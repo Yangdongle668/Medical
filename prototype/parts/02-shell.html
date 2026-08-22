@@ -8,6 +8,7 @@
         <div class="brand-sub">SiteDesk&nbsp;v0.9</div>
       </div>
     </div>
+    <div class="persona" id="persona"></div>
     <nav class="nav" id="nav"></nav>
     <div class="rail-foot">
       恒济临床研究（虚构）<br>
@@ -18,6 +19,9 @@
     <header class="topbar">
       <div class="crumb" id="crumb"></div>
       <div class="topbar-sp"></div>
+      <div class="who" id="who"></div>
+      <label class="crumb" for="grole">身份</label>
+      <select class="sel" id="grole"></select>
       <label class="crumb" for="gstudy">项目范围</label>
       <select class="sel" id="gstudy"></select>
       <span class="demo-tag">演示数据 · 非真实</span>
@@ -237,7 +241,11 @@ let TIMESHEET = [
   {id:4, d:"2026-08-20", who:"廖梦然", ss:"SS-09", type:"源数据准备与核对", h:8, travel:0},
   {id:5, d:"2026-08-20", who:"冯乐", ss:"SS-06", type:"受试者访视陪同", h:6.5, travel:0},
   {id:6, d:"2026-08-20", who:"何雨薇", ss:"SS-13", type:"伦理递交与跟进", h:5,  travel:0.18},
-  {id:7, d:"2026-08-19", who:"唐延", ss:"SS-05", type:"投标与商务支持", h:6,   travel:0}
+  {id:7, d:"2026-08-19", who:"唐延", ss:"SS-05", type:"投标与商务支持", h:6,   travel:0},
+  {id:8, d:"2026-08-20", who:"林敏", ss:"SS-09", type:"源数据准备与核对", h:6.5, travel:0},
+  {id:9, d:"2026-08-19", who:"林敏", ss:"SS-01", type:"现场监查（IMV）", h:8,   travel:0.29},
+  {id:10,d:"2026-08-18", who:"林敏", ss:"SS-12", type:"内部培训",        h:3,   travel:0},
+  {id:11,d:"2026-08-21", who:"林敏", ss:"SS-07", type:"现场监查（IMV）", h:7.5, travel:0.31}
 ];
-let tsSeq = 8;
+let tsSeq = 12;
 </script>

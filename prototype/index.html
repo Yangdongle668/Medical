@@ -287,6 +287,40 @@ input[type=range]{width:100%;accent-color:var(--accent);height:18px}
   .content{padding:14px 12px 50px}
   .topbar{padding:9px 12px}
 }
+
+/* ── Role & employee-facing atoms ──────────────────────────────────── */
+.who{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2)}
+.avatar{
+  width:25px;height:25px;border-radius:99px;background:var(--accent-soft);color:var(--accent);
+  display:grid;place-items:center;font-size:11px;font-weight:600;border:1px solid var(--accent-line);flex:none;
+}
+.who b{font-weight:600;color:var(--ink)}
+.who .r{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.06em;color:var(--ink-3)}
+.rail .persona{padding:9px 14px;border-bottom:1px solid var(--line);display:flex;gap:9px;align-items:center}
+.rail .persona .n{font-size:12.5px;font-weight:600;line-height:1.25}
+.rail .persona .d{font-size:10px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+
+.tcard{border:1px solid var(--line);border-radius:3px;position:relative;background:var(--surface)}
+.tcard.crit{border-color:color-mix(in srgb,var(--crit) 45%,var(--line))}
+.tcard.warn{border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
+.tcard-h{padding:10px 12px 9px 14px;display:flex;gap:10px;align-items:flex-start}
+.cd{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-weight:600;line-height:1.05}
+.subjid{
+  font-family:"IBM Plex Mono",monospace;font-size:11px;padding:1px 6px;border-radius:2px;
+  background:var(--surface-3);color:var(--ink-2);border:1px solid var(--line);letter-spacing:.03em;
+}
+.winbar{position:relative;height:16px;background:var(--surface-3);border-radius:2px;overflow:hidden}
+.winbar .ok{position:absolute;top:0;bottom:0;background:var(--good-soft)}
+.winbar .now{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
+.winbar .lbl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-family:"IBM Plex Mono",monospace;color:var(--ink-3)}
+.qbox{width:100%;font:inherit;font-size:12.5px;padding:7px 9px;border:1px solid var(--line-2);border-radius:3px;background:var(--surface);color:var(--ink);resize:vertical;min-height:56px}
+.apr{border:1px solid var(--line);border-radius:3px;padding:11px 13px;position:relative;background:var(--surface)}
+.apr.flag{border-left:2px solid var(--warn)}
+.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:9px}
+.mini > div{border:1px solid var(--line);border-radius:3px;padding:8px 10px}
+.mini .v{font-family:"IBM Plex Mono",monospace;font-size:18px;font-weight:600;line-height:1.1;margin-top:2px}
+.daybar{display:flex;gap:2px;height:22px;border-radius:2px;overflow:hidden;border:1px solid var(--line)}
+.daybar div{flex:1;display:grid;place-items:center;font-size:9.5px;font-family:"IBM Plex Mono",monospace}
 </style>
 
 <div class="app">
@@ -298,6 +332,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:18px}
         <div class="brand-sub">SiteDesk&nbsp;v0.9</div>
       </div>
     </div>
+    <div class="persona" id="persona"></div>
     <nav class="nav" id="nav"></nav>
     <div class="rail-foot">
       恒济临床研究（虚构）<br>
@@ -308,6 +343,9 @@ input[type=range]{width:100%;accent-color:var(--accent);height:18px}
     <header class="topbar">
       <div class="crumb" id="crumb"></div>
       <div class="topbar-sp"></div>
+      <div class="who" id="who"></div>
+      <label class="crumb" for="grole">身份</label>
+      <select class="sel" id="grole"></select>
       <label class="crumb" for="gstudy">项目范围</label>
       <select class="sel" id="gstudy"></select>
       <span class="demo-tag">演示数据 · 非真实</span>
@@ -527,9 +565,151 @@ let TIMESHEET = [
   {id:4, d:"2026-08-20", who:"廖梦然", ss:"SS-09", type:"源数据准备与核对", h:8, travel:0},
   {id:5, d:"2026-08-20", who:"冯乐", ss:"SS-06", type:"受试者访视陪同", h:6.5, travel:0},
   {id:6, d:"2026-08-20", who:"何雨薇", ss:"SS-13", type:"伦理递交与跟进", h:5,  travel:0.18},
-  {id:7, d:"2026-08-19", who:"唐延", ss:"SS-05", type:"投标与商务支持", h:6,   travel:0}
+  {id:7, d:"2026-08-19", who:"唐延", ss:"SS-05", type:"投标与商务支持", h:6,   travel:0},
+  {id:8, d:"2026-08-20", who:"林敏", ss:"SS-09", type:"源数据准备与核对", h:6.5, travel:0},
+  {id:9, d:"2026-08-19", who:"林敏", ss:"SS-01", type:"现场监查（IMV）", h:8,   travel:0.29},
+  {id:10,d:"2026-08-18", who:"林敏", ss:"SS-12", type:"内部培训",        h:3,   travel:0},
+  {id:11,d:"2026-08-21", who:"林敏", ss:"SS-07", type:"现场监查（IMV）", h:7.5, travel:0.31}
 ];
-let tsSeq = 8;
+let tsSeq = 12;
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   角色与员工端数据
+   一套数据，四种视角：经营层看钱与人效，PM 看团队与审批，
+   CRA 看中心与监查，CRC 看受试者访视窗口与现场事务。
+   受试者一律只用筛选号/随机号，无任何可识别信息。
+   ════════════════════════════════════════════════════════════════════ */
+
+const PERSONAS = [
+  {k:"boss", n:"凌远", title:"总经理",   role:"经营层", scope:"全公司 4 个项目 · 14 个中心"},
+  {k:"pm",   n:"韩雪", title:"项目总监", role:"PM",    scope:"华东华南组 · 7 人 · 2 个项目"},
+  {k:"cra",  n:"林敏", title:"高级 CRA", role:"CRA",   scope:"4 个中心 · 4 个项目"},
+  {k:"crc",  n:"吴桐", title:"高级 CRC", role:"CRC",   scope:"驻北京协和 · 天津医科大学肿瘤医院"}
+];
+const P_OF = Object.fromEntries(PERSONAS.map(p=>[p.k,p]));
+
+/* PM 韩雪的小团队：不是全公司，是一个组 */
+const TEAM = {
+  pm:"韩雪",
+  members:["林敏","赵坤","何雨薇","吴桐","沈亦琳","郭晓萱","冯乐"],
+  studies:["HJ-2024-017","HJ-2025-003"]
+};
+
+/* ── 受试者访视窗口：CRC 的核心作业对象 ──────────────────────────────
+   只存筛选号 + 访视名 + 窗口，不存姓名/证件/病历号。
+   窗口 = [due-win, due+win]，超窗即方案偏离。                         */
+const SUBJ = [
+  {id:"S-0203", ss:"SS-01", v:"C8D1 第 8 周期给药", due:"2026-08-18", win:3, crc:"吴桐",
+   tasks:[["生命体征与体格检查",1],["血常规 + 生化采血（空腹）",1],["ECOG 评分记录",1],
+          ["研究药物发放与剩余回收",0],["合并用药与不良事件问询",0]]},
+  {id:"S-0217", ss:"SS-01", v:"C6D1 第 6 周期给药", due:"2026-08-21", win:2, crc:"吴桐",
+   tasks:[["生命体征与体格检查",1],["血常规 + 生化采血（空腹）",1],["3 级肝功能异常 AE 随访",1],
+          ["研究药物发放",0],["SAE 上报后续资料补充",0]]},
+  {id:"S-0240", ss:"SS-01", v:"C1D1 首次给药", due:"2026-08-24", win:1, crc:"吴桐",
+   tasks:[["确认 ICF V3.0 已签署且早于任何检查",0],["入排标准逐条核对并签字",0],
+          ["基线影像与实验室结果归档",0],["随机化并记录随机号",0],["首次给药陪同与 4h 观察",0]]},
+  {id:"S-0231", ss:"SS-01", v:"筛选期检查", due:"2026-08-26", win:3, crc:"吴桐",
+   tasks:[["ICF 签署（版本 V3.0）",1],["病史采集与既往用药",0],["实验室与心电图预约",0]]},
+  {id:"S-0224", ss:"SS-07", v:"C3D1 第 3 周期给药", due:"2026-08-23", win:2, crc:"吴桐",
+   tasks:[["生命体征与体格检查",1],["采血与样本离心送检",0],["研究药物发放",0],["Q-1190 质疑对应源数据核实",0]]},
+  {id:"S-0198", ss:"SS-07", v:"安全性随访（末次给药后 30 天）", due:"2026-08-25", win:3, crc:"吴桐",
+   tasks:[["AE 转归确认",0],["合并用药记录",0],["实验室复查",0]]},
+  {id:"S-0189", ss:"SS-07", v:"EOT 治疗结束访视", due:"2026-08-27", win:3, crc:"吴桐",
+   tasks:[["肿瘤评估影像",0],["剩余药品全部回收清点",0],["治疗结束原因记录",0]]},
+  {id:"S-0331", ss:"SS-04", v:"第 4 次访视", due:"2026-08-10", win:3, crc:"唐延",
+   tasks:[["生命体征",1],["采血",1],["方案偏离表 PI 签字",0],["伦理上报",0]]},
+  {id:"S-0412", ss:"SS-09", v:"M6 随访（糖化血红蛋白）", due:"2026-08-25", win:3, crc:"廖梦然",
+   tasks:[["HbA1c 采血",0],["血糖日志回收",0],["用药依从性计数",0]]},
+  {id:"S-0455", ss:"SS-12", v:"术后 30 天随访", due:"2026-08-23", win:2, crc:"廖梦然",
+   tasks:[["心电图",1],["支架内血栓事件问询",0],["双抗用药依从性",0]]}
+];
+/* 窗口状态：只有四种，且由日期算出，不是人工标注 */
+function winState(s){
+  const last = new Date(new Date(s.due).getTime() + s.win*864e5).toISOString().slice(0,10);
+  const first= new Date(new Date(s.due).getTime() - s.win*864e5).toISOString().slice(0,10);
+  const rem  = days(TODAY, last);
+  if(rem < 0)  return {k:"crit", t:"已超窗", rem, first, last, dev:true};
+  if(rem <= 1) return {k:"crit", t:"今明到期", rem, first, last};
+  if(rem <= 3) return {k:"warn", t:"窗口临期", rem, first, last};
+  return {k:"good", t:"窗口内", rem, first, last};
+}
+const subjDone = s=>s.tasks.filter(t=>t[1]).length;
+
+/* ── 数据质疑 Query ─────────────────────────────────────────────────
+   CRC 视角 = 待我回复；CRA 视角 = 我发起的 / 待中心回复。            */
+let QUERIES = [
+  {id:"Q-1176", ss:"SS-01", subj:"S-0203", form:"合并用药 CM", field:"起始日期",
+   txt:"CM 起始日期（2026-07-30）早于知情同意签署日期（2026-08-02），请核实源数据。",
+   by:"数据管理", owner:"吴桐", age:9, st:"待中心回复"},
+  {id:"Q-1182", ss:"SS-01", subj:"S-0217", form:"不良事件 AE", field:"AE 开始日期",
+   txt:"AE「肝功能异常」开始日期晚于结束日期，请核对并修正 eCRF。",
+   by:"数据管理", owner:"吴桐", age:4, st:"待中心回复"},
+  {id:"Q-1190", ss:"SS-07", subj:"S-0224", form:"实验室检查 LB", field:"中性粒细胞计数",
+   txt:"C2D1 中性粒细胞 0.9×10⁹/L 已达 3 级，但未见对应 AE 记录，请确认是否漏报。",
+   by:"林敏（CRA）", owner:"吴桐", age:1, st:"待中心回复"},
+  {id:"Q-1165", ss:"SS-01", subj:"S-0198", form:"生命体征 VS", field:"收缩压",
+   txt:"收缩压 210 mmHg 超出合理区间，疑为录入错误。",
+   by:"数据管理", owner:"吴桐", age:12, st:"已回复待关闭"},
+  {id:"Q-1155", ss:"SS-04", subj:"S-0331", form:"访视日期 SV", field:"实际访视日期",
+   txt:"第 4 次访视超出方案窗口 5 天，请提供方案偏离说明及 PI 签字。",
+   by:"林敏（CRA）", owner:"唐延", age:21, st:"待中心回复"},
+  {id:"Q-1171", ss:"SS-02", subj:"S-0301", form:"疗效评估 RS", field:"靶病灶长径",
+   txt:"基线与 C4 靶病灶数量不一致（3 → 2），请补充说明。",
+   by:"数据管理", owner:"沈亦琳", age:6, st:"待中心回复"},
+  {id:"Q-1188", ss:"SS-09", subj:"S-0412", form:"用药依从性 EX", field:"回收片数",
+   txt:"发放 90 片、回收 12 片、服用记录 71 片，三者不平，请核对。",
+   by:"数据管理", owner:"廖梦然", age:3, st:"待中心回复"}
+];
+
+/* ── 待审批队列：PM 的日常 ─────────────────────────────────────────── */
+let APPROVALS = [
+  {id:"A-305", kind:"工时", who:"廖梦然", sub:"2026-08-22", amt:null,
+   detail:"本周合计 46.5 小时（含周六 6.5 小时），中心：北大人民、阜外",
+   flag:"该员工利用率已达 96%，连续第 3 周加班 —— 批准前先看是否该分流一个中心"},
+  {id:"A-301", kind:"工时", who:"唐延", sub:"2026-08-20", amt:null,
+   detail:"2026-08-19 投标与商务支持 6.0 小时（不可计费）",
+   flag:"本月不可计费工时已占 32%，远高于 15% 警戒线"},
+  {id:"A-303", kind:"方案偏离", who:"唐延", sub:"2026-08-15", amt:null,
+   detail:"S-0331 第 4 次访视超窗 5 天，需 PM 会签后上报伦理（QI-2026-0142）",
+   flag:"已挂起 7 天，超出内部 3 天会签时限 —— 这类拖延会直接变成核查发现"},
+  {id:"A-302", kind:"差旅", who:"赵坤", sub:"2026-08-21", amt:0.32,
+   detail:"上海 → 杭州 浙江省肿瘤医院 IMV，高铁往返 + 住宿 1 晚", flag:null},
+  {id:"A-304", kind:"请假", who:"郭晓萱", sub:"2026-08-19", amt:null,
+   detail:"2026-09-02 至 09-04 年假 3 天",
+   flag:"期间广东省人民医院 SIV 排期 09-01，需先确认交接人"},
+  {id:"A-306", kind:"差旅", who:"何雨薇", sub:"2026-08-18", amt:0.41,
+   detail:"广州 → 南京 江苏省人民医院 合同与启动准备，往返机票 + 住宿 2 晚", flag:null}
+];
+
+/* ── 中心文件与物资（ISF / IP）：CRC 的现场清单 ────────────────────── */
+const ISF = [
+  {ss:"SS-01", cat:"研究者文件夹", item:"方案 V3.0 及全体研究者签收表", st:"good", note:"2026-05-30 版，已签收 7/7"},
+  {ss:"SS-01", cat:"研究者文件夹", item:"研究者手册 IB V5.1", st:"good", note:"2026-03-11 生效"},
+  {ss:"SS-01", cat:"研究者文件夹", item:"伦理年度跟踪审查", st:"warn", note:"批件 2026-10-18 到期，需提前 60 天递交（还剩 27 天可准备）"},
+  {ss:"SS-01", cat:"人员资质", item:"新入组研究护士 GCP 证书", st:"crit", note:"缺失。该护士已参与 3 例受试者访视 —— 核查必查项"},
+  {ss:"SS-01", cat:"人员资质", item:"研究者授权分工表 DOA", st:"warn", note:"未更新新入组护士的授权行"},
+  {ss:"SS-01", cat:"试验用药品", item:"批次 260711 库存", st:"good", note:"剩余 18 盒，按当前入组速度可支撑约 6 周"},
+  {ss:"SS-01", cat:"试验用药品", item:"冷藏柜温度记录", st:"good", note:"近 30 天无越限，记录仪校准至 2027-01"},
+  {ss:"SS-01", cat:"检验与设备", item:"中心实验室室间质评证书", st:"warn", note:"2026-09-30 到期，需向检验科索取新证"},
+  {ss:"SS-01", cat:"检验与设备", item:"离心机校准证书", st:"good", note:"有效期至 2027-02-14"},
+  {ss:"SS-07", cat:"研究者文件夹", item:"方案 V3.0 及签收表", st:"good", note:"已签收 5/5"},
+  {ss:"SS-07", cat:"研究者文件夹", item:"知情同意书 V3.0 空白件", st:"warn", note:"库存 4 份，低于 10 份补货线"},
+  {ss:"SS-07", cat:"试验用药品", item:"批次 260618 效期", st:"crit", note:"2026-09-15 到期，剩余 9 盒 —— 需申办方尽快换批或延效"},
+  {ss:"SS-07", cat:"人员资质", item:"PI 及研究者 CV 与执业证", st:"good", note:"齐备"},
+  {ss:"SS-07", cat:"检验与设备", item:"-80℃ 冰箱温度记录", st:"good", note:"无越限"}
+];
+
+/* ── SDV 进度（CRA 视角）：已核查 / 应核查 页数 ─────────────────────── */
+const SDV = {
+  "SS-01":{done:412, total:468, ratio:1.0,  note:"100% SDV（关键项目）"},
+  "SS-07":{done:198, total:264, ratio:1.0,  note:"100% SDV"},
+  "SS-09":{done:151, total:186, ratio:0.3,  note:"降至 30% 抽样（质量稳定）"},
+  "SS-12":{done:203, total:275, ratio:0.5,  note:"50% 抽样"},
+  "SS-02":{done:288, total:391, ratio:1.0,  note:"100% SDV"},
+  "SS-04":{done:96,  total:184, ratio:1.0,  note:"加密监查（入组停滞 + 方案偏离）"}
+};
 </script>
 <script>
 "use strict";
@@ -555,8 +735,7 @@ function siteM(ss){
   const prog = ss.enrolled/ss.contracted;                // 合同完成度
   return {gp, gm, rate, cpe, prog, mdPerPt: ss.enrolled>0 ? ss.md/ss.enrolled : null};
 }
-function scope(){ return state.study==="all" ? SITES : SITES.filter(s=>s.sid===state.study); }
-function scopeIds(){ return new Set(scope().map(s=>s.id)); }
+/* scope() / scopeIds() 定义在 04-nav：数据范围由登录身份决定 */
 
 function rollup(list){
   const rev = sum(list,s=>s.revenue), cost = sum(list,s=>s.cost);
@@ -753,7 +932,7 @@ function diverging(box, rows, {fmt=v=>(v>0?"+":"")+n1(v), unit="万"}={}){
 </script>
 <script>
 "use strict";
-/* ════════ 导航与路由 ════════ */
+/* ════════ 图标 ════════ */
 const IC = {
   dash:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
   sites:'<rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="9" width="8" height="11" rx="1"/><path d="M6 8h2M6 12h2M16 13h2"/>',
@@ -764,28 +943,63 @@ const IC = {
   bill:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h4"/>',
   qa:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   mon:'<rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/>',
-  price:'<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'
+  price:'<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  me:'<path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="5"/>',
+  subj:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 3v4h6V3"/><path d="M8 12l2 2 4-4"/>',
+  query:'<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 13v.01M12 7a2 2 0 0 1 1.5 3.3c-.6.6-1.5 1-1.5 1.7"/>',
+  isf:'<path d="M4 4h6l2 2h8v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 13l2 2 4-4"/>',
+  approve:'<path d="M9 11l3 3 7-7"/><path d="M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9"/>',
+  team:'<circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 20a6 6 0 0 1 12 0"/><path d="M15 20a4.5 4.5 0 0 1 7-3.7"/>'
 };
-const NAV = [
-  {g:"经营", items:[
-    {k:"dash",  t:"经营驾驶舱", ic:IC.dash},
-    {k:"sites", t:"项目 · 中心台账", ic:IC.sites},
-    {k:"enr",   t:"入组进度", ic:IC.enr}]},
-  {g:"资源", items:[
-    {k:"staff", t:"派工与产能", ic:IC.staff},
-    {k:"time",  t:"工时与差旅", ic:IC.time}]},
-  {g:"财务", items:[
-    {k:"pnl",   t:"成本与毛利", ic:IC.pnl},
-    {k:"bill",  t:"里程碑 · 结算", ic:IC.bill}]},
-  {g:"质量", items:[
-    {k:"qa",    t:"质量事件与 CAPA", ic:IC.qa, badge:()=>ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般").length},
-    {k:"mon",   t:"监查访视", ic:IC.mon}]},
-  {g:"工具", items:[
-    {k:"price", t:"报价模型", ic:IC.price}]}
-];
+
+/* ════════ 每个角色只看得到自己该看的 ════════ */
+const N = {
+  dash:{t:"经营驾驶舱",ic:IC.dash}, sites:{t:"项目 · 中心台账",ic:IC.sites},
+  mysites:{t:"我的中心",ic:IC.sites}, enr:{t:"入组进度",ic:IC.enr},
+  staff:{t:"派工与产能",ic:IC.staff}, time:{t:"工时与差旅",ic:IC.time},
+  pnl:{t:"成本与毛利",ic:IC.pnl}, bill:{t:"里程碑 · 结算",ic:IC.bill},
+  qa:{t:"质量事件与 CAPA",ic:IC.qa}, mon:{t:"监查访视",ic:IC.mon},
+  price:{t:"报价模型",ic:IC.price},
+  crc:{t:"我的一天",ic:IC.me}, cra:{t:"我的一天",ic:IC.me}, pm:{t:"团队工作台",ic:IC.me},
+  subj:{t:"受试者访视窗口",ic:IC.subj}, query:{t:"数据质疑",ic:IC.query},
+  isf:{t:"中心文件与物资",ic:IC.isf}, approve:{t:"待我审批",ic:IC.approve},
+  team:{t:"我的团队",ic:IC.team}
+};
+const openQ  = who=>QUERIES.filter(q=>q.owner===who&&q.st==="待中心回复").length;
+const myQ    = ()=>QUERIES.filter(q=>q.by.startsWith(PERSONA().n)&&q.st==="待中心回复").length;
+const badQA  = ()=>ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般").length;
+
+const NAV_BY_ROLE = {
+  boss:[
+    {g:"经营", items:["dash","sites","enr"]},
+    {g:"资源", items:["staff","time"]},
+    {g:"财务", items:["pnl","bill"]},
+    {g:"质量", items:[["qa",badQA],"mon"]},
+    {g:"工具", items:["price"]}
+  ],
+  pm:[
+    {g:"团队", items:["pm","team",["approve",()=>APPROVALS.length]]},
+    {g:"项目", items:["sites","enr","mon"]},
+    {g:"质量", items:[["qa",badQA]]},
+    {g:"财务", items:["pnl"]}
+  ],
+  cra:[
+    {g:"我的工作", items:["cra","mysites","mon",["query",()=>myQ()]]},
+    {g:"记录", items:["time"]},
+    {g:"质量", items:[["qa",badQA]]}
+  ],
+  crc:[
+    {g:"我的工作", items:["crc",["subj",()=>SUBJ.filter(s=>s.crc===PERSONA().n&&winState(s).k!=="good").length],
+                          ["query",()=>openQ(PERSONA().n)],"isf"]},
+    {g:"记录", items:["time"]}
+  ]
+};
+const HOME = {boss:"dash", pm:"pm", cra:"cra", crc:"crc"};
+
 const TITLES = {
   dash:["经营驾驶舱","一页看清人效、毛利、入组与风险。每个数字后面都对应一个具体的人和一个具体的动作。"],
   sites:["项目 · 中心台账","StudySite（项目 × 中心）是本系统的最小作业单元 —— 收入按中心计、成本按人落在中心上、核查风险按中心暴露。"],
+  mysites:["我的中心","你负责监查的中心。风险分由入组达成、未关闭事件、SDV 缺口三项合成，决定下次监查的密度。"],
   enr:["入组进度","计划曲线 vs 实际曲线。入组延迟是临床试验项目亏损的第一大原因，这张图必须每天有人看。"],
   staff:["派工与产能","谁、在哪个项目中心、什么角色、FTE 占比多少。闲置与超载都是问题，所以按状态着色而不是按高低。"],
   time:["工时与差旅","一线在医院用手机填报，目标 30 秒内提交。可计费与不可计费强制区分 —— 不区分，利用率就是假的。"],
@@ -793,37 +1007,77 @@ const TITLES = {
   bill:["里程碑 · 开票 · 回款","里程碑达成 → 证据链 → 开票 → 回款。断在哪一环，现金流就卡在哪一环。"],
   qa:["质量事件与 CAPA","把风险信号提前到日常作业里，而不是等稽查时第一次看见。"],
   mon:["监查访视","访视排期与 MVR 跟进项闭环。跟进项没关闭，等于这次监查没做。"],
-  price:["报价模型","用历史真实人天反推报价。对手报价靠经验，你靠自己的成本数据库 —— 这是抄不走的护城河。"]
+  price:["报价模型","用历史真实人天反推报价。对手报价靠经验，你靠自己的成本数据库 —— 这是抄不走的护城河。"],
+  crc:["我的一天","CRC 在医院现场、手机操作、时间碎片。这一页只回答一件事：现在最该做哪一件。"],
+  cra:["我的一天","CRA 常年在路上。这一页把四个中心的风险、监查排期、待办跟进项收在一屏内。"],
+  pm:["团队工作台","小团队管理者要同时对人和项目负责。左手是组员负载与审批，右手是项目进度与风险。"],
+  subj:["受试者访视窗口","访视超窗即方案偏离。窗口由日期算出并倒计时，不靠人记 —— 这是 CRC 最该被系统兜住的地方。"],
+  query:["数据质疑","Query 关闭时长直接反映数据质量与中心战斗力。超过 7 天未回复的，通常已经变成 CRA 的电话催办。"],
+  isf:["中心文件与物资","研究者文件夹、人员资质、药品效期与温控。核查现场翻的就是这几摞东西。"],
+  approve:["待我审批","审批不是盖章。每条都附带风险提示 —— 批准之前先看它背后是不是一个该解决的管理问题。"],
+  team:["我的团队","组员负载、派驻中心、本周排班与调配。看到超载与闲置同时存在，就该动手调人。"]
 };
 
-const state = {view:"dash", study:"all", enrStudy:"HJ-2024-017", dashRange:"12m",
+const state = {view:"dash", persona:"boss", study:"all", enrStudy:"HJ-2024-017", dashRange:"12m",
   sortKey:"rate", sortDir:1, q:"", stFilter:new Set(), roleFilter:"all",
-  sevFilter:new Set(), pnlSort:"gp", visitSel:0, tsWho:"吴桐"};
+  sevFilter:new Set(), pnlSort:"gp", visitSel:0, tsWho:"吴桐", subjSel:null, qTab:"open"};
+
+const PERSONA = ()=>P_OF[state.persona];
+
+/* 数据范围由身份决定：看得到什么，取决于你是谁 */
+function myScope(){
+  const p = PERSONA();
+  if(p.k==="boss") return SITES;
+  if(p.k==="pm")   return SITES.filter(s=>TEAM.studies.includes(s.sid));
+  const me = staff(p.n);
+  return SITES.filter(s=>me.sites.includes(s.id));
+}
+function scope(){
+  const base = myScope();
+  return state.study==="all" ? base : base.filter(s=>s.sid===state.study);
+}
+function scopeIds(){ return new Set(scope().map(s=>s.id)); }
+function myTeam(){ return TEAM.members.map(staff); }
 
 function renderNav(){
-  $("#nav").innerHTML = NAV.map(g=>
+  const p = PERSONA();
+  $("#nav").innerHTML = NAV_BY_ROLE[p.k].map(g=>
     `<div class="nav-group">${esc(g.g)}</div>` + g.items.map(it=>{
-      const b = it.badge? it.badge():0;
-      return `<button class="nav-item" data-nav="${it.k}" aria-current="${state.view===it.k}">
-        <svg class="nav-ic" viewBox="0 0 24 24">${it.ic}</svg><span>${esc(it.t)}</span>
+      const [k,badge] = Array.isArray(it)? it : [it,null];
+      const b = badge? badge():0, d = N[k];
+      return `<button class="nav-item" data-nav="${k}" aria-current="${state.view===k}">
+        <svg class="nav-ic" viewBox="0 0 24 24">${d.ic}</svg><span>${esc(d.t)}</span>
         ${b?`<span class="nav-badge">${b}</span>`:""}</button>`;
     }).join("")).join("");
+  const per = $("#persona");
+  if(per) per.innerHTML =
+    `<div class="avatar">${esc(p.n.slice(0,1))}</div>
+     <div><div class="n">${esc(p.n)}</div><div class="d">${esc(p.title)}</div></div>`;
 }
 function renderTop(){
-  const [t] = TITLES[state.view];
-  const sc = state.study==="all" ? "全部 4 个项目" : S[state.study].short;
-  $("#crumb").innerHTML = `恒济临床研究 / <b>${esc(t)}</b> · <span class="t-mut">${esc(sc)}</span>`;
-  const sel=$("#gstudy");
-  if(!sel.options.length){
-    sel.innerHTML = `<option value="all">全部项目（4）</option>` +
-      STUDIES.map(s=>`<option value="${s.id}">${esc(s.id)} · ${esc(s.short)}</option>`).join("");
-  }
-  sel.value = state.study;
+  const p = PERSONA(), [t] = TITLES[state.view];
+  const studies = [...new Set(myScope().map(s=>s.sid))];
+  $("#crumb").innerHTML = `恒济临床研究 / <b>${esc(t)}</b>`;
+  $("#who").innerHTML =
+    `<div class="avatar">${esc(p.n.slice(0,1))}</div>
+     <div><b>${esc(p.n)}</b> <span class="r">${esc(p.role)}</span><br>
+     <span class="r">${esc(p.scope)}</span></div>`;
+  const rs = $("#grole");
+  if(!rs.options.length) rs.innerHTML = PERSONAS.map(x=>
+    `<option value="${x.k}">${esc(x.title)} · ${esc(x.n)}</option>`).join("");
+  rs.value = state.persona;
+  const sel = $("#gstudy");
+  sel.innerHTML = `<option value="all">全部项目（${studies.length}）</option>` +
+    studies.map(id=>`<option value="${id}">${esc(id)} · ${esc(S[id].short)}</option>`).join("");
+  sel.value = studies.includes(state.study) ? state.study : "all";
+  state.study = sel.value;
+  sel.disabled = studies.length < 2;
 }
 const VIEWS = {};
 function render(){
-  renderNav(); renderTop();
-  clearTimers();
+  if(!NAV_BY_ROLE[state.persona].some(g=>g.items.some(it=>(Array.isArray(it)?it[0]:it)===state.view)))
+    state.view = HOME[state.persona];
+  renderNav(); renderTop(); clearTimers();
   const [t,sub] = TITLES[state.view];
   $("#content").innerHTML = `<div class="view-head"><h1>${esc(t)}</h1><p>${esc(sub)}</p></div><div id="vbody"></div>`;
   VIEWS[state.view]($("#vbody"));
@@ -835,15 +1089,21 @@ let timers=[];
 const clearTimers=()=>{timers.forEach(clearInterval);timers=[];};
 
 document.addEventListener("click",e=>{
-  const nav=e.target.closest("[data-nav]");     if(nav){ go(nav.dataset.nav); return; }
-  const gt =e.target.closest("[data-goto]");    if(gt){ const [v,k,val]=gt.dataset.goto.split(":");
+  const nav=e.target.closest("[data-nav]");  if(nav){ go(nav.dataset.nav); return; }
+  const gt =e.target.closest("[data-goto]"); if(gt){ const [v,k,val]=gt.dataset.goto.split(":");
     go(v, k?{[k]:val}:{}); return; }
-  const cl =e.target.closest("[data-close]");   if(cl){ closeLayer(); return; }
+  const cl =e.target.closest("[data-close]"); if(cl){ closeLayer(); return; }
+});
+$("#grole").addEventListener("change",e=>{
+  state.persona = e.target.value; state.study="all"; state.view = HOME[state.persona];
+  state.stFilter.clear(); state.sevFilter.clear(); state.q=""; state.subjSel=null;
+  const p=PERSONA(); if(p.k==="cra"||p.k==="crc") state.tsWho=p.n;
+  render(); toast(`已切换到 ${p.title} ${p.n} 的视角`);
 });
 $("#gstudy").addEventListener("change",e=>{ state.study=e.target.value;
   if(state.study!=="all") state.enrStudy=state.study; render(); });
 addEventListener("resize",()=>{ clearTimeout(window.__rz);
-  window.__rz=setTimeout(()=>{ if(state.view==="dash"||state.view==="enr") render(); },250); });
+  window.__rz=setTimeout(()=>{ if(["dash","enr","pm","cra"].includes(state.view)) render(); },250); });
 </script>
 <script>
 "use strict";
@@ -1384,8 +1644,11 @@ function assignModal(){
 
 /* ════════════════ 5 · 工时与差旅 ════════════════ */
 VIEWS.time = box=>{
-  const ids = scopeIds();
-  const rows = TIMESHEET.filter(t=>ids.has(t.ss));
+  const ids = scopeIds(), me = PERSONA();
+  /* 员工只看得到自己的填报；PM 与经营层看范围内全部 */
+  const mineOnly = me.k==="cra" || me.k==="crc";
+  const inScope = t=>ids.has(t.ss) && (!mineOnly || t.who===me.n);
+  const rows = TIMESHEET.filter(inScope);
   const bill = rows.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill);
   const nb   = rows.filter(t=>!WORKTYPES.find(w=>w.k===t.type).bill);
   const bd=sum(bill,t=>t.h)/8, nd=sum(nb,t=>t.h)/8, td=bd+nd;
@@ -1400,8 +1663,9 @@ VIEWS.time = box=>{
           <span>9:41</span><span>中心台 · CRC 端</span></div>
         <div style="padding:14px">
           <div class="field"><div class="slider-h"><label for="ts-w">填报人</label></div>
-            <select class="sel" id="ts-w" style="width:100%">${STAFF.filter(p=>p.role==="CRA"||p.role==="CRC")
-              .map(p=>`<option ${p.n===state.tsWho?"selected":""}>${esc(p.n)}</option>`).join("")}</select></div>
+            <select class="sel" id="ts-w" style="width:100%" ${mineOnly?"disabled":""}>${
+              (mineOnly?[staff(me.n)]:STAFF.filter(p=>p.role==="CRA"||p.role==="CRC"))
+              .map(p=>`<option ${p.n===(mineOnly?me.n:state.tsWho)?"selected":""}>${esc(p.n)}</option>`).join("")}</select></div>
           <div class="field"><div class="slider-h"><label for="ts-s">项目中心</label></div>
             <select class="sel" id="ts-s" style="width:100%"></select></div>
           <div class="field"><div class="slider-h"><label>工作类型</label></div>
@@ -1425,7 +1689,7 @@ VIEWS.time = box=>{
     </div>
     <div class="stack">
       <div class="grid g4" style="gap:10px">
-        ${[["本期总人天",n1(td),"人天","含全部类型"],
+        ${[[mineOnly?"我的总人天":"本期总人天",n1(td),"人天","含全部类型"],
            ["可计费人天",n1(bd),"人天",`占比 ${td?pct(bd/td):"—"}`],
            ["不可计费人天",n1(nd),"人天",`占比 ${td?pct(nd/td):"—"} · 毛利蒸发口`],
            ["差旅费用",n1(tv),"万元",`${rows.filter(t=>t.travel>0).length} 笔`]
@@ -1461,7 +1725,7 @@ VIEWS.time = box=>{
       ? `<span class="pill p-good">✓ 可计费 — 计入合同范围</span>`
       : `<span class="pill p-crit">✗ 不可计费 — 由公司承担，不进项目收入</span>`; };
   const drawRows=()=>{
-    const rs = TIMESHEET.filter(t=>ids.has(t.ss)).slice().sort((a,b)=>b.d.localeCompare(a.d)||b.id-a.id);
+    const rs = TIMESHEET.filter(inScope).slice().sort((a,b)=>b.d.localeCompare(a.d)||b.id-a.id);
     $("#ts-tb").innerHTML = rs.map(t=>{
       const w=WORKTYPES.find(x=>x.k===t.type), p=staff(t.who);
       const cost=t.h/8*(p.role==="CRA"?RATE.craDay:RATE.crcDay)+t.travel;
@@ -1473,11 +1737,11 @@ VIEWS.time = box=>{
         <td class="tnum">${t.travel?n1(t.travel)+" 万":"—"}</td>
         <td class="tnum">${n1(cost)} 万</td>
         <td class="ta-r"><button class="x" data-del="${t.id}" title="撤销">✕</button></td></tr>`;}).join("")
-      || `<tr><td colspan="8"><div class="empty">当前项目范围内暂无填报记录</div></td></tr>`;
+      || `<tr><td colspan="8"><div class="empty">${mineOnly?"你还没有填报记录，用左侧手机端提交一条":"当前项目范围内暂无填报记录"}</div></td></tr>`;
     $("#ts-n").textContent = rs.length+" 条";
   };
   const drawBill=()=>{
-    const rs=TIMESHEET.filter(t=>ids.has(t.ss));
+    const rs=TIMESHEET.filter(inScope);
     const b=sum(rs.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
     const n=sum(rs.filter(t=>!WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
     stacked($("#c-bill"),[{n:"可计费",v:b,c:"var(--s1)"},{n:"不可计费",v:n,c:"var(--s2)"}],{fmt:v=>n1(v)+" 人天"});
@@ -2041,7 +2305,728 @@ CRA 人天 = SIV ${P.sites}×2 + IMV ${P.sites}×${r.nIMV}轮×1.5
     toast("参数已重置为默认方案"); });
 };
 
-/* ════════════════ 启动 ════════════════ */
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   CRC 端 —— 现场协调员。手机为主、时间碎片、最怕访视超窗。
+   ════════════════════════════════════════════════════════════════════ */
+
+const mySubj = ()=>SUBJ.filter(s=>s.crc===PERSONA().n)
+  .sort((a,b)=>winState(a).rem-winState(b).rem);
+
+/* 窗口条：把 [due-win, due+win] 画出来，并标出今天在哪 —— 不靠人记 */
+function winBar(s){
+  const w=winState(s), pad=3, span=s.win*2+pad*2;
+  const l=(pad/span*100), width=((s.win*2)/span*100);
+  const off=days(new Date(new Date(s.due).getTime()-(s.win+pad)*864e5).toISOString().slice(0,10),TODAY);
+  const now=clamp(off/span*100,0,100);
+  return `<div class="winbar" title="窗口 ${w.first} ～ ${w.last}">
+    <div class="ok" style="left:${l}%;width:${width}%"></div>
+    <div class="now" style="left:${now}%"></div>
+    <div class="lbl">${esc(w.first)} ～ ${esc(w.last)}</div></div>`;
+}
+function subjCard(s,{open=false}={}){
+  const w=winState(s), ss=site(s.ss), d=subjDone(s);
+  return `<div class="tcard ${w.k==="good"?"":w.k}" data-sc="${s.id}">
+    <div class="tcard-h">
+      <div style="flex:1;min-width:0">
+        <div class="row" style="gap:6px">
+          <span class="subjid">${esc(s.id)}</span>
+          <span class="pill p-${w.k}">${esc(w.t)}</span>
+          ${w.dev?`<span class="pill p-crit">已构成方案偏离</span>`:""}
+        </div>
+        <div style="font-size:13px;font-weight:600;margin-top:5px">${esc(s.v)}</div>
+        <div class="note">${esc(ss.hosp)} · ${esc(S[ss.sid].short)}｜目标日 ${esc(s.due)} ± ${s.win} 天</div>
+      </div>
+      <div class="ta-r" style="flex:none">
+        <div class="cd" style="font-size:19px;color:var(--${w.k==="good"?"good":w.k})">${w.rem<0?w.rem:"+"+w.rem}<span style="font-size:10px;font-weight:400"> 天</span></div>
+        <div class="note">${w.rem<0?"已超窗":"窗口剩余"}</div>
+      </div>
+    </div>
+    <div style="padding:0 12px 10px 14px">
+      ${winBar(s)}
+      <div class="row" style="justify-content:space-between;margin-top:8px">
+        <span class="note">访视任务 ${d} / ${s.tasks.length}</span>
+        <button class="btn" data-sx="${s.id}">${open?"收起":"展开任务"}</button>
+      </div>
+      <div class="bartrack" style="height:4px;margin-top:5px"><div class="barfill" style="width:${d/s.tasks.length*100}%;background:${d===s.tasks.length?"var(--good)":"var(--accent)"};height:100%"></div></div>
+      <div id="sx-${s.id}" ${open?"":"hidden"} style="margin-top:8px">
+        ${s.tasks.map((t,k)=>`<label class="cbx ${t[1]?"done":""}" style="border-bottom:1px solid var(--line)">
+          <input type="checkbox" data-st="${s.id}:${k}" ${t[1]?"checked":""}><span>${esc(t[0])}</span></label>`).join("")}
+        <div class="row" style="margin-top:9px">
+          <button class="btn btn-p" data-sdone="${s.id}">标记访视完成</button>
+          <button class="btn" data-goto4="${s.ss}">中心详情</button>
+        </div>
+      </div>
+    </div></div>`;
+}
+
+/* ── CRC 我的一天 ── */
+VIEWS.crc = box=>{
+  const me=PERSONA().n, list=mySubj();
+  const alert=list.filter(s=>winState(s).k!=="good");
+  const qs=QUERIES.filter(q=>q.owner===me&&q.st==="待中心回复");
+  const myTs=TIMESHEET.filter(t=>t.who===me);
+  const h=sum(myTs,t=>t.h), bill=sum(myTs.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h);
+  const isf=ISF.filter(i=>staff(me).sites.includes(i.ss)&&i.st!=="good");
+  const p=staff(me), us=utilState(p.util);
+
+  box.innerHTML=`
+  <div class="mini" style="margin-bottom:14px">
+    ${[["窗口告警",alert.length,"例",alert.length?"var(--crit)":"var(--good)"],
+       ["待我回复质疑",qs.length,"条",qs.length?"var(--warn)":"var(--good)"],
+       ["现场清单异常",isf.length,"项",isf.length?"var(--warn)":"var(--good)"],
+       ["本期工时",n1(h),"小时","var(--ink)"],
+       ["可计费率",h?pct(bill/h):"—","",bill/h<0.85?"var(--warn)":"var(--good)"],
+       ["我的利用率",p.util+"%","",us.c]
+     ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
+        <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="gap:12px">
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>现在最该做的</h3><span class="sub">按窗口剩余时间排序，不按录入顺序</span>
+          <span class="sp"></span><button class="btn" data-nav="subj">全部 ${list.length} 例 →</button></div>
+        <div class="card-b"><div class="stack" style="gap:9px">
+          ${list.slice(0,3).map(s=>subjCard(s,{open:winState(s).k==="crit"})).join("")||`<div class="empty">今日无待办访视</div>`}
+        </div></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>待我回复的数据质疑</h3><span class="sp"></span>
+          <button class="btn" data-nav="query">全部 →</button></div>
+        <div class="card-b" style="padding:0">
+          ${qs.slice(0,3).map(q=>`<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+            <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(q.id)}</span>
+              <span class="subjid">${esc(q.subj)}</span>
+              <span class="pill ${q.age>7?"p-crit":"p-warn"}">已挂起 ${q.age} 天</span></div>
+            <div style="font-size:12.5px;margin-top:4px;color:var(--ink-2)">${esc(q.txt)}</div>
+            <div class="note" style="margin-top:2px">${esc(site(q.ss).hosp)} · ${esc(q.form)} / ${esc(q.field)}｜发起 ${esc(q.by)}</div>
+          </div>`).join("")||`<div class="empty">没有待回复的质疑</div>`}
+        </div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>快速打卡</h3><span class="sub">30 秒</span></div>
+        <div class="card-b">
+          <div class="field"><div class="slider-h"><label for="qk-s">中心</label></div>
+            <select class="sel" id="qk-s" style="width:100%">${staff(me).sites.map(id=>
+              `<option value="${id}">${esc(site(id).hosp)}</option>`).join("")}</select></div>
+          <div class="field"><div class="slider-h"><label>类型</label></div>
+            <div class="row" style="gap:4px" id="qk-t">${WORKTYPES.slice(0,3).concat(WORKTYPES.slice(5,7)).map((w,i)=>
+              `<button class="chip" data-t="${esc(w.k)}" aria-pressed="${i===0}" style="font-size:10.5px;padding:2px 7px">${esc(w.k)}</button>`).join("")}</div></div>
+          <div class="field"><div class="slider-h"><label for="qk-h">工时</label><b id="qk-hv">8.0 小时</b></div>
+            <input type="range" id="qk-h" min="0.5" max="12" step="0.5" value="8"></div>
+          <div id="qk-b" style="margin-bottom:10px"></div>
+          <button class="btn btn-p" id="qk-go" style="width:100%;justify-content:center">提交</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>现场清单异常</h3><span class="sp"></span>
+          <button class="btn" data-nav="isf">全部 →</button></div>
+        <div class="card-b" style="padding:0">
+          ${isf.map(i=>`<div style="padding:9px 14px 9px 16px;border-bottom:1px solid var(--line);position:relative">
+            <span class="stripe" style="background:var(--${i.st})"></span>
+            <div class="row" style="gap:6px"><span class="pill p-${i.st}">${i.st==="crit"?"缺失/过期":"临期"}</span>
+              <b style="font-size:12.5px;font-weight:500">${esc(i.item)}</b></div>
+            <div class="note" style="margin-top:2px">${esc(site(i.ss).hosp)} · ${esc(i.cat)}｜${esc(i.note)}</div>
+          </div>`).join("")||`<div class="empty">清单齐备</div>`}
+        </div>
+      </div>
+    </div>
+  </div>`;
+  wireSubj(box); wireQuick(box, me);
+};
+
+/* ── 受试者访视窗口（完整列表） ── */
+VIEWS.subj = box=>{
+  const list=mySubj();
+  const g={crit:list.filter(s=>winState(s).k==="crit"),
+           warn:list.filter(s=>winState(s).k==="warn"),
+           good:list.filter(s=>winState(s).k==="good")};
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["已超窗 / 今明到期",g.crit.length,"例","var(--crit)","超窗即方案偏离，必须当天处理"],
+       ["窗口临期",g.warn.length,"例","var(--warn)","3 天内必须完成"],
+       ["窗口内",g.good.length,"例","var(--good)","按计划推进"],
+       ["在管受试者",list.length,"例","var(--ink)","仅筛选号，无身份信息"]
+     ].map(([l,v,u,c,n])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${["crit","warn","good"].map(k=>g[k].length?`
+    <div class="section-t">${k==="crit"?"立即处理":k==="warn"?"三天内":"窗口内"}（${g[k].length}）</div>
+    <div class="grid g2" style="gap:10px;margin-bottom:16px">${g[k].map(s=>subjCard(s,{open:k==="crit"})).join("")}</div>`:"").join("")}
+  <div class="formula">窗口状态由日期算出，不是人工标注：
+剩余 = (目标日 + 窗口天数) − 今天
+剩余 &lt; 0 → 已超窗（自动生成方案偏离待办）
+剩余 ≤ 1 → 今明到期    剩余 ≤ 3 → 窗口临期</div>`;
+  wireSubj(box);
+};
+
+function wireSubj(box){
+  box.addEventListener("click",e=>{
+    const x=e.target.closest("[data-sx]");
+    if(x){ const d=$("#sx-"+x.dataset.sx); if(d){ d.hidden=!d.hidden; x.textContent=d.hidden?"展开任务":"收起"; } return; }
+    const g=e.target.closest("[data-goto4]"); if(g){ openSite(g.dataset.goto4); return; }
+    const dn=e.target.closest("[data-sdone]");
+    if(dn){
+      const s=SUBJ.find(x=>x.id===dn.dataset.sdone), left=s.tasks.filter(t=>!t[1]).length;
+      if(left){ toast(`还有 ${left} 项访视任务未完成，无法标记完成`,"crit"); return; }
+      const w=winState(s);
+      if(w.dev){
+        ISSUES.unshift({id:"QI-2026-0"+(160+ISSUES.length), ss:s.ss, sev:"严重", type:"方案偏离",
+          found:TODAY, desc:`受试者 ${s.id}「${s.v}」实际完成日期超出方案窗口 ${Math.abs(w.rem)} 天（窗口 ${w.first} ～ ${w.last}）。`,
+          capa:"填写方案偏离表并由 PI 签字；上报伦理委员会；复盘窗口提醒是否生效。",
+          own:PERSONA().n, due:new Date(Date.now()+7*864e5).toISOString().slice(0,10), st:"待验证", sla:null});
+        toast(`${s.id} 访视已完成，但超窗 ${Math.abs(w.rem)} 天 —— 已自动生成方案偏离事件`,"crit");
+      } else toast(`${s.id}「${s.v}」已标记完成，窗口内`);
+      const i=SUBJ.indexOf(s); SUBJ.splice(i,1); render();
+    }
+  });
+  box.addEventListener("change",e=>{
+    const c=e.target.closest("[data-st]"); if(!c) return;
+    const [id,k]=c.dataset.st.split(":");
+    const s=SUBJ.find(x=>x.id===id); s.tasks[+k][1]=c.checked?1:0;
+    c.closest("label").classList.toggle("done",c.checked);
+    const card=c.closest(".tcard"), d=subjDone(s);
+    card.querySelector(".bartrack .barfill").style.width=d/s.tasks.length*100+"%";
+    card.querySelector(".bartrack .barfill").style.background=d===s.tasks.length?"var(--good)":"var(--accent)";
+    card.querySelector(".note").textContent=`访视任务 ${d} / ${s.tasks.length}`;
+  });
+}
+function wireQuick(box, me){
+  const note=()=>{ const t=box.querySelector('#qk-t [aria-pressed="true"]')?.dataset.t;
+    const w=WORKTYPES.find(x=>x.k===t);
+    $("#qk-b").innerHTML = w.bill? `<span class="pill p-good">✓ 可计费</span>`
+      : `<span class="pill p-crit">✗ 不可计费 — 由公司承担</span>`; };
+  note();
+  $("#qk-h").addEventListener("input",e=>$("#qk-hv").textContent=(+e.target.value).toFixed(1)+" 小时");
+  $("#qk-t").addEventListener("click",e=>{const b=e.target.closest("[data-t]"); if(!b)return;
+    box.querySelectorAll("#qk-t .chip").forEach(c=>c.setAttribute("aria-pressed",c===b)); note();});
+  $("#qk-go").addEventListener("click",()=>{
+    const ss=$("#qk-s").value, type=box.querySelector('#qk-t [aria-pressed="true"]').dataset.t;
+    const h=+$("#qk-h").value, p=staff(me);
+    TIMESHEET.unshift({id:tsSeq++, d:TODAY, who:me, ss, type, h, travel:0});
+    const c=h/8*(p.role==="CRA"?RATE.craDay:RATE.crcDay), s=site(ss);
+    s.cost=+(s.cost+c).toFixed(1); s.md+=Math.round(h/8*10)/10;
+    toast(`已打卡 ${n1(h)} 小时 · 成本 ${n1(c)} 万归集到 ${s.hosp}`); render();
+  });
+}
+
+/* ── 数据质疑（CRC 回复 / CRA 跟进，同一页两种视角） ── */
+VIEWS.query = box=>{
+  const p=PERSONA(), isCRC=p.k==="crc";
+  const all = isCRC ? QUERIES.filter(q=>q.owner===p.n)
+                    : QUERIES.filter(q=>q.by.startsWith(p.n)||staff(p.n).sites.includes(q.ss));
+  const open=all.filter(q=>q.st==="待中心回复"), waiting=all.filter(q=>q.st!=="待中心回复");
+  const shown = state.qTab==="open"? open : waiting;
+  const avg = all.length? sum(all,q=>q.age)/all.length : 0;
+
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[[isCRC?"待我回复":"待中心回复",open.length,"条",open.length?"var(--warn)":"var(--good)"],
+       ["挂起超 7 天",open.filter(q=>q.age>7).length,"条",open.filter(q=>q.age>7).length?"var(--crit)":"var(--good)"],
+       ["平均挂起",n1(avg),"天",avg>7?"var(--crit)":avg>5?"var(--warn)":"var(--good)"],
+       ["已回复待关闭",waiting.length,"条","var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="card">
+    <div class="card-h">
+      <div class="seg" id="qt">
+        <button data-q="open" aria-pressed="${state.qTab==="open"}">${isCRC?"待我回复":"待中心回复"} ${open.length}</button>
+        <button data-q="wait" aria-pressed="${state.qTab!=="open"}">已回复待关闭 ${waiting.length}</button>
+      </div><span class="sp"></span>
+      <span class="sub">目标平均关闭 ≤ 5 天</span></div>
+    <div class="card-b" style="padding:0">
+      ${shown.length? shown.map(q=>`
+        <div style="padding:12px 16px 12px 18px;border-bottom:1px solid var(--line);position:relative">
+          <span class="stripe" style="background:var(--${q.age>7?"crit":q.st==="待中心回复"?"warn":"good"})"></span>
+          <div class="row" style="gap:6px">
+            <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(q.id)}</span>
+            <span class="subjid">${esc(q.subj)}</span>
+            <span class="pill p-neut">${esc(q.form)}</span>
+            <span class="sp"></span>
+            <span class="pill ${q.age>7?"p-crit":"p-warn"}">挂起 ${q.age} 天</span></div>
+          <div style="font-size:12.5px;margin-top:5px;color:var(--ink-2);line-height:1.6">${esc(q.txt)}</div>
+          <div class="note" style="margin-top:3px">${esc(site(q.ss).hosp)} · 字段「${esc(q.field)}」｜发起方 ${esc(q.by)}｜责任 CRC ${esc(q.owner)}</div>
+          ${isCRC&&q.st==="待中心回复"?`
+            <div style="margin-top:9px">
+              <textarea class="qbox" id="qr-${q.id}" placeholder="填写核实结果与源数据依据，例如：已核对原始病历，AE 开始日期录入错误，已更正为 2026-08-09，源文件第 12 页。"></textarea>
+              <div class="row" style="margin-top:7px">
+                <button class="btn btn-p" data-qr="${q.id}">提交回复</button>
+                <button class="btn" data-goto4="${q.ss}">中心详情</button></div>
+            </div>`:""}
+          ${!isCRC&&q.st==="待中心回复"&&q.age>7?`
+            <div class="row" style="margin-top:9px">
+              <button class="btn btn-p" data-qp="${q.id}">电话催办并记录</button>
+              <span class="note">超 7 天未回复，靠系统提醒已经不够了</span></div>`:""}
+        </div>`).join("") : `<div class="empty">这一栏是空的</div>`}
+    </div>
+  </div>`;
+  box.addEventListener("click",e=>{
+    const t=e.target.closest("[data-q]"); if(t){ state.qTab=t.dataset.q; render(); return; }
+    const g=e.target.closest("[data-goto4]"); if(g){ openSite(g.dataset.goto4); return; }
+    const r=e.target.closest("[data-qr]");
+    if(r){ const q=QUERIES.find(x=>x.id===r.dataset.qr);
+      const v=$("#qr-"+q.id).value.trim();
+      if(v.length<10){ toast("回复需要写清核实结果与源数据依据（至少 10 个字）","crit"); return; }
+      q.st="已回复待关闭"; toast(`${q.id} 已回复，等待数据管理关闭`); render(); return; }
+    const ph=e.target.closest("[data-qp]");
+    if(ph){ const q=QUERIES.find(x=>x.id===ph.dataset.qp);
+      toast(`已记录对 ${site(q.ss).hosp} 的催办：${q.id}，并同步给 PM`,"warn"); }
+  });
+};
+
+/* ── 中心文件与物资 ── */
+VIEWS.isf = box=>{
+  const mine=staff(PERSONA().n).sites;
+  const list=ISF.filter(i=>mine.includes(i.ss));
+  const bad=list.filter(i=>i.st!=="good");
+  const cats=[...new Set(list.map(i=>i.cat))];
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["清单项",list.length,"项","var(--ink)"],
+       ["缺失 / 过期",list.filter(i=>i.st==="crit").length,"项",list.filter(i=>i.st==="crit").length?"var(--crit)":"var(--good)"],
+       ["临期待办",list.filter(i=>i.st==="warn").length,"项",list.filter(i=>i.st==="warn").length?"var(--warn)":"var(--good)"],
+       ["齐备率",pct((list.length-bad.length)/list.length),"",bad.length?"var(--warn)":"var(--good)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  ${mine.map(id=>`
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-h"><h3>${esc(site(id).hosp)}</h3>
+        <span class="sub">${esc(S[site(id).sid].short)} · PI ${esc(site(id).pi)}</span></div>
+      <div class="card-b" style="padding:0">
+        ${cats.map(c=>{const rows=list.filter(i=>i.ss===id&&i.cat===c); if(!rows.length) return "";
+          return `<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+            <div class="section-t" style="margin-bottom:6px">${esc(c)}</div>
+            ${rows.map(i=>`<div class="row" style="justify-content:space-between;gap:10px;padding:5px 0">
+              <div style="flex:1;min-width:0">
+                <div class="row" style="gap:6px"><span class="dot" style="background:var(--${i.st})"></span>
+                  <b style="font-size:12.5px;font-weight:500">${esc(i.item)}</b></div>
+                <div class="note" style="margin-left:12px">${esc(i.note)}</div></div>
+              ${i.st!=="good"?`<button class="btn" data-fix="${esc(i.item)}">${i.st==="crit"?"上报并补齐":"提前处理"}</button>`
+                             :`<span class="pill p-good">齐备</span>`}
+            </div>`).join("")}</div>`;}).join("")}
+      </div>
+    </div>`).join("")}
+  <p class="note">核查现场翻的就是这几摞东西。人员资质缺失与药品效期是最常见的两类严重发现 —— 它们都能被日历提醒兜住，却经常没人管。</p>`;
+  box.addEventListener("click",e=>{const b=e.target.closest("[data-fix]");
+    if(b) toast(`已生成待办并通知 CRA 与 PM：${b.dataset.fix}`,"warn");});
+};
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   CRA 端 —— 监查员。常年在路上，一个人盯 3~5 个中心。
+   核心是风险分级监查（RBM）：把有限的监查人天投到最该去的中心。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* 风险分：三项客观信号合成，不靠印象打分 */
+function siteRisk(ss){
+  const m=siteM(ss); let r=0; const why=[];
+  if(m.rate!==null){
+    if(m.rate<0.7){ r+=3; why.push(`入组仅达计划 ${pct(m.rate)}`); }
+    else if(m.rate<0.9){ r+=1; why.push(`入组落后（${pct(m.rate)}）`); }
+  }
+  const iss=ISSUES.filter(i=>i.ss===ss.id&&i.st!=="已关闭");
+  const sev=iss.filter(i=>i.sev!=="一般").length;
+  if(sev){ r+=sev*2; why.push(`${sev} 项重大/严重事件未关闭`); }
+  else if(iss.length){ r+=1; why.push(`${iss.length} 项一般事件未关闭`); }
+  const s=SDV[ss.id];
+  if(s){ const gap=1-s.done/s.total;
+    if(gap>0.25){ r+=2; why.push(`SDV 缺口 ${pct(gap)}`); }
+    else if(gap>0.15){ r+=1; why.push(`SDV 缺口 ${pct(gap)}`); } }
+  const q=QUERIES.filter(x=>x.ss===ss.id&&x.st==="待中心回复"&&x.age>7).length;
+  if(q){ r+=q; why.push(`${q} 条质疑挂起超 7 天`); }
+  const lvl = r>=5 ? {k:"crit",t:"高风险",f:"加密监查 · 100% SDV"}
+            : r>=2 ? {k:"warn",t:"中风险",f:"维持当前监查频率"}
+                   : {k:"good",t:"低风险",f:"可降低 SDV 抽样比例"};
+  return {r, why, lvl};
+}
+
+/* ── CRA 我的一天 ── */
+VIEWS.cra = box=>{
+  const me=PERSONA().n, mine=myScope();
+  const risks=mine.map(s=>({s,...siteRisk(s)})).sort((a,b)=>b.r-a.r);
+  const vs=VISITS.filter(v=>v.who===me);
+  const openItems=sum(vs,v=>v.items.filter(i=>!i.done).length);
+  const qs=QUERIES.filter(q=>mine.some(s=>s.id===q.ss)&&q.st==="待中心回复");
+  const myTs=TIMESHEET.filter(t=>t.who===me);
+  const trips=sum(myTs,t=>t.travel);
+  const p=staff(me), us=utilState(p.util);
+
+  box.innerHTML=`
+  <div class="mini" style="margin-bottom:14px">
+    ${[["我的中心",mine.length,"个","var(--ink)"],
+       ["高风险中心",risks.filter(r=>r.lvl.k==="crit").length,"个",risks.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--good)"],
+       ["排期访视",vs.length,"次","var(--ink)"],
+       ["未关闭跟进项",openItems,"项",openItems?"var(--warn)":"var(--good)"],
+       ["待中心回复质疑",qs.length,"条",qs.filter(q=>q.age>7).length?"var(--crit)":"var(--ink)"],
+       ["我的利用率",p.util+"%","",us.c]
+     ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
+        <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="gap:12px">
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>我的中心 · 风险分级</h3><span class="sub">决定下次监查该去哪、去多久</span>
+          <span class="sp"></span><button class="btn" data-nav="mysites">明细 →</button></div>
+        <div class="card-b"><div class="stack" style="gap:9px">
+          ${risks.map(({s,r,why,lvl})=>{const m=siteM(s), sd=SDV[s.id];
+            return `<div class="tcard ${lvl.k==="good"?"":lvl.k}">
+              <div class="tcard-h">
+                <div style="flex:1;min-width:0">
+                  <div class="row" style="gap:6px">
+                    <span class="pill p-${lvl.k}">${esc(lvl.t)} · ${r} 分</span>
+                    <b style="font-size:13px">${esc(s.hosp)}</b>
+                    <span class="t-sub">${esc(S[s.sid].short)}</span></div>
+                  <div class="note" style="margin-top:4px">${why.length?esc(why.join("｜")):"无风险信号"}</div>
+                  <div class="note" style="margin-top:2px;color:var(--ink-2)">建议：${esc(lvl.f)}</div>
+                </div>
+                <div class="ta-r" style="flex:none;min-width:96px">
+                  <div class="num" style="font-size:17px">${s.enrolled}<span style="font-size:11px;color:var(--ink-3)">/${s.contracted}</span></div>
+                  <div class="note">入组 ${m.rate===null?"—":pct(m.rate)}</div>
+                  ${sd?`<div class="bartrack" style="height:4px;margin-top:5px"><div class="barfill" style="width:${sd.done/sd.total*100}%;background:var(--accent);height:100%"></div></div>
+                        <div class="note">SDV ${sd.done}/${sd.total}</div>`:""}
+                </div>
+              </div></div>`;}).join("")}
+        </div></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>待办跟进项</h3><span class="sub">跟进项没关闭，等于这次监查没做</span></div>
+        <div class="card-b" style="padding:0">
+          ${vs.flatMap(v=>v.items.filter(i=>!i.done).map(i=>({v,i}))).slice(0,8).map(({v,i})=>`
+            <div style="padding:9px 14px;border-bottom:1px solid var(--line)">
+              <div class="row" style="gap:6px">
+                <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(v.d)}</span>
+                <span class="pill p-acc">${esc(v.kind)}</span>
+                <span class="t-sub">${esc(site(v.ss).hosp)}</span></div>
+              <div style="font-size:12.5px;margin-top:3px">${esc(i.t)}</div>
+            </div>`).join("")||`<div class="empty">跟进项已全部关闭</div>`}
+        </div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>我的行程</h3><span class="sp"></span>
+          <button class="btn" data-nav="mon">排期 →</button></div>
+        <div class="card-b" style="padding:0">
+          ${vs.map(v=>{const d=v.items.filter(i=>i.done).length;
+            return `<button data-goto5="${v.ss}" style="width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:10px 14px;cursor:pointer">
+              <div class="row" style="gap:6px">
+                <span class="mono" style="font-size:11.5px;color:var(--ink-3)">${esc(v.d)}</span>
+                <span class="pill p-acc">${esc(v.kind)}</span>
+                <span class="sp"></span>
+                <span class="pill ${v.st==="待确认"?"p-warn":"p-neut"}">${esc(v.st)}</span></div>
+              <div style="font-size:12.5px;font-weight:500;margin-top:4px">${esc(site(v.ss).hosp)}</div>
+              <div class="note">${esc(site(v.ss).city)} · ${v.days} 天 · 跟进项 ${d}/${v.items.length} · 预估差旅 ${n1(RATE.travel)} 万</div>
+            </button>`;}).join("")||`<div class="empty">近期无排期</div>`}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>本期差旅</h3></div>
+        <div class="card-b">
+          <div class="num" style="font-size:26px">${n1(trips)}<small style="font-size:12px;color:var(--ink-3);margin-left:3px">万元</small></div>
+          <div class="note">${myTs.filter(t=>t.travel>0).length} 笔已填报</div>
+          <div class="hr"></div>
+          <div class="note">差旅与监查访视绑定：一次现场 IMV 的完全成本 ≈ ${n1(RATE.craDay*1.5+RATE.travel)} 万（1.5 人天 + 单次差旅）。
+            这就是为什么低风险中心该降频 —— 省下的是真金白银。</div>
+          <button class="btn" style="width:100%;justify-content:center;margin-top:10px" data-nav="time">去填报 →</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  box.addEventListener("click",e=>{const g=e.target.closest("[data-goto5]"); if(g) openSite(g.dataset.goto5);});
+};
+
+/* ── 我的中心（CRA 版台账） ── */
+VIEWS.mysites = box=>{
+  const rows=scope().map(s=>({s,...siteRisk(s)})).sort((a,b)=>b.r-a.r);
+  const tot=rows.reduce((t,r)=>t+r.r,0);
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["在管中心",rows.length,"个","var(--ink)"],
+       ["高风险",rows.filter(r=>r.lvl.k==="crit").length,"个",rows.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--good)"],
+       ["风险总分",tot,"分",tot>10?"var(--crit)":tot>5?"var(--warn)":"var(--good)"],
+       ["行业经验值","8–12","个中心/CRA","var(--ink-3)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>中心明细</h3><span class="sp"></span><span class="sub">按风险分排序 —— 这就是下周该怎么排班</span></div>
+    <div class="tw"><table style="min-width:900px">
+      <thead><tr><th>中心</th><th>项目</th><th class="ta-r">风险分</th><th>风险信号</th><th class="ta-r">入组</th>
+        <th style="width:15%">SDV 进度</th><th>下次访视</th><th>监查建议</th></tr></thead>
+      <tbody>${rows.map(({s,r,why,lvl})=>{const m=siteM(s), sd=SDV[s.id];
+        const nv=VISITS.find(v=>v.ss===s.id);
+        return `<tr class="clk" data-ss5="${s.id}">
+          <td><div class="t-main">${esc(s.hosp)}</div><div class="t-sub">${esc(s.city)} · PI ${esc(s.pi)}</div></td>
+          <td class="t-sub">${esc(S[s.sid].short)}</td>
+          <td class="ta-r"><span class="pill p-${lvl.k}">${r}</span></td>
+          <td class="t-sub" style="max-width:230px">${why.length?esc(why.join("；")):"—"}</td>
+          <td class="tnum">${s.enrolled}/${s.contracted}<div class="t-sub" style="text-align:right">${m.rate===null?"—":pct(m.rate)}</div></td>
+          <td>${sd?`<div class="bartrack" style="height:14px"><div class="barfill" style="width:${sd.done/sd.total*100}%;background:var(--accent);height:100%"></div></div>
+                <div class="t-sub">${sd.done}/${sd.total} · ${esc(sd.note)}</div>`:`<span class="t-mut">未启动</span>`}</td>
+          <td class="t-sub">${nv?`${nv.d}<div class="t-sub">${nv.kind}</div>`:"未排期"}</td>
+          <td><span class="pill p-${lvl.k}">${esc(lvl.f)}</span></td></tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula" style="margin-top:12px">风险分 = 入组落后(1) / 严重落后(3)
+       + 每项重大或严重未关闭事件(2)｜仅一般事件(1)
+       + SDV 缺口 &gt;15%(1) / &gt;25%(2)
+       + 每条挂起超 7 天的数据质疑(1)
+≥5 分 高风险 → 加密监查、100% SDV
+2–4 分 中风险 → 维持频率      0–1 分 低风险 → 可降抽样</div>`;
+  box.addEventListener("click",e=>{const t=e.target.closest("[data-ss5]"); if(t) openSite(t.dataset.ss5);});
+};
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   PM / 小团队管理者 —— 同时对人和项目负责。
+   左手：组员负载与审批；右手：项目进度与中心风险。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* 调配建议：同角色才可互换 —— CRA 和 CRC 不是一种人 */
+function rebalance(){
+  const team=myTeam(), out=[];
+  team.filter(p=>p.util>88).forEach(o=>{
+    const inTeam=team.filter(x=>x.role===o.role&&x.util<70).sort((a,b)=>a.util-b.util)[0];
+    const outTeam=STAFF.filter(x=>x.role===o.role&&x.util<60&&!TEAM.members.includes(x.n))
+      .sort((a,b)=>a.util-b.util)[0];
+    out.push({over:o, inTeam, outTeam});
+  });
+  return out;
+}
+const teamSites = ()=>[...new Set(myTeam().flatMap(p=>p.sites))].map(site);
+
+/* ── 团队工作台 ── */
+VIEWS.pm = box=>{
+  const team=myTeam(), mine=myScope();
+  const over=team.filter(p=>p.util>88), idle=team.filter(p=>p.util<60);
+  const avg=sum(team,p=>p.util)/team.length;
+  const risks=mine.map(s=>({s,...siteRisk(s)})).sort((a,b)=>b.r-a.r);
+  const R=rollup(mine);
+  const flagged=APPROVALS.filter(a=>a.flag);
+  const us=utilState(avg);
+
+  box.innerHTML=`
+  <div class="mini" style="margin-bottom:14px">
+    ${[["组员",team.length,"人","var(--ink)"],
+       ["平均利用率",n1(avg)+"%","",us.c],
+       ["超载",over.length,"人",over.length?"var(--crit)":"var(--good)"],
+       ["待我审批",APPROVALS.length,"条",flagged.length?"var(--warn)":"var(--ink)"],
+       ["高风险中心",risks.filter(r=>r.lvl.k==="crit").length,"个",risks.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--good)"],
+       ["组内毛利率",pct(R.gm),"",R.gm<0.2?"var(--warn)":"var(--good)"]
+     ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
+        <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>组员负载</h3><span class="sub">健康带 60–88%</span>
+        <span class="sp"></span><button class="btn" data-nav="team">团队明细 →</button></div>
+      <div class="card-b"><div id="c-tl"></div>
+        <div class="legend" style="margin-top:10px;border-top:1px solid var(--line);padding-top:9px">
+          <span><span class="dot" style="background:var(--warn)"></span> 闲置</span>
+          <span><span class="dot" style="background:var(--good)"></span> 健康</span>
+          <span><span class="dot" style="background:var(--crit)"></span> 超载</span>
+          <span class="t-mut" style="margin-left:auto">灰线 = 健康下限</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>待我审批</h3><span class="sp"></span>
+        <span class="pill ${flagged.length?"p-warn":"p-neut"}">${APPROVALS.length} 条 · ${flagged.length} 条带风险</span></div>
+      <div class="card-b" style="padding:0;max-height:300px;overflow-y:auto">
+        ${APPROVALS.slice(0,4).map(a=>`
+          <button data-nav="approve" style="width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:10px 14px 10px 16px;cursor:pointer;position:relative">
+            ${a.flag?`<span class="stripe" style="background:var(--warn)"></span>`:""}
+            <div class="row" style="gap:6px"><span class="pill p-neut">${esc(a.kind)}</span>
+              <b style="font-size:12.5px;font-weight:500">${esc(a.who)}</b>
+              <span class="t-sub">${esc(a.sub)}</span></div>
+            <div class="note" style="margin-top:3px">${esc(a.detail)}</div>
+            ${a.flag?`<div class="note" style="margin-top:2px;color:var(--warn)">⚑ ${esc(a.flag)}</div>`:""}
+          </button>`).join("")}
+        ${APPROVALS.length>4?`<div class="empty" style="padding:12px">还有 ${APPROVALS.length-4} 条</div>`:""}
+        ${!APPROVALS.length?`<div class="empty">审批已清空</div>`:""}
+      </div>
+    </div>
+  </div>
+  <div class="grid g2" style="gap:12px;margin-bottom:12px">
+    ${TEAM.studies.map(id=>{const e=ENROLL[id], st=S[id], gap=e.act.at(-1)-e.plan.at(-1);
+      return `<div class="card">
+        <div class="card-h"><h3>${esc(st.short)}</h3><span class="sub">${esc(st.id)} · ${esc(st.sponsor)}</span>
+          <span class="sp"></span><span class="pill p-${gap<0?"warn":"good"}">${gap>=0?"领先":"落后"} ${Math.abs(gap)} 例</span></div>
+        <div class="card-b">
+          <div class="legend" style="margin-bottom:9px">
+            <span><i style="background:var(--plan)"></i>计划</span>
+            <span><i style="background:var(--s1)"></i>实际</span></div>
+          <div class="chart" id="pc-${id}"></div>
+        </div></div>`;}).join("")}
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>中心风险清单</h3><span class="sp"></span>
+      <span class="sub">项目责任范围，含非本组人员派驻的中心</span></div>
+    <div class="tw"><table style="min-width:760px">
+      <thead><tr><th>中心</th><th class="ta-r">风险分</th><th>风险信号</th><th class="ta-r">入组</th><th>CRA / CRC</th><th class="ta-r">毛利</th></tr></thead>
+      <tbody>${risks.map(({s,r,why,lvl})=>{const m=siteM(s);
+        return `<tr class="clk" data-ss6="${s.id}">
+          <td><div class="t-main">${esc(s.hosp)}</div><div class="t-sub">${esc(S[s.sid].short)} · ${esc(s.city)}</div></td>
+          <td class="ta-r"><span class="pill p-${lvl.k}">${r}</span></td>
+          <td class="t-sub" style="max-width:250px">${why.length?esc(why.join("；")):"—"}</td>
+          <td class="tnum">${s.enrolled}/${s.contracted}</td>
+          <td class="t-sub">${[s.cra,...s.crc].map(n=>
+            TEAM.members.includes(n)? esc(n) : `${esc(n)} <span class="pill p-warn">跨组</span>`).join(" / ")}</td>
+          <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--good)"};font-weight:500">${m.gp>0?"+":""}${n1(m.gp)} 万</td>
+        </tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:10px">项目责任与人员线管理是两条线：这张表覆盖你负责的 2 个项目下<b>全部</b>中心，
+    而上方「组员负载」只含你线管的 7 个人。标注「跨组」的中心，风险要你担、人却不归你调 ——
+    这类中心一旦亮红灯，只能走跨组协调，动作会慢一拍。</p>`;
+
+  hbars($("#c-tl"), team.slice().sort((a,b)=>b.util-a.util).map(p=>{const s=utilState(p.util);
+    return {label:`${p.n} · ${p.role}`, v:p.util, color:s.c, marker:60,
+      tip:`<div class="tip-t">${esc(p.n)} · ${p.role}${p.lvl}</div>
+        <div class="tip-r"><span>利用率</span><b>${p.util}%</b></div>
+        <div class="tip-r"><span>状态</span><b style="color:${s.c}">${s.t}</b></div>
+        <div class="tip-r"><span>带中心</span><b>${p.sites.length} 个</b></div>`};
+  }), {max:100, fmt:v=>v, unit:"%", h:18, gap:5});
+  TEAM.studies.forEach(id=>{const e=ENROLL[id];
+    lineChart($("#pc-"+id),{x:e.x,series:[
+      {name:"计划",color:"var(--plan)",values:e.plan,dash:true},
+      {name:"实际",color:"var(--s1)",values:e.act,fill:true}],h:150});});
+  box.addEventListener("click",e=>{const t=e.target.closest("[data-ss6]"); if(t) openSite(t.dataset.ss6);});
+};
+
+/* ── 我的团队 ── */
+VIEWS.team = box=>{
+  const team=myTeam(), rb=rebalance();
+  box.innerHTML=`
+  ${rb.length?`<div class="card" style="margin-bottom:12px;border-color:color-mix(in srgb,var(--warn) 40%,var(--line))">
+    <div class="card-h" style="background:var(--warn-soft)"><span class="dot" style="background:var(--warn)"></span>
+      <h3 style="color:var(--warn)">调配建议</h3></div>
+    <div class="card-b">
+      ${rb.map(({over,inTeam,outTeam})=>`
+        <div style="font-size:12.5px;line-height:1.75;color:var(--ink-2)">
+          <b style="color:var(--ink)">${esc(over.n)}（${over.role}）利用率 ${over.util}%，已超载。</b><br>
+          ${inTeam?`组内 ${esc(inTeam.n)}（同为 ${inTeam.role}，${inTeam.util}%）尚有余量，可接手 ${esc(site(over.sites.at(-1)).hosp)}。`
+            :`组内没有同角色的富余人手 —— CRA 与 CRC 是两种岗位，不能互相顶替。`}
+          ${outTeam?`<br>组外 ${esc(outTeam.n)}（${outTeam.role}，${outTeam.util}%，常驻${esc(outTeam.city)}）处于闲置，
+            但跨组调人需向上申请：<b>这正是"超载与闲置同时存在"的典型现象，问题在组织，不在个人。</b>`:""}
+        </div>
+        <div class="row" style="margin-top:10px">
+          ${inTeam?`<button class="btn btn-p" data-mv="${esc(over.n)}|${esc(inTeam.n)}">组内移交一个中心</button>`:""}
+          ${outTeam?`<button class="btn" data-esc="${esc(outTeam.n)}">向上申请跨组支援</button>`:""}
+        </div>`).join("<hr class='hr'>")}
+    </div></div>`:""}
+  <div class="grid g3" style="gap:11px">
+    ${team.sort((a,b)=>b.util-a.util).map(p=>{const s=utilState(p.util), left=days(TODAY,p.gcp);
+      const load=p.sites.map(site);
+      const q=QUERIES.filter(x=>x.owner===p.n&&x.st==="待中心回复").length;
+      const sub=SUBJ.filter(x=>x.crc===p.n&&winState(x).k!=="good").length;
+      return `<div class="card" style="padding:0">
+        <div style="padding:12px 13px 10px">
+          <div class="row" style="justify-content:space-between;align-items:flex-start">
+            <div class="row" style="gap:9px">
+              <div class="avatar">${esc(p.n.slice(0,1))}</div>
+              <div><div style="font-size:13.5px;font-weight:600;line-height:1.2">${esc(p.n)}</div>
+                <div class="t-sub">${esc(p.role)} · ${esc(p.lvl)} · ${esc(p.city)}</div></div>
+            </div>
+            <span class="pill p-${s.k}">${s.t}</span>
+          </div>
+          <div class="num" style="font-size:22px;margin-top:9px;color:${s.c}">${p.util}<small style="font-size:12px">%</small></div>
+          <div class="bartrack" style="height:7px;margin-top:5px;position:relative">
+            <div style="position:absolute;left:60%;right:12%;top:0;bottom:0;background:var(--good-soft)"></div>
+            <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:${s.c};height:100%;position:relative"></div>
+          </div>
+          <div class="row" style="gap:5px;margin-top:9px">
+            <span class="pill ${left<70?"p-crit":left<180?"p-warn":"p-neut"}">GCP ${left} 天</span>
+            ${q?`<span class="pill p-warn">质疑 ${q}</span>`:""}
+            ${sub?`<span class="pill p-crit">窗口告警 ${sub}</span>`:""}
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--line);padding:9px 13px">
+          <div class="section-t" style="margin-bottom:5px">派驻中心 ${load.length}</div>
+          ${load.map(x=>`<div class="row" style="justify-content:space-between;font-size:12px;padding:2px 0">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.hosp)}</span>
+            <span class="pill p-${siteRisk(x).lvl.k}">${siteRisk(x).r}</span></div>`).join("")||`<div class="note">无</div>`}
+        </div>
+      </div>`;}).join("")}
+  </div>
+  <p class="note" style="margin-top:12px">卡片右侧数字为该中心风险分。一个组员同时背两个高风险中心，是排班表上最该先被看见的事。</p>`;
+  box.addEventListener("click",e=>{
+    const m=e.target.closest("[data-mv]");
+    if(m){ const [a,b]=m.dataset.mv.split("|"), pa=staff(a), pb=staff(b);
+      const id=pa.sites.pop(); pb.sites.push(id);
+      pa.util=Math.max(40,pa.util-14); pb.util=Math.min(120,pb.util+14);
+      const ss=site(id); if(pb.role==="CRA") ss.cra=pb.n;
+      else { ss.crc=ss.crc.filter(x=>x!==pa.n); ss.crc.push(pb.n); }
+      toast(`${site(id).hosp} 已从 ${a} 移交给 ${b}｜${a} ${pa.util}%，${b} ${pb.util}%`); render(); return; }
+    const es=e.target.closest("[data-esc]");
+    if(es) toast(`跨组支援申请已提交（拟调 ${es.dataset.esc}），等待运营负责人审批`,"warn");
+  });
+};
+
+/* ── 待我审批 ── */
+VIEWS.approve = box=>{
+  const kinds=[...new Set(APPROVALS.map(a=>a.kind))];
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["待审批",APPROVALS.length,"条","var(--ink)"],
+       ["带风险提示",APPROVALS.filter(a=>a.flag).length,"条",APPROVALS.filter(a=>a.flag).length?"var(--warn)":"var(--good)"],
+       ["挂起超 3 天",APPROVALS.filter(a=>days(a.sub,TODAY)>3).length,"条",APPROVALS.filter(a=>days(a.sub,TODAY)>3).length?"var(--crit)":"var(--good)"],
+       ["待批差旅金额",n1(sum(APPROVALS.filter(a=>a.amt),a=>a.amt)),"万","var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="stack" style="gap:10px">
+    ${APPROVALS.length? APPROVALS.map(a=>{const held=days(a.sub,TODAY);
+      return `<div class="apr ${a.flag?"flag":""}">
+        <div class="row" style="justify-content:space-between;align-items:flex-start">
+          <div style="flex:1;min-width:0">
+            <div class="row" style="gap:6px">
+              <span class="pill p-acc">${esc(a.kind)}</span>
+              <b style="font-size:13px">${esc(a.who)}</b>
+              <span class="t-sub">${esc(a.id)} · 提交于 ${esc(a.sub)}</span>
+              ${held>3?`<span class="pill p-crit">已挂起 ${held} 天</span>`:""}
+            </div>
+            <div style="font-size:12.5px;margin-top:5px;color:var(--ink-2)">${esc(a.detail)}</div>
+            ${a.amt?`<div class="note" style="margin-top:2px">金额 ${n1(a.amt)} 万元</div>`:""}
+            ${a.flag?`<div style="margin-top:8px;border-left:2px solid var(--warn);background:var(--warn-soft);padding:7px 10px;font-size:12px;color:var(--ink-2);line-height:1.6">
+              <b style="color:var(--warn)">⚑ 批准之前先看这个</b><br>${esc(a.flag)}</div>`:""}
+          </div>
+          <div class="row" style="flex:none;gap:6px">
+            <button class="btn btn-p" data-ap="${a.id}">通过</button>
+            <button class="btn" data-rj="${a.id}">驳回</button>
+          </div>
+        </div>
+      </div>`;}).join("") : `<div class="card"><div class="empty">审批队列已清空 —— 但清空不等于问题解决了，看看被批准的那几条背后是不是同一个原因。</div></div>`}
+  </div>
+  <p class="note" style="margin-top:12px">审批不是盖章。这一页刻意把风险提示放在按钮旁边：连续三周加班的工时、32% 的不可计费占比、挂了 7 天的方案偏离会签 —— 每一条都不是"批"或"不批"能解决的，而是排班和流程该改。</p>`;
+  box.addEventListener("click",e=>{
+    const ap=e.target.closest("[data-ap]"), rj=e.target.closest("[data-rj]");
+    if(!ap&&!rj) return;
+    const id=(ap||rj).dataset.ap||(ap||rj).dataset.rj;
+    const i=APPROVALS.findIndex(a=>a.id===id), a=APPROVALS[i];
+    APPROVALS.splice(i,1);
+    toast(ap?`已通过：${a.who} 的${a.kind}申请${a.amt?`（${n1(a.amt)} 万）`:""}`
+            :`已驳回：${a.who} 的${a.kind}申请，已通知本人补充说明`, ap?"":"warn");
+    render();
+  });
+};
+</script>
+<script>
+"use strict";
+/* ════════ 启动 ════════ */
 render();
-console.info("临床中心台 SiteDesk · 演示原型｜全部数据为硬编码，不含真实受试者信息。");
+console.info("临床中心台 SiteDesk · 演示原型｜四种身份：经营层 / PM / CRA / CRC。全部数据为硬编码，不含真实受试者信息。");
 </script>

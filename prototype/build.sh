@@ -5,6 +5,7 @@ set -e
 cd "$(dirname "$0")"
 cat parts/01-head.html \
     parts/02-shell.html \
+    parts/02b-roles.html \
     parts/03-core.html \
     parts/04-nav.html \
     parts/05-dash.html \
@@ -12,5 +13,9 @@ cat parts/01-head.html \
     parts/07-staff.html \
     parts/08-fin.html \
     parts/09-qa.html \
-    parts/10-price.html > index.html
+    parts/10-price.html \
+    parts/11-crc.html \
+    parts/12-cra.html \
+    parts/13-pm.html \
+    parts/99-boot.html > index.html
 echo "index.html 已重新生成（$(wc -l < index.html) 行）"

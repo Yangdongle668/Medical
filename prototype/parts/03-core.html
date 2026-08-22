@@ -22,8 +22,7 @@ function siteM(ss){
   const prog = ss.enrolled/ss.contracted;                // 合同完成度
   return {gp, gm, rate, cpe, prog, mdPerPt: ss.enrolled>0 ? ss.md/ss.enrolled : null};
 }
-function scope(){ return state.study==="all" ? SITES : SITES.filter(s=>s.sid===state.study); }
-function scopeIds(){ return new Set(scope().map(s=>s.id)); }
+/* scope() / scopeIds() 定义在 04-nav：数据范围由登录身份决定 */
 
 function rollup(list){
   const rev = sum(list,s=>s.revenue), cost = sum(list,s=>s.cost);

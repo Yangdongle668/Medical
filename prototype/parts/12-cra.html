@@ -1,0 +1,167 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   CRA 端 —— 监查员。常年在路上，一个人盯 3~5 个中心。
+   核心是风险分级监查（RBM）：把有限的监查人天投到最该去的中心。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* 风险分：三项客观信号合成，不靠印象打分 */
+function siteRisk(ss){
+  const m=siteM(ss); let r=0; const why=[];
+  if(m.rate!==null){
+    if(m.rate<0.7){ r+=3; why.push(`入组仅达计划 ${pct(m.rate)}`); }
+    else if(m.rate<0.9){ r+=1; why.push(`入组落后（${pct(m.rate)}）`); }
+  }
+  const iss=ISSUES.filter(i=>i.ss===ss.id&&i.st!=="已关闭");
+  const sev=iss.filter(i=>i.sev!=="一般").length;
+  if(sev){ r+=sev*2; why.push(`${sev} 项重大/严重事件未关闭`); }
+  else if(iss.length){ r+=1; why.push(`${iss.length} 项一般事件未关闭`); }
+  const s=SDV[ss.id];
+  if(s){ const gap=1-s.done/s.total;
+    if(gap>0.25){ r+=2; why.push(`SDV 缺口 ${pct(gap)}`); }
+    else if(gap>0.15){ r+=1; why.push(`SDV 缺口 ${pct(gap)}`); } }
+  const q=QUERIES.filter(x=>x.ss===ss.id&&x.st==="待中心回复"&&x.age>7).length;
+  if(q){ r+=q; why.push(`${q} 条质疑挂起超 7 天`); }
+  const lvl = r>=5 ? {k:"crit",t:"高风险",f:"加密监查 · 100% SDV"}
+            : r>=2 ? {k:"warn",t:"中风险",f:"维持当前监查频率"}
+                   : {k:"good",t:"低风险",f:"可降低 SDV 抽样比例"};
+  return {r, why, lvl};
+}
+
+/* ── CRA 我的一天 ── */
+VIEWS.cra = box=>{
+  const me=PERSONA().n, mine=myScope();
+  const risks=mine.map(s=>({s,...siteRisk(s)})).sort((a,b)=>b.r-a.r);
+  const vs=VISITS.filter(v=>v.who===me);
+  const openItems=sum(vs,v=>v.items.filter(i=>!i.done).length);
+  const qs=QUERIES.filter(q=>mine.some(s=>s.id===q.ss)&&q.st==="待中心回复");
+  const myTs=TIMESHEET.filter(t=>t.who===me);
+  const trips=sum(myTs,t=>t.travel);
+  const p=staff(me), us=utilState(p.util);
+
+  box.innerHTML=`
+  <div class="mini" style="margin-bottom:14px">
+    ${[["我的中心",mine.length,"个","var(--ink)"],
+       ["高风险中心",risks.filter(r=>r.lvl.k==="crit").length,"个",risks.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--good)"],
+       ["排期访视",vs.length,"次","var(--ink)"],
+       ["未关闭跟进项",openItems,"项",openItems?"var(--warn)":"var(--good)"],
+       ["待中心回复质疑",qs.length,"条",qs.filter(q=>q.age>7).length?"var(--crit)":"var(--ink)"],
+       ["我的利用率",p.util+"%","",us.c]
+     ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
+        <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="gap:12px">
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>我的中心 · 风险分级</h3><span class="sub">决定下次监查该去哪、去多久</span>
+          <span class="sp"></span><button class="btn" data-nav="mysites">明细 →</button></div>
+        <div class="card-b"><div class="stack" style="gap:9px">
+          ${risks.map(({s,r,why,lvl})=>{const m=siteM(s), sd=SDV[s.id];
+            return `<div class="tcard ${lvl.k==="good"?"":lvl.k}">
+              <div class="tcard-h">
+                <div style="flex:1;min-width:0">
+                  <div class="row" style="gap:6px">
+                    <span class="pill p-${lvl.k}">${esc(lvl.t)} · ${r} 分</span>
+                    <b style="font-size:13px">${esc(s.hosp)}</b>
+                    <span class="t-sub">${esc(S[s.sid].short)}</span></div>
+                  <div class="note" style="margin-top:4px">${why.length?esc(why.join("｜")):"无风险信号"}</div>
+                  <div class="note" style="margin-top:2px;color:var(--ink-2)">建议：${esc(lvl.f)}</div>
+                </div>
+                <div class="ta-r" style="flex:none;min-width:96px">
+                  <div class="num" style="font-size:17px">${s.enrolled}<span style="font-size:11px;color:var(--ink-3)">/${s.contracted}</span></div>
+                  <div class="note">入组 ${m.rate===null?"—":pct(m.rate)}</div>
+                  ${sd?`<div class="bartrack" style="height:4px;margin-top:5px"><div class="barfill" style="width:${sd.done/sd.total*100}%;background:var(--accent);height:100%"></div></div>
+                        <div class="note">SDV ${sd.done}/${sd.total}</div>`:""}
+                </div>
+              </div></div>`;}).join("")}
+        </div></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>待办跟进项</h3><span class="sub">跟进项没关闭，等于这次监查没做</span></div>
+        <div class="card-b" style="padding:0">
+          ${vs.flatMap(v=>v.items.filter(i=>!i.done).map(i=>({v,i}))).slice(0,8).map(({v,i})=>`
+            <div style="padding:9px 14px;border-bottom:1px solid var(--line)">
+              <div class="row" style="gap:6px">
+                <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(v.d)}</span>
+                <span class="pill p-acc">${esc(v.kind)}</span>
+                <span class="t-sub">${esc(site(v.ss).hosp)}</span></div>
+              <div style="font-size:12.5px;margin-top:3px">${esc(i.t)}</div>
+            </div>`).join("")||`<div class="empty">跟进项已全部关闭</div>`}
+        </div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>我的行程</h3><span class="sp"></span>
+          <button class="btn" data-nav="mon">排期 →</button></div>
+        <div class="card-b" style="padding:0">
+          ${vs.map(v=>{const d=v.items.filter(i=>i.done).length;
+            return `<button data-goto5="${v.ss}" style="width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:10px 14px;cursor:pointer">
+              <div class="row" style="gap:6px">
+                <span class="mono" style="font-size:11.5px;color:var(--ink-3)">${esc(v.d)}</span>
+                <span class="pill p-acc">${esc(v.kind)}</span>
+                <span class="sp"></span>
+                <span class="pill ${v.st==="待确认"?"p-warn":"p-neut"}">${esc(v.st)}</span></div>
+              <div style="font-size:12.5px;font-weight:500;margin-top:4px">${esc(site(v.ss).hosp)}</div>
+              <div class="note">${esc(site(v.ss).city)} · ${v.days} 天 · 跟进项 ${d}/${v.items.length} · 预估差旅 ${n1(RATE.travel)} 万</div>
+            </button>`;}).join("")||`<div class="empty">近期无排期</div>`}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>本期差旅</h3></div>
+        <div class="card-b">
+          <div class="num" style="font-size:26px">${n1(trips)}<small style="font-size:12px;color:var(--ink-3);margin-left:3px">万元</small></div>
+          <div class="note">${myTs.filter(t=>t.travel>0).length} 笔已填报</div>
+          <div class="hr"></div>
+          <div class="note">差旅与监查访视绑定：一次现场 IMV 的完全成本 ≈ ${n1(RATE.craDay*1.5+RATE.travel)} 万（1.5 人天 + 单次差旅）。
+            这就是为什么低风险中心该降频 —— 省下的是真金白银。</div>
+          <button class="btn" style="width:100%;justify-content:center;margin-top:10px" data-nav="time">去填报 →</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  box.addEventListener("click",e=>{const g=e.target.closest("[data-goto5]"); if(g) openSite(g.dataset.goto5);});
+};
+
+/* ── 我的中心（CRA 版台账） ── */
+VIEWS.mysites = box=>{
+  const rows=scope().map(s=>({s,...siteRisk(s)})).sort((a,b)=>b.r-a.r);
+  const tot=rows.reduce((t,r)=>t+r.r,0);
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["在管中心",rows.length,"个","var(--ink)"],
+       ["高风险",rows.filter(r=>r.lvl.k==="crit").length,"个",rows.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--good)"],
+       ["风险总分",tot,"分",tot>10?"var(--crit)":tot>5?"var(--warn)":"var(--good)"],
+       ["行业经验值","8–12","个中心/CRA","var(--ink-3)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>中心明细</h3><span class="sp"></span><span class="sub">按风险分排序 —— 这就是下周该怎么排班</span></div>
+    <div class="tw"><table style="min-width:900px">
+      <thead><tr><th>中心</th><th>项目</th><th class="ta-r">风险分</th><th>风险信号</th><th class="ta-r">入组</th>
+        <th style="width:15%">SDV 进度</th><th>下次访视</th><th>监查建议</th></tr></thead>
+      <tbody>${rows.map(({s,r,why,lvl})=>{const m=siteM(s), sd=SDV[s.id];
+        const nv=VISITS.find(v=>v.ss===s.id);
+        return `<tr class="clk" data-ss5="${s.id}">
+          <td><div class="t-main">${esc(s.hosp)}</div><div class="t-sub">${esc(s.city)} · PI ${esc(s.pi)}</div></td>
+          <td class="t-sub">${esc(S[s.sid].short)}</td>
+          <td class="ta-r"><span class="pill p-${lvl.k}">${r}</span></td>
+          <td class="t-sub" style="max-width:230px">${why.length?esc(why.join("；")):"—"}</td>
+          <td class="tnum">${s.enrolled}/${s.contracted}<div class="t-sub" style="text-align:right">${m.rate===null?"—":pct(m.rate)}</div></td>
+          <td>${sd?`<div class="bartrack" style="height:14px"><div class="barfill" style="width:${sd.done/sd.total*100}%;background:var(--accent);height:100%"></div></div>
+                <div class="t-sub">${sd.done}/${sd.total} · ${esc(sd.note)}</div>`:`<span class="t-mut">未启动</span>`}</td>
+          <td class="t-sub">${nv?`${nv.d}<div class="t-sub">${nv.kind}</div>`:"未排期"}</td>
+          <td><span class="pill p-${lvl.k}">${esc(lvl.f)}</span></td></tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula" style="margin-top:12px">风险分 = 入组落后(1) / 严重落后(3)
+       + 每项重大或严重未关闭事件(2)｜仅一般事件(1)
+       + SDV 缺口 &gt;15%(1) / &gt;25%(2)
+       + 每条挂起超 7 天的数据质疑(1)
+≥5 分 高风险 → 加密监查、100% SDV
+2–4 分 中风险 → 维持频率      0–1 分 低风险 → 可降抽样</div>`;
+  box.addEventListener("click",e=>{const t=e.target.closest("[data-ss5]"); if(t) openSite(t.dataset.ss5);});
+};
+</script>

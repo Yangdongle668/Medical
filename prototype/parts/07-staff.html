@@ -148,8 +148,11 @@ function assignModal(){
 
 /* ════════════════ 5 · 工时与差旅 ════════════════ */
 VIEWS.time = box=>{
-  const ids = scopeIds();
-  const rows = TIMESHEET.filter(t=>ids.has(t.ss));
+  const ids = scopeIds(), me = PERSONA();
+  /* 员工只看得到自己的填报；PM 与经营层看范围内全部 */
+  const mineOnly = me.k==="cra" || me.k==="crc";
+  const inScope = t=>ids.has(t.ss) && (!mineOnly || t.who===me.n);
+  const rows = TIMESHEET.filter(inScope);
   const bill = rows.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill);
   const nb   = rows.filter(t=>!WORKTYPES.find(w=>w.k===t.type).bill);
   const bd=sum(bill,t=>t.h)/8, nd=sum(nb,t=>t.h)/8, td=bd+nd;
@@ -164,8 +167,9 @@ VIEWS.time = box=>{
           <span>9:41</span><span>中心台 · CRC 端</span></div>
         <div style="padding:14px">
           <div class="field"><div class="slider-h"><label for="ts-w">填报人</label></div>
-            <select class="sel" id="ts-w" style="width:100%">${STAFF.filter(p=>p.role==="CRA"||p.role==="CRC")
-              .map(p=>`<option ${p.n===state.tsWho?"selected":""}>${esc(p.n)}</option>`).join("")}</select></div>
+            <select class="sel" id="ts-w" style="width:100%" ${mineOnly?"disabled":""}>${
+              (mineOnly?[staff(me.n)]:STAFF.filter(p=>p.role==="CRA"||p.role==="CRC"))
+              .map(p=>`<option ${p.n===(mineOnly?me.n:state.tsWho)?"selected":""}>${esc(p.n)}</option>`).join("")}</select></div>
           <div class="field"><div class="slider-h"><label for="ts-s">项目中心</label></div>
             <select class="sel" id="ts-s" style="width:100%"></select></div>
           <div class="field"><div class="slider-h"><label>工作类型</label></div>
@@ -189,7 +193,7 @@ VIEWS.time = box=>{
     </div>
     <div class="stack">
       <div class="grid g4" style="gap:10px">
-        ${[["本期总人天",n1(td),"人天","含全部类型"],
+        ${[[mineOnly?"我的总人天":"本期总人天",n1(td),"人天","含全部类型"],
            ["可计费人天",n1(bd),"人天",`占比 ${td?pct(bd/td):"—"}`],
            ["不可计费人天",n1(nd),"人天",`占比 ${td?pct(nd/td):"—"} · 毛利蒸发口`],
            ["差旅费用",n1(tv),"万元",`${rows.filter(t=>t.travel>0).length} 笔`]
@@ -225,7 +229,7 @@ VIEWS.time = box=>{
       ? `<span class="pill p-good">✓ 可计费 — 计入合同范围</span>`
       : `<span class="pill p-crit">✗ 不可计费 — 由公司承担，不进项目收入</span>`; };
   const drawRows=()=>{
-    const rs = TIMESHEET.filter(t=>ids.has(t.ss)).slice().sort((a,b)=>b.d.localeCompare(a.d)||b.id-a.id);
+    const rs = TIMESHEET.filter(inScope).slice().sort((a,b)=>b.d.localeCompare(a.d)||b.id-a.id);
     $("#ts-tb").innerHTML = rs.map(t=>{
       const w=WORKTYPES.find(x=>x.k===t.type), p=staff(t.who);
       const cost=t.h/8*(p.role==="CRA"?RATE.craDay:RATE.crcDay)+t.travel;
@@ -237,11 +241,11 @@ VIEWS.time = box=>{
         <td class="tnum">${t.travel?n1(t.travel)+" 万":"—"}</td>
         <td class="tnum">${n1(cost)} 万</td>
         <td class="ta-r"><button class="x" data-del="${t.id}" title="撤销">✕</button></td></tr>`;}).join("")
-      || `<tr><td colspan="8"><div class="empty">当前项目范围内暂无填报记录</div></td></tr>`;
+      || `<tr><td colspan="8"><div class="empty">${mineOnly?"你还没有填报记录，用左侧手机端提交一条":"当前项目范围内暂无填报记录"}</div></td></tr>`;
     $("#ts-n").textContent = rs.length+" 条";
   };
   const drawBill=()=>{
-    const rs=TIMESHEET.filter(t=>ids.has(t.ss));
+    const rs=TIMESHEET.filter(inScope);
     const b=sum(rs.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
     const n=sum(rs.filter(t=>!WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
     stacked($("#c-bill"),[{n:"可计费",v:b,c:"var(--s1)"},{n:"不可计费",v:n,c:"var(--s2)"}],{fmt:v=>n1(v)+" 人天"});

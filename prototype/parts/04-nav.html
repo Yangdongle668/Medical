@@ -1,6 +1,6 @@
 <script>
 "use strict";
-/* ════════ 导航与路由 ════════ */
+/* ════════ 图标 ════════ */
 const IC = {
   dash:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
   sites:'<rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="9" width="8" height="11" rx="1"/><path d="M6 8h2M6 12h2M16 13h2"/>',
@@ -11,28 +11,63 @@ const IC = {
   bill:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h4"/>',
   qa:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   mon:'<rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/>',
-  price:'<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'
+  price:'<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  me:'<path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="5"/>',
+  subj:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 3v4h6V3"/><path d="M8 12l2 2 4-4"/>',
+  query:'<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 13v.01M12 7a2 2 0 0 1 1.5 3.3c-.6.6-1.5 1-1.5 1.7"/>',
+  isf:'<path d="M4 4h6l2 2h8v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 13l2 2 4-4"/>',
+  approve:'<path d="M9 11l3 3 7-7"/><path d="M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9"/>',
+  team:'<circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 20a6 6 0 0 1 12 0"/><path d="M15 20a4.5 4.5 0 0 1 7-3.7"/>'
 };
-const NAV = [
-  {g:"经营", items:[
-    {k:"dash",  t:"经营驾驶舱", ic:IC.dash},
-    {k:"sites", t:"项目 · 中心台账", ic:IC.sites},
-    {k:"enr",   t:"入组进度", ic:IC.enr}]},
-  {g:"资源", items:[
-    {k:"staff", t:"派工与产能", ic:IC.staff},
-    {k:"time",  t:"工时与差旅", ic:IC.time}]},
-  {g:"财务", items:[
-    {k:"pnl",   t:"成本与毛利", ic:IC.pnl},
-    {k:"bill",  t:"里程碑 · 结算", ic:IC.bill}]},
-  {g:"质量", items:[
-    {k:"qa",    t:"质量事件与 CAPA", ic:IC.qa, badge:()=>ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般").length},
-    {k:"mon",   t:"监查访视", ic:IC.mon}]},
-  {g:"工具", items:[
-    {k:"price", t:"报价模型", ic:IC.price}]}
-];
+
+/* ════════ 每个角色只看得到自己该看的 ════════ */
+const N = {
+  dash:{t:"经营驾驶舱",ic:IC.dash}, sites:{t:"项目 · 中心台账",ic:IC.sites},
+  mysites:{t:"我的中心",ic:IC.sites}, enr:{t:"入组进度",ic:IC.enr},
+  staff:{t:"派工与产能",ic:IC.staff}, time:{t:"工时与差旅",ic:IC.time},
+  pnl:{t:"成本与毛利",ic:IC.pnl}, bill:{t:"里程碑 · 结算",ic:IC.bill},
+  qa:{t:"质量事件与 CAPA",ic:IC.qa}, mon:{t:"监查访视",ic:IC.mon},
+  price:{t:"报价模型",ic:IC.price},
+  crc:{t:"我的一天",ic:IC.me}, cra:{t:"我的一天",ic:IC.me}, pm:{t:"团队工作台",ic:IC.me},
+  subj:{t:"受试者访视窗口",ic:IC.subj}, query:{t:"数据质疑",ic:IC.query},
+  isf:{t:"中心文件与物资",ic:IC.isf}, approve:{t:"待我审批",ic:IC.approve},
+  team:{t:"我的团队",ic:IC.team}
+};
+const openQ  = who=>QUERIES.filter(q=>q.owner===who&&q.st==="待中心回复").length;
+const myQ    = ()=>QUERIES.filter(q=>q.by.startsWith(PERSONA().n)&&q.st==="待中心回复").length;
+const badQA  = ()=>ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般").length;
+
+const NAV_BY_ROLE = {
+  boss:[
+    {g:"经营", items:["dash","sites","enr"]},
+    {g:"资源", items:["staff","time"]},
+    {g:"财务", items:["pnl","bill"]},
+    {g:"质量", items:[["qa",badQA],"mon"]},
+    {g:"工具", items:["price"]}
+  ],
+  pm:[
+    {g:"团队", items:["pm","team",["approve",()=>APPROVALS.length]]},
+    {g:"项目", items:["sites","enr","mon"]},
+    {g:"质量", items:[["qa",badQA]]},
+    {g:"财务", items:["pnl"]}
+  ],
+  cra:[
+    {g:"我的工作", items:["cra","mysites","mon",["query",()=>myQ()]]},
+    {g:"记录", items:["time"]},
+    {g:"质量", items:[["qa",badQA]]}
+  ],
+  crc:[
+    {g:"我的工作", items:["crc",["subj",()=>SUBJ.filter(s=>s.crc===PERSONA().n&&winState(s).k!=="good").length],
+                          ["query",()=>openQ(PERSONA().n)],"isf"]},
+    {g:"记录", items:["time"]}
+  ]
+};
+const HOME = {boss:"dash", pm:"pm", cra:"cra", crc:"crc"};
+
 const TITLES = {
   dash:["经营驾驶舱","一页看清人效、毛利、入组与风险。每个数字后面都对应一个具体的人和一个具体的动作。"],
   sites:["项目 · 中心台账","StudySite（项目 × 中心）是本系统的最小作业单元 —— 收入按中心计、成本按人落在中心上、核查风险按中心暴露。"],
+  mysites:["我的中心","你负责监查的中心。风险分由入组达成、未关闭事件、SDV 缺口三项合成，决定下次监查的密度。"],
   enr:["入组进度","计划曲线 vs 实际曲线。入组延迟是临床试验项目亏损的第一大原因，这张图必须每天有人看。"],
   staff:["派工与产能","谁、在哪个项目中心、什么角色、FTE 占比多少。闲置与超载都是问题，所以按状态着色而不是按高低。"],
   time:["工时与差旅","一线在医院用手机填报，目标 30 秒内提交。可计费与不可计费强制区分 —— 不区分，利用率就是假的。"],
@@ -40,37 +75,77 @@ const TITLES = {
   bill:["里程碑 · 开票 · 回款","里程碑达成 → 证据链 → 开票 → 回款。断在哪一环，现金流就卡在哪一环。"],
   qa:["质量事件与 CAPA","把风险信号提前到日常作业里，而不是等稽查时第一次看见。"],
   mon:["监查访视","访视排期与 MVR 跟进项闭环。跟进项没关闭，等于这次监查没做。"],
-  price:["报价模型","用历史真实人天反推报价。对手报价靠经验，你靠自己的成本数据库 —— 这是抄不走的护城河。"]
+  price:["报价模型","用历史真实人天反推报价。对手报价靠经验，你靠自己的成本数据库 —— 这是抄不走的护城河。"],
+  crc:["我的一天","CRC 在医院现场、手机操作、时间碎片。这一页只回答一件事：现在最该做哪一件。"],
+  cra:["我的一天","CRA 常年在路上。这一页把四个中心的风险、监查排期、待办跟进项收在一屏内。"],
+  pm:["团队工作台","小团队管理者要同时对人和项目负责。左手是组员负载与审批，右手是项目进度与风险。"],
+  subj:["受试者访视窗口","访视超窗即方案偏离。窗口由日期算出并倒计时，不靠人记 —— 这是 CRC 最该被系统兜住的地方。"],
+  query:["数据质疑","Query 关闭时长直接反映数据质量与中心战斗力。超过 7 天未回复的，通常已经变成 CRA 的电话催办。"],
+  isf:["中心文件与物资","研究者文件夹、人员资质、药品效期与温控。核查现场翻的就是这几摞东西。"],
+  approve:["待我审批","审批不是盖章。每条都附带风险提示 —— 批准之前先看它背后是不是一个该解决的管理问题。"],
+  team:["我的团队","组员负载、派驻中心、本周排班与调配。看到超载与闲置同时存在，就该动手调人。"]
 };
 
-const state = {view:"dash", study:"all", enrStudy:"HJ-2024-017", dashRange:"12m",
+const state = {view:"dash", persona:"boss", study:"all", enrStudy:"HJ-2024-017", dashRange:"12m",
   sortKey:"rate", sortDir:1, q:"", stFilter:new Set(), roleFilter:"all",
-  sevFilter:new Set(), pnlSort:"gp", visitSel:0, tsWho:"吴桐"};
+  sevFilter:new Set(), pnlSort:"gp", visitSel:0, tsWho:"吴桐", subjSel:null, qTab:"open"};
+
+const PERSONA = ()=>P_OF[state.persona];
+
+/* 数据范围由身份决定：看得到什么，取决于你是谁 */
+function myScope(){
+  const p = PERSONA();
+  if(p.k==="boss") return SITES;
+  if(p.k==="pm")   return SITES.filter(s=>TEAM.studies.includes(s.sid));
+  const me = staff(p.n);
+  return SITES.filter(s=>me.sites.includes(s.id));
+}
+function scope(){
+  const base = myScope();
+  return state.study==="all" ? base : base.filter(s=>s.sid===state.study);
+}
+function scopeIds(){ return new Set(scope().map(s=>s.id)); }
+function myTeam(){ return TEAM.members.map(staff); }
 
 function renderNav(){
-  $("#nav").innerHTML = NAV.map(g=>
+  const p = PERSONA();
+  $("#nav").innerHTML = NAV_BY_ROLE[p.k].map(g=>
     `<div class="nav-group">${esc(g.g)}</div>` + g.items.map(it=>{
-      const b = it.badge? it.badge():0;
-      return `<button class="nav-item" data-nav="${it.k}" aria-current="${state.view===it.k}">
-        <svg class="nav-ic" viewBox="0 0 24 24">${it.ic}</svg><span>${esc(it.t)}</span>
+      const [k,badge] = Array.isArray(it)? it : [it,null];
+      const b = badge? badge():0, d = N[k];
+      return `<button class="nav-item" data-nav="${k}" aria-current="${state.view===k}">
+        <svg class="nav-ic" viewBox="0 0 24 24">${d.ic}</svg><span>${esc(d.t)}</span>
         ${b?`<span class="nav-badge">${b}</span>`:""}</button>`;
     }).join("")).join("");
+  const per = $("#persona");
+  if(per) per.innerHTML =
+    `<div class="avatar">${esc(p.n.slice(0,1))}</div>
+     <div><div class="n">${esc(p.n)}</div><div class="d">${esc(p.title)}</div></div>`;
 }
 function renderTop(){
-  const [t] = TITLES[state.view];
-  const sc = state.study==="all" ? "全部 4 个项目" : S[state.study].short;
-  $("#crumb").innerHTML = `恒济临床研究 / <b>${esc(t)}</b> · <span class="t-mut">${esc(sc)}</span>`;
-  const sel=$("#gstudy");
-  if(!sel.options.length){
-    sel.innerHTML = `<option value="all">全部项目（4）</option>` +
-      STUDIES.map(s=>`<option value="${s.id}">${esc(s.id)} · ${esc(s.short)}</option>`).join("");
-  }
-  sel.value = state.study;
+  const p = PERSONA(), [t] = TITLES[state.view];
+  const studies = [...new Set(myScope().map(s=>s.sid))];
+  $("#crumb").innerHTML = `恒济临床研究 / <b>${esc(t)}</b>`;
+  $("#who").innerHTML =
+    `<div class="avatar">${esc(p.n.slice(0,1))}</div>
+     <div><b>${esc(p.n)}</b> <span class="r">${esc(p.role)}</span><br>
+     <span class="r">${esc(p.scope)}</span></div>`;
+  const rs = $("#grole");
+  if(!rs.options.length) rs.innerHTML = PERSONAS.map(x=>
+    `<option value="${x.k}">${esc(x.title)} · ${esc(x.n)}</option>`).join("");
+  rs.value = state.persona;
+  const sel = $("#gstudy");
+  sel.innerHTML = `<option value="all">全部项目（${studies.length}）</option>` +
+    studies.map(id=>`<option value="${id}">${esc(id)} · ${esc(S[id].short)}</option>`).join("");
+  sel.value = studies.includes(state.study) ? state.study : "all";
+  state.study = sel.value;
+  sel.disabled = studies.length < 2;
 }
 const VIEWS = {};
 function render(){
-  renderNav(); renderTop();
-  clearTimers();
+  if(!NAV_BY_ROLE[state.persona].some(g=>g.items.some(it=>(Array.isArray(it)?it[0]:it)===state.view)))
+    state.view = HOME[state.persona];
+  renderNav(); renderTop(); clearTimers();
   const [t,sub] = TITLES[state.view];
   $("#content").innerHTML = `<div class="view-head"><h1>${esc(t)}</h1><p>${esc(sub)}</p></div><div id="vbody"></div>`;
   VIEWS[state.view]($("#vbody"));
@@ -82,13 +157,19 @@ let timers=[];
 const clearTimers=()=>{timers.forEach(clearInterval);timers=[];};
 
 document.addEventListener("click",e=>{
-  const nav=e.target.closest("[data-nav]");     if(nav){ go(nav.dataset.nav); return; }
-  const gt =e.target.closest("[data-goto]");    if(gt){ const [v,k,val]=gt.dataset.goto.split(":");
+  const nav=e.target.closest("[data-nav]");  if(nav){ go(nav.dataset.nav); return; }
+  const gt =e.target.closest("[data-goto]"); if(gt){ const [v,k,val]=gt.dataset.goto.split(":");
     go(v, k?{[k]:val}:{}); return; }
-  const cl =e.target.closest("[data-close]");   if(cl){ closeLayer(); return; }
+  const cl =e.target.closest("[data-close]"); if(cl){ closeLayer(); return; }
+});
+$("#grole").addEventListener("change",e=>{
+  state.persona = e.target.value; state.study="all"; state.view = HOME[state.persona];
+  state.stFilter.clear(); state.sevFilter.clear(); state.q=""; state.subjSel=null;
+  const p=PERSONA(); if(p.k==="cra"||p.k==="crc") state.tsWho=p.n;
+  render(); toast(`已切换到 ${p.title} ${p.n} 的视角`);
 });
 $("#gstudy").addEventListener("change",e=>{ state.study=e.target.value;
   if(state.study!=="all") state.enrStudy=state.study; render(); });
 addEventListener("resize",()=>{ clearTimeout(window.__rz);
-  window.__rz=setTimeout(()=>{ if(state.view==="dash"||state.view==="enr") render(); },250); });
+  window.__rz=setTimeout(()=>{ if(["dash","enr","pm","cra"].includes(state.view)) render(); },250); });
 </script>
