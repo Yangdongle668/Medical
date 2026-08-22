@@ -1,0 +1,233 @@
+<script>
+"use strict";
+/* ════════════════ 2 · 项目 · 中心台账 ════════════════ */
+const COLS = [
+  {k:"hosp", t:"中心 / 科室", s:false},
+  {k:"sid",  t:"项目", s:true},
+  {k:"st",   t:"状态", s:true},
+  {k:"enrolled", t:"已入组", s:true, num:true},
+  {k:"rate", t:"入组达成", s:true, num:true},
+  {k:"gm",   t:"毛利率", s:true, num:true},
+  {k:"md",   t:"已耗人天", s:true, num:true},
+  {k:"team", t:"派驻", s:false}
+];
+VIEWS.sites = box=>{
+  const all = scope();
+  const sts = [...new Set(SITES.map(s=>s.st))].sort((a,b)=>FLOW.indexOf(a)-FLOW.indexOf(b));
+  box.innerHTML = `
+  <div class="card">
+    <div class="card-h" style="flex-wrap:wrap;gap:8px">
+      <input class="inp" id="q" placeholder="搜索医院 / PI / 城市 / 中心编号…" value="${esc(state.q)}" style="width:250px">
+      <div class="row" style="gap:5px">
+        ${sts.map(s=>`<button class="chip" data-st="${esc(s)}" aria-pressed="${state.stFilter.has(s)}">${esc(s)}</button>`).join("")}
+      </div>
+      <span class="sp"></span>
+      <span class="sub" id="cnt"></span>
+      <button class="btn" id="clr">重置</button>
+    </div>
+    <div class="tw"><table id="tbl">
+      <thead><tr>${COLS.map(c=>`<th class="${c.s?"s":""} ${c.num?"ta-r":""}" data-k="${c.k}"
+        ${state.sortKey===c.k?`aria-sort="${state.sortDir>0?"descending":"ascending"}"`:""}>${esc(c.t)}${c.s?`<span class="ar">${state.sortKey===c.k?(state.sortDir>0?"↓":"↑"):"↕"}</span>`:""}</th>`).join("")}</tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:10px">点击任意一行打开中心详情 —— 状态机推进、入组曲线、派驻人员、未关闭质量事件与财务快照都在一处。</p>`;
+
+  function draw(){
+    const q = state.q.trim().toLowerCase();
+    let rows = all.filter(s=>{
+      if(state.stFilter.size && !state.stFilter.has(s.st)) return false;
+      if(!q) return true;
+      return [s.hosp,s.pi,s.city,s.id,s.dept,S[s.sid].short].some(v=>v.toLowerCase().includes(q));
+    });
+    const val = (s,k)=>{ const m=siteM(s);
+      return k==="rate"? (m.rate??-1) : k==="gm"? (m.gm??-99) : k==="sid"? S[s.sid].short : s[k]; };
+    rows.sort((a,b)=>{ const x=val(a,state.sortKey), y=val(b,state.sortKey);
+      return (typeof x==="string"? x.localeCompare(y,"zh") : x-y) * -state.sortDir; });
+    $("#cnt").textContent = `${rows.length} / ${all.length} 个中心`;
+    $("#tbl tbody").innerHTML = rows.length? rows.map(s=>{
+      const m=siteM(s), rs=rateState(m.rate);
+      const iss = ISSUES.filter(i=>i.ss===s.id&&i.st!=="已关闭").length;
+      return `<tr class="clk" data-ss="${s.id}">
+        <td><div class="t-main">${esc(s.hosp)}${iss?` <span class="pill p-crit" title="未关闭质量事件">${iss}</span>`:""}</div>
+            <div class="t-sub">${esc(s.dept)} · PI ${esc(s.pi)} · ${esc(s.city)} · ${s.id}</div></td>
+        <td><div style="font-size:12px">${esc(S[s.sid].short)}</div><div class="t-sub">${esc(S[s.sid].phase)}</div></td>
+        <td><span class="pill ${s.st==="入组中"?"p-acc":"p-neut"}">${esc(s.st)}</span></td>
+        <td class="tnum">${s.enrolled}<span class="t-mut"> / ${s.contracted}</span></td>
+        <td class="ta-r"><span class="pill p-${rs.k}">${m.rate===null?"—":pct(m.rate)}</span></td>
+        <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--good)"};font-weight:500">${m.gm===null?"—":pct(m.gm)}</td>
+        <td class="tnum">${n0(s.md)}</td>
+        <td><div class="t-sub">CRA ${esc(s.cra)}</div><div class="t-sub">CRC ${esc(s.crc.join("、"))}</div></td>
+      </tr>`;}).join("") : `<tr><td colspan="8"><div class="empty">没有匹配的中心，试试放宽筛选条件</div></td></tr>`;
+  }
+  draw();
+  $("#q").addEventListener("input",e=>{state.q=e.target.value;draw();});
+  box.addEventListener("click",e=>{
+    const c=e.target.closest("[data-st]");
+    if(c){ const v=c.dataset.st; state.stFilter.has(v)?state.stFilter.delete(v):state.stFilter.add(v);
+      c.setAttribute("aria-pressed",state.stFilter.has(v)); draw(); return; }
+    const th=e.target.closest("th.s");
+    if(th){ const k=th.dataset.k;
+      if(state.sortKey===k) state.sortDir*=-1; else {state.sortKey=k;state.sortDir=1;}
+      render(); return; }
+    if(e.target.closest("#clr")){ state.q="";state.stFilter.clear();render(); return; }
+    const tr=e.target.closest("[data-ss]"); if(tr) openSite(tr.dataset.ss);
+  });
+};
+
+/* ── 中心详情抽屉：含状态机推进 ── */
+function openSite(id){
+  const ss=site(id), st=S[ss.sid], m=siteM(ss);
+  const i=FLOW.indexOf(ss.st), next=FLOW[i+1];
+  const iss=ISSUES.filter(x=>x.ss===id&&x.st!=="已关闭");
+  const ms =MILES.filter(x=>x.ss===id);
+  const vs =VISITS.filter(x=>x.ss===id);
+  const rs = rateState(m.rate);
+  openLayer($("#drawer"),`
+    <div class="drawer-h">
+      <div style="flex:1">
+        <div class="section-t" style="margin:0 0 3px">${esc(ss.id)} · ${esc(st.id)}</div>
+        <h2 style="font-size:17px">${esc(ss.hosp)}</h2>
+        <div class="note" style="margin-top:3px">${esc(ss.dept)} · PI ${esc(ss.pi)} · ${esc(ss.city)}｜${esc(st.short)} ${esc(st.phase)} · ${esc(st.indication)}</div>
+      </div>
+      <button class="x" data-close aria-label="关闭">✕</button>
+    </div>
+    <div class="drawer-b">
+      <div class="section-t">中心状态机</div>
+      <div style="display:flex;gap:2px;margin-bottom:8px">${FLOW.map((f,k)=>`
+        <div title="${esc(f)}" style="flex:1;height:5px;border-radius:1px;background:${k<=i?"var(--accent)":"var(--surface-3)"}"></div>`).join("")}</div>
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <div><span class="pill p-acc">${esc(ss.st)}</span>
+          <span class="note" style="margin-left:6px">第 ${i+1} / ${FLOW.length} 节点</span></div>
+        ${next?`<button class="btn btn-p" id="adv">推进到「${esc(next)}」</button>`
+              :`<span class="pill p-good">流程已完成</span>`}
+      </div>
+      <div class="grid g2" style="gap:8px;margin-bottom:14px">
+        <div class="card" style="padding:10px 12px">
+          <div class="kpi-l">入组达成</div>
+          <div class="num" style="font-size:20px;margin-top:3px;color:${rs.c}">${m.rate===null?"—":pct(m.rate)}</div>
+          <div class="note">实际 ${ss.enrolled} / 计划到今日 ${ss.planToDate}｜合同 ${ss.contracted} 例</div>
+        </div>
+        <div class="card" style="padding:10px 12px">
+          <div class="kpi-l">单中心毛利</div>
+          <div class="num" style="font-size:20px;margin-top:3px;color:${m.gp<0?"var(--crit)":"var(--good)"}">${m.gp>0?"+":""}${n1(m.gp)} 万</div>
+          <div class="note">毛利率 ${m.gm===null?"—":pct(m.gm)}｜每例成本 ${m.cpe?n1(m.cpe)+" 万":"—"}</div>
+        </div>
+      </div>
+      <div class="section-t">关键日期</div>
+      <dl class="kv" style="margin-bottom:14px">
+        <dt>伦理批件</dt><dd>${esc(ss.ethics)}</dd>
+        <dt>SIV 启动</dt><dd>${esc(ss.siv)}</dd>
+        <dt>首例入组</dt><dd>${esc(ss.fpi)}${ss.siv!=="—"&&ss.fpi!=="—"?` <span class="t-mut">（启动→FPI ${days(ss.siv,ss.fpi)} 天）</span>`:""}</dd>
+        <dt>单例单价</dt><dd>${n1(ss.unit)} 万 / 例</dd>
+        <dt>已耗人天</dt><dd>${n0(ss.md)} 人天${m.mdPerPt?` <span class="t-mut">（${n1(m.mdPerPt)} 人天/例）</span>`:""}</dd>
+      </dl>
+      <div class="section-t">派驻人员</div>
+      <div class="stack" style="gap:6px;margin-bottom:14px">
+        ${[[ss.cra,"CRA"],...ss.crc.map(c=>[c,"CRC"])].map(([n,r])=>{
+          const p=staff(n), s=utilState(p.util);
+          return `<div class="row" style="justify-content:space-between;border:1px solid var(--line);border-radius:3px;padding:7px 10px">
+            <div><b style="font-weight:500">${esc(n)}</b> <span class="t-sub">${r} · ${esc(p.lvl)} · ${esc(p.city)}</span></div>
+            <span class="pill p-${s.k}">利用率 ${p.util}% · ${s.t}</span></div>`;}).join("")}
+      </div>
+      ${iss.length?`<div class="section-t">未关闭质量事件（${iss.length}）</div>
+      <div class="stack" style="gap:6px;margin-bottom:14px">${iss.map(x=>`
+        <button data-goto="qa" style="text-align:left;border:1px solid var(--line);border-left:2px solid ${SEV[x.sev].c};background:none;border-radius:0 3px 3px 0;padding:8px 10px;cursor:pointer;width:100%">
+          <div class="row" style="gap:6px"><span class="pill p-${SEV[x.sev].k}">${esc(x.sev)}</span>
+            <b style="font-size:12.5px;font-weight:500">${esc(x.type)}</b><span class="t-sub">${esc(x.id)}</span></div>
+          <div class="note" style="margin-top:3px">责任人 ${esc(x.own)} · CAPA 到期 ${esc(x.due)} · ${esc(x.st)}</div>
+        </button>`).join("")}</div>`:""}
+      ${ms.length?`<div class="section-t">里程碑与结算</div>
+      <div class="tw" style="margin-bottom:14px"><table style="min-width:0">
+        <tbody>${ms.map(x=>`<tr><td style="padding-left:0">${esc(x.name)}<div class="t-sub">达成 ${esc(x.hit)}</div></td>
+          <td class="tnum">${n1(x.amt)} 万</td>
+          <td class="ta-r" style="padding-right:0"><span class="pill ${x.paid?"p-good":x.inv==="待开票"?"p-warn":"p-neut"}">${esc(x.paid?"已回款":x.inv)}</span></td></tr>`).join("")}</tbody>
+      </table></div>`:""}
+      ${vs.length?`<div class="section-t">监查排期</div>
+      <div class="stack" style="gap:5px">${vs.map(v=>`<div class="row" style="justify-content:space-between;font-size:12.5px">
+        <span><span class="mono">${esc(v.d)}</span> · ${esc(v.kind)} · ${esc(v.who)}</span>
+        <span class="pill p-neut">${esc(v.st)} · ${v.days} 天</span></div>`).join("")}</div>`:""}
+    </div>`);
+  $("#adv")?.addEventListener("click",()=>{
+    ss.st=next;
+    if(next==="入组中"&&ss.fpi==="—"){ ss.fpi=TODAY; toast(`${ss.hosp} 首例入组（FPI）日期已记录：${TODAY}`); }
+    if(next==="SIV启动"&&ss.siv==="—"){ ss.siv=TODAY;
+      MILES.unshift({id:"M-0"+(50+MILES.length),ss:ss.id,name:"中心启动 SIV",amt:14.0,hit:TODAY,inv:"待开票",due:"—",paid:false,age:0});
+      toast(`SIV 里程碑已达成，14.0 万自动进入待开票队列`); }
+    toast(`${ss.hosp} 状态推进至「${next}」`);
+    closeLayer(); setTimeout(render,220);
+  });
+}
+
+/* ════════════════ 3 · 入组进度 ════════════════ */
+VIEWS.enr = box=>{
+  const sid = state.study==="all" ? state.enrStudy : state.study;
+  const st = S[sid], e = ENROLL[sid];
+  const sites = SITES.filter(s=>s.sid===sid);
+  const gap = e.act.at(-1) - e.plan.at(-1);
+  const mp = e.plan.map((v,i)=>i?v-e.plan[i-1]:v), ma = e.act.map((v,i)=>i?v-e.act[i-1]:v);
+  const monthly = state.enrMode==="m";
+
+  box.innerHTML = `
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h" style="flex-wrap:wrap">
+      <div class="seg" id="stab">${STUDIES.map(s=>
+        `<button data-s="${s.id}" aria-pressed="${sid===s.id}">${esc(s.short)}</button>`).join("")}</div>
+      <span class="sp"></span>
+      <div class="seg" id="emode">
+        <button data-m="c" aria-pressed="${!monthly}">累计</button>
+        <button data-m="m" aria-pressed="${monthly}">月度新增</button>
+      </div>
+    </div>
+    <div class="card-b">
+      <div class="grid g4" style="gap:10px;margin-bottom:16px">
+        ${[["合同计划例数",st.planned,"例",""],
+           ["累计实际入组",e.act.at(-1),"例",`占计划 ${pct(e.act.at(-1)/st.planned)}`],
+           ["较计划曲线",(gap>0?"+":"")+gap,"例",gap<0?"落后":"领先"],
+           ["参研中心",st.sites,"个",`本系统在管 ${sites.length} 个`]].map(([l,v,u,n],i)=>`
+          <div>
+            <div class="kpi-l">${esc(l)}</div>
+            <div class="num" style="font-size:23px;margin-top:3px;${i===2?`color:${gap<0?"var(--crit)":"var(--good)"}`:""}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+            <div class="note">${esc(n)}</div>
+          </div>`).join("")}
+      </div>
+      <div class="legend" style="margin-bottom:10px">
+        <span><i style="background:var(--plan)"></i>计划${monthly?"月增":"累计"}</span>
+        <span><i style="background:var(--s1)"></i>实际${monthly?"月增":"累计"}</span>
+        <span class="t-mut" style="margin-left:auto">${esc(st.id)} · ${esc(st.sponsor)} · ${esc(st.indication)}</span>
+      </div>
+      <div class="chart" id="c-main"></div>
+    </div>
+  </div>
+  <div class="section-t">逐中心入组（小倍数）—— 同一项目内，中心之间差异往往是数倍</div>
+  <div class="grid g4">
+    ${sites.map(s=>{ const m=siteM(s), rs=rateState(m.rate);
+      return `<button class="card" data-ss2="${s.id}" style="text-align:left;cursor:pointer;padding:0;border-color:${m.rate!==null&&m.rate<0.7?"color-mix(in srgb,var(--crit) 40%,var(--line))":"var(--line)"}">
+        <div style="padding:11px 13px 9px">
+          <div class="row" style="justify-content:space-between;align-items:flex-start">
+            <div><div style="font-size:12.5px;font-weight:500;line-height:1.35">${esc(s.hosp)}</div>
+              <div class="t-sub">${esc(s.city)} · PI ${esc(s.pi)}</div></div>
+            <span class="pill p-${rs.k}">${rs.t}</span>
+          </div>
+          <div class="num" style="font-size:21px;margin-top:8px">${s.enrolled}<span style="font-size:12px;color:var(--ink-3)"> / ${s.contracted} 例</span></div>
+          <div class="bartrack" style="height:6px;margin-top:6px;position:relative">
+            <div class="barfill" style="width:${clamp(m.prog*100,0,100)}%;background:${rs.c};height:100%"></div>
+            ${s.planToDate?`<div style="position:absolute;left:${clamp(s.planToDate/s.contracted*100,0,100)}%;top:-2px;bottom:-2px;width:2px;background:var(--ink-3);opacity:.7"></div>`:""}
+          </div>
+          <div class="note" style="margin-top:5px">计划到今日 ${s.planToDate} 例（灰线）· 达成 ${m.rate===null?"—":pct(m.rate)}</div>
+        </div>
+      </button>`;}).join("")}
+  </div>`;
+
+  lineChart($("#c-main"),{x:e.x,series:[
+    {name:monthly?"计划月增":"计划累计",color:"var(--plan)",values:monthly?mp:e.plan,dash:true},
+    {name:monthly?"实际月增":"实际累计",color:"var(--s1)",values:monthly?ma:e.act,fill:!monthly}],h:250});
+
+  box.addEventListener("click",e2=>{
+    const t=e2.target.closest("[data-s]"); if(t){ state.enrStudy=t.dataset.s;
+      if(state.study!=="all"){state.study="all";} render(); return; }
+    const m2=e2.target.closest("[data-m]"); if(m2){ state.enrMode=m2.dataset.m; render(); return; }
+    const c=e2.target.closest("[data-ss2]"); if(c) openSite(c.dataset.ss2);
+  });
+};
+</script>

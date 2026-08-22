@@ -1,0 +1,243 @@
+
+<div class="app">
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark">中</div>
+      <div>
+        <div class="brand-name">临床中心台</div>
+        <div class="brand-sub">SiteDesk&nbsp;v0.9</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="rail-foot">
+      恒济临床研究（虚构）<br>
+      数据截止 <span class="mono">2026-08-22</span>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb" id="crumb"></div>
+      <div class="topbar-sp"></div>
+      <label class="crumb" for="gstudy">项目范围</label>
+      <select class="sel" id="gstudy"></select>
+      <span class="demo-tag">演示数据 · 非真实</span>
+    </header>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-label="详情面板"></aside>
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true"></div>
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   临床中心台 SiteDesk — CRO/SMO 运营管理系统 可交互原型
+   全部数据为硬编码演示数据，不含任何真实受试者信息。
+   数据模型的最小作业单元是 StudySite（项目 × 中心）。
+   ════════════════════════════════════════════════════════════════════ */
+
+const TODAY = "2026-08-22";
+
+/* ── 费率与常量（报价模型与成本归集共用，改一处全局生效） ────────── */
+const RATE = {
+  crcDay:   0.118,   // CRC 内部人天成本（万元/人天，含社保与管理分摊）
+  craDay:   0.192,   // CRA 内部人天成本
+  travel:   0.285,   // CRA 单次现场监查差旅（万元/次）
+  overhead: 0.12,    // PM/QA/职能分摊，按直接人力成本比例
+  workdays: 21.75    // 月均工作日
+};
+
+/* ── 项目 ─────────────────────────────────────────────────────────── */
+const STUDIES = [
+  {id:"HJ-2024-017", short:"艾瑞替尼 III", drug:"注射用甲磺酸艾瑞替尼", sponsor:"华拓生物", phase:"III期",
+   indication:"肝细胞癌", planned:240, sites:14, contract:1860, start:"2024-09", end:"2026-12", cx:1.35},
+  {id:"HJ-2025-003", short:"HT-118 II",  drug:"HT-118 注射液（PD-1）", sponsor:"安泰医药", phase:"II期",
+   indication:"非小细胞肺癌", planned:96, sites:6, contract:920, start:"2025-03", end:"2027-03", cx:1.5},
+  {id:"HJ-2025-011", short:"恒糖宁 III", drug:"恒糖宁片", sponsor:"中康制药", phase:"III期",
+   indication:"2型糖尿病", planned:420, sites:20, contract:2340, start:"2025-06", end:"2027-09", cx:1.0},
+  {id:"HJ-2026-004", short:"CoroFlex 器械", drug:"CoroFlex 药物洗脱支架", sponsor:"捷成医疗", phase:"确证性",
+   indication:"冠状动脉狭窄", planned:180, sites:10, contract:1450, start:"2026-01", end:"2028-01", cx:1.2}
+];
+const S = Object.fromEntries(STUDIES.map(s=>[s.id,s]));
+
+/* ── 中心状态机（顺序即业务流程） ─────────────────────────────────── */
+const FLOW = ["立项","伦理递交","伦理批件","合同签署","SIV启动","入组中","入组完成","随访中","中心关闭"];
+
+/* ── StudySite：项目 × 中心 = 最小作业单元 ───────────────────────── */
+/* enrolled 已入组 · planToDate 按计划曲线到今日应达 · contracted 合同例数
+   revenue 已确认收入(万元) · cost 已发生成本(万元) · md 已消耗人天       */
+const SITES = [
+  {id:"SS-01", sid:"HJ-2024-017", hosp:"北京协和医院", dept:"肝胆外科", pi:"陈国栋", city:"北京",
+   st:"入组中", contracted:30, enrolled:26, planToDate:24, unit:5.8, revenue:168.4, cost:96.2, md:642,
+   cra:"林敏", crc:["吴桐"], ethics:"2024-10-18", siv:"2024-12-06", fpi:"2024-12-27", risk:0},
+  {id:"SS-02", sid:"HJ-2024-017", hosp:"复旦大学附属中山医院", dept:"肝外科", pi:"沈亦农", city:"上海",
+   st:"入组中", contracted:28, enrolled:19, planToDate:22, unit:5.8, revenue:126.6, cost:88.4, md:588,
+   cra:"赵坤", crc:["沈亦琳"], ethics:"2024-11-02", siv:"2024-12-20", fpi:"2025-01-15", risk:2},
+  {id:"SS-03", sid:"HJ-2024-017", hosp:"中山大学肿瘤防治中心", dept:"肝胆科", pi:"黄志刚", city:"广州",
+   st:"入组中", contracted:25, enrolled:21, planToDate:20, unit:5.8, revenue:139.8, cost:79.1, md:527,
+   cra:"何雨薇", crc:["郭晓萱"], ethics:"2024-10-29", siv:"2024-12-13", fpi:"2025-01-08", risk:0},
+  {id:"SS-04", sid:"HJ-2024-017", hosp:"四川大学华西医院", dept:"腹部肿瘤科", pi:"罗建平", city:"成都",
+   st:"入组中", contracted:22, enrolled:8, planToDate:16, unit:5.8, revenue:62.4, cost:81.6, md:544,
+   cra:"段志远", crc:["唐延"], ethics:"2025-01-11", siv:"2025-03-07", fpi:"2025-05-19", risk:3},
+  {id:"SS-05", sid:"HJ-2024-017", hosp:"西安交大第一附属医院", dept:"肝胆外科", pi:"白玉山", city:"西安",
+   st:"SIV启动", contracted:20, enrolled:0, planToDate:9, unit:5.8, revenue:14.0, cost:38.9, md:259,
+   cra:"段志远", crc:["唐延"], ethics:"2025-06-20", siv:"2025-11-14", fpi:"—", risk:3},
+  {id:"SS-06", sid:"HJ-2025-003", hosp:"上海市胸科医院", dept:"肿瘤内科", pi:"顾雯", city:"上海",
+   st:"入组中", contracted:20, enrolled:14, planToDate:13, unit:8.4, revenue:135.6, cost:74.8, md:498,
+   cra:"赵坤", crc:["冯乐"], ethics:"2025-04-22", siv:"2025-06-11", fpi:"2025-07-03", risk:1},
+  {id:"SS-07", sid:"HJ-2025-003", hosp:"天津医科大学肿瘤医院", dept:"胸部肿瘤科", pi:"马利", city:"天津",
+   st:"入组中", contracted:18, enrolled:11, planToDate:12, unit:8.4, revenue:107.4, cost:69.3, md:462,
+   cra:"林敏", crc:["吴桐"], ethics:"2025-05-08", siv:"2025-06-25", fpi:"2025-07-30", risk:1},
+  {id:"SS-08", sid:"HJ-2025-003", hosp:"浙江省肿瘤医院", dept:"胸部内科", pi:"徐宏", city:"杭州",
+   st:"入组中", contracted:16, enrolled:3, planToDate:6, unit:8.4, revenue:37.2, cost:41.5, md:277,
+   cra:"赵坤", crc:["冯乐"], ethics:"2025-11-19", siv:"2026-02-10", fpi:"2026-04-22", risk:2},
+  {id:"SS-09", sid:"HJ-2025-011", hosp:"北京大学人民医院", dept:"内分泌科", pi:"纪红梅", city:"北京",
+   st:"入组中", contracted:35, enrolled:31, planToDate:28, unit:3.9, revenue:135.9, cost:71.4, md:605,
+   cra:"林敏", crc:["廖梦然"], ethics:"2025-07-14", siv:"2025-09-02", fpi:"2025-09-24", risk:0},
+  {id:"SS-10", sid:"HJ-2025-011", hosp:"华中科技大学同济医院", dept:"内分泌科", pi:"邓伟", city:"武汉",
+   st:"入组中", contracted:32, enrolled:27, planToDate:26, unit:3.9, revenue:119.3, cost:68.0, md:576,
+   cra:"徐倩", crc:["邱志安"], ethics:"2025-07-30", siv:"2025-09-16", fpi:"2025-10-11", risk:0},
+  {id:"SS-11", sid:"HJ-2025-011", hosp:"中南大学湘雅二医院", dept:"内分泌科", pi:"龚敏", city:"长沙",
+   st:"入组中", contracted:30, enrolled:18, planToDate:24, unit:3.9, revenue:82.2, cost:70.9, md:601,
+   cra:"徐倩", crc:["邱志安"], ethics:"2025-08-26", siv:"2025-10-21", fpi:"2025-11-28", risk:2},
+  {id:"SS-12", sid:"HJ-2026-004", hosp:"中国医学科学院阜外医院", dept:"冠心病中心", pi:"石磊", city:"北京",
+   st:"入组中", contracted:40, enrolled:33, planToDate:30, unit:4.6, revenue:167.8, cost:92.7, md:618,
+   cra:"林敏", crc:["廖梦然"], ethics:"2026-02-09", siv:"2026-03-24", fpi:"2026-04-14", risk:0},
+  {id:"SS-13", sid:"HJ-2026-004", hosp:"广东省人民医院", dept:"心内科", pi:"曾祥", city:"广州",
+   st:"伦理递交", contracted:25, enrolled:0, planToDate:0, unit:4.6, revenue:0, cost:11.8, md:79,
+   cra:"何雨薇", crc:["郭晓萱"], ethics:"—", siv:"—", fpi:"—", risk:1},
+  {id:"SS-14", sid:"HJ-2026-004", hosp:"江苏省人民医院", dept:"心内科", pi:"卢建", city:"南京",
+   st:"合同签署", contracted:22, enrolled:0, planToDate:0, unit:4.6, revenue:8.5, cost:16.3, md:109,
+   cra:"何雨薇", crc:["冯乐"], ethics:"2026-06-30", siv:"—", fpi:"—", risk:1}
+];
+
+/* ── 人员：资质、成本、当前饱和度 ─────────────────────────────────── */
+const STAFF = [
+  {n:"林敏",   role:"CRA", lvl:"高级", city:"北京", gcp:"2027-03-18", util:82, sites:["SS-01","SS-07","SS-09","SS-12"]},
+  {n:"赵坤",   role:"CRA", lvl:"中级", city:"上海", gcp:"2027-01-09", util:94, sites:["SS-02","SS-06","SS-08"]},
+  {n:"何雨薇", role:"CRA", lvl:"中级", city:"广州", gcp:"2026-11-25", util:71, sites:["SS-03","SS-13","SS-14"]},
+  {n:"段志远", role:"CRA", lvl:"初级", city:"成都", gcp:"2028-01-30", util:56, sites:["SS-04","SS-05"]},
+  {n:"徐倩",   role:"CRA", lvl:"中级", city:"武汉", gcp:"2026-09-30", util:88, sites:["SS-10","SS-11"]},
+  {n:"吴桐",   role:"CRC", lvl:"高级", city:"北京", gcp:"2027-05-12", util:87, sites:["SS-01","SS-07"]},
+  {n:"沈亦琳", role:"CRC", lvl:"中级", city:"上海", gcp:"2027-02-28", util:79, sites:["SS-02"]},
+  {n:"郭晓萱", role:"CRC", lvl:"中级", city:"广州", gcp:"2026-10-16", util:68, sites:["SS-03","SS-13"]},
+  {n:"唐延",   role:"CRC", lvl:"初级", city:"成都", gcp:"2028-03-04", util:44, sites:["SS-04","SS-05"]},
+  {n:"廖梦然", role:"CRC", lvl:"高级", city:"北京", gcp:"2027-08-21", util:96, sites:["SS-09","SS-12"]},
+  {n:"邱志安", role:"CRC", lvl:"中级", city:"武汉", gcp:"2027-06-07", util:81, sites:["SS-10","SS-11"]},
+  {n:"冯乐",   role:"CRC", lvl:"中级", city:"上海", gcp:"2027-04-19", util:76, sites:["SS-06","SS-08","SS-14"]},
+  {n:"韩雪",   role:"PM",  lvl:"总监", city:"北京", gcp:"2027-09-30", util:74, sites:[]},
+  {n:"卫兰",   role:"QA",  lvl:"经理", city:"北京", gcp:"2027-11-11", util:66, sites:[]}
+];
+
+/* ── 入组曲线：月度累计（计划 vs 实际），按项目 ───────────────────── */
+const ENROLL = {
+  "HJ-2024-017":{x:["25-02","25-04","25-06","25-08","25-10","25-12","26-02","26-04","26-06","26-08"],
+    plan:[12,28,48,70,92,114,136,158,178,196], act:[9,22,39,58,74,88,101,118,131,143]},
+  "HJ-2025-003":{x:["25-08","25-10","25-12","26-02","26-04","26-06","26-08"],
+    plan:[3,9,17,25,33,41,49], act:[2,7,13,19,23,26,28]},
+  "HJ-2025-011":{x:["25-10","25-12","26-02","26-04","26-06","26-08"],
+    plan:[14,42,78,116,152,188], act:[11,36,68,102,139,171]},
+  "HJ-2026-004":{x:["26-04","26-05","26-06","26-07","26-08"],
+    plan:[6,14,22,30,38], act:[5,12,19,26,33]}
+};
+
+/* ── 质量事件与 CAPA ──────────────────────────────────────────────── */
+const ISSUES = [
+  {id:"QI-2026-0155", ss:"SS-02", sev:"严重", type:"SAE 上报超窗", found:"2026-08-19",
+   desc:"受试者 S-0217 发生 3 级肝功能异常，研究者知晓至上报申办方 26.5 小时，超出 24 小时窗口。",
+   capa:"重新培训 PI 及研究护士 SAE 上报流程；在中心张贴 24h 倒计时卡；CRC 每日核查病历新增 SAE。",
+   own:"沈亦琳", due:"2026-08-26", st:"CAPA进行中", sla:24, elapsed:26.5},
+  {id:"QI-2026-0139", ss:"SS-05", sev:"重大", type:"知情同意版本错误", found:"2026-08-11",
+   desc:"3 例受试者签署 ICF V2.1（现行版本为 V3.0，2026-05-30 生效），涉及筛选期受试者。",
+   capa:"已上报伦理委员会并获批重新签署；全部在筛受试者 ICF 版本 100% 复核；中心文件夹版本控制表上墙。",
+   own:"卫兰", due:"2026-08-29", st:"CAPA进行中", sla:null},
+  {id:"QI-2026-0142", ss:"SS-04", sev:"严重", type:"方案偏离", found:"2026-08-14",
+   desc:"受试者 S-0331 第 4 次访视实际日期超出方案窗口 5 天（窗口 ±3 天）。",
+   capa:"CRC 增加访视窗口前 7 天提醒机制；PI 签署方案偏离表并上报伦理。",
+   own:"唐延", due:"2026-08-24", st:"待验证", sla:null},
+  {id:"QI-2026-0151", ss:"SS-11", sev:"一般", type:"源数据缺陷", found:"2026-08-17",
+   desc:"稽查抽查 20 份原始病历，12 处研究者签名/日期缺失，主要集中在合并用药记录页。",
+   capa:"研究者集中补签并留痕；CRC 建立每周源数据完整性自查清单。",
+   own:"邱志安", due:"2026-09-05", st:"CAPA进行中", sla:null},
+  {id:"QI-2026-0158", ss:"SS-12", sev:"一般", type:"药品温控中断", found:"2026-08-20",
+   desc:"药房冷藏柜温度记录仪断电 4 小时，期间温度记录缺失，涉及 2 个批次试验用药品。",
+   capa:"申办方已出具药品可用性评估；加装 UPS 与温度越限短信报警。",
+   own:"廖梦然", due:"2026-09-02", st:"待验证", sla:null},
+  {id:"QI-2026-0131", ss:"SS-03", sev:"一般", type:"实验室资质过期", found:"2026-07-28",
+   desc:"中心检验科室间质评证书于 2026-07-15 到期，新证书未及时归档至研究者文件夹。",
+   capa:"已取得新证书并归档；建立中心资质文件到期日历，提前 60 天提醒。",
+   own:"郭晓萱", due:"2026-08-15", st:"已关闭", sla:null}
+];
+
+/* ── 监查访视排期与 MVR 跟进项 ────────────────────────────────────── */
+const VISITS = [
+  {d:"2026-08-25", ss:"SS-02", kind:"IMV", who:"赵坤", st:"已排期", days:2,
+   items:[{t:"核查 8 月新增 3 例受试者知情同意原件与签署时间",done:true},
+          {t:"SDV：主要疗效终点（mRECIST 评估）100% 核对",done:true},
+          {t:"跟进 QI-2026-0155 SAE 上报 CAPA 执行证据",done:false},
+          {t:"核对试验用药品发放与回收记录，清点库存",done:false},
+          {t:"研究者文件夹（ISF）完整性检查表逐项过",done:false}]},
+  {d:"2026-08-27", ss:"SS-04", kind:"IMV", who:"段志远", st:"已排期", days:2,
+   items:[{t:"入组停滞根因访谈：PI 与研究护士各 30 分钟",done:false},
+          {t:"复核筛选失败日志，统计失败原因分布",done:false},
+          {t:"方案偏离 QI-2026-0142 关闭证据核查",done:false},
+          {t:"与 PI 确认 9-10 月入组承诺量并书面记录",done:false}]},
+  {d:"2026-09-01", ss:"SS-13", kind:"SIV", who:"何雨薇", st:"待确认", days:1,
+   items:[{t:"确认伦理批件、临床试验批件、保险单已齐备",done:false},
+          {t:"研究团队方案培训及签到表",done:false},
+          {t:"药品接收与储存条件确认",done:false},
+          {t:"EDC 账号开通与 eCRF 填写培训",done:false}]},
+  {d:"2026-09-03", ss:"SS-09", kind:"IMV", who:"林敏", st:"已排期", days:1,
+   items:[{t:"SDV 抽样 30%（该中心质量稳定，降低抽样比例）",done:false},
+          {t:"入组超前，核查是否存在入排标准放宽",done:false},
+          {t:"数据质疑（query）关闭情况复核",done:false}]},
+  {d:"2026-09-08", ss:"SS-11", kind:"IMV", who:"徐倩", st:"已排期", days:2,
+   items:[{t:"源数据签名缺失 QI-2026-0151 整改验证（全量复核）",done:false},
+          {t:"入组落后 6 例，制定追赶计划",done:false},
+          {t:"研究护士离职交接文件核查",done:false}]},
+  {d:"2026-09-15", ss:"SS-01", kind:"COV", who:"林敏", st:"待确认", days:2,
+   items:[{t:"全部受试者随访完成确认，末例出组日期锁定",done:false},
+          {t:"剩余药品回收销毁记录",done:false},
+          {t:"研究者文件夹归档移交清单",done:false},
+          {t:"中心关闭信及后续存档要求书面告知 PI",done:false}]}
+];
+
+/* ── 里程碑 · 开票 · 回款 ─────────────────────────────────────────── */
+const MILES = [
+  {id:"M-041", ss:"SS-01", name:"入组达成 80%", amt:42.0, hit:"2026-08-12", inv:"已开票", due:"2026-10-11", paid:false, age:10},
+  {id:"M-038", ss:"SS-09", name:"入组达成 80%", amt:31.2, hit:"2026-07-28", inv:"已开票", due:"2026-09-26", paid:false, age:25},
+  {id:"M-035", ss:"SS-12", name:"入组达成 75%", amt:38.6, hit:"2026-07-15", inv:"已开票", due:"2026-09-13", paid:false, age:38},
+  {id:"M-029", ss:"SS-03", name:"入组达成 80%", amt:28.9, hit:"2026-05-20", inv:"已开票", due:"2026-07-19", paid:false, age:94},
+  {id:"M-026", ss:"SS-06", name:"入组过半", amt:33.6, hit:"2026-04-30", inv:"已开票", due:"2026-06-29", paid:false, age:114},
+  {id:"M-044", ss:"SS-10", name:"入组达成 80%", amt:29.4, hit:"2026-08-18", inv:"待开票", due:"—", paid:false, age:4},
+  {id:"M-045", ss:"SS-07", name:"入组过半", amt:22.1, hit:"2026-08-06", inv:"待开票", due:"—", paid:false, age:16},
+  {id:"M-046", ss:"SS-14", name:"合同签署", amt:8.5, hit:"2026-08-20", inv:"待开票", due:"—", paid:false, age:2},
+  {id:"M-021", ss:"SS-02", name:"入组过半", amt:35.4, hit:"2026-03-11", inv:"已回款", due:"2026-05-10", paid:true, age:0},
+  {id:"M-018", ss:"SS-01", name:"入组过半", amt:40.6, hit:"2026-01-22", inv:"已回款", due:"2026-03-23", paid:true, age:0}
+];
+
+/* ── 工时记录（演示用，可在"工时与差旅"中新增） ──────────────────── */
+const WORKTYPES = [
+  {k:"受试者访视陪同", bill:true},
+  {k:"源数据准备与核对", bill:true},
+  {k:"伦理递交与跟进", bill:true},
+  {k:"现场监查（IMV）", bill:true},
+  {k:"药品与物资管理", bill:true},
+  {k:"内部培训", bill:false},
+  {k:"投标与商务支持", bill:false},
+  {k:"返工与整改", bill:false}
+];
+let TIMESHEET = [
+  {id:1, d:"2026-08-21", who:"吴桐", ss:"SS-01", type:"受试者访视陪同", h:7.5, travel:0},
+  {id:2, d:"2026-08-21", who:"赵坤", ss:"SS-02", type:"现场监查（IMV）", h:8,   travel:0.32},
+  {id:3, d:"2026-08-21", who:"唐延", ss:"SS-04", type:"内部培训",       h:4,   travel:0},
+  {id:4, d:"2026-08-20", who:"廖梦然", ss:"SS-09", type:"源数据准备与核对", h:8, travel:0},
+  {id:5, d:"2026-08-20", who:"冯乐", ss:"SS-06", type:"受试者访视陪同", h:6.5, travel:0},
+  {id:6, d:"2026-08-20", who:"何雨薇", ss:"SS-13", type:"伦理递交与跟进", h:5,  travel:0.18},
+  {id:7, d:"2026-08-19", who:"唐延", ss:"SS-05", type:"投标与商务支持", h:6,   travel:0}
+];
+let tsSeq = 8;
+</script>

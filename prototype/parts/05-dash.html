@@ -1,0 +1,156 @@
+<script>
+"use strict";
+/* ════════════════ 1 · 经营驾驶舱 ════════════════ */
+const SPARK = {
+  util:[71,74,72,77,79,76,80,78,81,79,80,78],
+  gm:[24.1,25.6,24.9,26.8,27.4,26.2,28.1,27.3,26.5,25.9,26.8,27.6],
+  rate:[102,99,97,95,94,92,90,89,88,87,86,87],
+  cpe:[3.9,3.8,4.0,4.1,4.0,4.2,4.3,4.2,4.4,4.3,4.4,4.5],
+  dso:[68,71,69,74,77,75,79,82,80,83,85,84]
+};
+VIEWS.dash = box=>{
+  const list = scope(), R = rollup(list);
+  const rng = {"6m":6,"12m":12,"all":99}[state.dashRange];
+  const es = ENROLL[state.study==="all"?"HJ-2024-017":state.study];
+  const cut = Math.max(0, es.x.length-rng);
+  const ex = es.x.slice(cut), ep = es.plan.slice(cut), ea = es.act.slice(cut);
+
+  /* 风险清单：由数据自动推导，不是手写 */
+  const alerts = [];
+  list.forEach(ss=>{
+    const m=siteM(ss);
+    if(m.rate!==null && m.rate<0.7) alerts.push({sev:"crit",t:`${ss.hosp} 入组仅达计划 ${pct(m.rate)}`,
+      d:`已入组 ${ss.enrolled} / 应达 ${ss.planToDate} 例，缺口 ${ss.planToDate-ss.enrolled} 例`,go:"sites"});
+    if(m.gm!==null && m.gm<0) alerts.push({sev:"crit",t:`${ss.hosp} 单中心亏损 ${n1(m.gp)} 万`,
+      d:`收入 ${wan(ss.revenue)} 万 / 成本 ${wan(ss.cost)} 万，已消耗 ${n0(ss.md)} 人天`,go:"pnl"});
+  });
+  ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般"&&(state.study==="all"||site(i.ss).sid===state.study))
+    .forEach(i=>alerts.push({sev:"crit",t:`${i.sev}质量事件 ${i.id} · ${i.type}`,
+      d:`${site(i.ss).hosp} · 责任人 ${i.own} · CAPA 到期 ${i.due}`,go:"qa"}));
+  STAFF.filter(p=>p.util>88).forEach(p=>alerts.push({sev:"warn",t:`${p.n}（${p.role}）利用率 ${p.util}%`,
+    d:`长期超过 88% 是质量事故与离职的先行指标，建议分流 1 个中心`,go:"staff"}));
+  STAFF.filter(p=>days(TODAY,p.gcp)<70).forEach(p=>alerts.push({sev:"warn",t:`${p.n} GCP 证书 ${days(TODAY,p.gcp)} 天后到期`,
+    d:`到期日 ${p.gcp} · 未及时换证将无法承担监查/协调工作`,go:"staff"}));
+  const overdue = MILES.filter(m=>!m.paid&&m.inv==="已开票"&&m.age>60&&(state.study==="all"||site(m.ss).sid===state.study));
+  if(overdue.length) alerts.push({sev:"warn",t:`${overdue.length} 笔应收账龄超 60 天，合计 ${wan(sum(overdue,m=>m.amt))} 万`,
+    d:`最久一笔 ${Math.max(...overdue.map(m=>m.age))} 天 · ${site(overdue[0].ss).hosp}`,go:"bill"});
+
+  const K = (l,v,u,note,sp,spc,delta,dc,to)=>`
+    <button class="kpi" data-goto="${to}">
+      <div class="kpi-l">${esc(l)}</div>
+      <div class="kpi-v">${v}${u?`<small>${u}</small>`:""}</div>
+      <div class="kpi-f"><div>
+        <div class="kpi-d" style="color:${dc}">${delta}</div>
+        <div class="kpi-note">${esc(note)}</div>
+      </div>${sp?spark(sp,spc):""}</div>
+    </button>`;
+  const us = utilState(R.util);
+
+  box.innerHTML = `
+  <div class="grid g4" style="margin-bottom:12px">
+    ${K("人员利用率", n1(R.util), "%", `健康区间 60–88%｜${R.people} 名一线`, SPARK.util, us.c,
+        `<span class="dot" style="background:${us.c}"></span>${us.t}`, us.c, "staff")}
+    ${K("综合毛利率", n1(R.gm*100), "%", `收入 ${wan(R.rev)} 万 · 成本 ${wan(R.cost)} 万`, SPARK.gm, "var(--s3)",
+        "▲ 较上月 +0.8pt", "var(--good)", "pnl")}
+    ${(()=>{ const g=R.enr-R.plan, c=g>=0?"var(--good)":R.rate<0.9?"var(--crit)":"var(--warn)";
+      return K("入组达成率", n1(R.rate*100), "%", `实际 ${R.enr} 例 / 计划到今日 ${R.plan} 例`, SPARK.rate, c,
+        `${g>=0?"▲ 领先":"▼ 落后"} ${Math.abs(g)} 例`, c, "enr"); })()}
+    ${K("每例入组成本", n1(R.cpe), "万", `${R.active} 个中心在组｜共 ${R.total} 个中心`, SPARK.cpe, "var(--s2)",
+        "▲ 较年初 +0.6 万", "var(--warn)", "pnl")}
+  </div>
+  <div class="grid g4" style="margin-bottom:12px">
+    ${K("未关闭质量事件", R.open.length, "", `其中重大/严重 ${R.crit} 项`, null, null,
+        `<span class="dot" style="background:${R.crit?"var(--crit)":"var(--good)"}"></span>${R.crit?"需立即处理":"无高危"}`,
+        R.crit?"var(--crit)":"var(--good)", "qa")}
+    ${K("应收未回款", wan(R.arAmt), "万", `账龄超 60 天 ${wan(R.arOver)} 万`, SPARK.dso, "var(--s5)",
+        `DSO ${R.dso} 天`, R.dso>75?"var(--crit)":"var(--warn)", "bill")}
+    ${K("待开票里程碑", wan(R.unbilledAmt), "万", `${R.unbilled} 笔已达成未开票`, null, null,
+        "立即可开票", "var(--accent)", "bill")}
+    ${K("在组中心", R.active, ` / ${R.total}`, `启动中 ${R.total-R.active} 个`, null, null,
+        "点击查看台账", "var(--ink-3)", "sites")}
+  </div>
+
+  <div class="grid g21" style="margin-bottom:12px">
+    <div class="card">
+      <div class="card-h">
+        <h3>入组累计：计划 vs 实际</h3>
+        <span class="sub">${esc(state.study==="all"?"HJ-2024-017 艾瑞替尼 III（默认）":S[state.study].short)}</span>
+        <span class="sp"></span>
+        <div class="seg" id="rng">
+          ${["6m","12m","all"].map(r=>`<button data-r="${r}" aria-pressed="${state.dashRange===r}">${r==="all"?"全周期":r.replace("m","个月")}</button>`).join("")}
+        </div>
+      </div>
+      <div class="card-b">
+        <div class="legend" style="margin-bottom:10px">
+          <span><i style="background:var(--plan)"></i>计划累计</span>
+          <span><i style="background:var(--s1)"></i>实际累计</span>
+          <span class="t-mut" style="margin-left:auto">悬停查看逐月差额</span>
+        </div>
+        <div class="chart" id="c-enr"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>风险预警</h3><span class="sp"></span>
+        <span class="pill ${alerts.some(a=>a.sev==="crit")?"p-crit":"p-warn"}">${alerts.length} 项待处理</span></div>
+      <div class="card-b" style="padding:0;max-height:330px;overflow-y:auto">
+        ${alerts.length? alerts.map(a=>`
+          <button data-goto="${a.go}" style="display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:10px 14px 10px 16px;cursor:pointer;position:relative">
+            <span class="stripe" style="background:var(--${a.sev==="crit"?"crit":"warn"})"></span>
+            <div style="font-size:12.5px;font-weight:500;line-height:1.45">${esc(a.t)}</div>
+            <div class="note" style="margin-top:2px">${esc(a.d)}</div>
+          </button>`).join("") : `<div class="empty">当前范围内无预警</div>`}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><h3>一线人员饱和度</h3><span class="sub">闲置与超载都是问题</span></div>
+      <div class="card-b">
+        <div style="position:relative;margin-bottom:10px">
+          <div style="position:absolute;left:calc(90px + 10px + 60%*.6);right:0;top:0;bottom:0;pointer-events:none"></div>
+        </div>
+        <div id="c-util"></div>
+        <div class="legend" style="margin-top:10px;border-top:1px solid var(--line);padding-top:9px">
+          <span><span class="dot" style="background:var(--warn)"></span> 闲置 &lt;60%</span>
+          <span><span class="dot" style="background:var(--good)"></span> 健康 60–88%</span>
+          <span><span class="dot" style="background:var(--crit)"></span> 超载 &gt;88%</span>
+          <span class="t-mut" style="margin-left:auto">灰线 = 健康下限</span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>单中心毛利</h3><span class="sub">正负极性，按毛利额排序</span>
+        <span class="sp"></span><button class="btn" data-goto="pnl">查看 P&amp;L 明细 →</button></div>
+      <div class="card-b"><div id="c-gp"></div></div>
+    </div>
+  </div>`;
+
+  lineChart($("#c-enr"),{x:ex,series:[
+    {name:"计划累计",color:"var(--plan)",values:ep,dash:true},
+    {name:"实际累计",color:"var(--s1)",values:ea,fill:true}],h:230});
+
+  const people = STAFF.filter(p=>p.role==="CRA"||p.role==="CRC").sort((a,b)=>b.util-a.util);
+  hbars($("#c-util"), people.map(p=>{ const s=utilState(p.util);
+    return {label:`${p.n} · ${p.role}`, v:p.util, color:s.c, marker:60,
+      tip:`<div class="tip-t">${esc(p.n)} · ${p.role}${p.lvl}</div>
+        <div class="tip-r"><span>利用率</span><b>${p.util}%</b></div>
+        <div class="tip-r"><span>状态</span><b style="color:${s.c}">${s.t}</b></div>
+        <div class="tip-r"><span>带中心</span><b>${p.sites.length} 个</b></div>
+        <div class="tip-r"><span>常驻</span><b>${p.city}</b></div>`};
+  }), {max:100, fmt:v=>v, unit:"%", h:18, gap:5});
+
+  const gp = list.filter(s=>s.revenue>0).map(s=>{const m=siteM(s);
+    return {label:s.hosp.replace(/(大学|医学院|附属)/g,""), v:m.gp, tip:
+      `<div class="tip-t">${esc(s.hosp)}</div>
+       <div class="tip-r"><span>已确认收入</span><b>${wan(s.revenue)} 万</b></div>
+       <div class="tip-r"><span>已发生成本</span><b>${wan(s.cost)} 万</b></div>
+       <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--good)"}">${pct(m.gm)}</b></div>
+       <div class="tip-r"><span>已入组</span><b>${s.enrolled} / ${s.contracted} 例</b></div>`};
+  }).sort((a,b)=>b.v-a.v);
+  diverging($("#c-gp"), gp);
+
+  $("#rng")?.addEventListener("click",e=>{const b=e.target.closest("[data-r]");
+    if(b){state.dashRange=b.dataset.r;render();}});
+};
+</script>

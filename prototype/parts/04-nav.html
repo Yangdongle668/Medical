@@ -1,0 +1,94 @@
+<script>
+"use strict";
+/* ════════ 导航与路由 ════════ */
+const IC = {
+  dash:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  sites:'<rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="9" width="8" height="11" rx="1"/><path d="M6 8h2M6 12h2M16 13h2"/>',
+  enr:'<path d="M3 17l5-6 4 3 6-8"/><path d="M3 21h18"/>',
+  staff:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M17 11h4M19 9v4"/>',
+  time:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  pnl:'<path d="M4 20V9M10 20V4M16 20v-7M22 20H2"/>',
+  bill:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h4"/>',
+  qa:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  mon:'<rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  price:'<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'
+};
+const NAV = [
+  {g:"经营", items:[
+    {k:"dash",  t:"经营驾驶舱", ic:IC.dash},
+    {k:"sites", t:"项目 · 中心台账", ic:IC.sites},
+    {k:"enr",   t:"入组进度", ic:IC.enr}]},
+  {g:"资源", items:[
+    {k:"staff", t:"派工与产能", ic:IC.staff},
+    {k:"time",  t:"工时与差旅", ic:IC.time}]},
+  {g:"财务", items:[
+    {k:"pnl",   t:"成本与毛利", ic:IC.pnl},
+    {k:"bill",  t:"里程碑 · 结算", ic:IC.bill}]},
+  {g:"质量", items:[
+    {k:"qa",    t:"质量事件与 CAPA", ic:IC.qa, badge:()=>ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般").length},
+    {k:"mon",   t:"监查访视", ic:IC.mon}]},
+  {g:"工具", items:[
+    {k:"price", t:"报价模型", ic:IC.price}]}
+];
+const TITLES = {
+  dash:["经营驾驶舱","一页看清人效、毛利、入组与风险。每个数字后面都对应一个具体的人和一个具体的动作。"],
+  sites:["项目 · 中心台账","StudySite（项目 × 中心）是本系统的最小作业单元 —— 收入按中心计、成本按人落在中心上、核查风险按中心暴露。"],
+  enr:["入组进度","计划曲线 vs 实际曲线。入组延迟是临床试验项目亏损的第一大原因，这张图必须每天有人看。"],
+  staff:["派工与产能","谁、在哪个项目中心、什么角色、FTE 占比多少。闲置与超载都是问题，所以按状态着色而不是按高低。"],
+  time:["工时与差旅","一线在医院用手机填报，目标 30 秒内提交。可计费与不可计费强制区分 —— 不区分，利用率就是假的。"],
+  pnl:["成本与毛利","单中心 P&L。「项目毛利 15%」没有经营价值，「A 院 40% / B 院 -20%」才能据以行动。"],
+  bill:["里程碑 · 开票 · 回款","里程碑达成 → 证据链 → 开票 → 回款。断在哪一环，现金流就卡在哪一环。"],
+  qa:["质量事件与 CAPA","把风险信号提前到日常作业里，而不是等稽查时第一次看见。"],
+  mon:["监查访视","访视排期与 MVR 跟进项闭环。跟进项没关闭，等于这次监查没做。"],
+  price:["报价模型","用历史真实人天反推报价。对手报价靠经验，你靠自己的成本数据库 —— 这是抄不走的护城河。"]
+};
+
+const state = {view:"dash", study:"all", enrStudy:"HJ-2024-017", dashRange:"12m",
+  sortKey:"rate", sortDir:1, q:"", stFilter:new Set(), roleFilter:"all",
+  sevFilter:new Set(), pnlSort:"gp", visitSel:0, tsWho:"吴桐"};
+
+function renderNav(){
+  $("#nav").innerHTML = NAV.map(g=>
+    `<div class="nav-group">${esc(g.g)}</div>` + g.items.map(it=>{
+      const b = it.badge? it.badge():0;
+      return `<button class="nav-item" data-nav="${it.k}" aria-current="${state.view===it.k}">
+        <svg class="nav-ic" viewBox="0 0 24 24">${it.ic}</svg><span>${esc(it.t)}</span>
+        ${b?`<span class="nav-badge">${b}</span>`:""}</button>`;
+    }).join("")).join("");
+}
+function renderTop(){
+  const [t] = TITLES[state.view];
+  const sc = state.study==="all" ? "全部 4 个项目" : S[state.study].short;
+  $("#crumb").innerHTML = `恒济临床研究 / <b>${esc(t)}</b> · <span class="t-mut">${esc(sc)}</span>`;
+  const sel=$("#gstudy");
+  if(!sel.options.length){
+    sel.innerHTML = `<option value="all">全部项目（4）</option>` +
+      STUDIES.map(s=>`<option value="${s.id}">${esc(s.id)} · ${esc(s.short)}</option>`).join("");
+  }
+  sel.value = state.study;
+}
+const VIEWS = {};
+function render(){
+  renderNav(); renderTop();
+  clearTimers();
+  const [t,sub] = TITLES[state.view];
+  $("#content").innerHTML = `<div class="view-head"><h1>${esc(t)}</h1><p>${esc(sub)}</p></div><div id="vbody"></div>`;
+  VIEWS[state.view]($("#vbody"));
+  $("#content").scrollIntoView({block:"start"});
+}
+function go(v,opts={}){ Object.assign(state,opts); state.view=v; render(); }
+
+let timers=[];
+const clearTimers=()=>{timers.forEach(clearInterval);timers=[];};
+
+document.addEventListener("click",e=>{
+  const nav=e.target.closest("[data-nav]");     if(nav){ go(nav.dataset.nav); return; }
+  const gt =e.target.closest("[data-goto]");    if(gt){ const [v,k,val]=gt.dataset.goto.split(":");
+    go(v, k?{[k]:val}:{}); return; }
+  const cl =e.target.closest("[data-close]");   if(cl){ closeLayer(); return; }
+});
+$("#gstudy").addEventListener("change",e=>{ state.study=e.target.value;
+  if(state.study!=="all") state.enrStudy=state.study; render(); });
+addEventListener("resize",()=>{ clearTimeout(window.__rz);
+  window.__rz=setTimeout(()=>{ if(state.view==="dash"||state.view==="enr") render(); },250); });
+</script>

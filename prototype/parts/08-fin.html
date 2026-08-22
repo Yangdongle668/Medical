@@ -1,0 +1,180 @@
+<script>
+"use strict";
+/* ════════════════ 6 · 成本与毛利 ════════════════ */
+VIEWS.pnl = box=>{
+  const list=scope().filter(s=>s.revenue>0||s.cost>0), R=rollup(scope());
+  const sorts={gp:"毛利额",gm:"毛利率",cpe:"每例成本",rev:"收入"};
+  const key=state.pnlSort;
+  const val=(s)=>{const m=siteM(s);return key==="gp"?m.gp:key==="gm"?(m.gm??-9):key==="cpe"?(m.cpe??999):s.revenue;};
+  const rows=list.slice().sort((a,b)=>val(b)-val(a));
+  const loss=rows.filter(s=>siteM(s).gp<0);
+
+  /* 成本构成：按人力/差旅/分摊拆解（与工时模块口径一致） */
+  const craMd=sum(list,s=>s.md*0.34), crcMd=sum(list,s=>s.md*0.66);
+  const craC=craMd*RATE.craDay, crcC=crcMd*RATE.crcDay;
+  const travel=sum(list,s=>s.md*0.011*RATE.travel*8);
+  const oh=(craC+crcC)*RATE.overhead;
+
+  box.innerHTML=`
+  <div class="grid g4" style="margin-bottom:12px">
+    ${[["已确认收入",wan(R.rev),"万","按里程碑与入组例数确认"],
+       ["已发生成本",wan(R.cost),"万","人力 + 差旅 + 职能分摊"],
+       ["毛利",(R.gp>0?"+":"")+wan(R.gp),"万",`毛利率 ${pct(R.gm)}`],
+       ["亏损中心",loss.length,"个",loss.length?`合计失血 ${n1(Math.abs(sum(loss,s=>siteM(s).gp)))} 万`:"无"]
+     ].map(([l,v,u,n],i)=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;${i===2?`color:${R.gp>0?"var(--good)":"var(--crit)"}`:i===3&&loss.length?"color:var(--crit)":""}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="margin-bottom:12px">
+    <div class="card">
+      <div class="card-h" style="flex-wrap:wrap"><h3>单中心毛利额</h3>
+        <span class="sub">零轴居中 · 绿盈红亏</span><span class="sp"></span>
+        <div class="seg" id="ps">${Object.entries(sorts).map(([k,t])=>
+          `<button data-k="${k}" aria-pressed="${key===k}">${esc(t)}</button>`).join("")}</div></div>
+      <div class="card-b"><div id="c-dv"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>成本构成</h3><span class="sub">口径同工时模块</span></div>
+      <div class="card-b">
+        <div id="c-cost"></div>
+        <div class="formula" style="margin-top:14px">
+CRC 人力 = ${n0(crcMd)} 人天 × ${RATE.crcDay} 万
+CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
+差旅     = 现场监查次数 × ${RATE.travel} 万
+职能分摊 = 直接人力 × ${pct(RATE.overhead)}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>单中心 P&amp;L 明细</h3><span class="sp"></span>
+      <span class="sub">「项目毛利 ${pct(R.gm)}」没有经营价值 — 下表才有</span></div>
+    <div class="tw"><table style="min-width:900px">
+      <thead><tr><th>中心</th><th>项目</th><th class="ta-r">已入组</th><th class="ta-r">收入</th><th class="ta-r">成本</th>
+        <th class="ta-r">毛利</th><th class="ta-r">毛利率</th><th class="ta-r">每例成本</th><th class="ta-r">人天/例</th><th>判断</th></tr></thead>
+      <tbody>${rows.map(s=>{const m=siteM(s);
+        const flag = m.gm===null?["p-neut","未启动"]:m.gm<0?["p-crit","止血：暂停投人"]:m.gm<0.2?["p-warn","毛利偏低"]:["p-good","健康"];
+        return `<tr class="clk" data-ss3="${s.id}">
+          <td><div class="t-main">${esc(s.hosp)}</div><div class="t-sub">${esc(s.city)} · PI ${esc(s.pi)}</div></td>
+          <td class="t-sub">${esc(S[s.sid].short)}</td>
+          <td class="tnum">${s.enrolled}</td>
+          <td class="tnum">${wan(s.revenue)}</td>
+          <td class="tnum">${wan(s.cost)}</td>
+          <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--good)"};font-weight:600">${m.gp>0?"+":""}${n1(m.gp)}</td>
+          <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--good)"}">${m.gm===null?"—":pct(m.gm)}</td>
+          <td class="tnum">${m.cpe?n1(m.cpe):"—"}</td>
+          <td class="tnum">${m.mdPerPt?n1(m.mdPerPt):"—"}</td>
+          <td><span class="pill ${flag[0]}">${flag[1]}</span></td></tr>`;}).join("")}</tbody>
+      <tfoot><tr style="border-top:2px solid var(--line-2)">
+        <td colspan="3" class="t-main">合计</td>
+        <td class="tnum t-main">${wan(R.rev)}</td><td class="tnum t-main">${wan(R.cost)}</td>
+        <td class="tnum t-main" style="color:${R.gp<0?"var(--crit)":"var(--good)"}">${R.gp>0?"+":""}${n1(R.gp)}</td>
+        <td class="tnum t-main">${pct(R.gm)}</td><td class="tnum t-main">${n1(R.cpe)}</td><td colspan="2"></td>
+      </tr></tfoot>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:10px">金额单位：万元。收入 = 启动费 + 已入组例数 × 单例单价（按合同里程碑确认）；成本 = 工时归集 + 差旅 + 职能分摊。点击任意行进入中心详情。</p>`;
+
+  diverging($("#c-dv"), rows.map(s=>{const m=siteM(s);
+    return {label:s.hosp.replace(/(大学|医学院|附属|中国医学科学院)/g,""),v:m.gp,
+      tip:`<div class="tip-t">${esc(s.hosp)}</div>
+        <div class="tip-r"><span>收入</span><b>${wan(s.revenue)} 万</b></div>
+        <div class="tip-r"><span>成本</span><b>${wan(s.cost)} 万</b></div>
+        <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--good)"}">${m.gm===null?"—":pct(m.gm)}</b></div>
+        <div class="tip-r"><span>每例成本</span><b>${m.cpe?n1(m.cpe)+" 万":"—"}</b></div>
+        <div class="tip-r"><span>单例单价</span><b>${n1(s.unit)} 万</b></div>`};}));
+  stacked($("#c-cost"),[
+    {n:"CRC 人力",v:crcC,c:"var(--s1)"},{n:"CRA 人力",v:craC,c:"var(--s3)"},
+    {n:"差旅",v:travel,c:"var(--s2)"},{n:"职能分摊",v:oh,c:"var(--s4)"}],{h:30});
+  box.addEventListener("click",e=>{
+    const b=e.target.closest("[data-k]"); if(b){state.pnlSort=b.dataset.k;render();return;}
+    const t=e.target.closest("[data-ss3]"); if(t) openSite(t.dataset.ss3);
+  });
+};
+
+/* ════════════════ 7 · 里程碑 · 开票 · 回款 ════════════════ */
+VIEWS.bill = box=>{
+  const ids=scopeIds();
+  const ms=MILES.filter(m=>ids.has(m.ss));
+  const unb=ms.filter(m=>m.inv==="待开票"), open=ms.filter(m=>m.inv==="已开票"&&!m.paid), paid=ms.filter(m=>m.paid);
+  const buckets=[
+    {n:"0–30 天",v:sum(open.filter(m=>m.age<=30),m=>m.amt),c:"var(--s1)"},
+    {n:"31–60 天",v:sum(open.filter(m=>m.age>30&&m.age<=60),m=>m.amt),c:"var(--s3)"},
+    {n:"61–90 天",v:sum(open.filter(m=>m.age>60&&m.age<=90),m=>m.amt),c:"var(--s2)"},
+    {n:"90 天以上",v:sum(open.filter(m=>m.age>90),m=>m.amt),c:"var(--s5)"}
+  ];
+  const dso = open.length? Math.round(sum(open,m=>m.age)/open.length)+62 : 0;
+
+  box.innerHTML=`
+  <div class="grid g4" style="margin-bottom:12px">
+    ${[["待开票",wan(sum(unb,m=>m.amt)),"万",`${unb.length} 笔已达成未开票 — 立即可开`,unb.length?"var(--warn)":"var(--ink)"],
+       ["已开票未回款",wan(sum(open,m=>m.amt)),"万",`${open.length} 笔在途`,"var(--ink)"],
+       ["账龄 60 天以上",wan(buckets[2].v+buckets[3].v),"万",`占应收 ${open.length?pct((buckets[2].v+buckets[3].v)/sum(open,m=>m.amt)):"—"}`,(buckets[2].v+buckets[3].v)?"var(--crit)":"var(--good)"],
+       ["DSO",dso,"天",`健康线 ≤ 75 天`,dso>75?"var(--crit)":"var(--good)"]
+     ].map(([l,v,u,n,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>里程碑 → 开票 → 回款</h3><span class="sp"></span>
+        ${unb.length?`<button class="btn btn-p" id="binv">一键生成 ${unb.length} 张发票申请</button>`:`<span class="pill p-good">无待开票</span>`}</div>
+      <div class="tw"><table style="min-width:760px">
+        <thead><tr><th>里程碑</th><th>中心</th><th class="ta-r">金额</th><th>达成日</th><th>状态</th><th class="ta-r">账龄</th><th></th></tr></thead>
+        <tbody>${ms.slice().sort((a,b)=>b.hit.localeCompare(a.hit)).map(m=>{
+          const s=site(m.ss);
+          const stt = m.paid?["p-good","已回款"]:m.inv==="待开票"?["p-warn","待开票"]:m.age>60?["p-crit","逾期未回款"]:["p-neut","已开票"];
+          return `<tr><td><div class="t-main">${esc(m.name)}</div><div class="t-sub">${esc(m.id)}</div></td>
+            <td style="font-size:12px">${esc(s.hosp)}<div class="t-sub">${esc(S[s.sid].short)}</div></td>
+            <td class="tnum">${n1(m.amt)} 万</td>
+            <td class="mono" style="font-size:11.5px">${esc(m.hit)}</td>
+            <td><span class="pill ${stt[0]}">${stt[1]}</span></td>
+            <td class="tnum" style="${m.age>60?"color:var(--crit);font-weight:600":""}">${m.paid?"—":m.age+" 天"}</td>
+            <td class="ta-r">${m.inv==="待开票"?`<button class="btn" data-inv="${m.id}">开票</button>`
+              :!m.paid?`<button class="btn" data-pay="${m.id}">登记回款</button>`:""}</td></tr>`;}).join("")}
+        </tbody></table></div>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>应收账龄分布</h3></div>
+        <div class="card-b"><div id="c-age"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>收入确认证据链</h3></div>
+        <div class="card-b">
+          <div class="note" style="margin-bottom:10px">里程碑达成必须有可追溯凭证，否则开票时要人肉翻邮件 —— 这是账期被拖长的主因。</div>
+          ${[["伦理批件","批件扫描件 + 批件号 + 生效日"],
+             ["中心启动 SIV","启动会签到表 + 培训记录 + MVR"],
+             ["首例入组 FPI","随机号/筛选号 + 知情同意签署日"],
+             ["入组过半 / 80%","系统入组计数（不含受试者身份信息）"],
+             ["末例出组 LPO","末次访视完成确认"],
+             ["数据库锁定 DBL","锁库确认函"]
+           ].map(([a,b])=>`<div style="display:grid;grid-template-columns:100px 1fr;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);font-size:12px">
+             <b style="font-weight:500">${esc(a)}</b><span class="t-mut">${esc(b)}</span></div>`).join("")}
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">合规提示：本模块只使用入组「计数」与随机号，不存储任何受试者可识别信息。</p>`;
+
+  hbars($("#c-age"), buckets.map(b=>({label:b.n,v:b.v,color:b.c,
+    tip:`<div class="tip-t">${esc(b.n)}</div><div class="tip-r"><span>金额</span><b>${n1(b.v)} 万</b></div>`})),
+    {fmt:n1,unit:" 万",h:20,gap:8});
+
+  box.addEventListener("click",e=>{
+    const i=e.target.closest("[data-inv]");
+    if(i){ const m=MILES.find(x=>x.id===i.dataset.inv); m.inv="已开票"; m.age=0;
+      m.due=new Date(Date.now()+60*864e5).toISOString().slice(0,10);
+      toast(`${m.id} 已开票 ${n1(m.amt)} 万，账期 60 天，到期日 ${m.due}`); render(); return; }
+    const p=e.target.closest("[data-pay]");
+    if(p){ const m=MILES.find(x=>x.id===p.dataset.pay); m.paid=true; m.age=0;
+      toast(`${m.id} 回款 ${n1(m.amt)} 万已登记，DSO 同步更新`); render(); return; }
+    if(e.target.closest("#binv")){
+      const t=sum(unb,m=>m.amt);
+      unb.forEach(m=>{m.inv="已开票";m.age=0;m.due=new Date(Date.now()+60*864e5).toISOString().slice(0,10);});
+      toast(`已生成 ${unb.length} 张发票申请，合计 ${n1(t)} 万`); render(); }
+  });
+};
+</script>

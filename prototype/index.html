@@ -1,0 +1,2047 @@
+<title>临床中心台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* ── Tokens ───────────────────────────────────────────────────────── */
+:root{
+  --ground:#F1F4F6; --surface:#FFFFFF; --surface-2:#F7F9FA; --surface-3:#ECF1F4;
+  --ink:#12222D; --ink-2:#46596A; --ink-3:#5D7382;
+  --line:#DBE3E9; --line-2:#C4D1DA; --grid:rgba(22,103,176,.055);
+  --accent:#1667B0; --accent-ink:#FFFFFF; --accent-soft:#E7F0F8; --accent-line:#B9D3E9;
+  --good:#1D7A4F; --good-soft:#E4F1EA; --warn:#A66A0B; --warn-soft:#FAF0DE;
+  --crit:#C0342E; --crit-soft:#FBE9E8;
+  --s1:#1667B0; --s2:#C85A24; --s3:#1A8F7A; --s4:#7E4FC0; --s5:#B8244A;
+  --plan:#8DA3B2;
+  --shadow:0 1px 2px rgba(18,34,45,.05), 0 8px 24px -12px rgba(18,34,45,.18);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --ground:#0D171E; --surface:#16232C; --surface-2:#1B2A34; --surface-3:#22323E;
+  --ink:#E6EDF2; --ink-2:#B3C4D0; --ink-3:#8CA1B0;
+  --line:#263846; --line-2:#33495A; --grid:rgba(120,180,230,.05);
+  --accent:#4A9AE0; --accent-ink:#0B1319; --accent-soft:#17313F; --accent-line:#2C516A;
+  --good:#3FA875; --good-soft:#13291F; --warn:#D19A2E; --warn-soft:#2B2314;
+  --crit:#E0655E; --crit-soft:#301B1A;
+  --s1:#3D93E0; --s2:#D46F30; --s3:#1B9C81; --s4:#9B72DC; --s5:#D9506B;
+  --plan:#6B8494;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.6);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --ground:#0D171E; --surface:#16232C; --surface-2:#1B2A34; --surface-3:#22323E;
+  --ink:#E6EDF2; --ink-2:#B3C4D0; --ink-3:#8CA1B0;
+  --line:#263846; --line-2:#33495A; --grid:rgba(120,180,230,.05);
+  --accent:#4A9AE0; --accent-ink:#0B1319; --accent-soft:#17313F; --accent-line:#2C516A;
+  --good:#3FA875; --good-soft:#13291F; --warn:#D19A2E; --warn-soft:#2B2314;
+  --crit:#E0655E; --crit-soft:#301B1A;
+  --s1:#3D93E0; --s2:#D46F30; --s3:#1B9C81; --s4:#9B72DC; --s5:#D9506B;
+  --plan:#6B8494;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────── */
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans","PingFang SC","Microsoft YaHei","Source Han Sans SC","Noto Sans CJK SC",sans-serif;
+  font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:28px 28px;
+}
+.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+h1,h2,h3,h4{margin:0;text-wrap:balance;font-weight:600;letter-spacing:-.01em}
+a{color:var(--accent)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+::selection{background:var(--accent-soft);color:var(--ink)}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* ── Shell ────────────────────────────────────────────────────────── */
+.app{position:relative;z-index:1;display:grid;grid-template-columns:224px 1fr;min-height:100vh}
+.rail{
+  border-right:1px solid var(--line);background:var(--surface);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;
+}
+.brand{padding:16px 16px 14px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:flex-start}
+.brand-mark{
+  width:26px;height:26px;flex:none;border:1.5px solid var(--accent);border-radius:3px;
+  display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--accent);
+  font-family:"IBM Plex Mono",monospace;background:var(--accent-soft);
+}
+.brand-name{font-size:14.5px;font-weight:700;letter-spacing:.01em;line-height:1.3}
+.brand-sub{font-size:10px;color:var(--ink-3);letter-spacing:.09em;text-transform:uppercase;font-family:"IBM Plex Mono",monospace}
+.nav{padding:10px 8px;flex:1}
+.nav-group{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);padding:12px 10px 5px}
+.nav-item{
+  display:flex;align-items:center;gap:9px;width:100%;padding:7px 10px;border:0;background:none;
+  border-radius:3px;cursor:pointer;text-align:left;color:var(--ink-2);font-size:13.5px;position:relative;
+}
+.nav-item:hover{background:var(--surface-3);color:var(--ink)}
+.nav-item[aria-current="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.nav-item[aria-current="true"]::before{content:"";position:absolute;left:-8px;top:6px;bottom:6px;width:2px;background:var(--accent)}
+.nav-ic{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.9}
+.nav-badge{margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:10px;padding:1px 5px;border-radius:2px;background:var(--crit-soft);color:var(--crit);font-weight:600}
+.rail-foot{padding:10px 14px 14px;border-top:1px solid var(--line);font-size:10.5px;color:var(--ink-3);line-height:1.5}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{
+  position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--surface) 92%,transparent);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+  padding:10px 22px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;
+}
+.crumb{font-size:12px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+.crumb b{color:var(--ink);font-weight:600}
+.topbar-sp{flex:1}
+.demo-tag{
+  font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  padding:3px 8px;border:1px dashed var(--warn);color:var(--warn);border-radius:2px;background:var(--warn-soft);
+}
+.content{padding:20px 22px 60px;max-width:1560px;width:100%}
+.view-head{margin-bottom:18px}
+.view-head h1{font-size:21px}
+.view-head p{margin:5px 0 0;color:var(--ink-3);font-size:13px;max-width:76ch}
+
+/* ── Controls ─────────────────────────────────────────────────────── */
+.sel,.inp{
+  font:inherit;font-size:12.5px;padding:5px 9px;border:1px solid var(--line-2);border-radius:3px;
+  background:var(--surface);color:var(--ink);
+}
+.inp::placeholder{color:var(--ink-3)}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:3px;overflow:hidden;background:var(--surface)}
+.seg button{
+  border:0;background:none;padding:5px 11px;font-size:12px;cursor:pointer;color:var(--ink-2);
+  border-right:1px solid var(--line);font-family:"IBM Plex Mono",monospace;
+}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.seg button:not([aria-pressed="true"]):hover{background:var(--surface-3)}
+.btn{
+  border:1px solid var(--line-2);background:var(--surface);border-radius:3px;padding:5px 11px;
+  font-size:12.5px;cursor:pointer;color:var(--ink-2);display:inline-flex;align-items:center;gap:6px;
+}
+.btn:hover{background:var(--surface-3);color:var(--ink)}
+.btn-p{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn-p:hover{background:var(--accent);filter:brightness(1.08);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.chip{
+  border:1px solid var(--line-2);background:var(--surface);border-radius:99px;padding:3px 10px;
+  font-size:11.5px;cursor:pointer;color:var(--ink-2);font-family:"IBM Plex Mono",monospace;
+}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.chip:not([aria-pressed="true"]):hover{background:var(--surface-3)}
+
+/* ── Cards & grid ─────────────────────────────────────────────────── */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:3px}
+.card-h{padding:11px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.card-h h3{font-size:13.5px;white-space:nowrap}
+.card-h .sub{font-size:11px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+.card-h .sp{flex:1}
+.card-b{padding:14px}
+.grid{display:grid;gap:12px}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g21{grid-template-columns:2fr 1fr}
+.g12{grid-template-columns:1fr 2fr}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* ── KPI tiles ────────────────────────────────────────────────────── */
+.kpi{
+  background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:12px 13px;
+  cursor:pointer;text-align:left;width:100%;display:block;position:relative;transition:border-color .12s;
+}
+.kpi:hover{border-color:var(--accent-line)}
+.kpi-l{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-family:"IBM Plex Mono",monospace;display:flex;align-items:center;gap:5px}
+.kpi-v{font-size:27px;font-weight:600;margin-top:5px;line-height:1.05;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.kpi-v small{font-size:13px;font-weight:400;color:var(--ink-3);margin-left:2px}
+.kpi-f{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:7px}
+.kpi-d{font-size:11px;font-family:"IBM Plex Mono",monospace;display:flex;align-items:center;gap:3px}
+.kpi-note{font-size:10.5px;color:var(--ink-3);margin-top:3px}
+
+/* ── Status atoms ─────────────────────────────────────────────────── */
+.pill{
+  display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1.5px 7px;border-radius:2px;
+  font-family:"IBM Plex Mono",monospace;font-weight:500;white-space:nowrap;border:1px solid transparent;
+}
+.p-good{background:var(--good-soft);color:var(--good);border-color:color-mix(in srgb,var(--good) 28%,transparent)}
+.p-warn{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 28%,transparent)}
+.p-crit{background:var(--crit-soft);color:var(--crit);border-color:color-mix(in srgb,var(--crit) 28%,transparent)}
+.p-neut{background:var(--surface-3);color:var(--ink-2);border-color:var(--line)}
+.p-acc{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
+.dot{width:6px;height:6px;border-radius:99px;flex:none;display:inline-block}
+.t-good{color:var(--good)} .t-warn{color:var(--warn)} .t-crit{color:var(--crit)} .t-mut{color:var(--ink-3)}
+.stripe{position:absolute;left:0;top:0;bottom:0;width:2px}
+
+/* ── Tables ───────────────────────────────────────────────────────── */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px}
+th{
+  text-align:left;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-3);font-weight:500;padding:7px 10px;
+  border-bottom:1px solid var(--line-2);white-space:nowrap;position:sticky;top:0;background:var(--surface);
+}
+th.s{cursor:pointer;user-select:none}
+th.s:hover{color:var(--ink)}
+th .ar{opacity:.4;margin-left:2px}
+th[aria-sort] .ar{opacity:1;color:var(--accent)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tr.clk{cursor:pointer}
+tr.clk:hover td{background:var(--surface-2)}
+.ta-r{text-align:right}
+.tnum{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.t-main{font-weight:500}
+.t-sub{font-size:11px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+
+/* ── Charts ───────────────────────────────────────────────────────── */
+.chart{position:relative;width:100%}
+.chart svg{display:block;width:100%;overflow:visible}
+.gridline{stroke:var(--line);stroke-width:1}
+.axis-t{fill:var(--ink-3);font-size:10px;font-family:"IBM Plex Mono",monospace}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-2);align-items:center}
+.legend i{width:11px;height:3px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:middle}
+.legend .dash{height:0;border-top:2px dashed currentColor;opacity:.7}
+.tip{
+  position:fixed;z-index:200;pointer-events:none;background:var(--surface);border:1px solid var(--line-2);
+  border-radius:3px;padding:7px 9px;font-size:11.5px;box-shadow:var(--shadow);opacity:0;transition:opacity .1s;
+  max-width:250px;
+}
+.tip.on{opacity:1}
+.tip-t{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+.tip-r{display:flex;align-items:center;gap:7px;justify-content:space-between;line-height:1.7}
+.tip-r b{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-weight:600}
+.bartrack{background:var(--surface-3);border-radius:2px;overflow:hidden;position:relative}
+.barfill{height:100%;border-radius:0 2px 2px 0}
+
+/* ── Drawer / modal ───────────────────────────────────────────────── */
+.scrim{position:fixed;inset:0;background:rgba(10,20,28,.42);z-index:100;opacity:0;transition:opacity .16s}
+.scrim.on{opacity:1}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;width:min(560px,94vw);background:var(--surface);z-index:101;
+  border-left:1px solid var(--line-2);transform:translateX(100%);transition:transform .2s cubic-bezier(.3,.7,.3,1);
+  display:flex;flex-direction:column;box-shadow:var(--shadow);
+}
+.drawer.on{transform:translateX(0)}
+.drawer-h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
+.drawer-b{padding:16px 18px 40px;overflow-y:auto;flex:1}
+.modal{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-48%) scale(.98);z-index:101;
+  width:min(460px,94vw);background:var(--surface);border:1px solid var(--line-2);border-radius:4px;
+  opacity:0;transition:opacity .14s,transform .14s;box-shadow:var(--shadow);
+}
+.modal.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.x{border:0;background:none;cursor:pointer;color:var(--ink-3);font-size:18px;line-height:1;padding:2px 5px;border-radius:2px}
+.x:hover{background:var(--surface-3);color:var(--ink)}
+
+/* ── Toast ────────────────────────────────────────────────────────── */
+.toasts{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:7px;align-items:center}
+.toast{
+  background:var(--ink);color:var(--ground);padding:8px 14px;border-radius:3px;font-size:12.5px;
+  box-shadow:var(--shadow);animation:tin .22s ease-out;display:flex;gap:8px;align-items:center;max-width:88vw;
+}
+.toast i{width:6px;height:6px;border-radius:99px;background:var(--good);flex:none}
+.toast.warn i{background:var(--warn)} .toast.crit i{background:var(--crit)}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ── Misc ─────────────────────────────────────────────────────────── */
+.section-t{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin:0 0 8px}
+.hr{height:1px;background:var(--line);border:0;margin:14px 0}
+.kv{display:grid;grid-template-columns:88px 1fr;gap:5px 12px;font-size:12.5px}
+.kv dt{color:var(--ink-3);font-size:11.5px}
+.kv dd{margin:0;font-family:"IBM Plex Mono",monospace}
+.empty{padding:28px;text-align:center;color:var(--ink-3);font-size:12.5px}
+.note{font-size:11.5px;color:var(--ink-3);line-height:1.6}
+.formula{
+  background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--accent);
+  padding:9px 11px;font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-2);
+  line-height:1.75;overflow-x:auto;border-radius:0 3px 3px 0;white-space:pre-wrap;
+}
+input[type=range]{width:100%;accent-color:var(--accent);height:18px}
+.slider-h{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:1px}
+.slider-h b{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--accent);font-weight:600}
+.field{margin-bottom:13px}
+.cbx{display:flex;gap:9px;align-items:flex-start;padding:7px 0;cursor:pointer;font-size:12.5px;line-height:1.5}
+.cbx input{margin:3px 0 0;accent-color:var(--accent);flex:none;width:14px;height:14px}
+.cbx.done span{color:var(--ink-3);text-decoration:line-through}
+
+@media(max-width:1180px){
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g21,.g12,.g3{grid-template-columns:1fr}
+}
+@media(max-width:860px){
+  .app{grid-template-columns:1fr}
+  .rail{position:static;height:auto;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}
+  .brand{border-bottom:0;border-right:1px solid var(--line);white-space:nowrap}
+  .nav{display:flex;gap:4px;padding:8px}
+  .nav-group,.rail-foot{display:none}
+  .nav-item{white-space:nowrap;padding:6px 9px}
+  .nav-item[aria-current="true"]::before{display:none}
+  .g4,.g2{grid-template-columns:1fr}
+  .content{padding:14px 12px 50px}
+  .topbar{padding:9px 12px}
+}
+</style>
+
+<div class="app">
+  <aside class="rail">
+    <div class="brand">
+      <div class="brand-mark">中</div>
+      <div>
+        <div class="brand-name">临床中心台</div>
+        <div class="brand-sub">SiteDesk&nbsp;v0.9</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+    <div class="rail-foot">
+      恒济临床研究（虚构）<br>
+      数据截止 <span class="mono">2026-08-22</span>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb" id="crumb"></div>
+      <div class="topbar-sp"></div>
+      <label class="crumb" for="gstudy">项目范围</label>
+      <select class="sel" id="gstudy"></select>
+      <span class="demo-tag">演示数据 · 非真实</span>
+    </header>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-label="详情面板"></aside>
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true"></div>
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+<div class="toasts" id="toasts"></div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   临床中心台 SiteDesk — CRO/SMO 运营管理系统 可交互原型
+   全部数据为硬编码演示数据，不含任何真实受试者信息。
+   数据模型的最小作业单元是 StudySite（项目 × 中心）。
+   ════════════════════════════════════════════════════════════════════ */
+
+const TODAY = "2026-08-22";
+
+/* ── 费率与常量（报价模型与成本归集共用，改一处全局生效） ────────── */
+const RATE = {
+  crcDay:   0.118,   // CRC 内部人天成本（万元/人天，含社保与管理分摊）
+  craDay:   0.192,   // CRA 内部人天成本
+  travel:   0.285,   // CRA 单次现场监查差旅（万元/次）
+  overhead: 0.12,    // PM/QA/职能分摊，按直接人力成本比例
+  workdays: 21.75    // 月均工作日
+};
+
+/* ── 项目 ─────────────────────────────────────────────────────────── */
+const STUDIES = [
+  {id:"HJ-2024-017", short:"艾瑞替尼 III", drug:"注射用甲磺酸艾瑞替尼", sponsor:"华拓生物", phase:"III期",
+   indication:"肝细胞癌", planned:240, sites:14, contract:1860, start:"2024-09", end:"2026-12", cx:1.35},
+  {id:"HJ-2025-003", short:"HT-118 II",  drug:"HT-118 注射液（PD-1）", sponsor:"安泰医药", phase:"II期",
+   indication:"非小细胞肺癌", planned:96, sites:6, contract:920, start:"2025-03", end:"2027-03", cx:1.5},
+  {id:"HJ-2025-011", short:"恒糖宁 III", drug:"恒糖宁片", sponsor:"中康制药", phase:"III期",
+   indication:"2型糖尿病", planned:420, sites:20, contract:2340, start:"2025-06", end:"2027-09", cx:1.0},
+  {id:"HJ-2026-004", short:"CoroFlex 器械", drug:"CoroFlex 药物洗脱支架", sponsor:"捷成医疗", phase:"确证性",
+   indication:"冠状动脉狭窄", planned:180, sites:10, contract:1450, start:"2026-01", end:"2028-01", cx:1.2}
+];
+const S = Object.fromEntries(STUDIES.map(s=>[s.id,s]));
+
+/* ── 中心状态机（顺序即业务流程） ─────────────────────────────────── */
+const FLOW = ["立项","伦理递交","伦理批件","合同签署","SIV启动","入组中","入组完成","随访中","中心关闭"];
+
+/* ── StudySite：项目 × 中心 = 最小作业单元 ───────────────────────── */
+/* enrolled 已入组 · planToDate 按计划曲线到今日应达 · contracted 合同例数
+   revenue 已确认收入(万元) · cost 已发生成本(万元) · md 已消耗人天       */
+const SITES = [
+  {id:"SS-01", sid:"HJ-2024-017", hosp:"北京协和医院", dept:"肝胆外科", pi:"陈国栋", city:"北京",
+   st:"入组中", contracted:30, enrolled:26, planToDate:24, unit:5.8, revenue:168.4, cost:96.2, md:642,
+   cra:"林敏", crc:["吴桐"], ethics:"2024-10-18", siv:"2024-12-06", fpi:"2024-12-27", risk:0},
+  {id:"SS-02", sid:"HJ-2024-017", hosp:"复旦大学附属中山医院", dept:"肝外科", pi:"沈亦农", city:"上海",
+   st:"入组中", contracted:28, enrolled:19, planToDate:22, unit:5.8, revenue:126.6, cost:88.4, md:588,
+   cra:"赵坤", crc:["沈亦琳"], ethics:"2024-11-02", siv:"2024-12-20", fpi:"2025-01-15", risk:2},
+  {id:"SS-03", sid:"HJ-2024-017", hosp:"中山大学肿瘤防治中心", dept:"肝胆科", pi:"黄志刚", city:"广州",
+   st:"入组中", contracted:25, enrolled:21, planToDate:20, unit:5.8, revenue:139.8, cost:79.1, md:527,
+   cra:"何雨薇", crc:["郭晓萱"], ethics:"2024-10-29", siv:"2024-12-13", fpi:"2025-01-08", risk:0},
+  {id:"SS-04", sid:"HJ-2024-017", hosp:"四川大学华西医院", dept:"腹部肿瘤科", pi:"罗建平", city:"成都",
+   st:"入组中", contracted:22, enrolled:8, planToDate:16, unit:5.8, revenue:62.4, cost:81.6, md:544,
+   cra:"段志远", crc:["唐延"], ethics:"2025-01-11", siv:"2025-03-07", fpi:"2025-05-19", risk:3},
+  {id:"SS-05", sid:"HJ-2024-017", hosp:"西安交大第一附属医院", dept:"肝胆外科", pi:"白玉山", city:"西安",
+   st:"SIV启动", contracted:20, enrolled:0, planToDate:9, unit:5.8, revenue:14.0, cost:38.9, md:259,
+   cra:"段志远", crc:["唐延"], ethics:"2025-06-20", siv:"2025-11-14", fpi:"—", risk:3},
+  {id:"SS-06", sid:"HJ-2025-003", hosp:"上海市胸科医院", dept:"肿瘤内科", pi:"顾雯", city:"上海",
+   st:"入组中", contracted:20, enrolled:14, planToDate:13, unit:8.4, revenue:135.6, cost:74.8, md:498,
+   cra:"赵坤", crc:["冯乐"], ethics:"2025-04-22", siv:"2025-06-11", fpi:"2025-07-03", risk:1},
+  {id:"SS-07", sid:"HJ-2025-003", hosp:"天津医科大学肿瘤医院", dept:"胸部肿瘤科", pi:"马利", city:"天津",
+   st:"入组中", contracted:18, enrolled:11, planToDate:12, unit:8.4, revenue:107.4, cost:69.3, md:462,
+   cra:"林敏", crc:["吴桐"], ethics:"2025-05-08", siv:"2025-06-25", fpi:"2025-07-30", risk:1},
+  {id:"SS-08", sid:"HJ-2025-003", hosp:"浙江省肿瘤医院", dept:"胸部内科", pi:"徐宏", city:"杭州",
+   st:"入组中", contracted:16, enrolled:3, planToDate:6, unit:8.4, revenue:37.2, cost:41.5, md:277,
+   cra:"赵坤", crc:["冯乐"], ethics:"2025-11-19", siv:"2026-02-10", fpi:"2026-04-22", risk:2},
+  {id:"SS-09", sid:"HJ-2025-011", hosp:"北京大学人民医院", dept:"内分泌科", pi:"纪红梅", city:"北京",
+   st:"入组中", contracted:35, enrolled:31, planToDate:28, unit:3.9, revenue:135.9, cost:71.4, md:605,
+   cra:"林敏", crc:["廖梦然"], ethics:"2025-07-14", siv:"2025-09-02", fpi:"2025-09-24", risk:0},
+  {id:"SS-10", sid:"HJ-2025-011", hosp:"华中科技大学同济医院", dept:"内分泌科", pi:"邓伟", city:"武汉",
+   st:"入组中", contracted:32, enrolled:27, planToDate:26, unit:3.9, revenue:119.3, cost:68.0, md:576,
+   cra:"徐倩", crc:["邱志安"], ethics:"2025-07-30", siv:"2025-09-16", fpi:"2025-10-11", risk:0},
+  {id:"SS-11", sid:"HJ-2025-011", hosp:"中南大学湘雅二医院", dept:"内分泌科", pi:"龚敏", city:"长沙",
+   st:"入组中", contracted:30, enrolled:18, planToDate:24, unit:3.9, revenue:82.2, cost:70.9, md:601,
+   cra:"徐倩", crc:["邱志安"], ethics:"2025-08-26", siv:"2025-10-21", fpi:"2025-11-28", risk:2},
+  {id:"SS-12", sid:"HJ-2026-004", hosp:"中国医学科学院阜外医院", dept:"冠心病中心", pi:"石磊", city:"北京",
+   st:"入组中", contracted:40, enrolled:33, planToDate:30, unit:4.6, revenue:167.8, cost:92.7, md:618,
+   cra:"林敏", crc:["廖梦然"], ethics:"2026-02-09", siv:"2026-03-24", fpi:"2026-04-14", risk:0},
+  {id:"SS-13", sid:"HJ-2026-004", hosp:"广东省人民医院", dept:"心内科", pi:"曾祥", city:"广州",
+   st:"伦理递交", contracted:25, enrolled:0, planToDate:0, unit:4.6, revenue:0, cost:11.8, md:79,
+   cra:"何雨薇", crc:["郭晓萱"], ethics:"—", siv:"—", fpi:"—", risk:1},
+  {id:"SS-14", sid:"HJ-2026-004", hosp:"江苏省人民医院", dept:"心内科", pi:"卢建", city:"南京",
+   st:"合同签署", contracted:22, enrolled:0, planToDate:0, unit:4.6, revenue:8.5, cost:16.3, md:109,
+   cra:"何雨薇", crc:["冯乐"], ethics:"2026-06-30", siv:"—", fpi:"—", risk:1}
+];
+
+/* ── 人员：资质、成本、当前饱和度 ─────────────────────────────────── */
+const STAFF = [
+  {n:"林敏",   role:"CRA", lvl:"高级", city:"北京", gcp:"2027-03-18", util:82, sites:["SS-01","SS-07","SS-09","SS-12"]},
+  {n:"赵坤",   role:"CRA", lvl:"中级", city:"上海", gcp:"2027-01-09", util:94, sites:["SS-02","SS-06","SS-08"]},
+  {n:"何雨薇", role:"CRA", lvl:"中级", city:"广州", gcp:"2026-11-25", util:71, sites:["SS-03","SS-13","SS-14"]},
+  {n:"段志远", role:"CRA", lvl:"初级", city:"成都", gcp:"2028-01-30", util:56, sites:["SS-04","SS-05"]},
+  {n:"徐倩",   role:"CRA", lvl:"中级", city:"武汉", gcp:"2026-09-30", util:88, sites:["SS-10","SS-11"]},
+  {n:"吴桐",   role:"CRC", lvl:"高级", city:"北京", gcp:"2027-05-12", util:87, sites:["SS-01","SS-07"]},
+  {n:"沈亦琳", role:"CRC", lvl:"中级", city:"上海", gcp:"2027-02-28", util:79, sites:["SS-02"]},
+  {n:"郭晓萱", role:"CRC", lvl:"中级", city:"广州", gcp:"2026-10-16", util:68, sites:["SS-03","SS-13"]},
+  {n:"唐延",   role:"CRC", lvl:"初级", city:"成都", gcp:"2028-03-04", util:44, sites:["SS-04","SS-05"]},
+  {n:"廖梦然", role:"CRC", lvl:"高级", city:"北京", gcp:"2027-08-21", util:96, sites:["SS-09","SS-12"]},
+  {n:"邱志安", role:"CRC", lvl:"中级", city:"武汉", gcp:"2027-06-07", util:81, sites:["SS-10","SS-11"]},
+  {n:"冯乐",   role:"CRC", lvl:"中级", city:"上海", gcp:"2027-04-19", util:76, sites:["SS-06","SS-08","SS-14"]},
+  {n:"韩雪",   role:"PM",  lvl:"总监", city:"北京", gcp:"2027-09-30", util:74, sites:[]},
+  {n:"卫兰",   role:"QA",  lvl:"经理", city:"北京", gcp:"2027-11-11", util:66, sites:[]}
+];
+
+/* ── 入组曲线：月度累计（计划 vs 实际），按项目 ───────────────────── */
+const ENROLL = {
+  "HJ-2024-017":{x:["25-02","25-04","25-06","25-08","25-10","25-12","26-02","26-04","26-06","26-08"],
+    plan:[12,28,48,70,92,114,136,158,178,196], act:[9,22,39,58,74,88,101,118,131,143]},
+  "HJ-2025-003":{x:["25-08","25-10","25-12","26-02","26-04","26-06","26-08"],
+    plan:[3,9,17,25,33,41,49], act:[2,7,13,19,23,26,28]},
+  "HJ-2025-011":{x:["25-10","25-12","26-02","26-04","26-06","26-08"],
+    plan:[14,42,78,116,152,188], act:[11,36,68,102,139,171]},
+  "HJ-2026-004":{x:["26-04","26-05","26-06","26-07","26-08"],
+    plan:[6,14,22,30,38], act:[5,12,19,26,33]}
+};
+
+/* ── 质量事件与 CAPA ──────────────────────────────────────────────── */
+const ISSUES = [
+  {id:"QI-2026-0155", ss:"SS-02", sev:"严重", type:"SAE 上报超窗", found:"2026-08-19",
+   desc:"受试者 S-0217 发生 3 级肝功能异常，研究者知晓至上报申办方 26.5 小时，超出 24 小时窗口。",
+   capa:"重新培训 PI 及研究护士 SAE 上报流程；在中心张贴 24h 倒计时卡；CRC 每日核查病历新增 SAE。",
+   own:"沈亦琳", due:"2026-08-26", st:"CAPA进行中", sla:24, elapsed:26.5},
+  {id:"QI-2026-0139", ss:"SS-05", sev:"重大", type:"知情同意版本错误", found:"2026-08-11",
+   desc:"3 例受试者签署 ICF V2.1（现行版本为 V3.0，2026-05-30 生效），涉及筛选期受试者。",
+   capa:"已上报伦理委员会并获批重新签署；全部在筛受试者 ICF 版本 100% 复核；中心文件夹版本控制表上墙。",
+   own:"卫兰", due:"2026-08-29", st:"CAPA进行中", sla:null},
+  {id:"QI-2026-0142", ss:"SS-04", sev:"严重", type:"方案偏离", found:"2026-08-14",
+   desc:"受试者 S-0331 第 4 次访视实际日期超出方案窗口 5 天（窗口 ±3 天）。",
+   capa:"CRC 增加访视窗口前 7 天提醒机制；PI 签署方案偏离表并上报伦理。",
+   own:"唐延", due:"2026-08-24", st:"待验证", sla:null},
+  {id:"QI-2026-0151", ss:"SS-11", sev:"一般", type:"源数据缺陷", found:"2026-08-17",
+   desc:"稽查抽查 20 份原始病历，12 处研究者签名/日期缺失，主要集中在合并用药记录页。",
+   capa:"研究者集中补签并留痕；CRC 建立每周源数据完整性自查清单。",
+   own:"邱志安", due:"2026-09-05", st:"CAPA进行中", sla:null},
+  {id:"QI-2026-0158", ss:"SS-12", sev:"一般", type:"药品温控中断", found:"2026-08-20",
+   desc:"药房冷藏柜温度记录仪断电 4 小时，期间温度记录缺失，涉及 2 个批次试验用药品。",
+   capa:"申办方已出具药品可用性评估；加装 UPS 与温度越限短信报警。",
+   own:"廖梦然", due:"2026-09-02", st:"待验证", sla:null},
+  {id:"QI-2026-0131", ss:"SS-03", sev:"一般", type:"实验室资质过期", found:"2026-07-28",
+   desc:"中心检验科室间质评证书于 2026-07-15 到期，新证书未及时归档至研究者文件夹。",
+   capa:"已取得新证书并归档；建立中心资质文件到期日历，提前 60 天提醒。",
+   own:"郭晓萱", due:"2026-08-15", st:"已关闭", sla:null}
+];
+
+/* ── 监查访视排期与 MVR 跟进项 ────────────────────────────────────── */
+const VISITS = [
+  {d:"2026-08-25", ss:"SS-02", kind:"IMV", who:"赵坤", st:"已排期", days:2,
+   items:[{t:"核查 8 月新增 3 例受试者知情同意原件与签署时间",done:true},
+          {t:"SDV：主要疗效终点（mRECIST 评估）100% 核对",done:true},
+          {t:"跟进 QI-2026-0155 SAE 上报 CAPA 执行证据",done:false},
+          {t:"核对试验用药品发放与回收记录，清点库存",done:false},
+          {t:"研究者文件夹（ISF）完整性检查表逐项过",done:false}]},
+  {d:"2026-08-27", ss:"SS-04", kind:"IMV", who:"段志远", st:"已排期", days:2,
+   items:[{t:"入组停滞根因访谈：PI 与研究护士各 30 分钟",done:false},
+          {t:"复核筛选失败日志，统计失败原因分布",done:false},
+          {t:"方案偏离 QI-2026-0142 关闭证据核查",done:false},
+          {t:"与 PI 确认 9-10 月入组承诺量并书面记录",done:false}]},
+  {d:"2026-09-01", ss:"SS-13", kind:"SIV", who:"何雨薇", st:"待确认", days:1,
+   items:[{t:"确认伦理批件、临床试验批件、保险单已齐备",done:false},
+          {t:"研究团队方案培训及签到表",done:false},
+          {t:"药品接收与储存条件确认",done:false},
+          {t:"EDC 账号开通与 eCRF 填写培训",done:false}]},
+  {d:"2026-09-03", ss:"SS-09", kind:"IMV", who:"林敏", st:"已排期", days:1,
+   items:[{t:"SDV 抽样 30%（该中心质量稳定，降低抽样比例）",done:false},
+          {t:"入组超前，核查是否存在入排标准放宽",done:false},
+          {t:"数据质疑（query）关闭情况复核",done:false}]},
+  {d:"2026-09-08", ss:"SS-11", kind:"IMV", who:"徐倩", st:"已排期", days:2,
+   items:[{t:"源数据签名缺失 QI-2026-0151 整改验证（全量复核）",done:false},
+          {t:"入组落后 6 例，制定追赶计划",done:false},
+          {t:"研究护士离职交接文件核查",done:false}]},
+  {d:"2026-09-15", ss:"SS-01", kind:"COV", who:"林敏", st:"待确认", days:2,
+   items:[{t:"全部受试者随访完成确认，末例出组日期锁定",done:false},
+          {t:"剩余药品回收销毁记录",done:false},
+          {t:"研究者文件夹归档移交清单",done:false},
+          {t:"中心关闭信及后续存档要求书面告知 PI",done:false}]}
+];
+
+/* ── 里程碑 · 开票 · 回款 ─────────────────────────────────────────── */
+const MILES = [
+  {id:"M-041", ss:"SS-01", name:"入组达成 80%", amt:42.0, hit:"2026-08-12", inv:"已开票", due:"2026-10-11", paid:false, age:10},
+  {id:"M-038", ss:"SS-09", name:"入组达成 80%", amt:31.2, hit:"2026-07-28", inv:"已开票", due:"2026-09-26", paid:false, age:25},
+  {id:"M-035", ss:"SS-12", name:"入组达成 75%", amt:38.6, hit:"2026-07-15", inv:"已开票", due:"2026-09-13", paid:false, age:38},
+  {id:"M-029", ss:"SS-03", name:"入组达成 80%", amt:28.9, hit:"2026-05-20", inv:"已开票", due:"2026-07-19", paid:false, age:94},
+  {id:"M-026", ss:"SS-06", name:"入组过半", amt:33.6, hit:"2026-04-30", inv:"已开票", due:"2026-06-29", paid:false, age:114},
+  {id:"M-044", ss:"SS-10", name:"入组达成 80%", amt:29.4, hit:"2026-08-18", inv:"待开票", due:"—", paid:false, age:4},
+  {id:"M-045", ss:"SS-07", name:"入组过半", amt:22.1, hit:"2026-08-06", inv:"待开票", due:"—", paid:false, age:16},
+  {id:"M-046", ss:"SS-14", name:"合同签署", amt:8.5, hit:"2026-08-20", inv:"待开票", due:"—", paid:false, age:2},
+  {id:"M-021", ss:"SS-02", name:"入组过半", amt:35.4, hit:"2026-03-11", inv:"已回款", due:"2026-05-10", paid:true, age:0},
+  {id:"M-018", ss:"SS-01", name:"入组过半", amt:40.6, hit:"2026-01-22", inv:"已回款", due:"2026-03-23", paid:true, age:0}
+];
+
+/* ── 工时记录（演示用，可在"工时与差旅"中新增） ──────────────────── */
+const WORKTYPES = [
+  {k:"受试者访视陪同", bill:true},
+  {k:"源数据准备与核对", bill:true},
+  {k:"伦理递交与跟进", bill:true},
+  {k:"现场监查（IMV）", bill:true},
+  {k:"药品与物资管理", bill:true},
+  {k:"内部培训", bill:false},
+  {k:"投标与商务支持", bill:false},
+  {k:"返工与整改", bill:false}
+];
+let TIMESHEET = [
+  {id:1, d:"2026-08-21", who:"吴桐", ss:"SS-01", type:"受试者访视陪同", h:7.5, travel:0},
+  {id:2, d:"2026-08-21", who:"赵坤", ss:"SS-02", type:"现场监查（IMV）", h:8,   travel:0.32},
+  {id:3, d:"2026-08-21", who:"唐延", ss:"SS-04", type:"内部培训",       h:4,   travel:0},
+  {id:4, d:"2026-08-20", who:"廖梦然", ss:"SS-09", type:"源数据准备与核对", h:8, travel:0},
+  {id:5, d:"2026-08-20", who:"冯乐", ss:"SS-06", type:"受试者访视陪同", h:6.5, travel:0},
+  {id:6, d:"2026-08-20", who:"何雨薇", ss:"SS-13", type:"伦理递交与跟进", h:5,  travel:0.18},
+  {id:7, d:"2026-08-19", who:"唐延", ss:"SS-05", type:"投标与商务支持", h:6,   travel:0}
+];
+let tsSeq = 8;
+</script>
+<script>
+"use strict";
+/* ════════ 工具 ════════ */
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const n1 = v=>v.toFixed(1), n0 = v=>Math.round(v).toLocaleString("zh-CN");
+const pct = v=>(v*100).toFixed(1)+"%";
+const wan = v=>v.toFixed(1);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const sum = (a,f)=>a.reduce((t,x)=>t+f(x),0);
+const days = (a,b)=>Math.round((new Date(b)-new Date(a))/864e5);
+const site = id=>SITES.find(s=>s.id===id);
+const staff = n=>STAFF.find(s=>s.n===n);
+const label = ss=>`${ss.hosp}｜${S[ss.sid].short}`;
+
+/* ════════ 派生指标（所有看板数字都由这里算出，口径唯一） ════════ */
+function siteM(ss){
+  const gp = ss.revenue - ss.cost;                       // 毛利（万元）
+  const gm = ss.revenue > 0 ? gp/ss.revenue : null;      // 毛利率
+  const rate = ss.planToDate>0 ? ss.enrolled/ss.planToDate : null;  // 入组达成率
+  const cpe = ss.enrolled>0 ? ss.cost/ss.enrolled : null;           // 每例入组成本
+  const prog = ss.enrolled/ss.contracted;                // 合同完成度
+  return {gp, gm, rate, cpe, prog, mdPerPt: ss.enrolled>0 ? ss.md/ss.enrolled : null};
+}
+function scope(){ return state.study==="all" ? SITES : SITES.filter(s=>s.sid===state.study); }
+function scopeIds(){ return new Set(scope().map(s=>s.id)); }
+
+function rollup(list){
+  const rev = sum(list,s=>s.revenue), cost = sum(list,s=>s.cost);
+  const enr = sum(list,s=>s.enrolled), plan = sum(list,s=>s.planToDate);
+  const ids = new Set(list.map(s=>s.id));
+  const people = STAFF.filter(p=>p.role!=="PM"&&p.role!=="QA"&&p.sites.some(x=>ids.has(x)));
+  const util = people.length? sum(people,p=>p.util)/people.length : 0;
+  const open = ISSUES.filter(i=>i.st!=="已关闭" && ids.has(i.ss));
+  const ar   = MILES.filter(m=>!m.paid && m.inv==="已开票" && ids.has(m.ss));
+  const unbilled = MILES.filter(m=>m.inv==="待开票" && ids.has(m.ss));
+  return {
+    rev, cost, gp:rev-cost, gm: rev? (rev-cost)/rev : 0,
+    enr, plan, rate: plan? enr/plan : 0,
+    cpe: enr? cost/enr : 0, util, people:people.length,
+    open, crit: open.filter(i=>i.sev!=="一般").length,
+    arAmt: sum(ar,m=>m.amt), arOver: sum(ar.filter(m=>m.age>60),m=>m.amt),
+    unbilledAmt: sum(unbilled,m=>m.amt), unbilled:unbilled.length,
+    dso: ar.length? Math.round(sum(ar,m=>m.age)/ar.length)+62 : 0,
+    active: list.filter(s=>s.st==="入组中").length, total:list.length
+  };
+}
+/* 利用率 → 状态（这是 state，不是 magnitude：闲置与超载都不好） */
+function utilState(u){
+  if(u < 60) return {k:"warn", t:"产能闲置", c:"var(--warn)"};
+  if(u > 88) return {k:"crit", t:"超载",     c:"var(--crit)"};
+  return {k:"good", t:"健康",  c:"var(--good)"};
+}
+function rateState(r){
+  if(r===null) return {k:"neut",t:"未启动",c:"var(--ink-3)"};
+  if(r < 0.7)  return {k:"crit",t:"严重落后",c:"var(--crit)"};
+  if(r < 0.9)  return {k:"warn",t:"落后",    c:"var(--warn)"};
+  return {k:"good",t:"达成",c:"var(--good)"};
+}
+const SEV = {"重大":{k:"crit",c:"var(--crit)"},"严重":{k:"crit",c:"var(--crit)"},"一般":{k:"warn",c:"var(--warn)"}};
+
+/* ════════ 反馈原语 ════════ */
+function toast(msg, kind=""){
+  const d=document.createElement("div");
+  d.className="toast "+kind; d.innerHTML=`<i></i><span>${esc(msg)}</span>`;
+  $("#toasts").appendChild(d);
+  setTimeout(()=>{d.style.transition="opacity .3s";d.style.opacity="0";setTimeout(()=>d.remove(),320);},2600);
+}
+const TIP=$("#tip");
+function showTip(html,x,y){
+  TIP.innerHTML=html; TIP.classList.add("on");
+  const r=TIP.getBoundingClientRect();
+  TIP.style.left = clamp(x+14, 8, innerWidth-r.width-8)+"px";
+  TIP.style.top  = clamp(y-r.height-12, 8, innerHeight-r.height-8)+"px";
+}
+const hideTip=()=>TIP.classList.remove("on");
+
+/* ════════ 抽屉 / 弹窗 ════════ */
+let overlayEsc=null;
+function openLayer(node, html){
+  node.innerHTML=html; node.hidden=false; $("#scrim").hidden=false;
+  requestAnimationFrame(()=>{node.classList.add("on");$("#scrim").classList.add("on");});
+  overlayEsc = e=>{ if(e.key==="Escape") closeLayer(); };
+  document.addEventListener("keydown",overlayEsc);
+  const f=node.querySelector("button,[href],input,select"); if(f) f.focus();
+}
+function closeLayer(){
+  for(const n of [$("#drawer"),$("#modal")]){
+    if(n.hidden) continue;
+    n.classList.remove("on");
+    setTimeout(()=>{n.hidden=true;n.innerHTML="";},200);
+  }
+  $("#scrim").classList.remove("on");
+  setTimeout(()=>{$("#scrim").hidden=true;},200);
+  if(overlayEsc){document.removeEventListener("keydown",overlayEsc);overlayEsc=null;}
+}
+$("#scrim").addEventListener("click",closeLayer);
+
+/* ════════════════════════════════════════════════════════════════════
+   图表原语 —— 细笔画、4px 数据端圆角、2px 线宽、填充间留 2px 表面缝隙、
+   ≥2 系列必有图例、只做选择性直标（绝不每点标数）、网格与轴线退居后景。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* 折线：计划 vs 实际，带十字准星 + 跟随提示 */
+function lineChart(box,{x,series,yMax,yFmt=n0,h=200}){
+  const W=box.clientWidth||640, P={t:12,r:14,b:26,l:44}, H=h;
+  const iw=W-P.l-P.r, ih=H-P.t-P.b;
+  const max = yMax || Math.max(...series.flatMap(s=>s.values))*1.12;
+  const px=i=> P.l + (x.length>1 ? i*iw/(x.length-1) : iw/2);
+  const py=v=> P.t + ih - (v/max)*ih;
+  const ticks=4, gl=[], ax=[];
+  for(let i=0;i<=ticks;i++){
+    const v=max*i/ticks, y=py(v);
+    gl.push(`<line class="gridline" x1="${P.l}" y1="${y.toFixed(1)}" x2="${W-P.r}" y2="${y.toFixed(1)}"/>`);
+    ax.push(`<text class="axis-t" x="${P.l-7}" y="${(y+3.5).toFixed(1)}" text-anchor="end">${yFmt(v)}</text>`);
+  }
+  const step = x.length>8 ? 2 : 1;
+  const xl = x.map((t,i)=> i%step===0||i===x.length-1
+    ? `<text class="axis-t" x="${px(i).toFixed(1)}" y="${H-8}" text-anchor="middle">${esc(t)}</text>`:"").join("");
+  const paths = series.map(s=>{
+    const d = s.values.map((v,i)=>`${i?"L":"M"}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(" ");
+    const area = s.fill ? `<path d="${d} L${px(x.length-1).toFixed(1)},${P.t+ih} L${px(0).toFixed(1)},${P.t+ih} Z" fill="${s.color}" opacity=".07"/>`:"";
+    return area + `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"${s.dash?' stroke-dasharray="5 4"':""}/>`;
+  }).join("");
+  /* 选择性直标：只标终点 */
+  const ends = series.map(s=>{
+    const i=x.length-1, cx=px(i), cy=py(s.values[i]);
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4" fill="${s.color}" stroke="var(--surface)" stroke-width="2"/>`;
+  }).join("");
+  box.innerHTML =
+   `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="计划与实际入组累计曲线">
+      ${gl.join("")}${ax.join("")}${xl}
+      <g id="cross" style="display:none"><line class="gridline" stroke="var(--ink-3)" stroke-dasharray="3 3" y1="${P.t}" y2="${P.t+ih}"/></g>
+      ${paths}${ends}
+      <rect x="${P.l}" y="${P.t}" width="${iw}" height="${ih}" fill="transparent" id="hit" style="cursor:crosshair"/>
+    </svg>`;
+  const svg=box.querySelector("svg"), cross=box.querySelector("#cross"), cl=cross.querySelector("line");
+  const dots=[];
+  series.forEach(s=>{ const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("r","4.5"); c.setAttribute("fill",s.color);
+    c.setAttribute("stroke","var(--surface)"); c.setAttribute("stroke-width","2");
+    cross.appendChild(c); dots.push(c); });
+  const hit=box.querySelector("#hit");
+  hit.addEventListener("pointermove",e=>{
+    const r=svg.getBoundingClientRect(), sx=(e.clientX-r.left)*W/r.width;
+    let i=Math.round((sx-P.l)/(iw/(x.length-1||1))); i=clamp(i,0,x.length-1);
+    cross.style.display=""; cl.setAttribute("x1",px(i)); cl.setAttribute("x2",px(i));
+    dots.forEach((c,k)=>{c.setAttribute("cx",px(i));c.setAttribute("cy",py(series[k].values[i]));});
+    const rows=series.map(s=>`<div class="tip-r"><span><i style="display:inline-block;width:9px;height:3px;border-radius:2px;background:${s.color};vertical-align:middle;margin-right:6px"></i>${esc(s.name)}</span><b>${yFmt(s.values[i])}</b></div>`).join("");
+    const diff = series.length===2 ? (()=>{const d=series[1].values[i]-series[0].values[i];
+      return `<div class="tip-r" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>差额</span><b style="color:${d<0?"var(--crit)":"var(--good)"}">${d>0?"+":""}${n0(d)}</b></div>`;})():"";
+    showTip(`<div class="tip-t">${esc(x[i])}</div>${rows}${diff}`,e.clientX,e.clientY);
+  });
+  hit.addEventListener("pointerleave",()=>{cross.style.display="none";hideTip();});
+}
+
+/* 迷你走势线（KPI 磁贴内） */
+function spark(vals,color,w=76,h=22){
+  const mn=Math.min(...vals), mx=Math.max(...vals), r=(mx-mn)||1;
+  const p=vals.map((v,i)=>`${i?"L":"M"}${(i*w/(vals.length-1)).toFixed(1)},${(h-2-((v-mn)/r)*(h-4)).toFixed(1)}`).join(" ");
+  const lx=w, ly=(h-2-((vals.at(-1)-mn)/r)*(h-4)).toFixed(1);
+  return `<svg width="${w}" height="${h}" aria-hidden="true" style="overflow:visible">
+    <path d="${p}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" opacity=".75"/>
+    <circle cx="${lx}" cy="${ly}" r="2.6" fill="${color}"/></svg>`;
+}
+
+/* 横向条：基线锚定，只有数据端 4px 圆角 */
+function hbars(box, rows, {max, fmt=n1, unit="", h=22, gap=7}={}){
+  const M = max || Math.max(...rows.map(r=>Math.abs(r.v)))*1.05 || 1;
+  box.innerHTML = rows.map(r=>{
+    const w = clamp(Math.abs(r.v)/M*100, 2, 100);
+    return `<div class="hb" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(90px,150px) 1fr auto;gap:10px;align-items:center;margin-bottom:${gap}px;cursor:default">
+      <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
+      <div class="bartrack" style="height:${h}px"><div class="barfill" style="width:${w}%;background:${r.color};height:100%"></div>${r.marker!=null?`<div style="position:absolute;left:${clamp(r.marker/M*100,0,100)}%;top:-2px;bottom:-2px;width:2px;background:var(--ink-3);opacity:.65"></div>`:""}</div>
+      <div class="tnum" style="font-size:12px;min-width:56px">${fmt(r.v)}${unit}</div>
+    </div>`;
+  }).join("");
+  box.querySelectorAll(".hb").forEach(el=>{
+    const t=el.dataset.tip; if(!t) return;
+    el.addEventListener("pointermove",e=>showTip(t,e.clientX,e.clientY));
+    el.addEventListener("pointerleave",hideTip);
+  });
+}
+
+/* 堆叠条：段间留 2px 表面缝隙 */
+function stacked(box, segs, {h=26, fmt=v=>wan(v)+" 万"}={}){
+  const tot=sum(segs,s=>s.v)||1;
+  box.innerHTML=`<div style="display:flex;height:${h}px;gap:2px;border-radius:2px;overflow:hidden">${
+    segs.map(s=>`<div class="sg" data-n="${esc(s.n)}" data-v="${fmt(s.v)}" data-p="${pct(s.v/tot)}"
+      style="width:${(s.v/tot*100).toFixed(2)}%;background:${s.c};min-width:2px"></div>`).join("")}</div>
+    <div class="legend" style="margin-top:9px">${segs.map(s=>
+      `<span><i style="background:${s.c}"></i>${esc(s.n)} <b class="mono" style="font-weight:600">${fmt(s.v)}</b> <span class="t-mut mono">${pct(s.v/tot)}</span></span>`).join("")}</div>`;
+  box.querySelectorAll(".sg").forEach(el=>{
+    el.addEventListener("pointermove",e=>showTip(
+      `<div class="tip-t">${esc(el.dataset.n)}</div><div class="tip-r"><span>金额</span><b>${el.dataset.v}</b></div><div class="tip-r"><span>占比</span><b>${el.dataset.p}</b></div>`,e.clientX,e.clientY));
+    el.addEventListener("pointerleave",hideTip);
+  });
+}
+
+/* 双向条：零轴居中，正负两色 + 中性零点（极性编码） */
+function diverging(box, rows, {fmt=v=>(v>0?"+":"")+n1(v), unit="万"}={}){
+  const M=Math.max(...rows.map(r=>Math.abs(r.v)))*1.08||1;
+  box.innerHTML = rows.map(r=>{
+    const w=Math.abs(r.v)/M*50, pos=r.v>=0;
+    return `<div class="dv" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(96px,168px) 1fr 68px;gap:10px;align-items:center;margin-bottom:6px">
+      <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
+      <div style="position:relative;height:20px;background:var(--surface-3);border-radius:2px">
+        <div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line-2)"></div>
+        <div style="position:absolute;top:0;bottom:0;${pos?`left:50%;border-radius:0 2px 2px 0`:`right:50%;border-radius:2px 0 0 2px`};width:${w}%;background:${pos?"var(--good)":"var(--crit)"}"></div>
+      </div>
+      <div class="tnum" style="font-size:12px;color:${pos?"var(--good)":"var(--crit)"};font-weight:500">${fmt(r.v)}${unit}</div>
+    </div>`;
+  }).join("");
+  box.querySelectorAll(".dv").forEach(el=>{
+    const t=el.dataset.tip; if(!t) return;
+    el.addEventListener("pointermove",e=>showTip(t,e.clientX,e.clientY));
+    el.addEventListener("pointerleave",hideTip);
+  });
+}
+</script>
+<script>
+"use strict";
+/* ════════ 导航与路由 ════════ */
+const IC = {
+  dash:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  sites:'<rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="9" width="8" height="11" rx="1"/><path d="M6 8h2M6 12h2M16 13h2"/>',
+  enr:'<path d="M3 17l5-6 4 3 6-8"/><path d="M3 21h18"/>',
+  staff:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M17 11h4M19 9v4"/>',
+  time:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  pnl:'<path d="M4 20V9M10 20V4M16 20v-7M22 20H2"/>',
+  bill:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h4"/>',
+  qa:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  mon:'<rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  price:'<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'
+};
+const NAV = [
+  {g:"经营", items:[
+    {k:"dash",  t:"经营驾驶舱", ic:IC.dash},
+    {k:"sites", t:"项目 · 中心台账", ic:IC.sites},
+    {k:"enr",   t:"入组进度", ic:IC.enr}]},
+  {g:"资源", items:[
+    {k:"staff", t:"派工与产能", ic:IC.staff},
+    {k:"time",  t:"工时与差旅", ic:IC.time}]},
+  {g:"财务", items:[
+    {k:"pnl",   t:"成本与毛利", ic:IC.pnl},
+    {k:"bill",  t:"里程碑 · 结算", ic:IC.bill}]},
+  {g:"质量", items:[
+    {k:"qa",    t:"质量事件与 CAPA", ic:IC.qa, badge:()=>ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般").length},
+    {k:"mon",   t:"监查访视", ic:IC.mon}]},
+  {g:"工具", items:[
+    {k:"price", t:"报价模型", ic:IC.price}]}
+];
+const TITLES = {
+  dash:["经营驾驶舱","一页看清人效、毛利、入组与风险。每个数字后面都对应一个具体的人和一个具体的动作。"],
+  sites:["项目 · 中心台账","StudySite（项目 × 中心）是本系统的最小作业单元 —— 收入按中心计、成本按人落在中心上、核查风险按中心暴露。"],
+  enr:["入组进度","计划曲线 vs 实际曲线。入组延迟是临床试验项目亏损的第一大原因，这张图必须每天有人看。"],
+  staff:["派工与产能","谁、在哪个项目中心、什么角色、FTE 占比多少。闲置与超载都是问题，所以按状态着色而不是按高低。"],
+  time:["工时与差旅","一线在医院用手机填报，目标 30 秒内提交。可计费与不可计费强制区分 —— 不区分，利用率就是假的。"],
+  pnl:["成本与毛利","单中心 P&L。「项目毛利 15%」没有经营价值，「A 院 40% / B 院 -20%」才能据以行动。"],
+  bill:["里程碑 · 开票 · 回款","里程碑达成 → 证据链 → 开票 → 回款。断在哪一环，现金流就卡在哪一环。"],
+  qa:["质量事件与 CAPA","把风险信号提前到日常作业里，而不是等稽查时第一次看见。"],
+  mon:["监查访视","访视排期与 MVR 跟进项闭环。跟进项没关闭，等于这次监查没做。"],
+  price:["报价模型","用历史真实人天反推报价。对手报价靠经验，你靠自己的成本数据库 —— 这是抄不走的护城河。"]
+};
+
+const state = {view:"dash", study:"all", enrStudy:"HJ-2024-017", dashRange:"12m",
+  sortKey:"rate", sortDir:1, q:"", stFilter:new Set(), roleFilter:"all",
+  sevFilter:new Set(), pnlSort:"gp", visitSel:0, tsWho:"吴桐"};
+
+function renderNav(){
+  $("#nav").innerHTML = NAV.map(g=>
+    `<div class="nav-group">${esc(g.g)}</div>` + g.items.map(it=>{
+      const b = it.badge? it.badge():0;
+      return `<button class="nav-item" data-nav="${it.k}" aria-current="${state.view===it.k}">
+        <svg class="nav-ic" viewBox="0 0 24 24">${it.ic}</svg><span>${esc(it.t)}</span>
+        ${b?`<span class="nav-badge">${b}</span>`:""}</button>`;
+    }).join("")).join("");
+}
+function renderTop(){
+  const [t] = TITLES[state.view];
+  const sc = state.study==="all" ? "全部 4 个项目" : S[state.study].short;
+  $("#crumb").innerHTML = `恒济临床研究 / <b>${esc(t)}</b> · <span class="t-mut">${esc(sc)}</span>`;
+  const sel=$("#gstudy");
+  if(!sel.options.length){
+    sel.innerHTML = `<option value="all">全部项目（4）</option>` +
+      STUDIES.map(s=>`<option value="${s.id}">${esc(s.id)} · ${esc(s.short)}</option>`).join("");
+  }
+  sel.value = state.study;
+}
+const VIEWS = {};
+function render(){
+  renderNav(); renderTop();
+  clearTimers();
+  const [t,sub] = TITLES[state.view];
+  $("#content").innerHTML = `<div class="view-head"><h1>${esc(t)}</h1><p>${esc(sub)}</p></div><div id="vbody"></div>`;
+  VIEWS[state.view]($("#vbody"));
+  $("#content").scrollIntoView({block:"start"});
+}
+function go(v,opts={}){ Object.assign(state,opts); state.view=v; render(); }
+
+let timers=[];
+const clearTimers=()=>{timers.forEach(clearInterval);timers=[];};
+
+document.addEventListener("click",e=>{
+  const nav=e.target.closest("[data-nav]");     if(nav){ go(nav.dataset.nav); return; }
+  const gt =e.target.closest("[data-goto]");    if(gt){ const [v,k,val]=gt.dataset.goto.split(":");
+    go(v, k?{[k]:val}:{}); return; }
+  const cl =e.target.closest("[data-close]");   if(cl){ closeLayer(); return; }
+});
+$("#gstudy").addEventListener("change",e=>{ state.study=e.target.value;
+  if(state.study!=="all") state.enrStudy=state.study; render(); });
+addEventListener("resize",()=>{ clearTimeout(window.__rz);
+  window.__rz=setTimeout(()=>{ if(state.view==="dash"||state.view==="enr") render(); },250); });
+</script>
+<script>
+"use strict";
+/* ════════════════ 1 · 经营驾驶舱 ════════════════ */
+const SPARK = {
+  util:[71,74,72,77,79,76,80,78,81,79,80,78],
+  gm:[24.1,25.6,24.9,26.8,27.4,26.2,28.1,27.3,26.5,25.9,26.8,27.6],
+  rate:[102,99,97,95,94,92,90,89,88,87,86,87],
+  cpe:[3.9,3.8,4.0,4.1,4.0,4.2,4.3,4.2,4.4,4.3,4.4,4.5],
+  dso:[68,71,69,74,77,75,79,82,80,83,85,84]
+};
+VIEWS.dash = box=>{
+  const list = scope(), R = rollup(list);
+  const rng = {"6m":6,"12m":12,"all":99}[state.dashRange];
+  const es = ENROLL[state.study==="all"?"HJ-2024-017":state.study];
+  const cut = Math.max(0, es.x.length-rng);
+  const ex = es.x.slice(cut), ep = es.plan.slice(cut), ea = es.act.slice(cut);
+
+  /* 风险清单：由数据自动推导，不是手写 */
+  const alerts = [];
+  list.forEach(ss=>{
+    const m=siteM(ss);
+    if(m.rate!==null && m.rate<0.7) alerts.push({sev:"crit",t:`${ss.hosp} 入组仅达计划 ${pct(m.rate)}`,
+      d:`已入组 ${ss.enrolled} / 应达 ${ss.planToDate} 例，缺口 ${ss.planToDate-ss.enrolled} 例`,go:"sites"});
+    if(m.gm!==null && m.gm<0) alerts.push({sev:"crit",t:`${ss.hosp} 单中心亏损 ${n1(m.gp)} 万`,
+      d:`收入 ${wan(ss.revenue)} 万 / 成本 ${wan(ss.cost)} 万，已消耗 ${n0(ss.md)} 人天`,go:"pnl"});
+  });
+  ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般"&&(state.study==="all"||site(i.ss).sid===state.study))
+    .forEach(i=>alerts.push({sev:"crit",t:`${i.sev}质量事件 ${i.id} · ${i.type}`,
+      d:`${site(i.ss).hosp} · 责任人 ${i.own} · CAPA 到期 ${i.due}`,go:"qa"}));
+  STAFF.filter(p=>p.util>88).forEach(p=>alerts.push({sev:"warn",t:`${p.n}（${p.role}）利用率 ${p.util}%`,
+    d:`长期超过 88% 是质量事故与离职的先行指标，建议分流 1 个中心`,go:"staff"}));
+  STAFF.filter(p=>days(TODAY,p.gcp)<70).forEach(p=>alerts.push({sev:"warn",t:`${p.n} GCP 证书 ${days(TODAY,p.gcp)} 天后到期`,
+    d:`到期日 ${p.gcp} · 未及时换证将无法承担监查/协调工作`,go:"staff"}));
+  const overdue = MILES.filter(m=>!m.paid&&m.inv==="已开票"&&m.age>60&&(state.study==="all"||site(m.ss).sid===state.study));
+  if(overdue.length) alerts.push({sev:"warn",t:`${overdue.length} 笔应收账龄超 60 天，合计 ${wan(sum(overdue,m=>m.amt))} 万`,
+    d:`最久一笔 ${Math.max(...overdue.map(m=>m.age))} 天 · ${site(overdue[0].ss).hosp}`,go:"bill"});
+
+  const K = (l,v,u,note,sp,spc,delta,dc,to)=>`
+    <button class="kpi" data-goto="${to}">
+      <div class="kpi-l">${esc(l)}</div>
+      <div class="kpi-v">${v}${u?`<small>${u}</small>`:""}</div>
+      <div class="kpi-f"><div>
+        <div class="kpi-d" style="color:${dc}">${delta}</div>
+        <div class="kpi-note">${esc(note)}</div>
+      </div>${sp?spark(sp,spc):""}</div>
+    </button>`;
+  const us = utilState(R.util);
+
+  box.innerHTML = `
+  <div class="grid g4" style="margin-bottom:12px">
+    ${K("人员利用率", n1(R.util), "%", `健康区间 60–88%｜${R.people} 名一线`, SPARK.util, us.c,
+        `<span class="dot" style="background:${us.c}"></span>${us.t}`, us.c, "staff")}
+    ${K("综合毛利率", n1(R.gm*100), "%", `收入 ${wan(R.rev)} 万 · 成本 ${wan(R.cost)} 万`, SPARK.gm, "var(--s3)",
+        "▲ 较上月 +0.8pt", "var(--good)", "pnl")}
+    ${(()=>{ const g=R.enr-R.plan, c=g>=0?"var(--good)":R.rate<0.9?"var(--crit)":"var(--warn)";
+      return K("入组达成率", n1(R.rate*100), "%", `实际 ${R.enr} 例 / 计划到今日 ${R.plan} 例`, SPARK.rate, c,
+        `${g>=0?"▲ 领先":"▼ 落后"} ${Math.abs(g)} 例`, c, "enr"); })()}
+    ${K("每例入组成本", n1(R.cpe), "万", `${R.active} 个中心在组｜共 ${R.total} 个中心`, SPARK.cpe, "var(--s2)",
+        "▲ 较年初 +0.6 万", "var(--warn)", "pnl")}
+  </div>
+  <div class="grid g4" style="margin-bottom:12px">
+    ${K("未关闭质量事件", R.open.length, "", `其中重大/严重 ${R.crit} 项`, null, null,
+        `<span class="dot" style="background:${R.crit?"var(--crit)":"var(--good)"}"></span>${R.crit?"需立即处理":"无高危"}`,
+        R.crit?"var(--crit)":"var(--good)", "qa")}
+    ${K("应收未回款", wan(R.arAmt), "万", `账龄超 60 天 ${wan(R.arOver)} 万`, SPARK.dso, "var(--s5)",
+        `DSO ${R.dso} 天`, R.dso>75?"var(--crit)":"var(--warn)", "bill")}
+    ${K("待开票里程碑", wan(R.unbilledAmt), "万", `${R.unbilled} 笔已达成未开票`, null, null,
+        "立即可开票", "var(--accent)", "bill")}
+    ${K("在组中心", R.active, ` / ${R.total}`, `启动中 ${R.total-R.active} 个`, null, null,
+        "点击查看台账", "var(--ink-3)", "sites")}
+  </div>
+
+  <div class="grid g21" style="margin-bottom:12px">
+    <div class="card">
+      <div class="card-h">
+        <h3>入组累计：计划 vs 实际</h3>
+        <span class="sub">${esc(state.study==="all"?"HJ-2024-017 艾瑞替尼 III（默认）":S[state.study].short)}</span>
+        <span class="sp"></span>
+        <div class="seg" id="rng">
+          ${["6m","12m","all"].map(r=>`<button data-r="${r}" aria-pressed="${state.dashRange===r}">${r==="all"?"全周期":r.replace("m","个月")}</button>`).join("")}
+        </div>
+      </div>
+      <div class="card-b">
+        <div class="legend" style="margin-bottom:10px">
+          <span><i style="background:var(--plan)"></i>计划累计</span>
+          <span><i style="background:var(--s1)"></i>实际累计</span>
+          <span class="t-mut" style="margin-left:auto">悬停查看逐月差额</span>
+        </div>
+        <div class="chart" id="c-enr"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>风险预警</h3><span class="sp"></span>
+        <span class="pill ${alerts.some(a=>a.sev==="crit")?"p-crit":"p-warn"}">${alerts.length} 项待处理</span></div>
+      <div class="card-b" style="padding:0;max-height:330px;overflow-y:auto">
+        ${alerts.length? alerts.map(a=>`
+          <button data-goto="${a.go}" style="display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;padding:10px 14px 10px 16px;cursor:pointer;position:relative">
+            <span class="stripe" style="background:var(--${a.sev==="crit"?"crit":"warn"})"></span>
+            <div style="font-size:12.5px;font-weight:500;line-height:1.45">${esc(a.t)}</div>
+            <div class="note" style="margin-top:2px">${esc(a.d)}</div>
+          </button>`).join("") : `<div class="empty">当前范围内无预警</div>`}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-h"><h3>一线人员饱和度</h3><span class="sub">闲置与超载都是问题</span></div>
+      <div class="card-b">
+        <div style="position:relative;margin-bottom:10px">
+          <div style="position:absolute;left:calc(90px + 10px + 60%*.6);right:0;top:0;bottom:0;pointer-events:none"></div>
+        </div>
+        <div id="c-util"></div>
+        <div class="legend" style="margin-top:10px;border-top:1px solid var(--line);padding-top:9px">
+          <span><span class="dot" style="background:var(--warn)"></span> 闲置 &lt;60%</span>
+          <span><span class="dot" style="background:var(--good)"></span> 健康 60–88%</span>
+          <span><span class="dot" style="background:var(--crit)"></span> 超载 &gt;88%</span>
+          <span class="t-mut" style="margin-left:auto">灰线 = 健康下限</span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>单中心毛利</h3><span class="sub">正负极性，按毛利额排序</span>
+        <span class="sp"></span><button class="btn" data-goto="pnl">查看 P&amp;L 明细 →</button></div>
+      <div class="card-b"><div id="c-gp"></div></div>
+    </div>
+  </div>`;
+
+  lineChart($("#c-enr"),{x:ex,series:[
+    {name:"计划累计",color:"var(--plan)",values:ep,dash:true},
+    {name:"实际累计",color:"var(--s1)",values:ea,fill:true}],h:230});
+
+  const people = STAFF.filter(p=>p.role==="CRA"||p.role==="CRC").sort((a,b)=>b.util-a.util);
+  hbars($("#c-util"), people.map(p=>{ const s=utilState(p.util);
+    return {label:`${p.n} · ${p.role}`, v:p.util, color:s.c, marker:60,
+      tip:`<div class="tip-t">${esc(p.n)} · ${p.role}${p.lvl}</div>
+        <div class="tip-r"><span>利用率</span><b>${p.util}%</b></div>
+        <div class="tip-r"><span>状态</span><b style="color:${s.c}">${s.t}</b></div>
+        <div class="tip-r"><span>带中心</span><b>${p.sites.length} 个</b></div>
+        <div class="tip-r"><span>常驻</span><b>${p.city}</b></div>`};
+  }), {max:100, fmt:v=>v, unit:"%", h:18, gap:5});
+
+  const gp = list.filter(s=>s.revenue>0).map(s=>{const m=siteM(s);
+    return {label:s.hosp.replace(/(大学|医学院|附属)/g,""), v:m.gp, tip:
+      `<div class="tip-t">${esc(s.hosp)}</div>
+       <div class="tip-r"><span>已确认收入</span><b>${wan(s.revenue)} 万</b></div>
+       <div class="tip-r"><span>已发生成本</span><b>${wan(s.cost)} 万</b></div>
+       <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--good)"}">${pct(m.gm)}</b></div>
+       <div class="tip-r"><span>已入组</span><b>${s.enrolled} / ${s.contracted} 例</b></div>`};
+  }).sort((a,b)=>b.v-a.v);
+  diverging($("#c-gp"), gp);
+
+  $("#rng")?.addEventListener("click",e=>{const b=e.target.closest("[data-r]");
+    if(b){state.dashRange=b.dataset.r;render();}});
+};
+</script>
+<script>
+"use strict";
+/* ════════════════ 2 · 项目 · 中心台账 ════════════════ */
+const COLS = [
+  {k:"hosp", t:"中心 / 科室", s:false},
+  {k:"sid",  t:"项目", s:true},
+  {k:"st",   t:"状态", s:true},
+  {k:"enrolled", t:"已入组", s:true, num:true},
+  {k:"rate", t:"入组达成", s:true, num:true},
+  {k:"gm",   t:"毛利率", s:true, num:true},
+  {k:"md",   t:"已耗人天", s:true, num:true},
+  {k:"team", t:"派驻", s:false}
+];
+VIEWS.sites = box=>{
+  const all = scope();
+  const sts = [...new Set(SITES.map(s=>s.st))].sort((a,b)=>FLOW.indexOf(a)-FLOW.indexOf(b));
+  box.innerHTML = `
+  <div class="card">
+    <div class="card-h" style="flex-wrap:wrap;gap:8px">
+      <input class="inp" id="q" placeholder="搜索医院 / PI / 城市 / 中心编号…" value="${esc(state.q)}" style="width:250px">
+      <div class="row" style="gap:5px">
+        ${sts.map(s=>`<button class="chip" data-st="${esc(s)}" aria-pressed="${state.stFilter.has(s)}">${esc(s)}</button>`).join("")}
+      </div>
+      <span class="sp"></span>
+      <span class="sub" id="cnt"></span>
+      <button class="btn" id="clr">重置</button>
+    </div>
+    <div class="tw"><table id="tbl">
+      <thead><tr>${COLS.map(c=>`<th class="${c.s?"s":""} ${c.num?"ta-r":""}" data-k="${c.k}"
+        ${state.sortKey===c.k?`aria-sort="${state.sortDir>0?"descending":"ascending"}"`:""}>${esc(c.t)}${c.s?`<span class="ar">${state.sortKey===c.k?(state.sortDir>0?"↓":"↑"):"↕"}</span>`:""}</th>`).join("")}</tr></thead>
+      <tbody></tbody>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:10px">点击任意一行打开中心详情 —— 状态机推进、入组曲线、派驻人员、未关闭质量事件与财务快照都在一处。</p>`;
+
+  function draw(){
+    const q = state.q.trim().toLowerCase();
+    let rows = all.filter(s=>{
+      if(state.stFilter.size && !state.stFilter.has(s.st)) return false;
+      if(!q) return true;
+      return [s.hosp,s.pi,s.city,s.id,s.dept,S[s.sid].short].some(v=>v.toLowerCase().includes(q));
+    });
+    const val = (s,k)=>{ const m=siteM(s);
+      return k==="rate"? (m.rate??-1) : k==="gm"? (m.gm??-99) : k==="sid"? S[s.sid].short : s[k]; };
+    rows.sort((a,b)=>{ const x=val(a,state.sortKey), y=val(b,state.sortKey);
+      return (typeof x==="string"? x.localeCompare(y,"zh") : x-y) * -state.sortDir; });
+    $("#cnt").textContent = `${rows.length} / ${all.length} 个中心`;
+    $("#tbl tbody").innerHTML = rows.length? rows.map(s=>{
+      const m=siteM(s), rs=rateState(m.rate);
+      const iss = ISSUES.filter(i=>i.ss===s.id&&i.st!=="已关闭").length;
+      return `<tr class="clk" data-ss="${s.id}">
+        <td><div class="t-main">${esc(s.hosp)}${iss?` <span class="pill p-crit" title="未关闭质量事件">${iss}</span>`:""}</div>
+            <div class="t-sub">${esc(s.dept)} · PI ${esc(s.pi)} · ${esc(s.city)} · ${s.id}</div></td>
+        <td><div style="font-size:12px">${esc(S[s.sid].short)}</div><div class="t-sub">${esc(S[s.sid].phase)}</div></td>
+        <td><span class="pill ${s.st==="入组中"?"p-acc":"p-neut"}">${esc(s.st)}</span></td>
+        <td class="tnum">${s.enrolled}<span class="t-mut"> / ${s.contracted}</span></td>
+        <td class="ta-r"><span class="pill p-${rs.k}">${m.rate===null?"—":pct(m.rate)}</span></td>
+        <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--good)"};font-weight:500">${m.gm===null?"—":pct(m.gm)}</td>
+        <td class="tnum">${n0(s.md)}</td>
+        <td><div class="t-sub">CRA ${esc(s.cra)}</div><div class="t-sub">CRC ${esc(s.crc.join("、"))}</div></td>
+      </tr>`;}).join("") : `<tr><td colspan="8"><div class="empty">没有匹配的中心，试试放宽筛选条件</div></td></tr>`;
+  }
+  draw();
+  $("#q").addEventListener("input",e=>{state.q=e.target.value;draw();});
+  box.addEventListener("click",e=>{
+    const c=e.target.closest("[data-st]");
+    if(c){ const v=c.dataset.st; state.stFilter.has(v)?state.stFilter.delete(v):state.stFilter.add(v);
+      c.setAttribute("aria-pressed",state.stFilter.has(v)); draw(); return; }
+    const th=e.target.closest("th.s");
+    if(th){ const k=th.dataset.k;
+      if(state.sortKey===k) state.sortDir*=-1; else {state.sortKey=k;state.sortDir=1;}
+      render(); return; }
+    if(e.target.closest("#clr")){ state.q="";state.stFilter.clear();render(); return; }
+    const tr=e.target.closest("[data-ss]"); if(tr) openSite(tr.dataset.ss);
+  });
+};
+
+/* ── 中心详情抽屉：含状态机推进 ── */
+function openSite(id){
+  const ss=site(id), st=S[ss.sid], m=siteM(ss);
+  const i=FLOW.indexOf(ss.st), next=FLOW[i+1];
+  const iss=ISSUES.filter(x=>x.ss===id&&x.st!=="已关闭");
+  const ms =MILES.filter(x=>x.ss===id);
+  const vs =VISITS.filter(x=>x.ss===id);
+  const rs = rateState(m.rate);
+  openLayer($("#drawer"),`
+    <div class="drawer-h">
+      <div style="flex:1">
+        <div class="section-t" style="margin:0 0 3px">${esc(ss.id)} · ${esc(st.id)}</div>
+        <h2 style="font-size:17px">${esc(ss.hosp)}</h2>
+        <div class="note" style="margin-top:3px">${esc(ss.dept)} · PI ${esc(ss.pi)} · ${esc(ss.city)}｜${esc(st.short)} ${esc(st.phase)} · ${esc(st.indication)}</div>
+      </div>
+      <button class="x" data-close aria-label="关闭">✕</button>
+    </div>
+    <div class="drawer-b">
+      <div class="section-t">中心状态机</div>
+      <div style="display:flex;gap:2px;margin-bottom:8px">${FLOW.map((f,k)=>`
+        <div title="${esc(f)}" style="flex:1;height:5px;border-radius:1px;background:${k<=i?"var(--accent)":"var(--surface-3)"}"></div>`).join("")}</div>
+      <div class="row" style="justify-content:space-between;margin-bottom:12px">
+        <div><span class="pill p-acc">${esc(ss.st)}</span>
+          <span class="note" style="margin-left:6px">第 ${i+1} / ${FLOW.length} 节点</span></div>
+        ${next?`<button class="btn btn-p" id="adv">推进到「${esc(next)}」</button>`
+              :`<span class="pill p-good">流程已完成</span>`}
+      </div>
+      <div class="grid g2" style="gap:8px;margin-bottom:14px">
+        <div class="card" style="padding:10px 12px">
+          <div class="kpi-l">入组达成</div>
+          <div class="num" style="font-size:20px;margin-top:3px;color:${rs.c}">${m.rate===null?"—":pct(m.rate)}</div>
+          <div class="note">实际 ${ss.enrolled} / 计划到今日 ${ss.planToDate}｜合同 ${ss.contracted} 例</div>
+        </div>
+        <div class="card" style="padding:10px 12px">
+          <div class="kpi-l">单中心毛利</div>
+          <div class="num" style="font-size:20px;margin-top:3px;color:${m.gp<0?"var(--crit)":"var(--good)"}">${m.gp>0?"+":""}${n1(m.gp)} 万</div>
+          <div class="note">毛利率 ${m.gm===null?"—":pct(m.gm)}｜每例成本 ${m.cpe?n1(m.cpe)+" 万":"—"}</div>
+        </div>
+      </div>
+      <div class="section-t">关键日期</div>
+      <dl class="kv" style="margin-bottom:14px">
+        <dt>伦理批件</dt><dd>${esc(ss.ethics)}</dd>
+        <dt>SIV 启动</dt><dd>${esc(ss.siv)}</dd>
+        <dt>首例入组</dt><dd>${esc(ss.fpi)}${ss.siv!=="—"&&ss.fpi!=="—"?` <span class="t-mut">（启动→FPI ${days(ss.siv,ss.fpi)} 天）</span>`:""}</dd>
+        <dt>单例单价</dt><dd>${n1(ss.unit)} 万 / 例</dd>
+        <dt>已耗人天</dt><dd>${n0(ss.md)} 人天${m.mdPerPt?` <span class="t-mut">（${n1(m.mdPerPt)} 人天/例）</span>`:""}</dd>
+      </dl>
+      <div class="section-t">派驻人员</div>
+      <div class="stack" style="gap:6px;margin-bottom:14px">
+        ${[[ss.cra,"CRA"],...ss.crc.map(c=>[c,"CRC"])].map(([n,r])=>{
+          const p=staff(n), s=utilState(p.util);
+          return `<div class="row" style="justify-content:space-between;border:1px solid var(--line);border-radius:3px;padding:7px 10px">
+            <div><b style="font-weight:500">${esc(n)}</b> <span class="t-sub">${r} · ${esc(p.lvl)} · ${esc(p.city)}</span></div>
+            <span class="pill p-${s.k}">利用率 ${p.util}% · ${s.t}</span></div>`;}).join("")}
+      </div>
+      ${iss.length?`<div class="section-t">未关闭质量事件（${iss.length}）</div>
+      <div class="stack" style="gap:6px;margin-bottom:14px">${iss.map(x=>`
+        <button data-goto="qa" style="text-align:left;border:1px solid var(--line);border-left:2px solid ${SEV[x.sev].c};background:none;border-radius:0 3px 3px 0;padding:8px 10px;cursor:pointer;width:100%">
+          <div class="row" style="gap:6px"><span class="pill p-${SEV[x.sev].k}">${esc(x.sev)}</span>
+            <b style="font-size:12.5px;font-weight:500">${esc(x.type)}</b><span class="t-sub">${esc(x.id)}</span></div>
+          <div class="note" style="margin-top:3px">责任人 ${esc(x.own)} · CAPA 到期 ${esc(x.due)} · ${esc(x.st)}</div>
+        </button>`).join("")}</div>`:""}
+      ${ms.length?`<div class="section-t">里程碑与结算</div>
+      <div class="tw" style="margin-bottom:14px"><table style="min-width:0">
+        <tbody>${ms.map(x=>`<tr><td style="padding-left:0">${esc(x.name)}<div class="t-sub">达成 ${esc(x.hit)}</div></td>
+          <td class="tnum">${n1(x.amt)} 万</td>
+          <td class="ta-r" style="padding-right:0"><span class="pill ${x.paid?"p-good":x.inv==="待开票"?"p-warn":"p-neut"}">${esc(x.paid?"已回款":x.inv)}</span></td></tr>`).join("")}</tbody>
+      </table></div>`:""}
+      ${vs.length?`<div class="section-t">监查排期</div>
+      <div class="stack" style="gap:5px">${vs.map(v=>`<div class="row" style="justify-content:space-between;font-size:12.5px">
+        <span><span class="mono">${esc(v.d)}</span> · ${esc(v.kind)} · ${esc(v.who)}</span>
+        <span class="pill p-neut">${esc(v.st)} · ${v.days} 天</span></div>`).join("")}</div>`:""}
+    </div>`);
+  $("#adv")?.addEventListener("click",()=>{
+    ss.st=next;
+    if(next==="入组中"&&ss.fpi==="—"){ ss.fpi=TODAY; toast(`${ss.hosp} 首例入组（FPI）日期已记录：${TODAY}`); }
+    if(next==="SIV启动"&&ss.siv==="—"){ ss.siv=TODAY;
+      MILES.unshift({id:"M-0"+(50+MILES.length),ss:ss.id,name:"中心启动 SIV",amt:14.0,hit:TODAY,inv:"待开票",due:"—",paid:false,age:0});
+      toast(`SIV 里程碑已达成，14.0 万自动进入待开票队列`); }
+    toast(`${ss.hosp} 状态推进至「${next}」`);
+    closeLayer(); setTimeout(render,220);
+  });
+}
+
+/* ════════════════ 3 · 入组进度 ════════════════ */
+VIEWS.enr = box=>{
+  const sid = state.study==="all" ? state.enrStudy : state.study;
+  const st = S[sid], e = ENROLL[sid];
+  const sites = SITES.filter(s=>s.sid===sid);
+  const gap = e.act.at(-1) - e.plan.at(-1);
+  const mp = e.plan.map((v,i)=>i?v-e.plan[i-1]:v), ma = e.act.map((v,i)=>i?v-e.act[i-1]:v);
+  const monthly = state.enrMode==="m";
+
+  box.innerHTML = `
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h" style="flex-wrap:wrap">
+      <div class="seg" id="stab">${STUDIES.map(s=>
+        `<button data-s="${s.id}" aria-pressed="${sid===s.id}">${esc(s.short)}</button>`).join("")}</div>
+      <span class="sp"></span>
+      <div class="seg" id="emode">
+        <button data-m="c" aria-pressed="${!monthly}">累计</button>
+        <button data-m="m" aria-pressed="${monthly}">月度新增</button>
+      </div>
+    </div>
+    <div class="card-b">
+      <div class="grid g4" style="gap:10px;margin-bottom:16px">
+        ${[["合同计划例数",st.planned,"例",""],
+           ["累计实际入组",e.act.at(-1),"例",`占计划 ${pct(e.act.at(-1)/st.planned)}`],
+           ["较计划曲线",(gap>0?"+":"")+gap,"例",gap<0?"落后":"领先"],
+           ["参研中心",st.sites,"个",`本系统在管 ${sites.length} 个`]].map(([l,v,u,n],i)=>`
+          <div>
+            <div class="kpi-l">${esc(l)}</div>
+            <div class="num" style="font-size:23px;margin-top:3px;${i===2?`color:${gap<0?"var(--crit)":"var(--good)"}`:""}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+            <div class="note">${esc(n)}</div>
+          </div>`).join("")}
+      </div>
+      <div class="legend" style="margin-bottom:10px">
+        <span><i style="background:var(--plan)"></i>计划${monthly?"月增":"累计"}</span>
+        <span><i style="background:var(--s1)"></i>实际${monthly?"月增":"累计"}</span>
+        <span class="t-mut" style="margin-left:auto">${esc(st.id)} · ${esc(st.sponsor)} · ${esc(st.indication)}</span>
+      </div>
+      <div class="chart" id="c-main"></div>
+    </div>
+  </div>
+  <div class="section-t">逐中心入组（小倍数）—— 同一项目内，中心之间差异往往是数倍</div>
+  <div class="grid g4">
+    ${sites.map(s=>{ const m=siteM(s), rs=rateState(m.rate);
+      return `<button class="card" data-ss2="${s.id}" style="text-align:left;cursor:pointer;padding:0;border-color:${m.rate!==null&&m.rate<0.7?"color-mix(in srgb,var(--crit) 40%,var(--line))":"var(--line)"}">
+        <div style="padding:11px 13px 9px">
+          <div class="row" style="justify-content:space-between;align-items:flex-start">
+            <div><div style="font-size:12.5px;font-weight:500;line-height:1.35">${esc(s.hosp)}</div>
+              <div class="t-sub">${esc(s.city)} · PI ${esc(s.pi)}</div></div>
+            <span class="pill p-${rs.k}">${rs.t}</span>
+          </div>
+          <div class="num" style="font-size:21px;margin-top:8px">${s.enrolled}<span style="font-size:12px;color:var(--ink-3)"> / ${s.contracted} 例</span></div>
+          <div class="bartrack" style="height:6px;margin-top:6px;position:relative">
+            <div class="barfill" style="width:${clamp(m.prog*100,0,100)}%;background:${rs.c};height:100%"></div>
+            ${s.planToDate?`<div style="position:absolute;left:${clamp(s.planToDate/s.contracted*100,0,100)}%;top:-2px;bottom:-2px;width:2px;background:var(--ink-3);opacity:.7"></div>`:""}
+          </div>
+          <div class="note" style="margin-top:5px">计划到今日 ${s.planToDate} 例（灰线）· 达成 ${m.rate===null?"—":pct(m.rate)}</div>
+        </div>
+      </button>`;}).join("")}
+  </div>`;
+
+  lineChart($("#c-main"),{x:e.x,series:[
+    {name:monthly?"计划月增":"计划累计",color:"var(--plan)",values:monthly?mp:e.plan,dash:true},
+    {name:monthly?"实际月增":"实际累计",color:"var(--s1)",values:monthly?ma:e.act,fill:!monthly}],h:250});
+
+  box.addEventListener("click",e2=>{
+    const t=e2.target.closest("[data-s]"); if(t){ state.enrStudy=t.dataset.s;
+      if(state.study!=="all"){state.study="all";} render(); return; }
+    const m2=e2.target.closest("[data-m]"); if(m2){ state.enrMode=m2.dataset.m; render(); return; }
+    const c=e2.target.closest("[data-ss2]"); if(c) openSite(c.dataset.ss2);
+  });
+};
+</script>
+<script>
+"use strict";
+/* ════════════════ 4 · 派工与产能 ════════════════ */
+VIEWS.staff = box=>{
+  const roles=["all","CRA","CRC","PM","QA"];
+  const list = STAFF.filter(p=>state.roleFilter==="all"||p.role===state.roleFilter);
+  const line = STAFF.filter(p=>p.role==="CRA"||p.role==="CRC");
+  const idle = line.filter(p=>p.util<60), over = line.filter(p=>p.util>88);
+  const avg = sum(line,p=>p.util)/line.length;
+  const craSites = sum(STAFF.filter(p=>p.role==="CRA"),p=>p.sites.length)/5;
+  const crcSites = sum(STAFF.filter(p=>p.role==="CRC"),p=>p.sites.length)/7;
+
+  box.innerHTML=`
+  <div class="grid g4" style="margin-bottom:12px">
+    ${[["平均利用率",n1(avg)+"%",`健康区间 60–88%`,utilState(avg).c],
+       ["超载人员",over.length+" 人",over.length?over.map(p=>p.n).join("、"):"无",over.length?"var(--crit)":"var(--good)"],
+       ["产能闲置",idle.length+" 人",idle.length?idle.map(p=>p.n).join("、"):"无",idle.length?"var(--warn)":"var(--good)"],
+       ["CRA / CRC 人均带中心",n1(craSites)+" / "+n1(crcSites),"CRA 行业经验值 8–12 个","var(--ink-3)"]
+     ].map(([l,v,n,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:4px;color:${c}">${esc(v)}</div>
+        <div class="note" style="margin-top:2px">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="card">
+    <div class="card-h" style="flex-wrap:wrap">
+      <h3>人员派工矩阵</h3>
+      <div class="seg" id="rf">${roles.map(r=>`<button data-r="${r}" aria-pressed="${state.roleFilter===r}">${r==="all"?"全部":r}</button>`).join("")}</div>
+      <span class="sp"></span>
+      <button class="btn btn-p" id="newas">+ 新增派工</button>
+    </div>
+    <div class="tw"><table style="min-width:820px">
+      <thead><tr><th>人员</th><th>常驻</th><th>GCP 证书</th><th class="ta-r">带中心</th><th style="width:36%">利用率 · 状态</th><th>当前派驻中心</th></tr></thead>
+      <tbody>${list.map(p=>{
+        const s=utilState(p.util), left=days(TODAY,p.gcp);
+        const gcpCls = left<70?"p-crit":left<180?"p-warn":"p-neut";
+        return `<tr class="clk" data-p="${esc(p.n)}">
+          <td><div class="t-main">${esc(p.n)}</div><div class="t-sub">${esc(p.role)} · ${esc(p.lvl)}</div></td>
+          <td class="t-sub">${esc(p.city)}</td>
+          <td><span class="pill ${gcpCls}">${esc(p.gcp)}</span><div class="t-sub">剩余 ${left} 天</div></td>
+          <td class="tnum">${p.sites.length}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:9px">
+              <div class="bartrack" style="height:16px;flex:1;position:relative">
+                <div style="position:absolute;left:60%;right:12%;top:0;bottom:0;background:var(--good-soft)"></div>
+                <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:${s.c};height:100%;position:relative"></div>
+              </div>
+              <span class="tnum" style="width:34px;font-size:12px">${p.util}%</span>
+              <span class="pill p-${s.k}" style="width:62px;justify-content:center">${s.t}</span>
+            </div>
+          </td>
+          <td class="t-sub">${p.sites.length? p.sites.map(id=>site(id).hosp.slice(0,6)).join("、") : "—"}</td>
+        </tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:10px">浅绿区间 = 健康带（60–88%）。点击人员查看派工明细与冲突检测。派工变更会即时重算利用率，并回写到驾驶舱与工时模块。</p>`;
+
+  box.addEventListener("click",e=>{
+    const r=e.target.closest("[data-r]"); if(r){state.roleFilter=r.dataset.r;render();return;}
+    if(e.target.closest("#newas")){ assignModal(); return; }
+    const p=e.target.closest("[data-p]"); if(p) openStaff(p.dataset.p);
+  });
+};
+
+function openStaff(name){
+  const p=staff(name), s=utilState(p.util);
+  const rows=p.sites.map(id=>{const ss=site(id);return {ss,m:siteM(ss)};});
+  const cities=[...new Set(rows.map(r=>r.ss.city))];
+  const conflict = cities.length>1 && p.role==="CRC";
+  openLayer($("#drawer"),`
+    <div class="drawer-h">
+      <div style="flex:1"><div class="section-t" style="margin:0 0 3px">${esc(p.role)} · ${esc(p.lvl)}</div>
+        <h2 style="font-size:17px">${esc(p.n)}</h2>
+        <div class="note" style="margin-top:3px">常驻 ${esc(p.city)}｜GCP 证书有效期至 ${esc(p.gcp)}（剩余 ${days(TODAY,p.gcp)} 天）</div></div>
+      <button class="x" data-close aria-label="关闭">✕</button>
+    </div>
+    <div class="drawer-b">
+      <div class="card" style="padding:12px;margin-bottom:14px">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <span class="kpi-l">当前利用率</span><span class="pill p-${s.k}">${s.t}</span></div>
+        <div class="num" style="font-size:30px;line-height:1;color:${s.c}">${p.util}<small style="font-size:14px">%</small></div>
+        <div class="bartrack" style="height:10px;margin-top:9px;position:relative">
+          <div style="position:absolute;left:60%;right:12%;top:0;bottom:0;background:var(--good-soft)"></div>
+          <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:${s.c};height:100%;position:relative"></div>
+        </div>
+        <div class="note" style="margin-top:6px">灰底浅绿段为健康带 60–88%。低于 60% 是产能浪费，高于 88% 是质量与流失风险。</div>
+      </div>
+      ${conflict?`<div class="card" style="padding:10px 12px;margin-bottom:14px;border-left:2px solid var(--warn);background:var(--warn-soft)">
+        <b style="font-size:12.5px;color:var(--warn)">跨城市派驻提示</b>
+        <div class="note" style="margin-top:2px;color:var(--ink-2)">该 CRC 被派驻到 ${cities.join("、")} 共 ${cities.length} 个城市的中心。CRC 为现场驻场角色，跨城派驻会产生大量非计费通勤工时。</div>
+      </div>`:""}
+      <div class="section-t">派驻明细（${rows.length} 个中心）</div>
+      ${rows.length? `<div class="stack" style="gap:7px">${rows.map(({ss,m})=>{
+        const rs=rateState(m.rate);
+        return `<button data-goto2="${ss.id}" style="width:100%;text-align:left;border:1px solid var(--line);border-radius:3px;padding:9px 11px;background:none;cursor:pointer">
+          <div class="row" style="justify-content:space-between">
+            <b style="font-size:12.5px;font-weight:500">${esc(ss.hosp)}</b>
+            <span class="pill p-${rs.k}">${rs.t}</span></div>
+          <div class="note" style="margin-top:3px">${esc(S[ss.sid].short)} · ${esc(ss.city)}｜已入组 ${ss.enrolled}/${ss.contracted}｜已耗 ${n0(ss.md)} 人天｜毛利 ${m.gp>0?"+":""}${n1(m.gp)} 万</div>
+        </button>`;}).join("")}</div>` : `<div class="empty">该人员当前无中心派驻（职能角色）</div>`}
+      <hr class="hr">
+      <div class="section-t">近 12 个月利用率</div>
+      <div style="margin-top:6px">${spark(SPARK.util.map(v=>clamp(v+(p.util-78),20,100)),s.c,480,54)}</div>
+    </div>`);
+  $("#drawer").addEventListener("click",e=>{const b=e.target.closest("[data-goto2]");
+    if(b){closeLayer();setTimeout(()=>openSite(b.dataset.goto2),230);} });
+}
+
+function assignModal(){
+  openLayer($("#modal"),`
+    <div class="drawer-h"><h3 style="flex:1;font-size:15px">新增派工</h3><button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div class="field"><div class="slider-h"><label for="as-p">人员</label></div>
+        <select class="sel" id="as-p" style="width:100%">${STAFF.filter(p=>p.role==="CRA"||p.role==="CRC")
+          .map(p=>`<option value="${esc(p.n)}">${esc(p.n)} · ${p.role} · ${p.city} · 当前 ${p.util}%</option>`).join("")}</select></div>
+      <div class="field"><div class="slider-h"><label for="as-s">项目中心</label></div>
+        <select class="sel" id="as-s" style="width:100%">${SITES.map(s=>
+          `<option value="${s.id}">${esc(s.hosp)}（${esc(S[s.sid].short)}）· ${esc(s.city)}</option>`).join("")}</select></div>
+      <div class="field"><div class="slider-h"><label for="as-f">投入 FTE</label><b id="as-fv">30%</b></div>
+        <input type="range" id="as-f" min="5" max="60" step="5" value="30"></div>
+      <div id="as-warn" style="margin-bottom:12px"></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="as-ok">确认派工</button></div>
+    </div>`);
+  const check=()=>{
+    const p=staff($("#as-p").value), ss=site($("#as-s").value), f=+$("#as-f").value;
+    $("#as-fv").textContent=f+"%";
+    const nu=clamp(p.util+f*0.8,0,140), s=utilState(nu);
+    const msgs=[];
+    if(nu>88) msgs.push(["crit",`派工后利用率将达 ${n1(nu)}%，进入超载区间（>88%）`]);
+    if(p.city!==ss.city&&p.role==="CRC") msgs.push(["warn",`${p.n} 常驻 ${p.city}，该中心在 ${ss.city} —— CRC 跨城驻场会产生大量不可计费通勤工时`]);
+    if(days(TODAY,p.gcp)<70) msgs.push(["crit",`${p.n} 的 GCP 证书 ${days(TODAY,p.gcp)} 天后到期，需先安排换证`]);
+    if(p.sites.includes(ss.id)) msgs.push(["warn",`${p.n} 已派驻该中心，本次将叠加投入`]);
+    $("#as-warn").innerHTML = msgs.length? msgs.map(([k,t])=>
+      `<div style="border-left:2px solid var(--${k});background:var(--${k}-soft);padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--ink-2)">${esc(t)}</div>`).join("")
+      : `<div style="border-left:2px solid var(--good);background:var(--good-soft);padding:7px 10px;font-size:12px;color:var(--ink-2)">派工后利用率 ${n1(nu)}%（${s.t}），无冲突</div>`;
+  };
+  ["#as-p","#as-s","#as-f"].forEach(s=>$(s).addEventListener("input",check));
+  check();
+  $("#as-ok").addEventListener("click",()=>{
+    const p=staff($("#as-p").value), ss=site($("#as-s").value), f=+$("#as-f").value;
+    p.util=Math.round(clamp(p.util+f*0.8,0,140));
+    if(!p.sites.includes(ss.id)) p.sites.push(ss.id);
+    if(p.role==="CRC"&&!ss.crc.includes(p.n)) ss.crc.push(p.n);
+    closeLayer(); toast(`已派工：${p.n} → ${ss.hosp}（${f}% FTE），利用率更新为 ${p.util}%`,
+      p.util>88?"warn":""); setTimeout(render,220);
+  });
+}
+
+/* ════════════════ 5 · 工时与差旅 ════════════════ */
+VIEWS.time = box=>{
+  const ids = scopeIds();
+  const rows = TIMESHEET.filter(t=>ids.has(t.ss));
+  const bill = rows.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill);
+  const nb   = rows.filter(t=>!WORKTYPES.find(w=>w.k===t.type).bill);
+  const bd=sum(bill,t=>t.h)/8, nd=sum(nb,t=>t.h)/8, td=bd+nd;
+  const tv=sum(rows,t=>t.travel);
+
+  box.innerHTML=`
+  <div class="grid g12" style="gap:14px">
+    <div>
+      <div class="section-t">移动端填报（模拟）</div>
+      <div style="border:9px solid var(--ink);border-radius:26px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow);max-width:330px">
+        <div style="background:var(--ink);color:var(--ground);padding:3px 14px 7px;display:flex;justify-content:space-between;font-size:10px" class="mono">
+          <span>9:41</span><span>中心台 · CRC 端</span></div>
+        <div style="padding:14px">
+          <div class="field"><div class="slider-h"><label for="ts-w">填报人</label></div>
+            <select class="sel" id="ts-w" style="width:100%">${STAFF.filter(p=>p.role==="CRA"||p.role==="CRC")
+              .map(p=>`<option ${p.n===state.tsWho?"selected":""}>${esc(p.n)}</option>`).join("")}</select></div>
+          <div class="field"><div class="slider-h"><label for="ts-s">项目中心</label></div>
+            <select class="sel" id="ts-s" style="width:100%"></select></div>
+          <div class="field"><div class="slider-h"><label>工作类型</label></div>
+            <div class="row" style="gap:4px" id="ts-t">${WORKTYPES.map((w,i)=>
+              `<button class="chip" data-t="${esc(w.k)}" aria-pressed="${i===0}" style="font-size:10.5px;padding:2px 7px">${esc(w.k)}</button>`).join("")}</div></div>
+          <div id="ts-bill" style="margin:-4px 0 12px"></div>
+          <div class="field"><div class="slider-h"><label for="ts-h">工时</label><b id="ts-hv">8.0 小时</b></div>
+            <input type="range" id="ts-h" min="0.5" max="12" step="0.5" value="8"></div>
+          <div class="field"><label class="cbx"><input type="checkbox" id="ts-tv"><span>发生差旅费用</span></label>
+            <div id="ts-tvw" hidden style="margin-top:5px"><input class="inp" id="ts-tva" type="number" step="0.01" min="0" value="0.28" style="width:100%"><div class="note" style="margin-top:3px">单位：万元</div></div></div>
+          <button class="btn btn-p" id="ts-go" style="width:100%;justify-content:center;padding:9px">提交（本次约 12 秒）</button>
+          <div class="note" style="text-align:center;margin-top:7px">弱网自动离线暂存，恢复后补传</div>
+        </div>
+      </div>
+      <div class="formula" style="margin-top:12px">
+成本归集口径
+人天 = 工时 ÷ 8
+成本 = 人天 × 费率(CRC ${RATE.crcDay}／CRA ${RATE.craDay} 万) + 差旅
+→ 自动落到该 StudySite
+      </div>
+    </div>
+    <div class="stack">
+      <div class="grid g4" style="gap:10px">
+        ${[["本期总人天",n1(td),"人天","含全部类型"],
+           ["可计费人天",n1(bd),"人天",`占比 ${td?pct(bd/td):"—"}`],
+           ["不可计费人天",n1(nd),"人天",`占比 ${td?pct(nd/td):"—"} · 毛利蒸发口`],
+           ["差旅费用",n1(tv),"万元",`${rows.filter(t=>t.travel>0).length} 笔`]
+         ].map(([l,v,u,n],i)=>`<div class="card" style="padding:12px 13px">
+            <div class="kpi-l">${esc(l)}</div>
+            <div class="num" style="font-size:23px;margin-top:3px;${i===2&&td&&nd/td>0.15?"color:var(--crit)":""}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+            <div class="note">${esc(n)}</div></div>`).join("")}
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>计费 / 不计费构成</h3><span class="sub">不区分，利用率就是假的</span></div>
+        <div class="card-b"><div id="c-bill"></div>
+          <div class="note" style="margin-top:10px;border-top:1px solid var(--line);padding-top:9px">
+            不可计费工时占比若持续高于 15%，通常意味着合同外「帮忙」、返工或投标支持被计入了项目 —— 这是隐性毛利流失最常见的出口。</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>最近填报</h3><span class="sp"></span><span class="sub" id="ts-n">${rows.length} 条</span></div>
+        <div class="tw"><table style="min-width:600px">
+          <thead><tr><th>日期</th><th>填报人</th><th>项目中心</th><th>工作类型</th><th class="ta-r">工时</th><th class="ta-r">差旅</th><th class="ta-r">归集成本</th><th></th></tr></thead>
+          <tbody id="ts-tb"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>`;
+
+  const fillSites=()=>{ const who=$("#ts-w").value, p=staff(who);
+    const opts = (p.sites.length?p.sites:SITES.map(s=>s.id));
+    $("#ts-s").innerHTML = opts.map(id=>{const s=site(id);
+      return `<option value="${id}">${esc(s.hosp)}（${esc(S[s.sid].short)}）</option>`;}).join(""); };
+  const billNote=()=>{ const t=box.querySelector('#ts-t [aria-pressed="true"]')?.dataset.t;
+    const w=WORKTYPES.find(x=>x.k===t);
+    $("#ts-bill").innerHTML = w.bill
+      ? `<span class="pill p-good">✓ 可计费 — 计入合同范围</span>`
+      : `<span class="pill p-crit">✗ 不可计费 — 由公司承担，不进项目收入</span>`; };
+  const drawRows=()=>{
+    const rs = TIMESHEET.filter(t=>ids.has(t.ss)).slice().sort((a,b)=>b.d.localeCompare(a.d)||b.id-a.id);
+    $("#ts-tb").innerHTML = rs.map(t=>{
+      const w=WORKTYPES.find(x=>x.k===t.type), p=staff(t.who);
+      const cost=t.h/8*(p.role==="CRA"?RATE.craDay:RATE.crcDay)+t.travel;
+      return `<tr><td class="mono" style="font-size:11.5px">${esc(t.d)}</td>
+        <td>${esc(t.who)} <span class="t-sub">${p.role}</span></td>
+        <td style="font-size:12px">${esc(site(t.ss).hosp)}</td>
+        <td><span class="pill ${w.bill?"p-neut":"p-crit"}">${esc(t.type)}</span></td>
+        <td class="tnum">${n1(t.h)} h</td>
+        <td class="tnum">${t.travel?n1(t.travel)+" 万":"—"}</td>
+        <td class="tnum">${n1(cost)} 万</td>
+        <td class="ta-r"><button class="x" data-del="${t.id}" title="撤销">✕</button></td></tr>`;}).join("")
+      || `<tr><td colspan="8"><div class="empty">当前项目范围内暂无填报记录</div></td></tr>`;
+    $("#ts-n").textContent = rs.length+" 条";
+  };
+  const drawBill=()=>{
+    const rs=TIMESHEET.filter(t=>ids.has(t.ss));
+    const b=sum(rs.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
+    const n=sum(rs.filter(t=>!WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
+    stacked($("#c-bill"),[{n:"可计费",v:b,c:"var(--s1)"},{n:"不可计费",v:n,c:"var(--s2)"}],{fmt:v=>n1(v)+" 人天"});
+  };
+  fillSites(); billNote(); drawRows(); drawBill();
+  $("#ts-w").addEventListener("change",e=>{state.tsWho=e.target.value;fillSites();});
+  $("#ts-h").addEventListener("input",e=>$("#ts-hv").textContent=(+e.target.value).toFixed(1)+" 小时");
+  $("#ts-tv").addEventListener("change",e=>$("#ts-tvw").hidden=!e.target.checked);
+  $("#ts-t").addEventListener("click",e=>{const b=e.target.closest("[data-t]"); if(!b)return;
+    box.querySelectorAll("#ts-t .chip").forEach(c=>c.setAttribute("aria-pressed",c===b));billNote();});
+  $("#ts-go").addEventListener("click",()=>{
+    const who=$("#ts-w").value, ss=$("#ts-s").value;
+    const type=box.querySelector('#ts-t [aria-pressed="true"]').dataset.t;
+    const h=+$("#ts-h").value, tv=$("#ts-tv").checked? +$("#ts-tva").value||0 : 0;
+    TIMESHEET.unshift({id:tsSeq++, d:TODAY, who, ss, type, h, travel:tv});
+    const p=staff(who), c=h/8*(p.role==="CRA"?RATE.craDay:RATE.crcDay)+tv;
+    const s=site(ss); s.cost=+(s.cost+c).toFixed(1); s.md+=Math.round(h/8*10)/10;
+    const w=WORKTYPES.find(x=>x.k===type);
+    toast(`已记录 ${who} ${n1(h)} 小时 · ${w.bill?"可计费":"不可计费"} · 成本 ${n1(c)} 万已归集到 ${s.hosp}`, w.bill?"":"warn");
+    render();
+  });
+  box.addEventListener("click",e=>{const d=e.target.closest("[data-del]"); if(!d)return;
+    const i=TIMESHEET.findIndex(t=>t.id===+d.dataset.del); if(i<0)return;
+    const t=TIMESHEET[i], p=staff(t.who), s=site(t.ss);
+    s.cost=+(s.cost-(t.h/8*(p.role==="CRA"?RATE.craDay:RATE.crcDay)+t.travel)).toFixed(1);
+    s.md=Math.max(0,s.md-Math.round(t.h/8*10)/10);
+    TIMESHEET.splice(i,1); toast("已撤销该条填报，成本同步回滚"); render();});
+};
+</script>
+<script>
+"use strict";
+/* ════════════════ 6 · 成本与毛利 ════════════════ */
+VIEWS.pnl = box=>{
+  const list=scope().filter(s=>s.revenue>0||s.cost>0), R=rollup(scope());
+  const sorts={gp:"毛利额",gm:"毛利率",cpe:"每例成本",rev:"收入"};
+  const key=state.pnlSort;
+  const val=(s)=>{const m=siteM(s);return key==="gp"?m.gp:key==="gm"?(m.gm??-9):key==="cpe"?(m.cpe??999):s.revenue;};
+  const rows=list.slice().sort((a,b)=>val(b)-val(a));
+  const loss=rows.filter(s=>siteM(s).gp<0);
+
+  /* 成本构成：按人力/差旅/分摊拆解（与工时模块口径一致） */
+  const craMd=sum(list,s=>s.md*0.34), crcMd=sum(list,s=>s.md*0.66);
+  const craC=craMd*RATE.craDay, crcC=crcMd*RATE.crcDay;
+  const travel=sum(list,s=>s.md*0.011*RATE.travel*8);
+  const oh=(craC+crcC)*RATE.overhead;
+
+  box.innerHTML=`
+  <div class="grid g4" style="margin-bottom:12px">
+    ${[["已确认收入",wan(R.rev),"万","按里程碑与入组例数确认"],
+       ["已发生成本",wan(R.cost),"万","人力 + 差旅 + 职能分摊"],
+       ["毛利",(R.gp>0?"+":"")+wan(R.gp),"万",`毛利率 ${pct(R.gm)}`],
+       ["亏损中心",loss.length,"个",loss.length?`合计失血 ${n1(Math.abs(sum(loss,s=>siteM(s).gp)))} 万`:"无"]
+     ].map(([l,v,u,n],i)=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;${i===2?`color:${R.gp>0?"var(--good)":"var(--crit)"}`:i===3&&loss.length?"color:var(--crit)":""}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="margin-bottom:12px">
+    <div class="card">
+      <div class="card-h" style="flex-wrap:wrap"><h3>单中心毛利额</h3>
+        <span class="sub">零轴居中 · 绿盈红亏</span><span class="sp"></span>
+        <div class="seg" id="ps">${Object.entries(sorts).map(([k,t])=>
+          `<button data-k="${k}" aria-pressed="${key===k}">${esc(t)}</button>`).join("")}</div></div>
+      <div class="card-b"><div id="c-dv"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>成本构成</h3><span class="sub">口径同工时模块</span></div>
+      <div class="card-b">
+        <div id="c-cost"></div>
+        <div class="formula" style="margin-top:14px">
+CRC 人力 = ${n0(crcMd)} 人天 × ${RATE.crcDay} 万
+CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
+差旅     = 现场监查次数 × ${RATE.travel} 万
+职能分摊 = 直接人力 × ${pct(RATE.overhead)}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>单中心 P&amp;L 明细</h3><span class="sp"></span>
+      <span class="sub">「项目毛利 ${pct(R.gm)}」没有经营价值 — 下表才有</span></div>
+    <div class="tw"><table style="min-width:900px">
+      <thead><tr><th>中心</th><th>项目</th><th class="ta-r">已入组</th><th class="ta-r">收入</th><th class="ta-r">成本</th>
+        <th class="ta-r">毛利</th><th class="ta-r">毛利率</th><th class="ta-r">每例成本</th><th class="ta-r">人天/例</th><th>判断</th></tr></thead>
+      <tbody>${rows.map(s=>{const m=siteM(s);
+        const flag = m.gm===null?["p-neut","未启动"]:m.gm<0?["p-crit","止血：暂停投人"]:m.gm<0.2?["p-warn","毛利偏低"]:["p-good","健康"];
+        return `<tr class="clk" data-ss3="${s.id}">
+          <td><div class="t-main">${esc(s.hosp)}</div><div class="t-sub">${esc(s.city)} · PI ${esc(s.pi)}</div></td>
+          <td class="t-sub">${esc(S[s.sid].short)}</td>
+          <td class="tnum">${s.enrolled}</td>
+          <td class="tnum">${wan(s.revenue)}</td>
+          <td class="tnum">${wan(s.cost)}</td>
+          <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--good)"};font-weight:600">${m.gp>0?"+":""}${n1(m.gp)}</td>
+          <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--good)"}">${m.gm===null?"—":pct(m.gm)}</td>
+          <td class="tnum">${m.cpe?n1(m.cpe):"—"}</td>
+          <td class="tnum">${m.mdPerPt?n1(m.mdPerPt):"—"}</td>
+          <td><span class="pill ${flag[0]}">${flag[1]}</span></td></tr>`;}).join("")}</tbody>
+      <tfoot><tr style="border-top:2px solid var(--line-2)">
+        <td colspan="3" class="t-main">合计</td>
+        <td class="tnum t-main">${wan(R.rev)}</td><td class="tnum t-main">${wan(R.cost)}</td>
+        <td class="tnum t-main" style="color:${R.gp<0?"var(--crit)":"var(--good)"}">${R.gp>0?"+":""}${n1(R.gp)}</td>
+        <td class="tnum t-main">${pct(R.gm)}</td><td class="tnum t-main">${n1(R.cpe)}</td><td colspan="2"></td>
+      </tr></tfoot>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:10px">金额单位：万元。收入 = 启动费 + 已入组例数 × 单例单价（按合同里程碑确认）；成本 = 工时归集 + 差旅 + 职能分摊。点击任意行进入中心详情。</p>`;
+
+  diverging($("#c-dv"), rows.map(s=>{const m=siteM(s);
+    return {label:s.hosp.replace(/(大学|医学院|附属|中国医学科学院)/g,""),v:m.gp,
+      tip:`<div class="tip-t">${esc(s.hosp)}</div>
+        <div class="tip-r"><span>收入</span><b>${wan(s.revenue)} 万</b></div>
+        <div class="tip-r"><span>成本</span><b>${wan(s.cost)} 万</b></div>
+        <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--good)"}">${m.gm===null?"—":pct(m.gm)}</b></div>
+        <div class="tip-r"><span>每例成本</span><b>${m.cpe?n1(m.cpe)+" 万":"—"}</b></div>
+        <div class="tip-r"><span>单例单价</span><b>${n1(s.unit)} 万</b></div>`};}));
+  stacked($("#c-cost"),[
+    {n:"CRC 人力",v:crcC,c:"var(--s1)"},{n:"CRA 人力",v:craC,c:"var(--s3)"},
+    {n:"差旅",v:travel,c:"var(--s2)"},{n:"职能分摊",v:oh,c:"var(--s4)"}],{h:30});
+  box.addEventListener("click",e=>{
+    const b=e.target.closest("[data-k]"); if(b){state.pnlSort=b.dataset.k;render();return;}
+    const t=e.target.closest("[data-ss3]"); if(t) openSite(t.dataset.ss3);
+  });
+};
+
+/* ════════════════ 7 · 里程碑 · 开票 · 回款 ════════════════ */
+VIEWS.bill = box=>{
+  const ids=scopeIds();
+  const ms=MILES.filter(m=>ids.has(m.ss));
+  const unb=ms.filter(m=>m.inv==="待开票"), open=ms.filter(m=>m.inv==="已开票"&&!m.paid), paid=ms.filter(m=>m.paid);
+  const buckets=[
+    {n:"0–30 天",v:sum(open.filter(m=>m.age<=30),m=>m.amt),c:"var(--s1)"},
+    {n:"31–60 天",v:sum(open.filter(m=>m.age>30&&m.age<=60),m=>m.amt),c:"var(--s3)"},
+    {n:"61–90 天",v:sum(open.filter(m=>m.age>60&&m.age<=90),m=>m.amt),c:"var(--s2)"},
+    {n:"90 天以上",v:sum(open.filter(m=>m.age>90),m=>m.amt),c:"var(--s5)"}
+  ];
+  const dso = open.length? Math.round(sum(open,m=>m.age)/open.length)+62 : 0;
+
+  box.innerHTML=`
+  <div class="grid g4" style="margin-bottom:12px">
+    ${[["待开票",wan(sum(unb,m=>m.amt)),"万",`${unb.length} 笔已达成未开票 — 立即可开`,unb.length?"var(--warn)":"var(--ink)"],
+       ["已开票未回款",wan(sum(open,m=>m.amt)),"万",`${open.length} 笔在途`,"var(--ink)"],
+       ["账龄 60 天以上",wan(buckets[2].v+buckets[3].v),"万",`占应收 ${open.length?pct((buckets[2].v+buckets[3].v)/sum(open,m=>m.amt)):"—"}`,(buckets[2].v+buckets[3].v)?"var(--crit)":"var(--good)"],
+       ["DSO",dso,"天",`健康线 ≤ 75 天`,dso>75?"var(--crit)":"var(--good)"]
+     ].map(([l,v,u,n,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>里程碑 → 开票 → 回款</h3><span class="sp"></span>
+        ${unb.length?`<button class="btn btn-p" id="binv">一键生成 ${unb.length} 张发票申请</button>`:`<span class="pill p-good">无待开票</span>`}</div>
+      <div class="tw"><table style="min-width:760px">
+        <thead><tr><th>里程碑</th><th>中心</th><th class="ta-r">金额</th><th>达成日</th><th>状态</th><th class="ta-r">账龄</th><th></th></tr></thead>
+        <tbody>${ms.slice().sort((a,b)=>b.hit.localeCompare(a.hit)).map(m=>{
+          const s=site(m.ss);
+          const stt = m.paid?["p-good","已回款"]:m.inv==="待开票"?["p-warn","待开票"]:m.age>60?["p-crit","逾期未回款"]:["p-neut","已开票"];
+          return `<tr><td><div class="t-main">${esc(m.name)}</div><div class="t-sub">${esc(m.id)}</div></td>
+            <td style="font-size:12px">${esc(s.hosp)}<div class="t-sub">${esc(S[s.sid].short)}</div></td>
+            <td class="tnum">${n1(m.amt)} 万</td>
+            <td class="mono" style="font-size:11.5px">${esc(m.hit)}</td>
+            <td><span class="pill ${stt[0]}">${stt[1]}</span></td>
+            <td class="tnum" style="${m.age>60?"color:var(--crit);font-weight:600":""}">${m.paid?"—":m.age+" 天"}</td>
+            <td class="ta-r">${m.inv==="待开票"?`<button class="btn" data-inv="${m.id}">开票</button>`
+              :!m.paid?`<button class="btn" data-pay="${m.id}">登记回款</button>`:""}</td></tr>`;}).join("")}
+        </tbody></table></div>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>应收账龄分布</h3></div>
+        <div class="card-b"><div id="c-age"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>收入确认证据链</h3></div>
+        <div class="card-b">
+          <div class="note" style="margin-bottom:10px">里程碑达成必须有可追溯凭证，否则开票时要人肉翻邮件 —— 这是账期被拖长的主因。</div>
+          ${[["伦理批件","批件扫描件 + 批件号 + 生效日"],
+             ["中心启动 SIV","启动会签到表 + 培训记录 + MVR"],
+             ["首例入组 FPI","随机号/筛选号 + 知情同意签署日"],
+             ["入组过半 / 80%","系统入组计数（不含受试者身份信息）"],
+             ["末例出组 LPO","末次访视完成确认"],
+             ["数据库锁定 DBL","锁库确认函"]
+           ].map(([a,b])=>`<div style="display:grid;grid-template-columns:100px 1fr;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);font-size:12px">
+             <b style="font-weight:500">${esc(a)}</b><span class="t-mut">${esc(b)}</span></div>`).join("")}
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="note">合规提示：本模块只使用入组「计数」与随机号，不存储任何受试者可识别信息。</p>`;
+
+  hbars($("#c-age"), buckets.map(b=>({label:b.n,v:b.v,color:b.c,
+    tip:`<div class="tip-t">${esc(b.n)}</div><div class="tip-r"><span>金额</span><b>${n1(b.v)} 万</b></div>`})),
+    {fmt:n1,unit:" 万",h:20,gap:8});
+
+  box.addEventListener("click",e=>{
+    const i=e.target.closest("[data-inv]");
+    if(i){ const m=MILES.find(x=>x.id===i.dataset.inv); m.inv="已开票"; m.age=0;
+      m.due=new Date(Date.now()+60*864e5).toISOString().slice(0,10);
+      toast(`${m.id} 已开票 ${n1(m.amt)} 万，账期 60 天，到期日 ${m.due}`); render(); return; }
+    const p=e.target.closest("[data-pay]");
+    if(p){ const m=MILES.find(x=>x.id===p.dataset.pay); m.paid=true; m.age=0;
+      toast(`${m.id} 回款 ${n1(m.amt)} 万已登记，DSO 同步更新`); render(); return; }
+    if(e.target.closest("#binv")){
+      const t=sum(unb,m=>m.amt);
+      unb.forEach(m=>{m.inv="已开票";m.age=0;m.due=new Date(Date.now()+60*864e5).toISOString().slice(0,10);});
+      toast(`已生成 ${unb.length} 张发票申请，合计 ${n1(t)} 万`); render(); }
+  });
+};
+</script>
+<script>
+"use strict";
+/* ════════════════ 8 · 质量事件与 CAPA ════════════════ */
+VIEWS.qa = box=>{
+  const ids=scopeIds();
+  let list=ISSUES.filter(i=>ids.has(i.ss));
+  if(state.sevFilter.size) list=list.filter(i=>state.sevFilter.has(i.sev));
+  const openN=ISSUES.filter(i=>ids.has(i.ss)&&i.st!=="已关闭");
+  const sae=ISSUES.find(i=>i.sla&&i.st!=="已关闭"&&ids.has(i.ss));
+  const overdue=openN.filter(i=>days(TODAY,i.due)<0);
+
+  box.innerHTML=`
+  <div class="grid g4" style="margin-bottom:12px">
+    ${[["未关闭事件",openN.length,"项",`重大/严重 ${openN.filter(i=>i.sev!=="一般").length} 项`,openN.filter(i=>i.sev!=="一般").length?"var(--crit)":"var(--ink)"],
+       ["SAE 24h 上报及时率","96.4","%","合规红线，目标 100%","var(--crit)"],
+       ["Query 平均关闭",6.2,"天","目标 ≤ 5 天","var(--warn)"],
+       ["CAPA 逾期",overdue.length,"项",overdue.length?"已超整改到期日":"全部在期内",overdue.length?"var(--crit)":"var(--good)"]
+     ].map(([l,v,u,n,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+
+  ${sae?`<div class="card" style="margin-bottom:12px;border-color:color-mix(in srgb,var(--crit) 45%,var(--line))">
+    <div class="card-h" style="background:var(--crit-soft);border-bottom-color:color-mix(in srgb,var(--crit) 25%,transparent)">
+      <span class="dot" style="background:var(--crit)"></span>
+      <h3 style="color:var(--crit)">SAE 上报时限监控 · ${esc(sae.id)}</h3><span class="sp"></span>
+      <span class="pill p-crit">已超窗</span></div>
+    <div class="card-b">
+      <div class="grid g3" style="gap:14px;align-items:center">
+        <div><div class="kpi-l">监管时限</div><div class="num" style="font-size:26px;margin-top:3px">${sae.sla}<small style="font-size:12px;color:var(--ink-3)"> 小时</small></div>
+          <div class="note">研究者知晓起算</div></div>
+        <div><div class="kpi-l">实际上报耗时</div><div class="num" style="font-size:26px;margin-top:3px;color:var(--crit)">${sae.elapsed}<small style="font-size:12px;color:var(--ink-3)"> 小时</small></div>
+          <div class="note">超出 ${n1(sae.elapsed-sae.sla)} 小时</div></div>
+        <div><div class="kpi-l">CAPA 剩余时间</div>
+          <div class="num" id="cd" style="font-size:26px;margin-top:3px;color:var(--warn)">—</div>
+          <div class="note">整改到期 ${esc(sae.due)}</div></div>
+      </div>
+      <div class="bartrack" style="height:8px;margin-top:14px;position:relative">
+        <div class="barfill" style="width:${clamp(sae.sla/sae.elapsed*100,0,100)}%;background:var(--good);height:100%"></div>
+        <div style="position:absolute;left:${clamp(sae.sla/sae.elapsed*100,0,100)}%;right:0;top:0;bottom:0;background:var(--crit)"></div>
+      </div>
+      <div class="note" style="margin-top:6px">绿色 = 窗口内，红色 = 超窗部分。SAE 24 小时上报及时率必须 100% —— 这是红线，不是 KPI。</div>
+    </div></div>`:""}
+
+  <div class="card">
+    <div class="card-h" style="flex-wrap:wrap"><h3>事件台账</h3>
+      <div class="row" style="gap:5px">${["重大","严重","一般"].map(s=>
+        `<button class="chip" data-sev="${s}" aria-pressed="${state.sevFilter.has(s)}">${s}</button>`).join("")}</div>
+      <span class="sp"></span><span class="sub">${list.length} 项</span></div>
+    <div class="card-b" style="padding:0">
+      ${list.length? list.map(i=>{
+        const s=site(i.ss), sv=SEV[i.sev], od=i.st!=="已关闭"&&days(TODAY,i.due)<0;
+        return `<div style="border-bottom:1px solid var(--line);position:relative">
+          <span class="stripe" style="background:${i.st==="已关闭"?"var(--line-2)":sv.c}"></span>
+          <button data-iss="${i.id}" style="width:100%;text-align:left;border:0;background:none;padding:12px 16px 12px 18px;cursor:pointer">
+            <div class="row" style="gap:7px">
+              <span class="pill p-${i.st==="已关闭"?"neut":sv.k}">${esc(i.sev)}</span>
+              <b style="font-size:13px;font-weight:600">${esc(i.type)}</b>
+              <span class="t-sub">${esc(i.id)}</span>
+              <span class="sp"></span>
+              <span class="pill ${i.st==="已关闭"?"p-good":od?"p-crit":"p-neut"}">${esc(i.st)}${od?" · 已逾期":""}</span>
+            </div>
+            <div class="note" style="margin-top:4px;color:var(--ink-2)">${esc(i.desc)}</div>
+            <div class="note" style="margin-top:4px">${esc(s.hosp)} · ${esc(S[s.sid].short)}｜发现 ${esc(i.found)}｜责任人 ${esc(i.own)}｜CAPA 到期 ${esc(i.due)}</div>
+          </button>
+          <div id="d-${i.id}" hidden style="padding:0 16px 14px 18px">
+            <div class="section-t">CAPA 纠正与预防措施</div>
+            <div style="font-size:12.5px;line-height:1.7;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);padding:10px 12px;border-radius:3px">${esc(i.capa)}</div>
+            ${i.st!=="已关闭"?`<div class="row" style="margin-top:10px">
+              <button class="btn btn-p" data-close-iss="${i.id}">验证通过并关闭</button>
+              <button class="btn" data-goto3="${i.ss}">查看中心</button></div>`
+              :`<div class="pill p-good" style="margin-top:10px">该事件已验证关闭</div>`}
+          </div>
+        </div>`;}).join("") : `<div class="empty">当前筛选下无事件</div>`}
+    </div>
+  </div>`;
+
+  if(sae){ const tick=()=>{ const el=$("#cd"); if(!el) return;
+      const ms=new Date(sae.due+"T18:00:00")-new Date(TODAY+"T"+new Date().toTimeString().slice(0,8));
+      const h=Math.max(0,Math.floor(ms/36e5)), m=Math.max(0,Math.floor(ms%36e5/6e4)), s2=Math.max(0,Math.floor(ms%6e4/1000));
+      el.textContent=`${h}:${String(m).padStart(2,"0")}:${String(s2).padStart(2,"0")}`; };
+    tick(); timers.push(setInterval(tick,1000)); }
+
+  box.addEventListener("click",e=>{
+    const c=e.target.closest("[data-sev]");
+    if(c){const v=c.dataset.sev; state.sevFilter.has(v)?state.sevFilter.delete(v):state.sevFilter.add(v); render(); return;}
+    const cl=e.target.closest("[data-close-iss]");
+    if(cl){const i=ISSUES.find(x=>x.id===cl.dataset.closeIss); i.st="已关闭";
+      toast(`${i.id} 已验证关闭，未关闭事件减至 ${ISSUES.filter(x=>x.st!=="已关闭").length} 项`); render(); return;}
+    const g=e.target.closest("[data-goto3]"); if(g){openSite(g.dataset.goto3);return;}
+    const b=e.target.closest("[data-iss]");
+    if(b){const d=$("#d-"+b.dataset.iss); if(d) d.hidden=!d.hidden;}
+  });
+};
+
+/* ════════════════ 9 · 监查访视 ════════════════ */
+VIEWS.mon = box=>{
+  const ids=scopeIds();
+  const vs=VISITS.filter(v=>ids.has(v.ss));
+  const sel=vs[clamp(state.visitSel,0,vs.length-1)];
+  const totItems=sum(vs,v=>v.items.length), doneItems=sum(vs,v=>v.items.filter(i=>i.done).length);
+  const byKind=["SIV","IMV","COV"].map((k,i)=>({n:k,v:vs.filter(v=>v.kind===k).length,c:`var(--s${i+1})`}));
+
+  box.innerHTML=`
+  <div class="grid g4" style="margin-bottom:12px">
+    ${[["未来 4 周访视",vs.length,"次",`共 ${sum(vs,v=>v.days)} 人天`],
+       ["MVR 跟进项",`${doneItems} / ${totItems}`,"",`完成率 ${totItems?pct(doneItems/totItems):"—"}`],
+       ["待确认排期",vs.filter(v=>v.st==="待确认").length,"次","需与中心确认时间"],
+       ["预估差旅",n1(vs.length*RATE.travel),"万",`${RATE.travel} 万/次 × ${vs.length} 次`]
+     ].map(([l,v,u,n])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:23px;margin-top:3px">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="grid g12" style="gap:12px">
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>访视排期</h3><span class="sp"></span><span class="sub">SIV 启动 · IMV 例行 · COV 关闭</span></div>
+        <div class="card-b" style="padding:0">
+          ${vs.map((v,i)=>{const s=site(v.ss), act=v===sel;
+            const done=v.items.filter(x=>x.done).length;
+            return `<button data-v="${i}" style="width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:${act?"var(--accent-soft)":"none"};padding:11px 14px;cursor:pointer;position:relative">
+              ${act?`<span class="stripe" style="background:var(--accent)"></span>`:""}
+              <div class="row" style="gap:7px">
+                <span class="mono" style="font-size:11.5px;color:var(--ink-3)">${esc(v.d)}</span>
+                <span class="pill p-acc">${esc(v.kind)}</span>
+                <span class="sp"></span>
+                <span class="pill ${v.st==="待确认"?"p-warn":"p-neut"}">${esc(v.st)}</span></div>
+              <div style="font-size:12.5px;font-weight:500;margin-top:4px">${esc(s.hosp)}</div>
+              <div class="note">${esc(v.who)} · ${v.days} 天 · 跟进项 ${done}/${v.items.length}</div>
+              <div class="bartrack" style="height:3px;margin-top:6px"><div class="barfill" style="width:${done/v.items.length*100}%;background:${done===v.items.length?"var(--good)":"var(--accent)"};height:100%"></div></div>
+            </button>`;}).join("") || `<div class="empty">当前项目范围内无排期</div>`}
+        </div>
+      </div>
+      <div class="card"><div class="card-h"><h3>访视类型构成</h3></div>
+        <div class="card-b"><div id="c-vk"></div></div></div>
+    </div>
+    ${sel?`<div class="card">
+      <div class="card-h"><h3>监查报告跟进项（MVR Follow-up）</h3><span class="sp"></span>
+        <span class="pill p-neut">${esc(sel.d)} · ${esc(sel.kind)} · ${esc(sel.who)}</span></div>
+      <div class="card-b">
+        <div class="row" style="justify-content:space-between;margin-bottom:12px">
+          <div><div style="font-size:14px;font-weight:600">${esc(site(sel.ss).hosp)}</div>
+            <div class="note">${esc(S[site(sel.ss).sid].short)} · ${esc(site(sel.ss).city)} · PI ${esc(site(sel.ss).pi)}</div></div>
+          <div class="ta-r"><div class="num" style="font-size:22px" id="mv-n">${sel.items.filter(i=>i.done).length} / ${sel.items.length}</div>
+            <div class="note">已关闭</div></div>
+        </div>
+        <div class="bartrack" style="height:6px;margin-bottom:14px"><div class="barfill" id="mv-b" style="width:${sel.items.filter(i=>i.done).length/sel.items.length*100}%;background:var(--accent);height:100%"></div></div>
+        <div id="mv-list">${sel.items.map((it,k)=>`
+          <label class="cbx ${it.done?"done":""}" style="border-bottom:1px solid var(--line)">
+            <input type="checkbox" data-mv="${k}" ${it.done?"checked":""}><span>${esc(it.t)}</span></label>`).join("")}</div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn btn-p" id="mv-submit">提交 MVR</button>
+          <button class="btn" data-goto3b="${sel.ss}">查看中心</button>
+          <span class="sp"></span>
+          <span class="note">跟进项全部关闭后才可提交监查报告</span></div>
+        <div class="formula" style="margin-top:14px">
+监查频率来自风险分级，不是一刀切：
+质量稳定中心 → 降低 SDV 抽样比例、延长 IMV 间隔
+入组停滞 / 有未关闭严重事件 → 加密监查
+        </div>
+      </div>
+    </div>`:`<div class="card"><div class="empty">选择左侧一次访视查看跟进项</div></div>`}
+  </div>`;
+
+  stacked($("#c-vk"), byKind.filter(b=>b.v), {h:24, fmt:v=>v+" 次"});
+
+  box.addEventListener("click",e=>{
+    const v=e.target.closest("[data-v]"); if(v){state.visitSel=+v.dataset.v;render();return;}
+    const g=e.target.closest("[data-goto3b]"); if(g){openSite(g.dataset.goto3b);return;}
+    if(e.target.closest("#mv-submit")){
+      const left=sel.items.filter(i=>!i.done).length;
+      if(left) toast(`还有 ${left} 项跟进项未关闭，MVR 无法提交`,"crit");
+      else { sel.st="已提交"; toast(`${site(sel.ss).hosp} ${sel.kind} 监查报告已提交`); render(); }
+    }
+  });
+  box.addEventListener("change",e=>{
+    const c=e.target.closest("[data-mv]"); if(!c)return;
+    sel.items[+c.dataset.mv].done=c.checked;
+    c.closest("label").classList.toggle("done",c.checked);
+    const d=sel.items.filter(i=>i.done).length;
+    $("#mv-n").textContent=`${d} / ${sel.items.length}`;
+    $("#mv-b").style.width=d/sel.items.length*100+"%";
+    $("#mv-b").style.background = d===sel.items.length?"var(--good)":"var(--accent)";
+  });
+};
+</script>
+<script>
+"use strict";
+/* ════════════════ 10 · 报价模型 ════════════════
+   人天口径与「工时与差旅」「成本与毛利」完全一致 —— 报价不是拍脑袋，
+   是把自己历史真实消耗的人天，按新项目的参数重新展开一次。          */
+const PRICE = {sites:12, pts:20, months:20, visits:11, cx:1.2, imv:1.5, fte:0.55, target:0.30};
+
+function calcPrice(p){
+  const total = p.sites * p.pts;                                  // 总入组例数
+  // CRC 人天
+  const crcSetup = p.sites * 12;                                  // 每中心启动+关闭固定
+  const crcBase  = p.sites * p.months * RATE.workdays * p.fte;    // 驻场基线
+  const crcVisit = total * p.visits * 0.5 * p.cx;                 // 访视陪同增量
+  const crcMd = crcSetup + crcBase + crcVisit;
+  // CRA 人天
+  const nIMV = Math.round(p.months / p.imv);
+  const craSiv = p.sites * 2, craImv = p.sites * nIMV * 1.5, craCov = p.sites * 1.5;
+  const craReport = (craSiv + craImv + craCov) * 0.6;             // 远程跟进与报告
+  const craMd = craSiv + craImv + craCov + craReport;
+  // 费用
+  const trips  = p.sites * (nIMV + 2);
+  const crcCost = crcMd * RATE.crcDay, craCost = craMd * RATE.craDay;
+  const travel  = trips * RATE.travel;
+  const oh      = (crcCost + craCost) * RATE.overhead;
+  const cost    = crcCost + craCost + travel + oh;
+  const quote   = cost / (1 - p.target);
+  return {total, crcMd, craMd, nIMV, trips, crcCost, craCost, travel, oh, cost, quote,
+          unit: quote/total, mdPerPt:(crcMd+craMd)/total};
+}
+/* 历史实际：从真实数据反推（这是护城河的来源）
+   对标基准只取入组完成度 ≥ 80% 的中心 —— 启动成本已充分摊薄，
+   人天/例与每例成本才具备可比性；未摊薄的中心仅列出参考。      */
+function historic(){
+  return SITES.filter(s=>s.enrolled>=8).map(s=>{const m=siteM(s);
+    return {n:s.hosp, ph:S[s.sid].phase, unit:s.unit, cost:m.cpe, md:m.mdPerPt,
+            gm:m.gm, prog:m.prog, base:m.prog>=0.8};});
+}
+const baseline = ()=>{ const b=historic().filter(h=>h.base);
+  return {md:sum(b,h=>h.md)/b.length, cost:sum(b,h=>h.cost)/b.length,
+          unit:sum(b,h=>h.unit)/b.length, n:b.length}; };
+
+VIEWS.price = box=>{
+  const P={...PRICE, ...(state.price||{})};
+  const F = [
+    {k:"sites", t:"参研中心数", min:2, max:40, step:1, u:" 个"},
+    {k:"pts",   t:"每中心入组例数", min:5, max:60, step:1, u:" 例"},
+    {k:"months",t:"入组期（月）", min:6, max:36, step:1, u:" 个月"},
+    {k:"visits",t:"每例访视次数", min:3, max:20, step:1, u:" 次"},
+    {k:"cx",    t:"方案复杂度系数", min:0.8, max:2, step:.05, u:"×", note:"肿瘤/罕见病 1.3–1.8；慢病 1.0"},
+    {k:"imv",   t:"监查间隔（月）", min:0.5, max:4, step:.5, u:" 个月/次"},
+    {k:"fte",   t:"CRC 驻场 FTE", min:.1, max:1, step:.05, u:"", fmt:v=>pct(v)},
+    {k:"target",t:"目标毛利率", min:.1, max:.5, step:.01, u:"", fmt:v=>pct(v)}
+  ];
+  box.innerHTML=`
+  <div class="grid g12" style="gap:14px">
+    <div class="card">
+      <div class="card-h"><h3>项目参数</h3><span class="sp"></span><button class="btn" id="p-rst">重置</button></div>
+      <div class="card-b">
+        ${F.map(f=>`<div class="field">
+          <div class="slider-h"><label for="f-${f.k}">${esc(f.t)}</label><b id="v-${f.k}"></b></div>
+          <input type="range" id="f-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${P[f.k]}">
+          ${f.note?`<div class="note">${esc(f.note)}</div>`:""}
+        </div>`).join("")}
+      </div>
+    </div>
+    <div class="stack">
+      <div class="grid g4" style="gap:10px">
+        ${["建议报价总额","单例报价","预估总成本","人天/例"].map((l,i)=>`
+          <div class="card" style="padding:12px 13px${i===0?";border-color:var(--accent-line);background:var(--accent-soft)":""}">
+            <div class="kpi-l">${esc(l)}</div>
+            <div class="num" id="o-${i}" style="font-size:${i===0?"26":"23"}px;margin-top:3px;${i===0?"color:var(--accent)":""}">—</div>
+            <div class="note" id="n-${i}"></div></div>`).join("")}
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>成本构成推演</h3><span class="sub">改动左侧任一参数即时重算</span></div>
+        <div class="card-b"><div id="p-stack"></div>
+          <div class="hr"></div>
+          <div class="grid g2" style="gap:14px">
+            <div><div class="section-t">CRC 人天分解</div><div id="p-crc"></div></div>
+            <div><div class="section-t">CRA 人天分解</div><div id="p-cra"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>与历史实际对标</h3><span class="sub">这才是报价模型的护城河</span></div>
+        <div class="card-b">
+          <div class="note" style="margin-bottom:10px">下表是本公司已入组中心的<b>真实</b>单例成本与人天消耗。对手报价靠经验，你靠自己三年的成本数据库 —— 别人买不到，也抄不走。<br>
+            对标基准只取<b>入组完成度 ≥ 80%</b> 的中心（下表加粗行，共 ${baseline().n} 个）：启动成本已充分摊薄，人天/例才具可比性；其余行仅作参考。</div>
+          <div class="tw"><table style="min-width:660px">
+            <thead><tr><th>中心</th><th>期别</th><th class="ta-r">完成度</th><th class="ta-r">实际单价</th><th class="ta-r">实际每例成本</th><th class="ta-r">实际人天/例</th><th class="ta-r">实际毛利率</th></tr></thead>
+            <tbody>${historic().map(h=>`<tr style="${h.base?"font-weight:500":"opacity:.62"}">
+              <td style="font-size:12px">${esc(h.n)}${h.base?` <span class="pill p-acc">基准</span>`:""}</td><td class="t-sub">${esc(h.ph)}</td>
+              <td class="tnum">${pct(h.prog)}</td>
+              <td class="tnum">${n1(h.unit)} 万</td><td class="tnum">${n1(h.cost)} 万</td>
+              <td class="tnum">${n1(h.md)}</td>
+              <td class="tnum" style="color:${h.gm<0?"var(--crit)":h.gm<.2?"var(--warn)":"var(--good)"}">${pct(h.gm)}</td></tr>`).join("")}</tbody>
+          </table></div>
+          <div id="p-bench" style="margin-top:12px"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>计算口径</h3><span class="sub">全部公式可追溯，无黑箱</span></div>
+        <div class="card-b"><div class="formula" id="p-form"></div></div>
+      </div>
+    </div>
+  </div>`;
+
+  const upd=()=>{
+    const r=calcPrice(P);
+    F.forEach(f=>$("#v-"+f.k).textContent = (f.fmt?f.fmt(P[f.k]):P[f.k])+(f.u||""));
+    $("#o-0").innerHTML=`${n1(r.quote)}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">万元</small>`;
+    $("#n-0").textContent=`目标毛利率 ${pct(P.target)} · 共 ${r.total} 例`;
+    $("#o-1").innerHTML=`${n1(r.unit)}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">万/例</small>`;
+    $("#n-1").textContent=`${P.sites} 中心 × ${P.pts} 例`;
+    $("#o-2").innerHTML=`${n1(r.cost)}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">万元</small>`;
+    $("#n-2").textContent=`CRC ${n0(r.crcMd)} + CRA ${n0(r.craMd)} 人天`;
+    $("#o-3").textContent=n1(r.mdPerPt);
+    const bl=baseline();
+    $("#n-3").innerHTML=`基准均值 ${n1(bl.md)} · <span style="color:${r.mdPerPt<bl.md*0.85?"var(--crit)":r.mdPerPt>bl.md*1.2?"var(--warn)":"var(--good)"}">${
+      r.mdPerPt<bl.md*0.85?"低于历史，报价偏乐观":r.mdPerPt>bl.md*1.2?"高于历史，易失标":"与历史相符"}</span>`;
+
+    stacked($("#p-stack"),[
+      {n:"CRC 人力",v:r.crcCost,c:"var(--s1)"},{n:"CRA 人力",v:r.craCost,c:"var(--s3)"},
+      {n:"差旅",v:r.travel,c:"var(--s2)"},{n:"职能分摊",v:r.oh,c:"var(--s4)"},
+      {n:"目标毛利",v:r.quote-r.cost,c:"var(--s5)"}],{h:30});
+    hbars($("#p-crc"),[
+      {label:"启动与关闭",v:P.sites*12,color:"var(--s1)"},
+      {label:"驻场基线",v:P.sites*P.months*RATE.workdays*P.fte,color:"var(--s1)"},
+      {label:"访视陪同",v:r.total*P.visits*0.5*P.cx,color:"var(--s1)"}],{fmt:n0,unit:" 人天",h:16,gap:5});
+    hbars($("#p-cra"),[
+      {label:"SIV 启动",v:P.sites*2,color:"var(--s3)"},
+      {label:`IMV ×${r.nIMV} 轮`,v:P.sites*r.nIMV*1.5,color:"var(--s3)"},
+      {label:"COV 关闭",v:P.sites*1.5,color:"var(--s3)"},
+      {label:"报告与远程",v:(P.sites*2+P.sites*r.nIMV*1.5+P.sites*1.5)*0.6,color:"var(--s3)"}],{fmt:n0,unit:" 人天",h:16,gap:5});
+
+    const myCost=r.cost/r.total, dev=(myCost-bl.cost)/bl.cost, ok=Math.abs(dev)<0.2;
+    $("#p-bench").innerHTML=`<div style="border-left:2px solid var(--${ok?"good":"warn"});background:var(--${ok?"good":"warn"}-soft);padding:9px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.65">
+      本次测算每例成本 <b class="mono">${n1(myCost)} 万</b>，基准中心实际均值 <b class="mono">${n1(bl.cost)} 万</b>，偏离 <b class="mono">${dev>0?"+":""}${pct(dev)}</b>；
+      建议单价 <b class="mono">${n1(r.unit)} 万</b>，历史成交均价 <b class="mono">${n1(bl.unit)} 万</b>。
+      ${ok?"与历史经验一致，报价可信。":dev>0?"高于历史水平，检查是否高估了访视次数或驻场 FTE，否则容易在投标中失标。":"低于历史水平，警惕报低了硬做 —— 这是亏损单最常见的来源。"}</div>`;
+
+    $("#p-form").textContent =
+`总例数 = ${P.sites} 中心 × ${P.pts} 例 = ${r.total} 例
+
+CRC 人天 = 启动关闭 ${P.sites}×12
+         + 驻场 ${P.sites}×${P.months}月×${RATE.workdays}天×${pct(P.fte)}
+         + 访视 ${r.total}例×${P.visits}次×0.5×${P.cx}
+         = ${n0(r.crcMd)} 人天
+
+CRA 人天 = SIV ${P.sites}×2 + IMV ${P.sites}×${r.nIMV}轮×1.5
+         + COV ${P.sites}×1.5 + 报告×0.6
+         = ${n0(r.craMd)} 人天
+
+成本 = ${n0(r.crcMd)}×${RATE.crcDay} + ${n0(r.craMd)}×${RATE.craDay}
+     + 差旅 ${r.trips}次×${RATE.travel} + 分摊×${pct(RATE.overhead)}
+     = ${n1(r.cost)} 万
+
+报价 = 成本 ÷ (1 − ${pct(P.target)}) = ${n1(r.quote)} 万`;
+  };
+  upd();
+  box.addEventListener("input",e=>{ const i=e.target.closest("[data-k]"); if(!i)return;
+    P[i.dataset.k]=+i.value; state.price={...P}; upd(); });
+  $("#p-rst").addEventListener("click",()=>{ state.price=null; render();
+    toast("参数已重置为默认方案"); });
+};
+
+/* ════════════════ 启动 ════════════════ */
+render();
+console.info("临床中心台 SiteDesk · 演示原型｜全部数据为硬编码，不含真实受试者信息。");
+</script>
