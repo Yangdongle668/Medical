@@ -36,7 +36,7 @@ const eps = [...allEndpoints()].sort((a, b) =>
 
 /* 登记端点上的匿名 schema */
 const bodyId  = (e: Endpoint) => ref(e.body!,     `${cap(e.id)}Request`);
-const respId  = (e: Endpoint) => ref(e.response,  `${cap(e.id)}Response`);
+const respId  = (e: Endpoint) => e.response ? ref(e.response, `${cap(e.id)}Response`) : null;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 for (const e of eps) { if (e.body) bodyId(e); respId(e); }
 
@@ -108,11 +108,11 @@ for (const e of eps) {
     ...(e.body ? { requestBody: { required: true, content: {
       "application/json": { schema: { $ref: `#/components/schemas/${named.get(e.body)}` } } } } } : {}),
     responses: {
-      [String(e.status ?? 200)]: {
-        description: e.summary,
-        content: { "application/json": {
-          schema: { $ref: `#/components/schemas/${named.get(e.response)}` } } }
-      },
+      [String(e.status ?? 200)]: e.response
+        ? { description: e.summary,
+            content: { "application/json": {
+              schema: { $ref: `#/components/schemas/${named.get(e.response)}` } } } }
+        : { description: e.summary },
       ...byStatus
     }
   };
@@ -133,6 +133,7 @@ const doc = {
   },
   servers: [{ url: "https://api.sitedesk.example", description: "生产" }],
   tags: [
+    { name: "auth", description: "认证：内部 OIDC / 外部一次性链接" },
     { name: "identity", description: "身份与权限：行 × 列 × 动作" },
     { name: "site", description: "项目与中心：StudySite 是最小作业单元" }
   ],

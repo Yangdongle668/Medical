@@ -14,6 +14,8 @@ servers:
   - url: https://api.sitedesk.example
     description: 生产
 tags:
+  - name: auth
+    description: 认证：内部 OIDC / 外部一次性链接
   - name: identity
     description: 身份与权限：行 × 列 × 动作
   - name: site
@@ -411,6 +413,344 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListAuditEntriesResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/auth/logout:
+    post:
+      operationId: logout
+      tags:
+        - auth
+      summary: 登出（撤销本人全部会话）
+      description: 会话可撤销是外部方场景的硬要求：机构老师离职、PI 换人都要能立刻断开。
+      x-layer: L1
+      parameters: []
+      responses:
+        '204':
+          description: 登出（撤销本人全部会话）
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/auth/magic-link:
+    post:
+      operationId: requestMagicLink
+      tags:
+        - auth
+      summary: 申请一次性登录链接
+      description: |-
+        **无论账号是否存在都返回同样的 202。** 区别对待会让这个接口变成账号枚举器。
+        链接由邮件 / 短信通道直接发给本人，绝不回显给调用方。
+      x-layer: L1
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestMagicLinkRequest'
+      responses:
+        '202':
+          description: 申请一次性登录链接
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkAccepted'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/auth/session:
+    get:
+      operationId: currentSession
+      tags:
+        - auth
+      summary: 当前会话
+      x-layer: L1
+      parameters: []
+      responses:
+        '200':
+          description: 当前会话
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentSessionResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+    post:
+      operationId: redeemMagicLink
+      tags:
+        - auth
+      summary: 兑换登录链接，换取会话
+      description: |-
+        兑换在数据库里原子完成：并发的两次兑换只有一次能成功。
+        放在应用层做「先查再改」，两个请求同时到达就会双双成功。
+      x-layer: L1
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeemMagicLinkRequest'
+      responses:
+        '200':
+          description: 兑换登录链接，换取会话
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionGranted'
         '401':
           description: 未认证
           content:
@@ -1496,6 +1836,37 @@ components:
         - summary
       additionalProperties: false
       description: 命令执行时被连带触发的领域事件。客户端必须忽略不认识的 type。
+    SessionGranted:
+      type: object
+      properties:
+        token:
+          type: string
+          description: 会话令牌。服务端只保存它的 SHA-256，明文仅此一次返回。
+        expiresAt:
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+      required:
+        - token
+        - expiresAt
+      additionalProperties: false
+    LinkAccepted:
+      type: object
+      properties:
+        accepted:
+          type: boolean
+          enum:
+            - true
+        message:
+          type: string
+        devToken:
+          description: 仅当 SITEDESK_DEV_LOGIN=1 时出现，供本地与 CI 使用。生产环境永远不返回。
+          type: string
+      required:
+        - accepted
+        - message
+      additionalProperties: false
     RowRule:
       type: string
       enum:
@@ -2064,6 +2435,47 @@ components:
       required:
         - items
         - nextCursor
+      additionalProperties: false
+    RequestMagicLinkRequest:
+      type: object
+      properties:
+        login:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sentTo:
+          description: 收件地址，仅用于审计留痕
+          type: string
+          maxLength: 128
+      required:
+        - login
+      additionalProperties: false
+    CurrentSessionResponse:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        login:
+          type: string
+        roleCode:
+          type: string
+      required:
+        - accountId
+        - login
+        - roleCode
+      additionalProperties: false
+    RedeemMagicLinkRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 16
+          maxLength: 256
+      required:
+        - token
       additionalProperties: false
     ListRolesResponse:
       type: object

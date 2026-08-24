@@ -164,38 +164,67 @@
       "nextCursor": "示例"
     }
   },
+  "requestMagicLink": {
+    "method": "POST",
+    "path": "/v1/auth/magic-link",
+    "status": 202,
+    "body": {
+      "accepted": true,
+      "message": "示例文本（由契约生成，非真实数据）",
+      "devToken": "示例"
+    }
+  },
+  "currentSession": {
+    "method": "GET",
+    "path": "/v1/auth/session",
+    "status": 200,
+    "body": {
+      "accountId": "30813438-4a9c-331f-9f62-cde2543fba77",
+      "login": "wutong",
+      "roleCode": "示例"
+    }
+  },
+  "redeemMagicLink": {
+    "method": "POST",
+    "path": "/v1/auth/session",
+    "status": 200,
+    "body": {
+      "token": "示例",
+      "expiresAt": "2026-08-22T09:15:00+08:00"
+    }
+  },
   "getMe": {
     "method": "GET",
     "path": "/v1/me",
     "status": 200,
     "body": {
       "account": {
-        "id": "e05161cc-9026-9192-81bf-5ae7397fdf86",
-        "login": "liaomeng",
-        "displayName": "韩雪",
+        "id": "c1aaf7c5-24e7-c4ba-f003-c1850f04fd89",
+        "login": "linmin",
+        "displayName": "廖梦然",
         "role": {
-          "id": "c60489c1-ce9b-7749-69c0-5609818b2fd8",
+          "id": "f26d4302-bf9d-f9eb-c3ba-60ada91c60e5",
           "code": "crc",
           "name": "临床协调员 CRC",
           "isExternal": false
         },
         "team": {
-          "id": "601455ac-5ae9-e340-7f3f-ffeb6377badd",
+          "id": "a1ef3783-709b-5f4d-0d6e-2d093bc5c825",
           "code": "G-01",
           "name": "华东华南组"
         },
         "isExternal": true,
         "orgRef": "天津医科大学肿瘤医院",
         "status": "active",
-        "joinedOn": "2026-08-12",
+        "joinedOn": null,
         "disabledAt": "2026-08-22T09:15:00+08:00",
         "disabledReason": "示例文本（由契约生成，非真实数据）",
         "lastLoginAt": "2026-08-22T09:15:00+08:00"
       },
       "scopeLabel": "示例标识",
       "visibleSiteIds": [
-        "88768e3b-ca2e-ccf3-fc49-11b3c817f9fa",
-        "14ffbb88-9893-df36-8967-e24722629d18"
+        "a70f3123-e888-fa7f-200e-fa756ef1e40b",
+        "dbd9d6c5-1e86-1bfe-78ee-b39674833883"
       ],
       "permissions": {
         "rowRule": "all",
@@ -221,8 +250,8 @@
     "body": {
       "items": [
         {
-          "id": "30813438-4a9c-331f-9f62-cde2543fba77",
-          "code": "SS-02",
+          "id": "12046294-3776-72f9-90b3-4233ea1069bb",
+          "code": "SS-12",
           "name": "韩雪",
           "isExternal": true,
           "rowRule": "all",
@@ -240,10 +269,10 @@
           ]
         },
         {
-          "id": "3b66849b-1352-ad77-3f2a-5f2557c10f90",
-          "code": "SS-06",
-          "name": "吴桐",
-          "isExternal": false,
+          "id": "532245d1-a3df-a653-a181-ce661b616913",
+          "code": "SS-01",
+          "name": "林敏",
+          "isExternal": true,
           "rowRule": "all",
           "visibleFields": [
             "cost",
@@ -266,10 +295,10 @@
     "path": "/v1/roles/{id}",
     "status": 200,
     "body": {
-      "id": "7050c0cb-33c3-163f-9f80-7983cca8b619",
-      "code": "SS-15",
-      "name": "林敏",
-      "isExternal": false,
+      "id": "52c04259-9725-82c9-51d8-bd5d8c0bbd17",
+      "code": "SS-03",
+      "name": "廖梦然",
+      "isExternal": true,
       "rowRule": "all",
       "visibleFields": [
         "cost",
@@ -292,28 +321,28 @@
     "body": {
       "items": [
         {
-          "id": "c1aaf7c5-24e7-c4ba-f003-c1850f04fd89",
-          "code": "SS-07",
-          "shortName": "恒糖宁 III",
+          "id": "a3ae7a9d-34b5-933b-09b1-30ee971dfd97",
+          "code": "SS-06",
+          "shortName": "艾瑞替尼 III",
           "sponsorName": "华拓生物",
           "phase": "III期",
           "indication": "肝细胞癌",
-          "plannedSubjects": 39,
-          "contractAmountCents": 2170000,
-          "startedOn": "2026-08-25",
-          "endsOn": "2026-08-13"
+          "plannedSubjects": 36,
+          "contractAmountCents": 9250000,
+          "startedOn": "2026-08-16",
+          "endsOn": "2026-08-10"
         },
         {
-          "id": "02bf9df9-ebc3-ba60-ada9-1c60e56a1ef3",
-          "code": "SS-07",
-          "shortName": "恒糖宁 III",
+          "id": "52de3694-57a8-f9eb-325e-594d0f956f1e",
+          "code": "SS-03",
+          "shortName": "艾瑞替尼 III",
           "sponsorName": "华拓生物",
           "phase": "III期",
           "indication": "肝细胞癌",
-          "plannedSubjects": 9,
-          "contractAmountCents": 5370000,
-          "startedOn": null,
-          "endsOn": "2026-08-23"
+          "plannedSubjects": 20,
+          "contractAmountCents": 8280000,
+          "startedOn": "2026-08-18",
+          "endsOn": "2026-08-15"
         }
       ],
       "nextCursor": "示例"
@@ -321,26 +350,26 @@
     "bodyWithoutFieldPermission": {
       "items": [
         {
-          "id": "c1aaf7c5-24e7-c4ba-f003-c1850f04fd89",
-          "code": "SS-07",
-          "shortName": "恒糖宁 III",
-          "sponsorName": "华拓生物",
-          "phase": "III期",
-          "indication": "肝细胞癌",
-          "plannedSubjects": 39,
-          "startedOn": null,
-          "endsOn": "2026-08-25"
-        },
-        {
-          "id": "4302bf9d-f9eb-c3ba-60ad-a91c60e56a1e",
-          "code": "SS-15",
+          "id": "a3ae7a9d-34b5-933b-09b1-30ee971dfd97",
+          "code": "SS-06",
           "shortName": "艾瑞替尼 III",
           "sponsorName": "华拓生物",
           "phase": "III期",
           "indication": "肝细胞癌",
-          "plannedSubjects": 19,
-          "startedOn": "2026-08-13",
-          "endsOn": "2026-08-10"
+          "plannedSubjects": 36,
+          "startedOn": "2026-08-16",
+          "endsOn": "2026-08-15"
+        },
+        {
+          "id": "052de369-457a-8f9e-b325-e594d0f956f1",
+          "code": "SS-14",
+          "shortName": "艾瑞替尼 III",
+          "sponsorName": "华拓生物",
+          "phase": "III期",
+          "indication": "肝细胞癌",
+          "plannedSubjects": 5,
+          "startedOn": "2026-08-24",
+          "endsOn": "2026-08-18"
         }
       ],
       "nextCursor": "示例"
@@ -353,48 +382,48 @@
     "body": {
       "items": [
         {
-          "id": "12046294-3776-72f9-90b3-4233ea1069bb",
-          "code": "SS-12",
+          "id": "f3cee578-f38d-b296-24c1-1814ef83e4ae",
+          "code": "SS-11",
           "study": {
-            "id": "f8532245-d1a3-dfa6-53a1-81ce661b6169",
+            "id": "2d0a576e-8903-3ad6-10db-3406ab589244",
             "code": "HJ-2024-017",
-            "shortName": "艾瑞替尼 III"
+            "shortName": "恒糖宁 III"
           },
           "hospital": "北京协和医院",
-          "dept": "肝胆外科",
-          "city": "上海",
+          "dept": "内分泌科",
+          "city": "广州",
           "piName": "廖梦然",
-          "piAccountId": null,
+          "piAccountId": "f0db7425-c9b6-cd0d-4c6e-2f955d85bb2d",
           "state": "intake",
-          "contracted": 36,
-          "unitPriceCents": 5110000,
-          "startupFeeCents": 4000000,
-          "irbApprovedOn": null,
-          "sivOn": null,
-          "sivPlannedOn": "2026-08-13",
-          "fpiOn": "2026-08-24"
+          "contracted": 20,
+          "unitPriceCents": 7700000,
+          "startupFeeCents": 2410000,
+          "irbApprovedOn": "2026-08-24",
+          "sivOn": "2026-08-24",
+          "sivPlannedOn": "2026-08-25",
+          "fpiOn": "2026-08-14"
         },
         {
-          "id": "07e49df9-2fd3-23f5-15dd-c896ba44e609",
-          "code": "SS-14",
+          "id": "c6d624a7-49a6-4d09-8840-170891d8af78",
+          "code": "SS-12",
           "study": {
-            "id": "7ff5b42f-4466-8f4c-ca2f-6a0b41635c41",
+            "id": "4daef0c0-0da1-ab2f-2a15-4694ba7246b4",
             "code": "HJ-2024-017",
-            "shortName": "艾瑞替尼 III"
+            "shortName": "HT-118 II"
           },
-          "hospital": "复旦大学附属中山医院",
-          "dept": "肝胆外科",
-          "city": "北京",
-          "piName": "林敏",
-          "piAccountId": "49995abd-7b4f-c9c2-0908-4040e45d713d",
+          "hospital": "天津医科大学肿瘤医院",
+          "dept": "心内科",
+          "city": "天津",
+          "piName": "吴桐",
+          "piAccountId": "a0bd7023-5902-9a4a-355d-72f20b3b0f6b",
           "state": "intake",
-          "contracted": 11,
-          "unitPriceCents": 5580000,
-          "startupFeeCents": 4460000,
-          "irbApprovedOn": "2026-08-20",
-          "sivOn": "2026-08-14",
-          "sivPlannedOn": "2026-08-12",
-          "fpiOn": "2026-08-27"
+          "contracted": 22,
+          "unitPriceCents": 1790000,
+          "startupFeeCents": 6090000,
+          "irbApprovedOn": "2026-08-26",
+          "sivOn": "2026-08-15",
+          "sivPlannedOn": null,
+          "fpiOn": null
         }
       ],
       "nextCursor": "示例"
@@ -402,44 +431,44 @@
     "bodyWithoutFieldPermission": {
       "items": [
         {
-          "id": "12046294-3776-72f9-90b3-4233ea1069bb",
-          "code": "SS-12",
+          "id": "f3cee578-f38d-b296-24c1-1814ef83e4ae",
+          "code": "SS-11",
           "study": {
-            "id": "f8532245-d1a3-dfa6-53a1-81ce661b6169",
+            "id": "2d0a576e-8903-3ad6-10db-3406ab589244",
             "code": "HJ-2024-017",
-            "shortName": "艾瑞替尼 III"
+            "shortName": "恒糖宁 III"
           },
           "hospital": "北京协和医院",
-          "dept": "肝胆外科",
-          "city": "上海",
+          "dept": "内分泌科",
+          "city": "广州",
           "piName": "廖梦然",
-          "piAccountId": null,
+          "piAccountId": "f0db7425-c9b6-cd0d-4c6e-2f955d85bb2d",
           "state": "intake",
-          "contracted": 36,
-          "irbApprovedOn": "2026-08-16",
-          "sivOn": null,
-          "sivPlannedOn": null,
-          "fpiOn": "2026-08-13"
+          "contracted": 20,
+          "irbApprovedOn": "2026-08-12",
+          "sivOn": "2026-08-24",
+          "sivPlannedOn": "2026-08-24",
+          "fpiOn": "2026-08-25"
         },
         {
-          "id": "8d07e49d-f92f-d323-f515-ddc896ba44e6",
-          "code": "SS-01",
+          "id": "44c6d624-a749-a64d-0988-40170891d8af",
+          "code": "SS-08",
           "study": {
-            "id": "9e7ff5b4-2f44-668f-4cca-2f6a0b41635c",
+            "id": "8c4daef0-c00d-a1ab-2f2a-154694ba7246",
             "code": "HJ-2024-017",
-            "shortName": "HT-118 II"
+            "shortName": "恒糖宁 III"
           },
           "hospital": "北京协和医院",
-          "dept": "肝胆外科",
+          "dept": "肿瘤内科",
           "city": "天津",
-          "piName": "吴桐",
-          "piAccountId": null,
+          "piName": "韩雪",
+          "piAccountId": "06a0bd70-2359-029a-4a35-5d72f20b3b0f",
           "state": "intake",
-          "contracted": 11,
-          "irbApprovedOn": "2026-08-14",
-          "sivOn": "2026-08-20",
-          "sivPlannedOn": "2026-08-15",
-          "fpiOn": "2026-08-22"
+          "contracted": 16,
+          "irbApprovedOn": "2026-08-19",
+          "sivOn": null,
+          "sivPlannedOn": "2026-08-25",
+          "fpiOn": "2026-08-21"
         }
       ],
       "nextCursor": "示例"
@@ -450,46 +479,46 @@
     "path": "/v1/study-sites",
     "status": 201,
     "body": {
-      "id": "52c04259-9725-82c9-51d8-bd5d8c0bbd17",
-      "code": "SS-03",
+      "id": "34adad5c-a2cd-ab5a-3f45-e220e7cefc5c",
+      "code": "SS-11",
       "study": {
-        "id": "ab127f6b-8497-ca47-341a-a64e0b91dd1d",
+        "id": "2a363229-05ed-7c1a-026b-9fcaee1ce6a1",
         "code": "HJ-2024-017",
-        "shortName": "CoroFlex 器械"
+        "shortName": "恒糖宁 III"
       },
       "hospital": "复旦大学附属中山医院",
       "dept": "内分泌科",
       "city": "北京",
-      "piName": "廖梦然",
+      "piName": "林敏",
       "piAccountId": null,
       "state": "intake",
-      "contracted": 15,
-      "unitPriceCents": 4150000,
-      "startupFeeCents": 1980000,
-      "irbApprovedOn": "2026-08-12",
-      "sivOn": "2026-08-13",
-      "sivPlannedOn": "2026-08-16",
-      "fpiOn": "2026-08-11"
+      "contracted": 3,
+      "unitPriceCents": 4170000,
+      "startupFeeCents": 7460000,
+      "irbApprovedOn": "2026-08-19",
+      "sivOn": "2026-08-27",
+      "sivPlannedOn": null,
+      "fpiOn": "2026-08-12"
     },
     "bodyWithoutFieldPermission": {
-      "id": "52c04259-9725-82c9-51d8-bd5d8c0bbd17",
-      "code": "SS-03",
+      "id": "34adad5c-a2cd-ab5a-3f45-e220e7cefc5c",
+      "code": "SS-11",
       "study": {
-        "id": "ab127f6b-8497-ca47-341a-a64e0b91dd1d",
+        "id": "2a363229-05ed-7c1a-026b-9fcaee1ce6a1",
         "code": "HJ-2024-017",
-        "shortName": "CoroFlex 器械"
+        "shortName": "恒糖宁 III"
       },
       "hospital": "复旦大学附属中山医院",
       "dept": "内分泌科",
       "city": "北京",
-      "piName": "廖梦然",
+      "piName": "林敏",
       "piAccountId": null,
       "state": "intake",
-      "contracted": 15,
-      "irbApprovedOn": "2026-08-11",
-      "sivOn": "2026-08-12",
-      "sivPlannedOn": "2026-08-13",
-      "fpiOn": "2026-08-16"
+      "contracted": 3,
+      "irbApprovedOn": "2026-08-22",
+      "sivOn": "2026-08-19",
+      "sivPlannedOn": "2026-08-27",
+      "fpiOn": null
     }
   },
   "getStudySite": {
@@ -497,46 +526,46 @@
     "path": "/v1/study-sites/{id}",
     "status": 200,
     "body": {
-      "id": "a3ae7a9d-34b5-933b-09b1-30ee971dfd97",
-      "code": "SS-06",
+      "id": "84f7d2c0-8be9-70e8-11a2-17c977146d1f",
+      "code": "SS-14",
       "study": {
-        "id": "3ee66405-2de3-6945-7a8f-9eb325e594d0",
+        "id": "953db98f-1d35-175c-5eed-ad7283fa1b8f",
         "code": "HJ-2024-017",
         "shortName": "CoroFlex 器械"
       },
-      "hospital": "复旦大学附属中山医院",
-      "dept": "肿瘤内科",
-      "city": "上海",
+      "hospital": "北京协和医院",
+      "dept": "心内科",
+      "city": "天津",
       "piName": "韩雪",
-      "piAccountId": null,
+      "piAccountId": "b2facca9-0459-1931-19df-20c1bd02fa71",
       "state": "intake",
-      "contracted": 36,
-      "unitPriceCents": 2200000,
-      "startupFeeCents": 1930000,
-      "irbApprovedOn": "2026-08-24",
-      "sivOn": "2026-08-18",
-      "sivPlannedOn": "2026-08-15",
-      "fpiOn": "2026-08-10"
+      "contracted": 28,
+      "unitPriceCents": 5870000,
+      "startupFeeCents": 7930000,
+      "irbApprovedOn": "2026-08-12",
+      "sivOn": "2026-08-23",
+      "sivPlannedOn": "2026-08-17",
+      "fpiOn": "2026-08-25"
     },
     "bodyWithoutFieldPermission": {
-      "id": "a3ae7a9d-34b5-933b-09b1-30ee971dfd97",
-      "code": "SS-06",
+      "id": "84f7d2c0-8be9-70e8-11a2-17c977146d1f",
+      "code": "SS-14",
       "study": {
-        "id": "3ee66405-2de3-6945-7a8f-9eb325e594d0",
+        "id": "953db98f-1d35-175c-5eed-ad7283fa1b8f",
         "code": "HJ-2024-017",
         "shortName": "CoroFlex 器械"
       },
-      "hospital": "复旦大学附属中山医院",
-      "dept": "肿瘤内科",
-      "city": "上海",
+      "hospital": "北京协和医院",
+      "dept": "心内科",
+      "city": "天津",
       "piName": "韩雪",
-      "piAccountId": null,
+      "piAccountId": "b2facca9-0459-1931-19df-20c1bd02fa71",
       "state": "intake",
-      "contracted": 36,
-      "irbApprovedOn": null,
-      "sivOn": null,
-      "sivPlannedOn": "2026-08-24",
-      "fpiOn": "2026-08-18"
+      "contracted": 28,
+      "irbApprovedOn": "2026-08-23",
+      "sivOn": "2026-08-12",
+      "sivPlannedOn": "2026-08-23",
+      "fpiOn": "2026-08-17"
     }
   },
   "advanceStudySite": {
@@ -545,78 +574,77 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "f3cee578-f38d-b296-24c1-1814ef83e4ae",
+        "id": "d4ab4ee8-4b0f-4766-a7a5-919cbfc2c75f",
         "code": "SS-11",
         "study": {
-          "id": "2d0a576e-8903-3ad6-10db-3406ab589244",
+          "id": "b208d608-e9c0-90a1-cc6e-0c82e566dae0",
           "code": "HJ-2024-017",
-          "shortName": "恒糖宁 III"
+          "shortName": "艾瑞替尼 III"
         },
         "hospital": "北京协和医院",
-        "dept": "内分泌科",
+        "dept": "肿瘤内科",
         "city": "广州",
-        "piName": "廖梦然",
-        "piAccountId": "f0db7425-c9b6-cd0d-4c6e-2f955d85bb2d",
+        "piName": "林敏",
+        "piAccountId": "891e3273-2bfe-aeb1-6994-1fdfe731ebfe",
         "state": "intake",
-        "contracted": 20,
-        "unitPriceCents": 7700000,
-        "startupFeeCents": 2410000,
-        "irbApprovedOn": "2026-08-24",
-        "sivOn": "2026-08-24",
+        "contracted": 40,
+        "unitPriceCents": 3580000,
+        "startupFeeCents": 5760000,
+        "irbApprovedOn": null,
+        "sivOn": "2026-08-26",
         "sivPlannedOn": "2026-08-25",
-        "fpiOn": "2026-08-14"
+        "fpiOn": "2026-08-27"
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "6d624a74-9a64-d098-8401-70891d8af78c",
-          "amountCents": 8750000,
-          "studySiteId": "ef0c00da-1ab2-f2a1-5469-4ba7246b46be"
+          "ref": "5fc02acf-eeb2-f68a-c44d-556466f294a7",
+          "studySiteId": "b0b408dd-5da6-37f8-c92b-d4cad497a566"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "06a0bd70-2359-029a-4a35-5d72f20b3b0f",
-          "amountCents": 7740000,
-          "studySiteId": "19dea422-75d9-2dea-fb0d-dc581d841681"
+          "ref": "f6363f62-0e8f-9edf-3f5f-e46881c37b21",
+          "amountCents": 5430000,
+          "studySiteId": "5b6fffda-b98a-d4ff-5749-d4977ac7019c"
         }
       ]
     },
     "bodyWithoutFieldPermission": {
       "data": {
-        "id": "f3cee578-f38d-b296-24c1-1814ef83e4ae",
+        "id": "d4ab4ee8-4b0f-4766-a7a5-919cbfc2c75f",
         "code": "SS-11",
         "study": {
-          "id": "2d0a576e-8903-3ad6-10db-3406ab589244",
+          "id": "b208d608-e9c0-90a1-cc6e-0c82e566dae0",
           "code": "HJ-2024-017",
-          "shortName": "恒糖宁 III"
+          "shortName": "艾瑞替尼 III"
         },
         "hospital": "北京协和医院",
-        "dept": "内分泌科",
+        "dept": "肿瘤内科",
         "city": "广州",
-        "piName": "廖梦然",
-        "piAccountId": "f0db7425-c9b6-cd0d-4c6e-2f955d85bb2d",
+        "piName": "林敏",
+        "piAccountId": "891e3273-2bfe-aeb1-6994-1fdfe731ebfe",
         "state": "intake",
-        "contracted": 20,
-        "irbApprovedOn": "2026-08-12",
-        "sivOn": "2026-08-24",
-        "sivPlannedOn": "2026-08-24",
+        "contracted": 40,
+        "irbApprovedOn": "2026-08-19",
+        "sivOn": null,
+        "sivPlannedOn": "2026-08-26",
         "fpiOn": "2026-08-25"
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "4c6d624a-749a-64d0-9884-0170891d8af7",
-          "amountCents": 8180000,
-          "studySiteId": "daef0c00-da1a-b2f2-a154-694ba7246b46"
+          "ref": "fa5fc02a-cfee-b2f6-8ac4-4d556466f294",
+          "amountCents": 5400000
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "ea06a0bd-7023-5902-9a4a-355d72f20b3b",
-          "studySiteId": "6b819dea-4227-5d92-deaf-b0ddc581d841"
+          "ref": "b0b408dd-5da6-37f8-c92b-d4cad497a566",
+          "amountCents": 9590000,
+          "studySiteId": "363f620e-8f9e-df3f-5fe4-6881c37b2137"
         }
       ]
     }
@@ -631,12 +659,12 @@
       "satisfied": false,
       "unmet": [
         {
-          "code": "SS-04",
+          "code": "SS-05",
           "message": "示例文本（由契约生成，非真实数据）",
           "module": "示例标识"
         },
         {
-          "code": "SS-13",
+          "code": "SS-02",
           "message": "示例文本（由契约生成，非真实数据）",
           "module": "示例标识"
         }

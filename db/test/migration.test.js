@@ -22,19 +22,23 @@ const tables = async () => {
 };
 
 describe("迁移：本地可重复执行（生产只进不退）", () => {
+  /* 断言"前后集合一致"而不是某个数字 —— 数字会让每加一张表都要改测试，
+     而改测试去迁就实现，正是测试开始失效的那一刻。 */
+  let before = [];
+
   it("down 到底后只剩迁移记录表", async () => {
-    const before = await tables();
+    before = await tables();
     expect(before.length).toBeGreaterThan(10);
     run("down 99");
     expect(await tables()).toEqual(["schema_migration"]);
   });
 
-  it("再 up 能完整恢复，且表集合与之前一致", async () => {
+  it("再 up 能完整恢复，且表集合与之前**逐一**一致", async () => {
     run("up");
     const after = await tables();
+    expect(after).toEqual(before);
     expect(after).toContain("study_site");
     expect(after).toContain("audit_entry");
-    expect(after.length).toBe(17);
   });
 
   it("重复 up 是幂等的", async () => {
@@ -54,7 +58,18 @@ describe("迁移：本地可重复执行（生产只进不退）", () => {
     const { rows } = await o.query(`
       SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
        WHERE n.nspname='public' AND c.relrowsecurity ORDER BY 1`);
-    expect(rows.map(r => r.relname)).toEqual(
-      ["account","audit_entry","role","site_assignment","study","study_site","team"]);
+    expect(rows.map(r => r.relname)).toEqual([
+      "account", "audit_identity", "audit_entry", "auth_identity", "auth_session",
+      "idempotency_key", "login_token", "role", "site_assignment",
+      "study", "study_site", "team"
+    ].filter(t => t !== "audit_identity").sort());
+  });
+
+  it("每张启用了 RLS 的表都至少有一条策略 —— 启用而无策略等于全部拒绝，会静默出事", async () => {
+    const { rows } = await o.query(`
+      SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname='public' AND c.relrowsecurity
+         AND NOT EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid)`);
+    expect(rows.map(r => r.relname)).toEqual([]);
   });
 });

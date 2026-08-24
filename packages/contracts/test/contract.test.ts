@@ -71,6 +71,17 @@ describe("契约约定（不是风格偏好，每条对应一次事故）", () =
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it("fieldGates() 与 openapi 的 x-gated-by 完全一致 —— 脱敏只有一个来源", async () => {
+    const { fieldGates } = await import("../src/kernel/gates.js");
+    const fromCode = fieldGates();
+    const fromSpec: Record<string, string> = {};
+    for (const s of Object.values<any>(doc.components.schemas))
+      for (const [k, p] of Object.entries<any>(s.properties ?? {}))
+        if (p["x-gated-by"]) fromSpec[k] = p["x-gated-by"];
+    expect(fromCode).toEqual(fromSpec);
+    expect(Object.keys(fromCode).length).toBeGreaterThan(0);
+  });
+
   it("openapi.yaml 与 zod 定义一致 —— 产物不得手改", () => {
     execFileSync("npx", ["tsx", "scripts/gen-openapi.ts"], { cwd: ROOT, stdio: "pipe" });
     const now = fs.readFileSync(SPEC, "utf8");

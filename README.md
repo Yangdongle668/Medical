@@ -11,6 +11,8 @@
 - [阶段交付记录](docs/05-阶段交付记录.md) — 每阶段的产出、测试结果与已知问题
 - [`db/`](db/README.md) — Schema 与迁移：10 条 SQL 规约、6 支迁移、50 项测试
 - [`packages/contracts/`](packages/contracts/README.md) — 契约唯一定义源：zod → OpenAPI，五条不可协商的约定，破坏性变更门禁
+- [`packages/policy/`](packages/policy/) — 权限判定纯函数；与数据库实现由 300 组用例穷举比对
+- [`apps/api/`](apps/api/README.md) — NestJS 后端：认证、三维权限强制、审计、幂等、状态机闸门
 - [可交互原型 `prototype/index.html`](prototype/README.md) — 单文件网页原型：**登录 + 八种身份**
   （经营层 / PM / CRA / CRC / DM / QA / 机构办 / 研究者）、合计 45 个模块，全部为硬编码演示数据。
   演示密码 `demo`

@@ -16,6 +16,7 @@ jobs:
         with: { node-version: '22', cache: npm }
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run arch:check
 
       # 产物必须与 zod 定义一致：openapi.yaml 是生成出来的，不允许手改
       - name: 重新生成并确认无差异
@@ -32,7 +33,7 @@ jobs:
       - run: npm run test -w @sitedesk/contracts
 
   database:
-    name: 数据库 —— 迁移可重复 · RLS · 审计不可变
+    name: 数据库与后端 —— 迁移 · RLS · 等价性 · 权限矩阵
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -60,6 +61,8 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d sitedesk_test -c "ALTER DATABASE sitedesk_test OWNER TO sitedesk;"
       - name: 写入 .env（测试库连接）
         run: |
-          printf 'TEST_DATABASE_URL=%s\nAPP_TEST_DATABASE_URL=%s\n' \
-            "$TEST_DATABASE_URL" "$APP_TEST_DATABASE_URL" > .env
+          printf 'TEST_DATABASE_URL=%s\nAPP_TEST_DATABASE_URL=%s\nAPP_DATABASE_URL=%s\n' \
+            "$TEST_DATABASE_URL" "$APP_TEST_DATABASE_URL" "$APP_TEST_DATABASE_URL" > .env
       - run: npm run test -w db
+      - run: npm run test -w @sitedesk/policy
+      - run: npm run test -w @sitedesk/api

@@ -1,0 +1,60 @@
+import type { PoolClient } from "pg";
+
+/* ════════════════════════════════════════════════════════════════════
+   中心状态机闸门。
+
+   推进不是给字段赋值，而是断言一组前置条件已经成立。
+
+   本阶段只有 study_site 一张业务表，因此七项关闭条件里的绝大多数
+   依赖尚未交付的模块。**这种情况下必须 fail-closed**：
+   把「查不了」当成「通过」，就等于允许在质疑挂着、药品差三盒的时候关闭中心 ——
+   而这正是原型里那个只有一句 `ss.st = next` 的按钮所犯的错。
+
+   因此未就绪的检查项以 `unavailable` 出现在 unmet 里，闸门不放行。
+   每个模块交付时把自己的检查项接进这张表。
+   ════════════════════════════════════════════════════════════════════ */
+
+export type GateStatus = "ok" | "unmet" | "unavailable";
+export interface GateItem { code: string; message: string; module?: string; status: GateStatus }
+
+type Checker = (client: PoolClient, siteId: string) => Promise<GateItem>;
+
+/** 尚未交付的模块占位。交付时把这一行换成真实查询即可。 */
+const pending = (code: string, what: string, mod: string): Checker =>
+  async () => ({ code, module: mod, status: "unavailable",
+    message: `${what}（该检查由「${mod}」模块提供，尚未交付 —— 闸门保持关闭）` });
+
+/** 推进到「SIV启动」：启动清单的阻塞项必须清零 */
+const SIV_CHECKS: Checker[] = [
+  pending("startup-blockers", "启动清单仍有阻塞项", "startup")
+];
+
+/** 推进到「中心关闭」：七项前置条件 */
+const CLOSE_CHECKS: Checker[] = [
+  pending("subjects-in-trial", "仍有受试者在组未出组",       "clinical"),
+  pending("open-queries",      "仍有数据质疑未关闭",         "clinical"),
+  pending("open-quality",      "仍有质量事件未关闭",         "quality"),
+  pending("ip-imbalance",      "药品数量不平衡",             "clinical"),
+  pending("ip-not-destroyed",  "回收药品未完成销毁登记",     "clinical"),
+  pending("specimen-open",     "生物样本链未闭环",           "clinical"),
+  pending("compensation-open", "受试者补偿未发放或缺签收凭证", "clinical"),
+  pending("closeout-report",   "未向伦理递交结题报告或尚未获批", "regulatory")
+];
+
+const REGISTRY: Record<string, Checker[]> = { siv: SIV_CHECKS, closed: CLOSE_CHECKS };
+
+export async function evaluateGate(
+  client: PoolClient, siteId: string, to: string
+): Promise<{ satisfied: boolean; items: GateItem[] }> {
+  const checks = REGISTRY[to] ?? [];
+  const items = await Promise.all(checks.map(c => c(client, siteId)));
+  return { satisfied: items.every(i => i.status === "ok"), items };
+}
+
+/** 状态机的下一节点 */
+export async function nextState(client: PoolClient, current: string): Promise<string | null> {
+  const { rows } = await client.query<{ code: string }>(
+    `SELECT code FROM site_state WHERE seq = (SELECT seq + 1 FROM site_state WHERE code = $1)`,
+    [current]);
+  return rows[0]?.code ?? null;
+}

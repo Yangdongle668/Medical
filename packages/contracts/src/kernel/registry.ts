@@ -22,7 +22,8 @@ export interface Endpoint {
   query?: z.ZodType;
   params?: z.ZodType;
   body?: z.ZodType;
-  response: z.ZodType;
+  /** 204 之类没有响应体的端点省略它 —— 空 schema 与「没有 content」在 OpenAPI 里是两回事 */
+  response?: z.ZodType;
   status?: number;
   /** 除通用错误外，本端点特有的错误 */
   errors?: ErrorCode[];
@@ -39,6 +40,8 @@ export function define(e: Endpoint): Endpoint {
     throw new Error(`${e.id}：L2 命令必须是 POST`);
   if (e.layer === "L2" && !e.path.includes(":"))
     throw new Error(`${e.id}：L2 命令路径须形如 /v1/xxx/{id}:action`);
+  if (!e.response && e.status !== 204)
+    throw new Error(`${e.id}：只有 204 可以没有响应体`);
   endpoints.push(e);
   return e;
 }

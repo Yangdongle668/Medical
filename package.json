@@ -18,7 +18,9 @@
     "db:seed": "npm run seed -w db",
     "contracts:build": "npm run build -w @sitedesk/contracts",
     "contracts:check": "npm run check:breaking -w @sitedesk/contracts",
-    "typecheck": "npm run typecheck -w @sitedesk/contracts",
-    "test": "npm run test -w db && npm run test -w @sitedesk/contracts"
+    "arch:check": "node tools/arch-check.mjs",
+    "typecheck": "npm run typecheck -w @sitedesk/contracts && npm run typecheck -w @sitedesk/policy && npm run typecheck -w @sitedesk/api",
+    "test": "npm run test -w db && npm run test -w @sitedesk/contracts && npm run test -w @sitedesk/policy && npm run test -w @sitedesk/api",
+    "api:dev": "npm run build -w @sitedesk/api && npm run start -w @sitedesk/api"
   }
 }
