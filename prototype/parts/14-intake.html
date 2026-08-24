@@ -1,0 +1,253 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   立项与建档 —— 系统的入口。此前所有数据都是凭空存在的，这里补上。
+   关键判断：立项时就算毛利率，而不是做完半年后财务才告诉你亏了。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* 用与报价模型完全相同的口径反算成本，保证「立项测算」与「报价」不会两套账 */
+function intakeCalc({sites, pts, months, contract, cx=1.2, visits=11, fte=0.55, imv=1.5}){
+  const r = calcPrice({sites, pts, months, cx, visits, fte, imv, target:0});
+  const total = sites*pts;
+  return {total, cost:r.cost, gm: contract>0 ? (contract-r.cost)/contract : 0,
+          unit: total? contract/total : 0, crcMd:r.crcMd, craMd:r.craMd,
+          minContract: r.cost/(1-GM_GATE)};
+}
+
+VIEWS.intake = box=>{
+  const p = PERSONA(), isPM = p.k==="pm", isBoss = p.k==="boss";
+  const mine = isBoss ? INTAKE : INTAKE.filter(x=>x.by===p.n);
+  const below = INTAKE.filter(x=>x.gm < GM_GATE);
+
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["待审批立项",INTAKE.length,"个",INTAKE.length?"var(--warn)":"var(--good)"],
+       ["低于毛利门槛",below.length,"个",below.length?"var(--crit)":"var(--good)"],
+       ["合计合同额",n1(sum(INTAKE,x=>x.contract)),"万","var(--ink)"],
+       ["毛利门槛",pct(GM_GATE),"","var(--ink-3)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>${isBoss?"立项审批":"我提交的立项申请"}</h3><span class="sp"></span>
+      ${isPM?`<button class="btn btn-p" id="np">+ 新建项目立项</button>
+              <button class="btn" id="ns">+ 新增中心建档</button>`:""}
+      ${isBoss?`<span class="sub">毛利率低于 ${pct(GM_GATE)} 的必须过你这一关</span>`:""}</div>
+    <div class="card-b" style="padding:0">
+      ${mine.length? mine.map(x=>{const low=x.gm<GM_GATE;
+        return `<div style="padding:13px 16px 13px 18px;border-bottom:1px solid var(--line);position:relative">
+          ${low?`<span class="stripe" style="background:var(--crit)"></span>`:""}
+          <div class="row" style="gap:7px">
+            <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(x.id)}</span>
+            <b style="font-size:13.5px">${esc(x.drug)}</b>
+            <span class="pill p-neut">${esc(x.phase)}</span>
+            <span class="sp"></span>
+            <span class="pill ${low?"p-crit":"p-good"}">测算毛利率 ${pct(x.gm)}${low?" · 低于门槛":""}</span>
+          </div>
+          <div class="note" style="margin-top:4px">${esc(x.sponsor)} · ${esc(x.indication)}｜${x.sites} 中心 × ${Math.round(x.planned/x.sites)} 例 = ${x.planned} 例｜周期 ${x.months} 个月｜提交人 ${esc(x.by)} · ${esc(x.sub)}</div>
+          <div class="mini" style="margin-top:9px;grid-template-columns:repeat(auto-fit,minmax(96px,1fr))">
+            <div><div class="kpi-l">合同总额</div><div class="v">${n1(x.contract)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
+            <div><div class="kpi-l">预估成本</div><div class="v">${n1(x.cost)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
+            <div><div class="kpi-l">预估毛利</div><div class="v" style="color:${low?"var(--crit)":"var(--good)"}">${n1(x.contract-x.cost)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
+            <div><div class="kpi-l">单例单价</div><div class="v">${n1(x.contract/x.planned)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
+            <div><div class="kpi-l">保本合同额</div><div class="v">${n1(x.cost/(1-GM_GATE))}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
+          </div>
+          ${x.note?`<div style="margin-top:9px;border-left:2px solid var(--${low?"crit":"accent"});background:var(--${low?"crit":"accent"}-soft);padding:7px 10px;font-size:12px;color:var(--ink-2);line-height:1.6">
+            <b>提交说明</b>：${esc(x.note)}</div>`:""}
+          ${isBoss?`<div class="row" style="margin-top:10px">
+            <button class="btn btn-p" data-ok="${x.id}">批准立项</button>
+            <button class="btn" data-no="${x.id}">退回重谈</button>
+            <span class="note">批准后自动建项目档案，可开始逐中心建档</span></div>`
+          :`<div class="row" style="margin-top:10px"><span class="pill p-warn">${esc(x.st)}</span></div>`}
+        </div>`;}).join("") : `<div class="empty">${isPM?"还没有提交中的立项申请，点右上角新建":"当前没有待审批的立项"}</div>`}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h3>已立项项目</h3><span class="sp"></span><span class="sub">共 ${STUDIES.length} 个</span></div>
+    <div class="tw"><table style="min-width:820px">
+      <thead><tr><th>方案编号</th><th>药物 / 器械</th><th>申办方</th><th>期别</th><th>适应症</th>
+        <th class="ta-r">计划例数</th><th class="ta-r">中心数</th><th class="ta-r">已建档</th><th class="ta-r">合同额</th></tr></thead>
+      <tbody>${STUDIES.map(st=>{const built=SITES.filter(s=>s.sid===st.id).length;
+        return `<tr><td class="mono" style="font-size:11.5px">${esc(st.id)}</td>
+          <td class="t-main">${esc(st.drug)}</td><td>${esc(st.sponsor)}</td>
+          <td><span class="pill p-neut">${esc(st.phase)}</span></td>
+          <td class="t-sub">${esc(st.indication)}</td>
+          <td class="tnum">${st.planned}</td><td class="tnum">${st.sites}</td>
+          <td class="tnum" style="color:${built<st.sites?"var(--warn)":"var(--good)"}">${built}<span class="t-mut"> / ${st.sites}</span></td>
+          <td class="tnum">${n1(st.contract)} 万</td></tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:10px">「已建档」小于「中心数」= 合同里写了但还没进系统的中心。这些中心的成本已经在发生（伦理递交、合同谈判），
+    收入却还挂不上号 —— 建档滞后是早期成本失控最常见的一种。</p>`;
+
+  $("#np")?.addEventListener("click", newStudyModal);
+  $("#ns")?.addEventListener("click", newSiteModal);
+  box.addEventListener("click",e=>{
+    const ok=e.target.closest("[data-ok]"), no=e.target.closest("[data-no]");
+    if(!ok&&!no) return;
+    const id=(ok||no).dataset.ok||(ok||no).dataset.no;
+    const i=INTAKE.findIndex(x=>x.id===id), x=INTAKE[i];
+    if(ok){
+      const sid=`HJ-2026-0${String(STUDIES.length+10).slice(-2)}`;
+      STUDIES.push({id:sid, short:x.drug.slice(0,6), drug:x.drug, sponsor:x.sponsor, phase:x.phase,
+        indication:x.indication, planned:x.planned, sites:x.sites, contract:x.contract,
+        start:TODAY.slice(0,7), end:"—", cx:1.2});
+      S[sid]=STUDIES.at(-1);
+      ENROLL[sid]={x:[TODAY.slice(2,7)], plan:[0], act:[0]};
+      toast(`${x.drug} 已批准立项，方案编号 ${sid}，可开始逐中心建档`);
+    } else toast(`${x.drug} 已退回：毛利率 ${pct(x.gm)} 低于门槛，需重谈价格或压缩投入`,"warn");
+    INTAKE.splice(i,1); render();
+  });
+};
+
+/* ── 新建项目立项 ── */
+function newStudyModal(){
+  openLayer($("#modal"),`
+    <div class="drawer-h"><h3 style="flex:1;font-size:15px">新建项目立项</h3><button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px;max-height:76vh;overflow-y:auto">
+      <div class="field"><div class="slider-h"><label for="i-drug">药物 / 器械名称</label></div>
+        <input class="inp" id="i-drug" style="width:100%" placeholder="例：KY-207 片（JAK 抑制剂）"></div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="i-sp">申办方</label></div>
+          <input class="inp" id="i-sp" style="width:100%" placeholder="例：科翼医药"></div>
+        <div class="field"><div class="slider-h"><label for="i-ph">期别</label></div>
+          <select class="sel" id="i-ph" style="width:100%">${["I期","II期","III期","IV期","确证性","BE"].map(x=>`<option>${x}</option>`).join("")}</select></div>
+      </div>
+      <div class="field"><div class="slider-h"><label for="i-ind">适应症</label></div>
+        <input class="inp" id="i-ind" style="width:100%" placeholder="例：中重度特应性皮炎"></div>
+      <div class="field"><div class="slider-h"><label for="i-sites">参研中心数</label><b id="v-sites">8 个</b></div>
+        <input type="range" id="i-sites" min="2" max="30" step="1" value="8"></div>
+      <div class="field"><div class="slider-h"><label for="i-pts">每中心例数</label><b id="v-pts">15 例</b></div>
+        <input type="range" id="i-pts" min="5" max="50" step="1" value="15"></div>
+      <div class="field"><div class="slider-h"><label for="i-mon">入组期（月）</label><b id="v-mon">16 个月</b></div>
+        <input type="range" id="i-mon" min="6" max="36" step="1" value="16"></div>
+      <div class="field"><div class="slider-h"><label for="i-amt">合同总额（万元）</label></div>
+        <input class="inp" id="i-amt" type="number" step="10" value="760" style="width:100%"></div>
+      <div class="field"><div class="slider-h"><label for="i-note">提交说明</label></div>
+        <textarea class="qbox" id="i-note" placeholder="例：申办方压价两轮；若接需把 CRC 驻场 FTE 压到 0.4。"></textarea></div>
+      <div id="i-calc" style="margin-bottom:12px"></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="i-go">提交立项申请</button></div>
+    </div>`);
+  const read=()=>({sites:+$("#i-sites").value, pts:+$("#i-pts").value,
+                   months:+$("#i-mon").value, contract:+$("#i-amt").value||0});
+  const upd=()=>{
+    const v=read(), r=intakeCalc(v), low=r.gm<GM_GATE;
+    $("#v-sites").textContent=v.sites+" 个"; $("#v-pts").textContent=v.pts+" 例";
+    $("#v-mon").textContent=v.months+" 个月";
+    $("#i-calc").innerHTML=`
+      <div style="border:1px solid var(--line);border-left:2px solid var(--${low?"crit":"good"});background:var(--${low?"crit":"good"}-soft);padding:10px 12px;border-radius:0 3px 3px 0">
+        <div class="row" style="justify-content:space-between;margin-bottom:6px">
+          <b style="font-size:12.5px">立项测算</b>
+          <span class="pill ${low?"p-crit":"p-good"}">毛利率 ${pct(r.gm)}${low?` · 低于门槛 ${pct(GM_GATE)}`:""}</span></div>
+        <div class="mini" style="grid-template-columns:repeat(auto-fit,minmax(84px,1fr))">
+          <div><div class="kpi-l">总例数</div><div class="v">${r.total}</div></div>
+          <div><div class="kpi-l">预估成本</div><div class="v">${n1(r.cost)}<small style="font-size:10px"> 万</small></div></div>
+          <div><div class="kpi-l">单例单价</div><div class="v">${n1(r.unit)}<small style="font-size:10px"> 万</small></div></div>
+          <div><div class="kpi-l">保本合同额</div><div class="v">${n1(r.minContract)}<small style="font-size:10px"> 万</small></div></div>
+        </div>
+        <div class="note" style="margin-top:7px;color:var(--ink-2)">
+          ${low?`按当前参数，合同额需 ≥ <b>${n1(r.minContract)} 万</b> 才能达到 ${pct(GM_GATE)} 门槛，缺口 ${n1(r.minContract-v.contract)} 万。提交后需经营层审批。`
+               :`达到毛利门槛，提交后走常规审批。`}
+          人天口径与报价模型一致：CRC ${n0(r.crcMd)} + CRA ${n0(r.craMd)} 人天。</div>
+      </div>`;
+  };
+  ["#i-sites","#i-pts","#i-mon","#i-amt"].forEach(s=>$(s).addEventListener("input",upd));
+  upd();
+  $("#i-go").addEventListener("click",()=>{
+    const drug=$("#i-drug").value.trim()||"未命名项目", sp=$("#i-sp").value.trim()||"未填写";
+    const ind=$("#i-ind").value.trim()||"未填写", v=read(), r=intakeCalc(v);
+    if(!v.contract){ toast("请填写合同总额","crit"); return; }
+    INTAKE.unshift({id:`NP-2026-0${acSeq++}`, drug, sponsor:sp, phase:$("#i-ph").value,
+      indication:ind, sites:v.sites, planned:r.total, contract:v.contract, months:v.months,
+      cost:r.cost, gm:r.gm, sub:TODAY, by:PERSONA().n,
+      st: r.gm<GM_GATE ? "待经营层审批" : "待常规审批", note:$("#i-note").value.trim()});
+    closeLayer();
+    toast(`${drug} 立项申请已提交${r.gm<GM_GATE?"，毛利率低于门槛，需经营层审批":""}`, r.gm<GM_GATE?"warn":"");
+    setTimeout(render,220);
+  });
+}
+
+/* ── 新增中心建档 ── */
+function newSiteModal(){
+  const ids = STUDIES.map(s=>s.id);
+  openLayer($("#modal"),`
+    <div class="drawer-h"><h3 style="flex:1;font-size:15px">新增中心建档</h3><button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px;max-height:76vh;overflow-y:auto">
+      <div class="field"><div class="slider-h"><label for="s-sid">所属项目</label></div>
+        <select class="sel" id="s-sid" style="width:100%">${ids.map(id=>
+          `<option value="${id}">${esc(id)} · ${esc(S[id].short)}</option>`).join("")}</select></div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="s-h">医院</label></div>
+          <input class="inp" id="s-h" style="width:100%" placeholder="例：浙江大学医学院附属第一医院"></div>
+        <div class="field"><div class="slider-h"><label for="s-c">城市</label></div>
+          <input class="inp" id="s-c" style="width:100%" placeholder="例：杭州"></div>
+      </div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="s-d">科室</label></div>
+          <input class="inp" id="s-d" style="width:100%" placeholder="例：皮肤科"></div>
+        <div class="field"><div class="slider-h"><label for="s-pi">主要研究者 PI</label></div>
+          <input class="inp" id="s-pi" style="width:100%" placeholder="例：吕文轩"></div>
+      </div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="s-n">合同例数</label><b id="v-sn">15 例</b></div>
+          <input type="range" id="s-n" min="3" max="50" step="1" value="15"></div>
+        <div class="field"><div class="slider-h"><label for="s-u">单例单价（万）</label></div>
+          <input class="inp" id="s-u" type="number" step="0.1" value="4.5" style="width:100%"></div>
+      </div>
+      <div class="field"><div class="slider-h"><label for="s-e">伦理路径</label></div>
+        <select class="sel" id="s-e" style="width:100%">
+          <option>组长单位伦理批件 + 本院备案</option>
+          <option>本院伦理独立审查</option>
+          <option>区域伦理委员会审查</option></select></div>
+      <div class="field"><div class="slider-h"><label for="s-ac">机构受理号</label></div>
+        <input class="inp" id="s-ac" style="width:100%" placeholder="由医院机构办受理后回填，可留空"></div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="s-cra">派驻 CRA</label></div>
+          <select class="sel" id="s-cra" style="width:100%">${STAFF.filter(x=>x.role==="CRA")
+            .map(x=>`<option>${esc(x.n)}</option>`).join("")}</select></div>
+        <div class="field"><div class="slider-h"><label for="s-crc">派驻 CRC</label></div>
+          <select class="sel" id="s-crc" style="width:100%">${STAFF.filter(x=>x.role==="CRC")
+            .map(x=>`<option>${esc(x.n)}</option>`).join("")}</select></div>
+      </div>
+      <div id="s-warn" style="margin-bottom:12px"></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="s-go">建档并进入立项状态</button></div>
+    </div>`);
+  const chk=()=>{
+    $("#v-sn").textContent=$("#s-n").value+" 例";
+    const cra=staff($("#s-cra").value), crc=staff($("#s-crc").value), city=$("#s-c").value.trim();
+    const m=[];
+    if(crc && city && crc.city!==city) m.push(["warn",`${crc.n} 常驻 ${crc.city}，与该中心所在地 ${city} 不一致 —— CRC 是驻场角色，跨城会产生大量不可计费通勤工时`]);
+    if(cra && cra.util>88) m.push(["crit",`${cra.n} 当前利用率 ${cra.util}%，已超载，再加中心会拉低监查质量`]);
+    if(crc && crc.util>88) m.push(["crit",`${crc.n} 当前利用率 ${crc.util}%，已超载`]);
+    [cra,crc].forEach(x=>{ if(x&&days(TODAY,x.gcp)<70) m.push(["crit",`${x.n} 的 GCP 证书 ${days(TODAY,x.gcp)} 天后到期，医院机构办可能拒绝备案`]); });
+    $("#s-warn").innerHTML = m.length? m.map(([k,t])=>
+      `<div style="border-left:2px solid var(--${k});background:var(--${k}-soft);padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--ink-2)">${esc(t)}</div>`).join("")
+      : `<div style="border-left:2px solid var(--good);background:var(--good-soft);padding:7px 10px;font-size:12px;color:var(--ink-2)">派驻无冲突。建档后中心进入「立项」节点，可在台账中逐步推进状态机。</div>`;
+  };
+  ["#s-n","#s-c","#s-cra","#s-crc"].forEach(s=>$(s).addEventListener("input",chk));
+  chk();
+  $("#s-go").addEventListener("click",()=>{
+    const hosp=$("#s-h").value.trim();
+    if(!hosp){ toast("请填写医院名称","crit"); return; }
+    const sid=$("#s-sid").value, id="SS-"+String(SITES.length+1).padStart(2,"0");
+    const cra=$("#s-cra").value, crc=$("#s-crc").value;
+    SITES.push({id, sid, hosp, dept:$("#s-d").value.trim()||"—", pi:$("#s-pi").value.trim()||"—",
+      city:$("#s-c").value.trim()||"—", st:"立项", contracted:+$("#s-n").value, enrolled:0,
+      planToDate:0, unit:+$("#s-u").value||0, revenue:0, cost:0, md:0,
+      cra, crc:[crc], ethics:"—", siv:"—", fpi:"—", risk:1});
+    staff(cra).sites.push(id); staff(crc).sites.push(id);
+    REG.push({who:crc, org:"恒济临床（SMO）", role:"CRC", ss:id, st:"备案中",
+      gcp:staff(crc).gcp, train:"—", badge:"—", note:"新建档中心，待医院机构办备案准入"});
+    closeLayer();
+    toast(`${hosp} 已建档（${id}），状态：立项｜已同步生成机构备案申请`);
+    setTimeout(render,220);
+  });
+}
+</script>

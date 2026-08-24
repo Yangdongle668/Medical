@@ -43,6 +43,16 @@ VIEWS.qa = box=>{
       <div class="note" style="margin-top:6px">绿色 = 窗口内，红色 = 超窗部分。SAE 24 小时上报及时率必须 100% —— 这是红线，不是 KPI。</div>
     </div></div>`:""}
 
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>问题发现来源</h3><span class="sp"></span>
+      <span class="sub">分布本身就是质量指标</span></div>
+    <div class="card-b">
+      <div id="c-src2"></div>
+      <div class="note" style="margin-top:11px;border-top:1px solid var(--line);padding-top:9px">
+        前置发现（中心自查、机构质控、内部监查）占比越高，说明防线在起作用。
+        如果问题主要由<b>申办方稽查或药监核查</b>发现，代价就不再是整改，而是数据被剔除、项目延期、供应商名录降级。</div>
+    </div>
+  </div>
   <div class="card">
     <div class="card-h" style="flex-wrap:wrap"><h3>事件台账</h3>
       <div class="row" style="gap:5px">${["重大","严重","一般"].map(s=>
@@ -58,6 +68,7 @@ VIEWS.qa = box=>{
               <span class="pill p-${i.st==="已关闭"?"neut":sv.k}">${esc(i.sev)}</span>
               <b style="font-size:13px;font-weight:600">${esc(i.type)}</b>
               <span class="t-sub">${esc(i.id)}</span>
+              <span class="pill p-neut">来源 ${esc(i.src||"—")}</span>
               <span class="sp"></span>
               <span class="pill ${i.st==="已关闭"?"p-good":od?"p-crit":"p-neut"}">${esc(i.st)}${od?" · 已逾期":""}</span>
             </div>
@@ -75,6 +86,12 @@ VIEWS.qa = box=>{
         </div>`;}).join("") : `<div class="empty">当前筛选下无事件</div>`}
     </div>
   </div>`;
+
+  const bySrc={}; ISSUES.filter(i=>ids.has(i.ss)).forEach(i=>bySrc[i.src]=(bySrc[i.src]||0)+1);
+  const ORD=["中心自查","机构质控","内部监查","申办方稽查","药监核查"];
+  const COL={"机构质控":"var(--s1)","中心自查":"var(--s3)","内部监查":"var(--s2)",
+             "申办方稽查":"var(--s4)","药监核查":"var(--s5)"};
+  stacked($("#c-src2"), ORD.filter(k=>bySrc[k]).map(k=>({n:k,v:bySrc[k],c:COL[k]})),{h:28,fmt:v=>v+" 项"});
 
   if(sae){ const tick=()=>{ const el=$("#cd"); if(!el) return;
       const ms=new Date(sae.due+"T18:00:00")-new Date(TODAY+"T"+new Date().toTimeString().slice(0,8));

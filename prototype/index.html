@@ -439,7 +439,10 @@ const SITES = [
    cra:"何雨薇", crc:["郭晓萱"], ethics:"—", siv:"—", fpi:"—", risk:1},
   {id:"SS-14", sid:"HJ-2026-004", hosp:"江苏省人民医院", dept:"心内科", pi:"卢建", city:"南京",
    st:"合同签署", contracted:22, enrolled:0, planToDate:0, unit:4.6, revenue:8.5, cost:16.3, md:109,
-   cra:"何雨薇", crc:["冯乐"], ethics:"2026-06-30", siv:"—", fpi:"—", risk:1}
+   cra:"何雨薇", crc:["冯乐"], ethics:"2026-06-30", siv:"—", fpi:"—", risk:1},
+  {id:"SS-15", sid:"HJ-2025-011", hosp:"北京协和医院", dept:"内分泌科", pi:"苏文彦", city:"北京",
+   st:"入组中", contracted:28, enrolled:22, planToDate:21, unit:3.9, revenue:96.4, cost:54.8, md:464,
+   cra:"徐倩", crc:["廖梦然"], ethics:"2025-07-09", siv:"2025-08-28", fpi:"2025-09-19", risk:1}
 ];
 
 /* ── 人员：资质、成本、当前饱和度 ─────────────────────────────────── */
@@ -448,12 +451,12 @@ const STAFF = [
   {n:"赵坤",   role:"CRA", lvl:"中级", city:"上海", gcp:"2027-01-09", util:94, sites:["SS-02","SS-06","SS-08"]},
   {n:"何雨薇", role:"CRA", lvl:"中级", city:"广州", gcp:"2026-11-25", util:71, sites:["SS-03","SS-13","SS-14"]},
   {n:"段志远", role:"CRA", lvl:"初级", city:"成都", gcp:"2028-01-30", util:56, sites:["SS-04","SS-05"]},
-  {n:"徐倩",   role:"CRA", lvl:"中级", city:"武汉", gcp:"2026-09-30", util:88, sites:["SS-10","SS-11"]},
+  {n:"徐倩",   role:"CRA", lvl:"中级", city:"武汉", gcp:"2026-09-30", util:88, sites:["SS-10","SS-11","SS-15"]},
   {n:"吴桐",   role:"CRC", lvl:"高级", city:"北京", gcp:"2027-05-12", util:87, sites:["SS-01","SS-07"]},
   {n:"沈亦琳", role:"CRC", lvl:"中级", city:"上海", gcp:"2027-02-28", util:79, sites:["SS-02"]},
   {n:"郭晓萱", role:"CRC", lvl:"中级", city:"广州", gcp:"2026-10-16", util:68, sites:["SS-03","SS-13"]},
   {n:"唐延",   role:"CRC", lvl:"初级", city:"成都", gcp:"2028-03-04", util:44, sites:["SS-04","SS-05"]},
-  {n:"廖梦然", role:"CRC", lvl:"高级", city:"北京", gcp:"2027-08-21", util:96, sites:["SS-09","SS-12"]},
+  {n:"廖梦然", role:"CRC", lvl:"高级", city:"北京", gcp:"2027-08-21", util:96, sites:["SS-09","SS-12","SS-15"]},
   {n:"邱志安", role:"CRC", lvl:"中级", city:"武汉", gcp:"2027-06-07", util:81, sites:["SS-10","SS-11"]},
   {n:"冯乐",   role:"CRC", lvl:"中级", city:"上海", gcp:"2027-04-19", util:76, sites:["SS-06","SS-08","SS-14"]},
   {n:"韩雪",   role:"PM",  lvl:"总监", city:"北京", gcp:"2027-09-30", util:74, sites:[]},
@@ -474,27 +477,40 @@ const ENROLL = {
 
 /* ── 质量事件与 CAPA ──────────────────────────────────────────────── */
 const ISSUES = [
-  {id:"QI-2026-0155", ss:"SS-02", sev:"严重", type:"SAE 上报超窗", found:"2026-08-19",
+  {id:"QI-2026-0155", src:"内部监查", ss:"SS-02", sev:"严重", type:"SAE 上报超窗", found:"2026-08-19",
    desc:"受试者 S-0217 发生 3 级肝功能异常，研究者知晓至上报申办方 26.5 小时，超出 24 小时窗口。",
    capa:"重新培训 PI 及研究护士 SAE 上报流程；在中心张贴 24h 倒计时卡；CRC 每日核查病历新增 SAE。",
    own:"沈亦琳", due:"2026-08-26", st:"CAPA进行中", sla:24, elapsed:26.5},
-  {id:"QI-2026-0139", ss:"SS-05", sev:"重大", type:"知情同意版本错误", found:"2026-08-11",
+  {id:"QI-2026-0139", src:"机构质控", ss:"SS-05", sev:"重大", type:"知情同意版本错误", found:"2026-08-11",
    desc:"3 例受试者签署 ICF V2.1（现行版本为 V3.0，2026-05-30 生效），涉及筛选期受试者。",
    capa:"已上报伦理委员会并获批重新签署；全部在筛受试者 ICF 版本 100% 复核；中心文件夹版本控制表上墙。",
    own:"卫兰", due:"2026-08-29", st:"CAPA进行中", sla:null},
-  {id:"QI-2026-0142", ss:"SS-04", sev:"严重", type:"方案偏离", found:"2026-08-14",
+  {id:"QI-2026-0142", src:"内部监查", ss:"SS-04", sev:"严重", type:"方案偏离", found:"2026-08-14",
    desc:"受试者 S-0331 第 4 次访视实际日期超出方案窗口 5 天（窗口 ±3 天）。",
    capa:"CRC 增加访视窗口前 7 天提醒机制；PI 签署方案偏离表并上报伦理。",
    own:"唐延", due:"2026-08-24", st:"待验证", sla:null},
-  {id:"QI-2026-0151", ss:"SS-11", sev:"一般", type:"源数据缺陷", found:"2026-08-17",
+  {id:"QI-2026-0151", src:"申办方稽查", ss:"SS-11", sev:"一般", type:"源数据缺陷", found:"2026-08-17",
    desc:"稽查抽查 20 份原始病历，12 处研究者签名/日期缺失，主要集中在合并用药记录页。",
    capa:"研究者集中补签并留痕；CRC 建立每周源数据完整性自查清单。",
    own:"邱志安", due:"2026-09-05", st:"CAPA进行中", sla:null},
-  {id:"QI-2026-0158", ss:"SS-12", sev:"一般", type:"药品温控中断", found:"2026-08-20",
+  {id:"QI-2026-0158", src:"中心自查", ss:"SS-12", sev:"一般", type:"药品温控中断", found:"2026-08-20",
    desc:"药房冷藏柜温度记录仪断电 4 小时，期间温度记录缺失，涉及 2 个批次试验用药品。",
    capa:"申办方已出具药品可用性评估；加装 UPS 与温度越限短信报警。",
    own:"廖梦然", due:"2026-09-02", st:"待验证", sla:null},
-  {id:"QI-2026-0131", ss:"SS-03", sev:"一般", type:"实验室资质过期", found:"2026-07-28",
+  {id:"QI-2026-0146", src:"机构质控", ss:"SS-01", sev:"严重", type:"机构质控发现 · 知情同意", found:"2026-08-14",
+   desc:"机构二级质控抽查 5 例，发现 3 例受试者签署 ICF V2.1（现行版本 V3.0，2026-05-30 生效）。",
+   capa:"（待受托方提交整改措施）", own:"吴桐", due:"2026-08-28", st:"待整改", sla:null},
+  {id:"QI-2026-0147", src:"机构质控", ss:"SS-01", sev:"严重", type:"机构质控发现 · 人员资质", found:"2026-08-14",
+   desc:"新入组研究护士周琳未提供 GCP 证书，且未列入研究者授权分工表，已参与 3 例受试者访视。",
+   capa:"（待受托方提交整改措施）", own:"吴桐", due:"2026-08-26", st:"待整改", sla:null},
+  {id:"QI-2026-0149", src:"机构质控", ss:"SS-01", sev:"一般", type:"机构质控发现 · 原始病历", found:"2026-08-14",
+   desc:"合并用药页 4 处研究者签名缺日期。",
+   capa:"（待受托方提交整改措施）", own:"吴桐", due:"2026-09-04", st:"待整改", sla:null},
+  {id:"QI-2026-0148", src:"申办方稽查", ss:"SS-01", sev:"严重", type:"监查覆盖不足", found:"2026-08-16",
+   desc:"申办方稽查发现：合并用药页 4 处研究者签名缺日期，该问题在此前两次 IMV 的 SDV 中均未被识别 —— SDV 覆盖率 88%，但抽样范围未包含合并用药页。",
+   capa:"修订 SDV 抽样策略，将合并用药与 AE 页列为每次 IMV 的必查范围；对该中心既往全部受试者回溯复核并留痕。",
+   own:"林敏", due:"2026-09-04", st:"CAPA进行中", sla:null},
+  {id:"QI-2026-0131", src:"机构质控", ss:"SS-03", sev:"一般", type:"实验室资质过期", found:"2026-07-28",
    desc:"中心检验科室间质评证书于 2026-07-15 到期，新证书未及时归档至研究者文件夹。",
    capa:"已取得新证书并归档；建立中心资质文件到期日历，提前 60 天提醒。",
    own:"郭晓萱", due:"2026-08-15", st:"已关闭", sla:null}
@@ -713,6 +729,95 @@ const SDV = {
 </script>
 <script>
 "use strict";
+/* ════════════════════════════════════════════════════════════════════
+   立项录入 · 机构端数据
+   补两件此前缺失的事：① 项目和中心是怎么进系统的 ② 医院方的质量责任人
+   ════════════════════════════════════════════════════════════════════ */
+
+/* 机构老师 = 医院药物临床试验机构办公室的项目管理员。
+   注意：他不是 CRO/SMO 的员工，是医院方的守门人与质量责任人。
+   因此这是「外部协作视图」，权限比内部员工更窄，而不是更宽。 */
+PERSONAS.push({k:"inst", n:"张慧敏", title:"机构项目管理员", role:"机构办",
+  scope:"北京协和医院 · 药物临床试验机构办公室", hosp:"北京协和医院"});
+P_OF.inst = PERSONAS.at(-1);
+
+/* 立项毛利率门槛：低于此线必须经营层审批 —— 在立项时就算账，不等做完才知道亏 */
+const GM_GATE = 0.25;
+
+/* ── 待审批立项申请 ──────────────────────────────────────────────── */
+let INTAKE = [
+  {id:"NP-2026-011", drug:"KY-207 片（JAK 抑制剂）", sponsor:"科翼医药", phase:"II期",
+   indication:"中重度特应性皮炎", sites:8, planned:120, contract:760, months:16,
+   cost:604.2, gm:0.205, sub:"2026-08-19", by:"韩雪", st:"待经营层审批",
+   note:"申办方压价两轮，已低于 25% 毛利门槛。若接，需把 CRC 驻场 FTE 从 0.55 压到 0.4。"},
+  {id:"NP-2026-012", drug:"恒安宁注射液", sponsor:"华拓生物", phase:"III期",
+   indication:"急性缺血性脑卒中", sites:16, planned:480, contract:2680, months:24,
+   cost:1849.2, gm:0.310, sub:"2026-08-21", by:"韩雪", st:"待经营层审批",
+   note:"老客户续单，中心多为已合作医院，启动成本可复用。"}
+];
+
+/* ── 机构质控（一级自查 / 二级机构抽查 / 三级申办方稽查） ──────────── */
+const QC_ITEMS = [
+  "知情同意：版本正确、签署早于任何试验相关检查、页码与签名齐全",
+  "入排标准：逐条有源数据支持，PI 签字确认",
+  "原始病历：研究者签名与日期完整，修改留痕（不得涂改）",
+  "试验用药品：接收、储存温控、发放回收、剩余销毁记录闭环",
+  "生物样本：采集、离心、暂存、转运记录与温度链完整",
+  "SAE / 方案偏离：24 小时上报与伦理递交记录齐备",
+  "研究者文件夹 ISF：方案、IB、批件、DOA 授权表为现行版本",
+  "人员资质：GCP 证书、方案培训记录、授权分工表一致"
+];
+let QC = [
+  {id:"QC-2026-014", ss:"SS-01", round:"二级质控（机构抽查）", date:"2026-08-14", by:"张慧敏",
+   scope:"随机抽取 5 例受试者，覆盖知情同意、入排、原始病历、药品与人员资质", st:"待整改",
+   findings:[
+     {item:"知情同意", sev:"严重", desc:"3 例受试者签署 ICF V2.1（现行版本 V3.0，2026-05-30 生效）。",
+      resp:"吴桐", due:"2026-08-28", st:"待整改", iss:"QI-2026-0146"},
+     {item:"人员资质", sev:"严重", desc:"新入组研究护士周琳未提供 GCP 证书，且未列入授权分工表，已参与 3 例受试者访视。",
+      resp:"吴桐", due:"2026-08-26", st:"待整改", iss:"QI-2026-0147"},
+     {item:"原始病历", sev:"一般", desc:"合并用药页 4 处研究者签名缺日期。",
+      resp:"吴桐", due:"2026-09-04", st:"待整改", iss:"QI-2026-0149"}
+   ]},
+  {id:"QC-2026-009", ss:"SS-15", round:"一级质控（研究者自查）", date:"2026-07-22", by:"苏文彦",
+   scope:"全部在组受试者的访视窗口与实验室结果回传", st:"已关闭",
+   findings:[
+     {item:"访视窗口", sev:"一般", desc:"2 例受试者访视处于窗口边界，提醒 CRC 提前 7 天预约。",
+      resp:"廖梦然", due:"2026-08-05", st:"已关闭", iss:null}
+   ]}
+];
+let qcSeq = 15;
+
+/* ── 人员备案与准入：谁能进这家医院开展工作，由机构说了算 ──────────── */
+let REG = [
+  {who:"吴桐",   org:"恒济临床（SMO）", role:"CRC", ss:"SS-01", st:"已准入",
+   gcp:"2027-05-12", train:"2024-11-28", badge:"XH-C-0417", note:"协和肝胆外科驻场"},
+  {who:"林敏",   org:"恒济临床（CRO）", role:"CRA", ss:"SS-01", st:"已准入",
+   gcp:"2027-03-18", train:"2024-11-28", badge:"XH-M-0233", note:"监查权限，非驻场"},
+  {who:"廖梦然", org:"恒济临床（SMO）", role:"CRC", ss:"SS-15", st:"备案中",
+   gcp:"2027-08-21", train:"—", badge:"—", note:"方案培训未完成，暂不可独立开展受试者相关工作"},
+  {who:"徐倩",   org:"恒济临床（CRO）", role:"CRA", ss:"SS-15", st:"已准入",
+   gcp:"2026-09-30", train:"2025-08-20", badge:"XH-M-0281", note:"GCP 证书 39 天后到期，需提前换证"},
+  {who:"周琳",   org:"北京协和医院", role:"研究护士", ss:"SS-01", st:"资质缺失",
+   gcp:"—", train:"—", badge:"XH-N-1102", note:"未提供 GCP 证书、未列入授权分工表，已参与 3 例访视（QC-2026-014 发现）"}
+];
+
+/* ── 机构侧立项受理：CRO 递交 → 机构形式审查 → 伦理 → 合同 ─────────── */
+let ACCEPT = [
+  {id:"AC-2026-038", sid:"HJ-2026-004", hosp:"北京协和医院", drug:"CoroFlex 药物洗脱支架",
+   sponsor:"捷成医疗", sub:"2026-08-18", st:"形式审查中", by:"何雨薇",
+   docs:[["立项申请表",1],["临床试验批件 / 备案号",1],["方案 V2.0 及研究者手册",1],
+         ["组长单位伦理批件",0],["主要研究者简历与 GCP 证书",1],["试验用器械说明与合格证明",1],
+         ["保险单",0],["经费预算明细",1]]},
+  {id:"AC-2026-041", sid:"HJ-2025-003", hosp:"北京协和医院", drug:"HT-118 注射液（PD-1）",
+   sponsor:"安泰医药", sub:"2026-08-21", st:"待受理", by:"林敏",
+   docs:[["立项申请表",1],["临床试验批件 / 备案号",1],["方案 V4.1 及研究者手册",1],
+         ["组长单位伦理批件",1],["主要研究者简历与 GCP 证书",0],["试验用药品检验报告",0],
+         ["保险单",1],["经费预算明细",0]]}
+];
+let acSeq = 42;
+</script>
+<script>
+"use strict";
 /* ════════ 工具 ════════ */
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -896,6 +1001,7 @@ function hbars(box, rows, {max, fmt=n1, unit="", h=22, gap=7}={}){
 
 /* 堆叠条：段间留 2px 表面缝隙 */
 function stacked(box, segs, {h=26, fmt=v=>wan(v)+" 万"}={}){
+  if(!segs.length){ box.innerHTML=`<div class="empty" style="padding:16px">暂无数据</div>`; return; }
   const tot=sum(segs,s=>s.v)||1;
   box.innerHTML=`<div style="display:flex;height:${h}px;gap:2px;border-radius:2px;overflow:hidden">${
     segs.map(s=>`<div class="sg" data-n="${esc(s.n)}" data-v="${fmt(s.v)}" data-p="${pct(s.v/tot)}"
@@ -949,7 +1055,11 @@ const IC = {
   query:'<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 13v.01M12 7a2 2 0 0 1 1.5 3.3c-.6.6-1.5 1-1.5 1.7"/>',
   isf:'<path d="M4 4h6l2 2h8v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 13l2 2 4-4"/>',
   approve:'<path d="M9 11l3 3 7-7"/><path d="M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9"/>',
-  team:'<circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 20a6 6 0 0 1 12 0"/><path d="M15 20a4.5 4.5 0 0 1 7-3.7"/>'
+  team:'<circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 20a6 6 0 0 1 12 0"/><path d="M15 20a4.5 4.5 0 0 1 7-3.7"/>',
+  intake:'<path d="M12 5v10M8 11l4 4 4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>',
+  capa:'<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
+  inst:'<path d="M3 21h18M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/>',
+  reg:'<rect x="3" y="4" width="18" height="16" rx="1"/><circle cx="9" cy="10" r="2.2"/><path d="M5.5 17a3.8 3.8 0 0 1 7 0"/><path d="M15 9h4M15 13h4"/>'
 };
 
 /* ════════ 每个角色只看得到自己该看的 ════════ */
@@ -963,15 +1073,20 @@ const N = {
   crc:{t:"我的一天",ic:IC.me}, cra:{t:"我的一天",ic:IC.me}, pm:{t:"团队工作台",ic:IC.me},
   subj:{t:"受试者访视窗口",ic:IC.subj}, query:{t:"数据质疑",ic:IC.query},
   isf:{t:"中心文件与物资",ic:IC.isf}, approve:{t:"待我审批",ic:IC.approve},
-  team:{t:"我的团队",ic:IC.team}
+  team:{t:"我的团队",ic:IC.team},
+  intake:{t:()=>PERSONA().k==="boss"?"立项审批":"立项与建档", ic:IC.intake},
+  capa:{t:"我的整改",ic:IC.capa},
+  inst:{t:"机构工作台",ic:IC.inst}, instac:{t:"立项受理",ic:IC.intake},
+  instqc:{t:"机构质控",ic:IC.qa}, instreg:{t:"人员备案与准入",ic:IC.reg}
 };
 const openQ  = who=>QUERIES.filter(q=>q.owner===who&&q.st==="待中心回复").length;
 const myQ    = ()=>QUERIES.filter(q=>q.by.startsWith(PERSONA().n)&&q.st==="待中心回复").length;
 const badQA  = ()=>ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般").length;
+const myCapa = ()=>ISSUES.filter(i=>i.own===PERSONA().n&&i.st!=="已关闭").length;
 
 const NAV_BY_ROLE = {
   boss:[
-    {g:"经营", items:["dash","sites","enr"]},
+    {g:"经营", items:["dash",["intake",()=>INTAKE.length],"sites","enr"]},
     {g:"资源", items:["staff","time"]},
     {g:"财务", items:["pnl","bill"]},
     {g:"质量", items:[["qa",badQA],"mon"]},
@@ -979,22 +1094,28 @@ const NAV_BY_ROLE = {
   ],
   pm:[
     {g:"团队", items:["pm","team",["approve",()=>APPROVALS.length]]},
-    {g:"项目", items:["sites","enr","mon"]},
+    {g:"项目", items:["intake","sites","enr","mon"]},
     {g:"质量", items:[["qa",badQA]]},
     {g:"财务", items:["pnl"]}
   ],
   cra:[
     {g:"我的工作", items:["cra","mysites","mon",["query",()=>myQ()]]},
     {g:"记录", items:["time"]},
-    {g:"质量", items:[["qa",badQA]]}
+    {g:"质量", items:[["qa",badQA],["capa",myCapa]]}
   ],
   crc:[
     {g:"我的工作", items:["crc",["subj",()=>SUBJ.filter(s=>s.crc===PERSONA().n&&winState(s).k!=="good").length],
                           ["query",()=>openQ(PERSONA().n)],"isf"]},
+    {g:"质量", items:[["capa",myCapa]]},
     {g:"记录", items:["time"]}
+  ],
+  inst:[
+    {g:"机构办公室", items:["inst",["instac",()=>acOpen().length],
+                            ["instqc",()=>qcFindOpen().length],
+                            ["instreg",()=>regOpen().length]]}
   ]
 };
-const HOME = {boss:"dash", pm:"pm", cra:"cra", crc:"crc"};
+const HOME = {boss:"dash", pm:"pm", cra:"cra", crc:"crc", inst:"inst"};
 
 const TITLES = {
   dash:["经营驾驶舱","一页看清人效、毛利、入组与风险。每个数字后面都对应一个具体的人和一个具体的动作。"],
@@ -1015,7 +1136,15 @@ const TITLES = {
   query:["数据质疑","Query 关闭时长直接反映数据质量与中心战斗力。超过 7 天未回复的，通常已经变成 CRA 的电话催办。"],
   isf:["中心文件与物资","研究者文件夹、人员资质、药品效期与温控。核查现场翻的就是这几摞东西。"],
   approve:["待我审批","审批不是盖章。每条都附带风险提示 —— 批准之前先看它背后是不是一个该解决的管理问题。"],
-  team:["我的团队","组员负载、派驻中心、本周排班与调配。看到超载与闲置同时存在，就该动手调人。"]
+  team:["我的团队","组员负载、派驻中心、本周排班与调配。看到超载与闲置同时存在，就该动手调人。"],
+  intake:()=>PERSONA().k==="boss"
+    ? ["立项审批","毛利率低于门槛的项目必须过这一关。在立项时就算账，而不是做完半年后财务才告诉你亏了。"]
+    : ["立项与建档","系统的入口：项目怎么进来、中心怎么建档。测算口径与报价模型完全一致，不做两套账。"],
+  capa:["我的整改","机构质控、内部监查、稽查发现最终都落到具体的人。整改回复要写清措施与证据，机构复核通过才算关闭。"],
+  inst:["机构工作台","医院药物临床试验机构办公室视角。机构对本院承接的每一个项目负质量与合规的最终责任。"],
+  instac:["立项受理","受托方递交 → 机构形式审查 → 受理并转伦理。材料不齐就受理，后面每个环节都带着这个缺口往下走。"],
+  instqc:["机构质控","医院方对项目的质量反馈闭环：质控发现 → 出具意见 → 派发整改 → 受托方回复 → 机构复核关闭。"],
+  instreg:["人员备案与准入","谁能进这家医院接触受试者源数据，是医院的责任，不是受托方能自行决定的事。"]
 };
 
 const state = {view:"dash", persona:"boss", study:"all", enrStudy:"HJ-2024-017", dashRange:"12m",
@@ -1029,6 +1158,7 @@ function myScope(){
   const p = PERSONA();
   if(p.k==="boss") return SITES;
   if(p.k==="pm")   return SITES.filter(s=>TEAM.studies.includes(s.sid));
+  if(p.k==="inst") return SITES.filter(s=>s.hosp===p.hosp);   // 机构只看本院
   const me = staff(p.n);
   return SITES.filter(s=>me.sites.includes(s.id));
 }
@@ -1046,7 +1176,7 @@ function renderNav(){
       const [k,badge] = Array.isArray(it)? it : [it,null];
       const b = badge? badge():0, d = N[k];
       return `<button class="nav-item" data-nav="${k}" aria-current="${state.view===k}">
-        <svg class="nav-ic" viewBox="0 0 24 24">${d.ic}</svg><span>${esc(d.t)}</span>
+        <svg class="nav-ic" viewBox="0 0 24 24">${d.ic}</svg><span>${esc(typeof d.t==="function"?d.t():d.t)}</span>
         ${b?`<span class="nav-badge">${b}</span>`:""}</button>`;
     }).join("")).join("");
   const per = $("#persona");
@@ -1054,8 +1184,9 @@ function renderNav(){
     `<div class="avatar">${esc(p.n.slice(0,1))}</div>
      <div><div class="n">${esc(p.n)}</div><div class="d">${esc(p.title)}</div></div>`;
 }
+const titleOf = v=>{ const t=TITLES[v]; return typeof t==="function"? t() : t; };
 function renderTop(){
-  const p = PERSONA(), [t] = TITLES[state.view];
+  const p = PERSONA(), [t] = titleOf(state.view);
   const studies = [...new Set(myScope().map(s=>s.sid))];
   $("#crumb").innerHTML = `恒济临床研究 / <b>${esc(t)}</b>`;
   $("#who").innerHTML =
@@ -1078,7 +1209,7 @@ function render(){
   if(!NAV_BY_ROLE[state.persona].some(g=>g.items.some(it=>(Array.isArray(it)?it[0]:it)===state.view)))
     state.view = HOME[state.persona];
   renderNav(); renderTop(); clearTimers();
-  const [t,sub] = TITLES[state.view];
+  const [t,sub] = titleOf(state.view);
   $("#content").innerHTML = `<div class="view-head"><h1>${esc(t)}</h1><p>${esc(sub)}</p></div><div id="vbody"></div>`;
   VIEWS[state.view]($("#vbody"));
   $("#content").scrollIntoView({block:"start"});
@@ -1996,6 +2127,16 @@ VIEWS.qa = box=>{
       <div class="note" style="margin-top:6px">绿色 = 窗口内，红色 = 超窗部分。SAE 24 小时上报及时率必须 100% —— 这是红线，不是 KPI。</div>
     </div></div>`:""}
 
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>问题发现来源</h3><span class="sp"></span>
+      <span class="sub">分布本身就是质量指标</span></div>
+    <div class="card-b">
+      <div id="c-src2"></div>
+      <div class="note" style="margin-top:11px;border-top:1px solid var(--line);padding-top:9px">
+        前置发现（中心自查、机构质控、内部监查）占比越高，说明防线在起作用。
+        如果问题主要由<b>申办方稽查或药监核查</b>发现，代价就不再是整改，而是数据被剔除、项目延期、供应商名录降级。</div>
+    </div>
+  </div>
   <div class="card">
     <div class="card-h" style="flex-wrap:wrap"><h3>事件台账</h3>
       <div class="row" style="gap:5px">${["重大","严重","一般"].map(s=>
@@ -2011,6 +2152,7 @@ VIEWS.qa = box=>{
               <span class="pill p-${i.st==="已关闭"?"neut":sv.k}">${esc(i.sev)}</span>
               <b style="font-size:13px;font-weight:600">${esc(i.type)}</b>
               <span class="t-sub">${esc(i.id)}</span>
+              <span class="pill p-neut">来源 ${esc(i.src||"—")}</span>
               <span class="sp"></span>
               <span class="pill ${i.st==="已关闭"?"p-good":od?"p-crit":"p-neut"}">${esc(i.st)}${od?" · 已逾期":""}</span>
             </div>
@@ -2028,6 +2170,12 @@ VIEWS.qa = box=>{
         </div>`;}).join("") : `<div class="empty">当前筛选下无事件</div>`}
     </div>
   </div>`;
+
+  const bySrc={}; ISSUES.filter(i=>ids.has(i.ss)).forEach(i=>bySrc[i.src]=(bySrc[i.src]||0)+1);
+  const ORD=["中心自查","机构质控","内部监查","申办方稽查","药监核查"];
+  const COL={"机构质控":"var(--s1)","中心自查":"var(--s3)","内部监查":"var(--s2)",
+             "申办方稽查":"var(--s4)","药监核查":"var(--s5)"};
+  stacked($("#c-src2"), ORD.filter(k=>bySrc[k]).map(k=>({n:k,v:bySrc[k],c:COL[k]})),{h:28,fmt:v=>v+" 项"});
 
   if(sae){ const tick=()=>{ const el=$("#cd"); if(!el) return;
       const ms=new Date(sae.due+"T18:00:00")-new Date(TODAY+"T"+new Date().toTimeString().slice(0,8));
@@ -3021,6 +3169,695 @@ VIEWS.approve = box=>{
     toast(ap?`已通过：${a.who} 的${a.kind}申请${a.amt?`（${n1(a.amt)} 万）`:""}`
             :`已驳回：${a.who} 的${a.kind}申请，已通知本人补充说明`, ap?"":"warn");
     render();
+  });
+};
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   立项与建档 —— 系统的入口。此前所有数据都是凭空存在的，这里补上。
+   关键判断：立项时就算毛利率，而不是做完半年后财务才告诉你亏了。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* 用与报价模型完全相同的口径反算成本，保证「立项测算」与「报价」不会两套账 */
+function intakeCalc({sites, pts, months, contract, cx=1.2, visits=11, fte=0.55, imv=1.5}){
+  const r = calcPrice({sites, pts, months, cx, visits, fte, imv, target:0});
+  const total = sites*pts;
+  return {total, cost:r.cost, gm: contract>0 ? (contract-r.cost)/contract : 0,
+          unit: total? contract/total : 0, crcMd:r.crcMd, craMd:r.craMd,
+          minContract: r.cost/(1-GM_GATE)};
+}
+
+VIEWS.intake = box=>{
+  const p = PERSONA(), isPM = p.k==="pm", isBoss = p.k==="boss";
+  const mine = isBoss ? INTAKE : INTAKE.filter(x=>x.by===p.n);
+  const below = INTAKE.filter(x=>x.gm < GM_GATE);
+
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["待审批立项",INTAKE.length,"个",INTAKE.length?"var(--warn)":"var(--good)"],
+       ["低于毛利门槛",below.length,"个",below.length?"var(--crit)":"var(--good)"],
+       ["合计合同额",n1(sum(INTAKE,x=>x.contract)),"万","var(--ink)"],
+       ["毛利门槛",pct(GM_GATE),"","var(--ink-3)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>${isBoss?"立项审批":"我提交的立项申请"}</h3><span class="sp"></span>
+      ${isPM?`<button class="btn btn-p" id="np">+ 新建项目立项</button>
+              <button class="btn" id="ns">+ 新增中心建档</button>`:""}
+      ${isBoss?`<span class="sub">毛利率低于 ${pct(GM_GATE)} 的必须过你这一关</span>`:""}</div>
+    <div class="card-b" style="padding:0">
+      ${mine.length? mine.map(x=>{const low=x.gm<GM_GATE;
+        return `<div style="padding:13px 16px 13px 18px;border-bottom:1px solid var(--line);position:relative">
+          ${low?`<span class="stripe" style="background:var(--crit)"></span>`:""}
+          <div class="row" style="gap:7px">
+            <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(x.id)}</span>
+            <b style="font-size:13.5px">${esc(x.drug)}</b>
+            <span class="pill p-neut">${esc(x.phase)}</span>
+            <span class="sp"></span>
+            <span class="pill ${low?"p-crit":"p-good"}">测算毛利率 ${pct(x.gm)}${low?" · 低于门槛":""}</span>
+          </div>
+          <div class="note" style="margin-top:4px">${esc(x.sponsor)} · ${esc(x.indication)}｜${x.sites} 中心 × ${Math.round(x.planned/x.sites)} 例 = ${x.planned} 例｜周期 ${x.months} 个月｜提交人 ${esc(x.by)} · ${esc(x.sub)}</div>
+          <div class="mini" style="margin-top:9px;grid-template-columns:repeat(auto-fit,minmax(96px,1fr))">
+            <div><div class="kpi-l">合同总额</div><div class="v">${n1(x.contract)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
+            <div><div class="kpi-l">预估成本</div><div class="v">${n1(x.cost)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
+            <div><div class="kpi-l">预估毛利</div><div class="v" style="color:${low?"var(--crit)":"var(--good)"}">${n1(x.contract-x.cost)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
+            <div><div class="kpi-l">单例单价</div><div class="v">${n1(x.contract/x.planned)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
+            <div><div class="kpi-l">保本合同额</div><div class="v">${n1(x.cost/(1-GM_GATE))}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
+          </div>
+          ${x.note?`<div style="margin-top:9px;border-left:2px solid var(--${low?"crit":"accent"});background:var(--${low?"crit":"accent"}-soft);padding:7px 10px;font-size:12px;color:var(--ink-2);line-height:1.6">
+            <b>提交说明</b>：${esc(x.note)}</div>`:""}
+          ${isBoss?`<div class="row" style="margin-top:10px">
+            <button class="btn btn-p" data-ok="${x.id}">批准立项</button>
+            <button class="btn" data-no="${x.id}">退回重谈</button>
+            <span class="note">批准后自动建项目档案，可开始逐中心建档</span></div>`
+          :`<div class="row" style="margin-top:10px"><span class="pill p-warn">${esc(x.st)}</span></div>`}
+        </div>`;}).join("") : `<div class="empty">${isPM?"还没有提交中的立项申请，点右上角新建":"当前没有待审批的立项"}</div>`}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h3>已立项项目</h3><span class="sp"></span><span class="sub">共 ${STUDIES.length} 个</span></div>
+    <div class="tw"><table style="min-width:820px">
+      <thead><tr><th>方案编号</th><th>药物 / 器械</th><th>申办方</th><th>期别</th><th>适应症</th>
+        <th class="ta-r">计划例数</th><th class="ta-r">中心数</th><th class="ta-r">已建档</th><th class="ta-r">合同额</th></tr></thead>
+      <tbody>${STUDIES.map(st=>{const built=SITES.filter(s=>s.sid===st.id).length;
+        return `<tr><td class="mono" style="font-size:11.5px">${esc(st.id)}</td>
+          <td class="t-main">${esc(st.drug)}</td><td>${esc(st.sponsor)}</td>
+          <td><span class="pill p-neut">${esc(st.phase)}</span></td>
+          <td class="t-sub">${esc(st.indication)}</td>
+          <td class="tnum">${st.planned}</td><td class="tnum">${st.sites}</td>
+          <td class="tnum" style="color:${built<st.sites?"var(--warn)":"var(--good)"}">${built}<span class="t-mut"> / ${st.sites}</span></td>
+          <td class="tnum">${n1(st.contract)} 万</td></tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:10px">「已建档」小于「中心数」= 合同里写了但还没进系统的中心。这些中心的成本已经在发生（伦理递交、合同谈判），
+    收入却还挂不上号 —— 建档滞后是早期成本失控最常见的一种。</p>`;
+
+  $("#np")?.addEventListener("click", newStudyModal);
+  $("#ns")?.addEventListener("click", newSiteModal);
+  box.addEventListener("click",e=>{
+    const ok=e.target.closest("[data-ok]"), no=e.target.closest("[data-no]");
+    if(!ok&&!no) return;
+    const id=(ok||no).dataset.ok||(ok||no).dataset.no;
+    const i=INTAKE.findIndex(x=>x.id===id), x=INTAKE[i];
+    if(ok){
+      const sid=`HJ-2026-0${String(STUDIES.length+10).slice(-2)}`;
+      STUDIES.push({id:sid, short:x.drug.slice(0,6), drug:x.drug, sponsor:x.sponsor, phase:x.phase,
+        indication:x.indication, planned:x.planned, sites:x.sites, contract:x.contract,
+        start:TODAY.slice(0,7), end:"—", cx:1.2});
+      S[sid]=STUDIES.at(-1);
+      ENROLL[sid]={x:[TODAY.slice(2,7)], plan:[0], act:[0]};
+      toast(`${x.drug} 已批准立项，方案编号 ${sid}，可开始逐中心建档`);
+    } else toast(`${x.drug} 已退回：毛利率 ${pct(x.gm)} 低于门槛，需重谈价格或压缩投入`,"warn");
+    INTAKE.splice(i,1); render();
+  });
+};
+
+/* ── 新建项目立项 ── */
+function newStudyModal(){
+  openLayer($("#modal"),`
+    <div class="drawer-h"><h3 style="flex:1;font-size:15px">新建项目立项</h3><button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px;max-height:76vh;overflow-y:auto">
+      <div class="field"><div class="slider-h"><label for="i-drug">药物 / 器械名称</label></div>
+        <input class="inp" id="i-drug" style="width:100%" placeholder="例：KY-207 片（JAK 抑制剂）"></div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="i-sp">申办方</label></div>
+          <input class="inp" id="i-sp" style="width:100%" placeholder="例：科翼医药"></div>
+        <div class="field"><div class="slider-h"><label for="i-ph">期别</label></div>
+          <select class="sel" id="i-ph" style="width:100%">${["I期","II期","III期","IV期","确证性","BE"].map(x=>`<option>${x}</option>`).join("")}</select></div>
+      </div>
+      <div class="field"><div class="slider-h"><label for="i-ind">适应症</label></div>
+        <input class="inp" id="i-ind" style="width:100%" placeholder="例：中重度特应性皮炎"></div>
+      <div class="field"><div class="slider-h"><label for="i-sites">参研中心数</label><b id="v-sites">8 个</b></div>
+        <input type="range" id="i-sites" min="2" max="30" step="1" value="8"></div>
+      <div class="field"><div class="slider-h"><label for="i-pts">每中心例数</label><b id="v-pts">15 例</b></div>
+        <input type="range" id="i-pts" min="5" max="50" step="1" value="15"></div>
+      <div class="field"><div class="slider-h"><label for="i-mon">入组期（月）</label><b id="v-mon">16 个月</b></div>
+        <input type="range" id="i-mon" min="6" max="36" step="1" value="16"></div>
+      <div class="field"><div class="slider-h"><label for="i-amt">合同总额（万元）</label></div>
+        <input class="inp" id="i-amt" type="number" step="10" value="760" style="width:100%"></div>
+      <div class="field"><div class="slider-h"><label for="i-note">提交说明</label></div>
+        <textarea class="qbox" id="i-note" placeholder="例：申办方压价两轮；若接需把 CRC 驻场 FTE 压到 0.4。"></textarea></div>
+      <div id="i-calc" style="margin-bottom:12px"></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="i-go">提交立项申请</button></div>
+    </div>`);
+  const read=()=>({sites:+$("#i-sites").value, pts:+$("#i-pts").value,
+                   months:+$("#i-mon").value, contract:+$("#i-amt").value||0});
+  const upd=()=>{
+    const v=read(), r=intakeCalc(v), low=r.gm<GM_GATE;
+    $("#v-sites").textContent=v.sites+" 个"; $("#v-pts").textContent=v.pts+" 例";
+    $("#v-mon").textContent=v.months+" 个月";
+    $("#i-calc").innerHTML=`
+      <div style="border:1px solid var(--line);border-left:2px solid var(--${low?"crit":"good"});background:var(--${low?"crit":"good"}-soft);padding:10px 12px;border-radius:0 3px 3px 0">
+        <div class="row" style="justify-content:space-between;margin-bottom:6px">
+          <b style="font-size:12.5px">立项测算</b>
+          <span class="pill ${low?"p-crit":"p-good"}">毛利率 ${pct(r.gm)}${low?` · 低于门槛 ${pct(GM_GATE)}`:""}</span></div>
+        <div class="mini" style="grid-template-columns:repeat(auto-fit,minmax(84px,1fr))">
+          <div><div class="kpi-l">总例数</div><div class="v">${r.total}</div></div>
+          <div><div class="kpi-l">预估成本</div><div class="v">${n1(r.cost)}<small style="font-size:10px"> 万</small></div></div>
+          <div><div class="kpi-l">单例单价</div><div class="v">${n1(r.unit)}<small style="font-size:10px"> 万</small></div></div>
+          <div><div class="kpi-l">保本合同额</div><div class="v">${n1(r.minContract)}<small style="font-size:10px"> 万</small></div></div>
+        </div>
+        <div class="note" style="margin-top:7px;color:var(--ink-2)">
+          ${low?`按当前参数，合同额需 ≥ <b>${n1(r.minContract)} 万</b> 才能达到 ${pct(GM_GATE)} 门槛，缺口 ${n1(r.minContract-v.contract)} 万。提交后需经营层审批。`
+               :`达到毛利门槛，提交后走常规审批。`}
+          人天口径与报价模型一致：CRC ${n0(r.crcMd)} + CRA ${n0(r.craMd)} 人天。</div>
+      </div>`;
+  };
+  ["#i-sites","#i-pts","#i-mon","#i-amt"].forEach(s=>$(s).addEventListener("input",upd));
+  upd();
+  $("#i-go").addEventListener("click",()=>{
+    const drug=$("#i-drug").value.trim()||"未命名项目", sp=$("#i-sp").value.trim()||"未填写";
+    const ind=$("#i-ind").value.trim()||"未填写", v=read(), r=intakeCalc(v);
+    if(!v.contract){ toast("请填写合同总额","crit"); return; }
+    INTAKE.unshift({id:`NP-2026-0${acSeq++}`, drug, sponsor:sp, phase:$("#i-ph").value,
+      indication:ind, sites:v.sites, planned:r.total, contract:v.contract, months:v.months,
+      cost:r.cost, gm:r.gm, sub:TODAY, by:PERSONA().n,
+      st: r.gm<GM_GATE ? "待经营层审批" : "待常规审批", note:$("#i-note").value.trim()});
+    closeLayer();
+    toast(`${drug} 立项申请已提交${r.gm<GM_GATE?"，毛利率低于门槛，需经营层审批":""}`, r.gm<GM_GATE?"warn":"");
+    setTimeout(render,220);
+  });
+}
+
+/* ── 新增中心建档 ── */
+function newSiteModal(){
+  const ids = STUDIES.map(s=>s.id);
+  openLayer($("#modal"),`
+    <div class="drawer-h"><h3 style="flex:1;font-size:15px">新增中心建档</h3><button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px;max-height:76vh;overflow-y:auto">
+      <div class="field"><div class="slider-h"><label for="s-sid">所属项目</label></div>
+        <select class="sel" id="s-sid" style="width:100%">${ids.map(id=>
+          `<option value="${id}">${esc(id)} · ${esc(S[id].short)}</option>`).join("")}</select></div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="s-h">医院</label></div>
+          <input class="inp" id="s-h" style="width:100%" placeholder="例：浙江大学医学院附属第一医院"></div>
+        <div class="field"><div class="slider-h"><label for="s-c">城市</label></div>
+          <input class="inp" id="s-c" style="width:100%" placeholder="例：杭州"></div>
+      </div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="s-d">科室</label></div>
+          <input class="inp" id="s-d" style="width:100%" placeholder="例：皮肤科"></div>
+        <div class="field"><div class="slider-h"><label for="s-pi">主要研究者 PI</label></div>
+          <input class="inp" id="s-pi" style="width:100%" placeholder="例：吕文轩"></div>
+      </div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="s-n">合同例数</label><b id="v-sn">15 例</b></div>
+          <input type="range" id="s-n" min="3" max="50" step="1" value="15"></div>
+        <div class="field"><div class="slider-h"><label for="s-u">单例单价（万）</label></div>
+          <input class="inp" id="s-u" type="number" step="0.1" value="4.5" style="width:100%"></div>
+      </div>
+      <div class="field"><div class="slider-h"><label for="s-e">伦理路径</label></div>
+        <select class="sel" id="s-e" style="width:100%">
+          <option>组长单位伦理批件 + 本院备案</option>
+          <option>本院伦理独立审查</option>
+          <option>区域伦理委员会审查</option></select></div>
+      <div class="field"><div class="slider-h"><label for="s-ac">机构受理号</label></div>
+        <input class="inp" id="s-ac" style="width:100%" placeholder="由医院机构办受理后回填，可留空"></div>
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="s-cra">派驻 CRA</label></div>
+          <select class="sel" id="s-cra" style="width:100%">${STAFF.filter(x=>x.role==="CRA")
+            .map(x=>`<option>${esc(x.n)}</option>`).join("")}</select></div>
+        <div class="field"><div class="slider-h"><label for="s-crc">派驻 CRC</label></div>
+          <select class="sel" id="s-crc" style="width:100%">${STAFF.filter(x=>x.role==="CRC")
+            .map(x=>`<option>${esc(x.n)}</option>`).join("")}</select></div>
+      </div>
+      <div id="s-warn" style="margin-bottom:12px"></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="s-go">建档并进入立项状态</button></div>
+    </div>`);
+  const chk=()=>{
+    $("#v-sn").textContent=$("#s-n").value+" 例";
+    const cra=staff($("#s-cra").value), crc=staff($("#s-crc").value), city=$("#s-c").value.trim();
+    const m=[];
+    if(crc && city && crc.city!==city) m.push(["warn",`${crc.n} 常驻 ${crc.city}，与该中心所在地 ${city} 不一致 —— CRC 是驻场角色，跨城会产生大量不可计费通勤工时`]);
+    if(cra && cra.util>88) m.push(["crit",`${cra.n} 当前利用率 ${cra.util}%，已超载，再加中心会拉低监查质量`]);
+    if(crc && crc.util>88) m.push(["crit",`${crc.n} 当前利用率 ${crc.util}%，已超载`]);
+    [cra,crc].forEach(x=>{ if(x&&days(TODAY,x.gcp)<70) m.push(["crit",`${x.n} 的 GCP 证书 ${days(TODAY,x.gcp)} 天后到期，医院机构办可能拒绝备案`]); });
+    $("#s-warn").innerHTML = m.length? m.map(([k,t])=>
+      `<div style="border-left:2px solid var(--${k});background:var(--${k}-soft);padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--ink-2)">${esc(t)}</div>`).join("")
+      : `<div style="border-left:2px solid var(--good);background:var(--good-soft);padding:7px 10px;font-size:12px;color:var(--ink-2)">派驻无冲突。建档后中心进入「立项」节点，可在台账中逐步推进状态机。</div>`;
+  };
+  ["#s-n","#s-c","#s-cra","#s-crc"].forEach(s=>$(s).addEventListener("input",chk));
+  chk();
+  $("#s-go").addEventListener("click",()=>{
+    const hosp=$("#s-h").value.trim();
+    if(!hosp){ toast("请填写医院名称","crit"); return; }
+    const sid=$("#s-sid").value, id="SS-"+String(SITES.length+1).padStart(2,"0");
+    const cra=$("#s-cra").value, crc=$("#s-crc").value;
+    SITES.push({id, sid, hosp, dept:$("#s-d").value.trim()||"—", pi:$("#s-pi").value.trim()||"—",
+      city:$("#s-c").value.trim()||"—", st:"立项", contracted:+$("#s-n").value, enrolled:0,
+      planToDate:0, unit:+$("#s-u").value||0, revenue:0, cost:0, md:0,
+      cra, crc:[crc], ethics:"—", siv:"—", fpi:"—", risk:1});
+    staff(cra).sites.push(id); staff(crc).sites.push(id);
+    REG.push({who:crc, org:"恒济临床（SMO）", role:"CRC", ss:id, st:"备案中",
+      gcp:staff(crc).gcp, train:"—", badge:"—", note:"新建档中心，待医院机构办备案准入"});
+    closeLayer();
+    toast(`${hosp} 已建档（${id}），状态：立项｜已同步生成机构备案申请`);
+    setTimeout(render,220);
+  });
+}
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   机构端 —— 医院药物临床试验机构办公室的「机构老师」。
+   他不是 CRO/SMO 的员工，是医院方的守门人与质量责任人：
+   立项受理 · 机构质控 · 人员备案准入 · 文件归档。
+
+   权限边界比内部员工更窄，不是更宽：
+   只看本院、只看质量与合规，看不到任何成本、毛利、人天与利用率。
+   ════════════════════════════════════════════════════════════════════ */
+
+const instSites = ()=>SITES.filter(s=>s.hosp===PERSONA().hosp);
+const instIds   = ()=>new Set(instSites().map(s=>s.id));
+const qcOpen    = ()=>QC.filter(q=>instIds().has(q.ss)&&q.st!=="已关闭");
+const qcFindOpen= ()=>qcOpen().flatMap(q=>q.findings.filter(f=>f.st!=="已关闭"));
+const acOpen    = ()=>ACCEPT.filter(a=>a.hosp===PERSONA().hosp&&a.st!=="已受理");
+const regOpen   = ()=>REG.filter(r=>instIds().has(r.ss)&&r.st!=="已准入");
+
+const NOTICE = `<div style="border:1px dashed var(--line-2);background:var(--surface-2);padding:9px 12px;border-radius:3px;font-size:11.5px;color:var(--ink-3);line-height:1.6">
+  <b style="color:var(--ink-2)">机构端可见范围</b>：仅本机构承接的项目与中心，内容限于质量、合规、人员资质与文件。
+  受托方（CRO/SMO）的成本、毛利、人天与人员利用率<b>不对机构开放</b> —— 那是受托方的商业信息，
+  与机构履行监管职责无关。同样，机构的内部质控底稿也不向受托方开放全文，只发送质控意见与整改要求。</div>`;
+
+/* ── 机构工作台 ── */
+VIEWS.inst = box=>{
+  const ss=instSites(), fo=qcFindOpen(), ac=acOpen(), rg=regOpen();
+  const iss=ISSUES.filter(i=>instIds().has(i.ss)&&i.st!=="已关闭");
+  const bySrc={};
+  ISSUES.filter(i=>instIds().has(i.ss)).forEach(i=>bySrc[i.src]=(bySrc[i.src]||0)+1);
+  const overdue=fo.filter(f=>days(TODAY,f.due)<0);
+
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:12px">
+    ${[["本院在研项目",new Set(ss.map(s=>s.sid)).size,"个","var(--ink)"],
+       ["待受理立项",ac.length,"项",ac.length?"var(--warn)":"var(--good)"],
+       ["质控待整改",fo.length,"项",overdue.length?"var(--crit)":fo.length?"var(--warn)":"var(--good)"],
+       ["人员资质异常",rg.length,"人",rg.length?"var(--crit)":"var(--good)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>本院在研中心</h3><span class="sub">仅显示质量与进度，不含受托方财务信息</span></div>
+      <div class="tw"><table style="min-width:640px">
+        <thead><tr><th>项目 / 科室</th><th>PI</th><th>状态</th><th class="ta-r">已入组</th>
+          <th class="ta-r">未关闭事件</th><th>最近机构质控</th></tr></thead>
+        <tbody>${ss.map(s=>{const q=QC.filter(x=>x.ss===s.id).sort((a,b)=>b.date.localeCompare(a.date))[0];
+          const n=ISSUES.filter(i=>i.ss===s.id&&i.st!=="已关闭").length;
+          return `<tr><td><div class="t-main">${esc(S[s.sid].short)}</div>
+              <div class="t-sub">${esc(s.dept)} · ${esc(S[s.sid].phase)} · ${esc(s.sid)}</div></td>
+            <td>${esc(s.pi)}</td>
+            <td><span class="pill ${s.st==="入组中"?"p-acc":"p-neut"}">${esc(s.st)}</span></td>
+            <td class="tnum">${s.enrolled}<span class="t-mut"> / ${s.contracted}</span></td>
+            <td class="ta-r">${n?`<span class="pill p-crit">${n}</span>`:`<span class="pill p-good">0</span>`}</td>
+            <td class="t-sub">${q?`${esc(q.date)}<div class="t-sub">${esc(q.round)} · ${esc(q.st)}</div>`
+              :`<span class="t-mut">未开展</span>`}</td></tr>`;}).join("")}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>问题发现来源</h3><span class="sub">分布本身就是质量指标</span></div>
+      <div class="card-b">
+        <div id="c-src"></div>
+        <div class="note" style="margin-top:11px;border-top:1px solid var(--line);padding-top:9px">
+          机构质控与中心自查发现得越多，说明前置防线在起作用；如果问题主要由<b>申办方稽查或药监核查</b>发现，
+          说明一级、二级质控形同虚设 —— 那时代价已经不是整改，而是数据被剔除。</div>
+      </div>
+    </div>
+  </div>
+  <div class="grid g2" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>待办：整改跟踪</h3><span class="sp"></span>
+        <button class="btn" data-nav="instqc">机构质控 →</button></div>
+      <div class="card-b" style="padding:0">
+        ${fo.length? fo.map(f=>{const od=days(TODAY,f.due)<0;
+          return `<div style="padding:10px 14px 10px 16px;border-bottom:1px solid var(--line);position:relative">
+            <span class="stripe" style="background:var(--${od?"crit":SEV[f.sev].k})"></span>
+            <div class="row" style="gap:6px"><span class="pill p-${SEV[f.sev].k}">${esc(f.sev)}</span>
+              <b style="font-size:12.5px;font-weight:500">${esc(f.item)}</b>
+              ${od?`<span class="pill p-crit">整改逾期 ${Math.abs(days(TODAY,f.due))} 天</span>`:""}</div>
+            <div class="note" style="margin-top:3px;color:var(--ink-2)">${esc(f.desc)}</div>
+            <div class="note" style="margin-top:2px">责任人 ${esc(f.resp)}｜整改期限 ${esc(f.due)}｜${esc(f.st)}</div>
+          </div>`;}).join("") : `<div class="empty">无待整改项</div>`}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>待办：受理与备案</h3><span class="sp"></span>
+        <button class="btn" data-nav="instac">立项受理 →</button>
+        <button class="btn" data-nav="instreg">人员备案 →</button></div>
+      <div class="card-b" style="padding:0">
+        ${ac.map(a=>`<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+          <div class="row" style="gap:6px"><span class="pill p-warn">${esc(a.st)}</span>
+            <b style="font-size:12.5px;font-weight:500">${esc(a.drug)}</b></div>
+          <div class="note" style="margin-top:3px">${esc(a.sponsor)}｜递交 ${esc(a.sub)} · ${esc(a.by)}｜
+            材料 ${a.docs.filter(d=>d[1]).length}/${a.docs.length} 齐备</div></div>`).join("")}
+        ${rg.map(r=>`<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+          <div class="row" style="gap:6px"><span class="pill ${r.st==="资质缺失"?"p-crit":"p-warn"}">${esc(r.st)}</span>
+            <b style="font-size:12.5px;font-weight:500">${esc(r.who)}</b>
+            <span class="t-sub">${esc(r.role)} · ${esc(r.org)}</span></div>
+          <div class="note" style="margin-top:3px">${esc(r.note)}</div></div>`).join("")}
+        ${!ac.length&&!rg.length?`<div class="empty">无待办</div>`:""}
+      </div>
+    </div>
+  </div>
+  ${NOTICE}`;
+
+  const order=["机构质控","中心自查","内部监查","申办方稽查","药监核查"];
+  const cols={"机构质控":"var(--s1)","中心自查":"var(--s3)","内部监查":"var(--s2)",
+              "申办方稽查":"var(--s4)","药监核查":"var(--s5)"};
+  stacked($("#c-src"), order.filter(k=>bySrc[k]).map(k=>({n:k,v:bySrc[k],c:cols[k]})),
+    {h:28, fmt:v=>v+" 项"});
+};
+
+/* ── 立项受理：医院侧的形式审查 ── */
+VIEWS.instac = box=>{
+  const list=ACCEPT.filter(a=>a.hosp===PERSONA().hosp);
+  box.innerHTML=`
+  <div class="stack" style="gap:12px">
+    ${list.length? list.map(a=>{const ok=a.docs.filter(d=>d[1]).length, miss=a.docs.filter(d=>!d[1]);
+      return `<div class="card">
+        <div class="card-h"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(a.id)}</span>
+          <h3>${esc(a.drug)}</h3>
+          <span class="sub">${esc(a.sponsor)} · ${esc(S[a.sid]?S[a.sid].phase:"—")}</span>
+          <span class="sp"></span>
+          <span class="pill ${a.st==="已受理"?"p-good":miss.length?"p-warn":"p-acc"}">${esc(a.st)}</span></div>
+        <div class="card-b">
+          <div class="row" style="justify-content:space-between;margin-bottom:10px">
+            <span class="note">递交方 ${esc(a.by)}（受托方）｜递交日期 ${esc(a.sub)}</span>
+            <span class="note">材料齐备 ${ok} / ${a.docs.length}</span></div>
+          <div class="bartrack" style="height:5px;margin-bottom:12px">
+            <div class="barfill" style="width:${ok/a.docs.length*100}%;background:${miss.length?"var(--warn)":"var(--good)"};height:100%"></div></div>
+          <div class="section-t">立项材料形式审查</div>
+          <div class="grid g2" style="gap:0 16px">
+            ${a.docs.map((d,k)=>`<label class="cbx ${d[1]?"done":""}" style="border-bottom:1px solid var(--line)">
+              <input type="checkbox" data-doc="${esc(a.id)}:${k}" ${d[1]?"checked":""}><span>${esc(d[0])}</span></label>`).join("")}
+          </div>
+          ${a.st!=="已受理"?`<div class="row" style="margin-top:12px">
+            <button class="btn btn-p" data-acok="${esc(a.id)}" ${miss.length?"disabled":""}>予以受理</button>
+            <button class="btn" data-acno="${esc(a.id)}">补正通知</button>
+            <span class="note">${miss.length?`尚缺 ${miss.length} 项材料，不予受理：${esc(miss.map(d=>d[0]).join("、"))}`
+              :"材料齐备，可出具受理通知并转伦理审查"}</span></div>`
+          :`<div class="row" style="margin-top:12px"><span class="pill p-good">已受理，受理号 ${esc(a.id)}｜已转伦理委员会</span></div>`}
+        </div>
+      </div>`;}).join("") : `<div class="card"><div class="empty">当前无递交待受理的项目</div></div>`}
+  </div>
+  <p class="note" style="margin-top:12px">形式审查只看材料是否齐备与合规，不评价科学性 —— 科学性由伦理委员会与专业组判断。
+    受理是医院承接项目的第一道闸门：材料不齐就受理，后面所有环节都会带着这个缺口往下走。</p>
+  ${NOTICE}`;
+  box.addEventListener("change",e=>{
+    const c=e.target.closest("[data-doc]"); if(!c) return;
+    const [id,k]=c.dataset.doc.split(":"); const a=ACCEPT.find(x=>x.id===id);
+    a.docs[+k][1]=c.checked?1:0; render();
+  });
+  box.addEventListener("click",e=>{
+    const ok=e.target.closest("[data-acok]"), no=e.target.closest("[data-acno]");
+    if(ok){ const a=ACCEPT.find(x=>x.id===ok.dataset.acok); a.st="已受理";
+      toast(`${a.drug} 已受理（${a.id}），已出具受理通知并转伦理审查`); render(); return; }
+    if(no){ const a=ACCEPT.find(x=>x.id===no.dataset.acno);
+      const miss=a.docs.filter(d=>!d[1]).map(d=>d[0]);
+      a.st="待补正";
+      toast(`已向 ${a.by} 发出补正通知：${miss.join("、")||"无缺项"}`,"warn"); render(); }
+  });
+};
+
+/* ── 机构质控：医院方对项目的质量反馈闭环 ── */
+VIEWS.instqc = box=>{
+  const list=QC.filter(q=>instIds().has(q.ss)).sort((a,b)=>b.date.localeCompare(a.date));
+  const fo=qcFindOpen();
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:12px">
+    ${[["累计质控",list.length,"轮","var(--ink)"],
+       ["待整改发现",fo.length,"项",fo.length?"var(--warn)":"var(--good)"],
+       ["整改逾期",fo.filter(f=>days(TODAY,f.due)<0).length,"项",fo.filter(f=>days(TODAY,f.due)<0).length?"var(--crit)":"var(--good)"],
+       ["严重及以上",fo.filter(f=>f.sev!=="一般").length,"项",fo.filter(f=>f.sev!=="一般").length?"var(--crit)":"var(--good)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="row" style="margin-bottom:12px">
+    <button class="btn btn-p" id="qc-new">+ 发起新一轮机构质控</button>
+    <span class="note">质控分三级：一级为研究者自查，二级为机构抽查，三级为申办方稽查与药监核查</span>
+  </div>
+  <div class="stack" style="gap:12px">
+    ${list.map(q=>{const s=site(q.ss), open=q.findings.filter(f=>f.st!=="已关闭").length;
+      return `<div class="card">
+        <div class="card-h"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(q.id)}</span>
+          <h3>${esc(q.round)}</h3>
+          <span class="sub">${esc(S[s.sid].short)} · ${esc(s.dept)} · ${esc(q.date)} · 质控员 ${esc(q.by)}</span>
+          <span class="sp"></span>
+          <span class="pill ${q.st==="已关闭"?"p-good":open?"p-warn":"p-acc"}">${esc(q.st)}${open?` · ${open} 项待整改`:""}</span></div>
+        <div class="card-b">
+          <div class="note" style="margin-bottom:10px"><b>质控范围</b>：${esc(q.scope)}</div>
+          <div class="section-t">质控意见与整改跟踪</div>
+          ${q.findings.map((f,k)=>{const od=f.st!=="已关闭"&&days(TODAY,f.due)<0;
+            return `<div style="border:1px solid var(--line);border-left:2px solid var(--${f.st==="已关闭"?"good":od?"crit":SEV[f.sev].k});border-radius:0 3px 3px 0;padding:10px 12px;margin-bottom:8px">
+              <div class="row" style="gap:6px">
+                <span class="pill p-${f.st==="已关闭"?"good":SEV[f.sev].k}">${esc(f.sev)}</span>
+                <b style="font-size:12.5px">${esc(f.item)}</b>
+                ${f.iss?`<span class="mono" style="font-size:10.5px;color:var(--ink-3)">→ ${esc(f.iss)}</span>`:""}
+                <span class="sp"></span>
+                <span class="pill ${f.st==="已关闭"?"p-good":od?"p-crit":"p-neut"}">${esc(f.st)}${od?` · 逾期 ${Math.abs(days(TODAY,f.due))} 天`:""}</span></div>
+              <div style="font-size:12.5px;margin-top:5px;color:var(--ink-2);line-height:1.6">${esc(f.desc)}</div>
+              <div class="note" style="margin-top:3px">责任人 ${esc(f.resp)}（受托方）｜整改期限 ${esc(f.due)}</div>
+              ${f.reply?`<div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--line);padding:8px 10px;border-radius:3px;font-size:12px;color:var(--ink-2);line-height:1.6">
+                <b style="color:var(--ink)">整改回复（${esc(f.resp)}）</b><br>${esc(f.reply)}</div>`:""}
+              ${f.st==="待复核"?`<div class="row" style="margin-top:9px">
+                <button class="btn btn-p" data-qcok="${esc(q.id)}:${k}">复核通过并关闭</button>
+                <button class="btn" data-qcno="${esc(q.id)}:${k}">整改不充分，退回</button></div>`:""}
+              ${f.st==="待整改"?`<div class="note" style="margin-top:7px">等待受托方提交整改回复 —— 该发现已同步到责任人的「我的整改」待办。</div>`:""}
+            </div>`;}).join("")}
+        </div>
+      </div>`;}).join("")||`<div class="card"><div class="empty">尚未开展机构质控</div></div>`}
+  </div>
+  ${NOTICE}`;
+  $("#qc-new").addEventListener("click", qcModal);
+  box.addEventListener("click",e=>{
+    const ok=e.target.closest("[data-qcok]"), no=e.target.closest("[data-qcno]");
+    if(!ok&&!no) return;
+    const [qid,k]=((ok||no).dataset.qcok||(ok||no).dataset.qcno).split(":");
+    const q=QC.find(x=>x.id===qid), f=q.findings[+k];
+    if(ok){ f.st="已关闭";
+      if(f.iss){ const i=ISSUES.find(x=>x.id===f.iss); if(i) i.st="已关闭"; }
+      if(q.findings.every(x=>x.st==="已关闭")) q.st="已关闭";
+      toast(`${f.item} 整改复核通过，已关闭`);
+    } else { f.st="待整改"; f.reply=null;
+      toast(`${f.item} 整改不充分已退回 ${f.resp}，需重新提交`,"warn"); }
+    render();
+  });
+};
+
+/* ── 发起机构质控 ── */
+function qcModal(){
+  const ss=instSites();
+  openLayer($("#drawer"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">机构办公室</div>
+      <h2 style="font-size:17px">发起机构质控</h2>
+      <div class="note" style="margin-top:3px">逐项标记「符合 / 不符合」，不符合项将生成质控意见并派发整改</div>
+    </div><button class="x" data-close aria-label="关闭">✕</button></div>
+    <div class="drawer-b">
+      <div class="field"><div class="slider-h"><label for="q-ss">受控中心</label></div>
+        <select class="sel" id="q-ss" style="width:100%">${ss.map(s=>
+          `<option value="${s.id}">${esc(S[s.sid].short)} · ${esc(s.dept)} · PI ${esc(s.pi)}</option>`).join("")}</select></div>
+      <div class="field"><div class="slider-h"><label for="q-r">质控级别</label></div>
+        <select class="sel" id="q-r" style="width:100%">
+          <option>二级质控（机构抽查）</option><option>一级质控（研究者自查）</option>
+          <option>专项质控（针对既往发现）</option></select></div>
+      <div class="field"><div class="slider-h"><label for="q-n">抽查例数</label><b id="q-nv">5 例</b></div>
+        <input type="range" id="q-n" min="1" max="20" step="1" value="5"></div>
+      <div class="section-t">检查项</div>
+      <div id="q-items">${QC_ITEMS.map((t,k)=>`
+        <div style="border-bottom:1px solid var(--line);padding:9px 0">
+          <div class="row" style="justify-content:space-between;gap:10px;align-items:flex-start">
+            <div style="flex:1;font-size:12.5px;line-height:1.55">${esc(t)}</div>
+            <div class="seg" style="flex:none">
+              <button data-qi="${k}:ok" aria-pressed="true">符合</button>
+              <button data-qi="${k}:no" aria-pressed="false">不符合</button></div>
+          </div>
+          <div id="qf-${k}" hidden style="margin-top:8px">
+            <div class="row" style="gap:8px;margin-bottom:6px">
+              <select class="sel" id="qs-${k}"><option>一般</option><option>严重</option><option>重大</option></select>
+              <select class="sel" id="qr-${k}">${STAFF.filter(x=>x.role==="CRC"||x.role==="CRA")
+                .map(x=>`<option>${esc(x.n)}</option>`).join("")}</select>
+              <span class="note">严重程度 · 责任人</span>
+            </div>
+            <textarea class="qbox" id="qd-${k}" placeholder="写清发现的事实、涉及例数与依据，避免笼统表述。"></textarea>
+          </div>
+        </div>`).join("")}</div>
+      <div class="row" style="margin-top:14px;justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="q-go">出具质控意见</button></div>
+    </div>`);
+  $("#q-n").addEventListener("input",e=>$("#q-nv").textContent=e.target.value+" 例");
+  $("#q-items").addEventListener("click",e=>{
+    const b=e.target.closest("[data-qi]"); if(!b) return;
+    const [k,v]=b.dataset.qi.split(":");
+    b.parentElement.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));
+    $("#qf-"+k).hidden = v!=="no";
+  });
+  $("#q-go").addEventListener("click",()=>{
+    const ssid=$("#q-ss").value, round=$("#q-r").value, n=+$("#q-n").value;
+    const finds=[];
+    QC_ITEMS.forEach((t,k)=>{
+      const bad=$("#qf-"+k).hidden===false; if(!bad) return;
+      const desc=$("#qd-"+k).value.trim();
+      if(!desc) return;
+      const sev=$("#qs-"+k).value, resp=$("#qr-"+k).value;
+      const iid="QI-2026-0"+(160+ISSUES.length+finds.length);
+      finds.push({item:t.split("：")[0], sev, desc, resp,
+        due:new Date(Date.now()+14*864e5).toISOString().slice(0,10), st:"待整改", iss:iid});
+      ISSUES.unshift({id:iid, src:"机构质控", ss:ssid, sev, type:"机构质控发现 · "+t.split("：")[0],
+        found:TODAY, desc, capa:"（待受托方提交整改措施）", own:resp,
+        due:new Date(Date.now()+14*864e5).toISOString().slice(0,10), st:"待整改", sla:null});
+    });
+    const qid="QC-2026-0"+(qcSeq++);
+    QC.unshift({id:qid, ss:ssid, round, date:TODAY, by:PERSONA().n,
+      scope:`随机抽取 ${n} 例受试者，覆盖 ${QC_ITEMS.length} 项检查内容`,
+      st: finds.length? "待整改" : "已关闭", findings:finds});
+    closeLayer();
+    toast(finds.length
+      ? `${qid} 质控意见已出具：${finds.length} 项不符合，已派发整改并同步至质量事件台账`
+      : `${qid} 质控完成：全部检查项符合要求`, finds.length?"warn":"");
+    setTimeout(render,220);
+  });
+}
+
+/* ── 人员备案与准入：谁能进这家医院工作，由机构说了算 ── */
+VIEWS.instreg = box=>{
+  const list=REG.filter(r=>instIds().has(r.ss));
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:12px">
+    ${[["备案人员",list.length,"人","var(--ink)"],
+       ["已准入",list.filter(r=>r.st==="已准入").length,"人","var(--good)"],
+       ["备案中",list.filter(r=>r.st==="备案中").length,"人",list.filter(r=>r.st==="备案中").length?"var(--warn)":"var(--good)"],
+       ["资质缺失",list.filter(r=>r.st==="资质缺失").length,"人",list.filter(r=>r.st==="资质缺失").length?"var(--crit)":"var(--good)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>人员备案台账</h3><span class="sp"></span>
+      <span class="sub">GCP 证书、方案培训、授权分工表 —— 核查必查的三件套</span></div>
+    <div class="tw"><table style="min-width:900px">
+      <thead><tr><th>姓名</th><th>所属单位</th><th>角色</th><th>项目 / 科室</th><th>GCP 证书</th>
+        <th>方案培训</th><th>门禁编号</th><th>状态</th><th></th></tr></thead>
+      <tbody>${list.map((r,k)=>{const s=site(r.ss);
+        const left=r.gcp!=="—"?days(TODAY,r.gcp):null;
+        return `<tr>
+          <td class="t-main">${esc(r.who)}</td>
+          <td class="t-sub">${esc(r.org)}</td>
+          <td><span class="pill p-neut">${esc(r.role)}</span></td>
+          <td class="t-sub">${esc(S[s.sid].short)}<div class="t-sub">${esc(s.dept)}</div></td>
+          <td>${r.gcp==="—"?`<span class="pill p-crit">未提供</span>`
+            :`<span class="pill ${left<70?"p-crit":left<180?"p-warn":"p-neut"}">${esc(r.gcp)}</span>`}</td>
+          <td class="t-sub">${r.train==="—"?`<span class="pill p-warn">未完成</span>`:esc(r.train)}</td>
+          <td class="mono" style="font-size:11.5px">${esc(r.badge)}</td>
+          <td><span class="pill ${r.st==="已准入"?"p-good":r.st==="资质缺失"?"p-crit":"p-warn"}">${esc(r.st)}</span></td>
+          <td class="ta-r">${r.st==="已准入"
+            ? `<button class="btn" data-sus="${k}">暂停权限</button>`
+            : `<button class="btn btn-p" data-adm="${k}">准予准入</button>
+               <button class="btn" data-ask="${k}">要求补材料</button>`}</td>
+        </tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-b">
+      <div class="section-t">为什么这一页在机构端而不在受托方</div>
+      <div class="note" style="line-height:1.75">
+        CRC 由 SMO 派驻、CRA 由 CRO 派驻，但他们进的是<b>医院</b>的门、看的是<b>医院</b>的病历。
+        谁能接触受试者源数据，是医院的责任，不是受托方能自行决定的事。<br>
+        所以准入权在机构：GCP 证书未提供、方案培训未完成、未列入授权分工表的人员，
+        机构有权拒绝其开展受试者相关工作 —— 上表中<b>周琳</b>就是典型：她已参与 3 例访视，
+        但资质材料缺失，这在药监核查中属于必查且必然被记录的严重发现。
+      </div>
+    </div>
+  </div>
+  ${NOTICE}`;
+  box.addEventListener("click",e=>{
+    const a=e.target.closest("[data-adm]"), s=e.target.closest("[data-sus]"), q=e.target.closest("[data-ask]");
+    if(a){ const r=list[+a.dataset.adm];
+      if(r.gcp==="—"||r.train==="—"){ toast(`${r.who} 的 GCP 证书或方案培训记录缺失，不予准入`,"crit"); return; }
+      r.st="已准入"; r.badge=r.badge==="—"?"XH-C-0"+(500+Math.floor(Math.random()*99)):r.badge;
+      toast(`${r.who} 已准予准入，门禁编号 ${r.badge}`); render(); return; }
+    if(s){ const r=list[+s.dataset.sus]; r.st="备案中";
+      toast(`${r.who} 的中心权限已暂停，已通知受托方`,"warn"); render(); return; }
+    if(q){ const r=list[+q.dataset.ask];
+      toast(`已向 ${r.org} 发出材料补充通知：${r.gcp==="—"?"GCP 证书、":""}${r.train==="—"?"方案培训记录、":""}授权分工表`,"warn"); }
+  });
+};
+
+/* ── 受托方侧的对侧：我的整改（CRC/CRA 收到机构质控意见后回复） ── */
+VIEWS.capa = box=>{
+  const me=PERSONA().n;
+  const mine=ISSUES.filter(i=>i.own===me&&i.st!=="已关闭");
+  const fromQC=QC.flatMap(q=>q.findings.map(f=>({q,f}))).filter(({f})=>f.resp===me&&f.st!=="已关闭");
+  const overdue=mine.filter(i=>days(TODAY,i.due)<0);
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:12px">
+    ${[["待我整改",mine.length,"项",mine.length?"var(--warn)":"var(--good)"],
+       ["其中机构质控",fromQC.length,"项",fromQC.length?"var(--crit)":"var(--good)"],
+       ["整改逾期",overdue.length,"项",overdue.length?"var(--crit)":"var(--good)"],
+       ["最近到期",mine.length?mine.map(i=>i.due).sort()[0]:"—","","var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:${String(v).length>6?"15":"24"}px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="stack" style="gap:10px">
+    ${fromQC.length? fromQC.map(({q,f},k)=>{const od=days(TODAY,f.due)<0;
+      return `<div class="tcard ${od?"crit":SEV[f.sev].k}">
+        <div class="tcard-h">
+          <div style="flex:1;min-width:0">
+            <div class="row" style="gap:6px">
+              <span class="pill p-${SEV[f.sev].k}">${esc(f.sev)}</span>
+              <b style="font-size:13px">${esc(f.item)}</b>
+              <span class="mono" style="font-size:10.5px;color:var(--ink-3)">${esc(q.id)}</span>
+              ${od?`<span class="pill p-crit">逾期 ${Math.abs(days(TODAY,f.due))} 天</span>`:""}</div>
+            <div class="note" style="margin-top:4px;color:var(--ink-2)">${esc(f.desc)}</div>
+            <div class="note" style="margin-top:2px">来源：${esc(q.round)} · ${esc(site(q.ss).hosp)}机构办 ${esc(q.by)}｜整改期限 ${esc(f.due)}</div>
+          </div>
+          <span class="pill ${f.st==="待复核"?"p-acc":"p-warn"}" style="flex:none">${esc(f.st)}</span>
+        </div>
+        <div style="padding:0 12px 12px 14px">
+          ${f.st==="待整改"?`
+            <textarea class="qbox" id="cp-${k}" placeholder="写清已采取的纠正措施、预防措施与完成证据，例如：3 例受试者已于 2026-08-25 重新签署 ICF V3.0 并上报伦理；中心 ICF 版本控制表已上墙，CRC 每周核对。"></textarea>
+            <div class="row" style="margin-top:8px">
+              <button class="btn btn-p" data-cp="${k}">提交整改回复</button>
+              <span class="note">提交后转机构复核，复核通过才算关闭</span></div>`
+          :`<div style="background:var(--surface-2);border:1px solid var(--line);padding:8px 10px;border-radius:3px;font-size:12px;color:var(--ink-2);line-height:1.6">
+              <b style="color:var(--ink)">已提交整改回复</b><br>${esc(f.reply||"")}</div>
+            <div class="note" style="margin-top:6px">等待 ${esc(site(q.ss).hosp)}机构办复核</div>`}
+        </div></div>`;}).join("")
+      : `<div class="card"><div class="empty">当前没有来自机构质控的整改要求</div></div>`}
+  </div>
+  ${mine.filter(i=>i.src!=="机构质控").length?`
+    <div class="section-t" style="margin-top:16px">其他来源的质量事件（${mine.filter(i=>i.src!=="机构质控").length}）</div>
+    <div class="card"><div class="card-b" style="padding:0">
+      ${mine.filter(i=>i.src!=="机构质控").map(i=>`
+        <div style="padding:10px 14px 10px 16px;border-bottom:1px solid var(--line);position:relative">
+          <span class="stripe" style="background:var(--${SEV[i.sev].k})"></span>
+          <div class="row" style="gap:6px"><span class="pill p-${SEV[i.sev].k}">${esc(i.sev)}</span>
+            <b style="font-size:12.5px;font-weight:500">${esc(i.type)}</b>
+            <span class="pill p-neut">来源 ${esc(i.src)}</span></div>
+          <div class="note" style="margin-top:3px;color:var(--ink-2)">${esc(i.desc)}</div>
+          <div class="note" style="margin-top:2px">CAPA 到期 ${esc(i.due)}｜${esc(i.st)}</div>
+        </div>`).join("")}
+    </div></div>`:""}`;
+  box.addEventListener("click",e=>{
+    const b=e.target.closest("[data-cp]"); if(!b) return;
+    const {q,f}=fromQC[+b.dataset.cp], v=$("#cp-"+b.dataset.cp).value.trim();
+    if(v.length<15){ toast("整改回复需写清纠正措施、预防措施与完成证据（至少 15 个字）","crit"); return; }
+    f.reply=v; f.st="待复核";
+    if(f.iss){ const i=ISSUES.find(x=>x.id===f.iss); if(i){ i.st="待验证"; i.capa=v; } }
+    toast(`整改回复已提交，转 ${site(q.ss).hosp}机构办复核`); render();
   });
 };
 </script>

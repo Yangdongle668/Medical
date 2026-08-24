@@ -183,6 +183,7 @@ function hbars(box, rows, {max, fmt=n1, unit="", h=22, gap=7}={}){
 
 /* 堆叠条：段间留 2px 表面缝隙 */
 function stacked(box, segs, {h=26, fmt=v=>wan(v)+" 万"}={}){
+  if(!segs.length){ box.innerHTML=`<div class="empty" style="padding:16px">暂无数据</div>`; return; }
   const tot=sum(segs,s=>s.v)||1;
   box.innerHTML=`<div style="display:flex;height:${h}px;gap:2px;border-radius:2px;overflow:hidden">${
     segs.map(s=>`<div class="sg" data-n="${esc(s.n)}" data-v="${fmt(s.v)}" data-p="${pct(s.v/tot)}"
