@@ -36,7 +36,7 @@ const STUDIES = grab("STUDIES"), SITES = grab("SITES"),
 
 const q  = v => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const d  = v => (!v || v === "—") ? "NULL" : `'${v}'`;
-const wan = v => (Number(v) * 10000).toFixed(2);              // 万元 → 元
+const cents = v => Math.round(Number(v) * 10000 * 100);        // 万元 → 分（整数）
 /* 原型里的字段键沿用简写；schema 以可读全名为准，此处做唯一一次映射。
    规约 9（单一定义源）：今后以 field_key 表为准，前端类型由契约生成。 */
 const FIELD = {subj:"subject", cost:"cost", margin:"margin", price:"price", staff:"staff"};
@@ -116,12 +116,12 @@ P(``);
 
 /* ── 项目与中心 ── */
 P(`-- ── 项目 ────────────────────────────────────────────────────`);
-P(`-- 金额一律以「元」存 numeric(14,2)；原型的万元数值在此换算。`);
+P(`-- 金额一律以「分」存 bigint；原型的万元数值在此换算（见迁移 0006）。`);
 for (const s of STUDIES)
   P(`INSERT INTO study (id, code, short_name, sponsor_name, phase, indication,` +
-    ` planned_subjects, contract_amount, started_on, ends_on) VALUES (` +
+    ` planned_subjects, contract_amount_cents, started_on, ends_on) VALUES (` +
     `'${uuid5("study:"+s.id)}', ${q(s.id)}, ${q(s.short)}, ${q(s.sponsor)}, ${q(s.phase)}, ` +
-    `${q(s.indication)}, ${s.planned}, ${wan(s.contract)}, '${s.start}-01', '${s.end}-01');`);
+    `${q(s.indication)}, ${s.planned}, ${cents(s.contract)}, '${s.start}-01', '${s.end}-01');`);
 P(``);
 P(`-- ── 分组承接项目：PM 行范围的来源 ────────────────────────────`);
 for (const g of GROUPS) for (const sid of g.studies)
@@ -132,10 +132,10 @@ P(`-- ── 中心（StudySite：最小作业单元） ────────
 for (const s of SITES) {
   const piAcc = USERS.find(u => u.n === s.pi && u.role === "pi");
   P(`INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name,` +
-    ` state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES (` +
+    ` state, contracted, unit_price_cents, startup_fee_cents, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES (` +
     `'${uuid5("site:"+s.id)}', '${uuid5("study:"+s.sid)}', ${q(s.id)}, ${q(s.hosp)}, ${q(s.dept)}, ` +
     `${q(s.city)}, ${piAcc ? `'${uuid5("account:"+piAcc.u)}'` : "NULL"}, ${q(s.pi)}, ` +
-    `${q(STATE[s.st])}, ${s.contracted}, ${wan(s.unit)}, ${wan(s.startup||0)}, ` +
+    `${q(STATE[s.st])}, ${s.contracted}, ${cents(s.unit)}, ${cents(s.startup||0)}, ` +
     `${d(s.ethics)}, ${d(s.siv)}, NULL, ${d(s.fpi)});`);
 }
 P(``);

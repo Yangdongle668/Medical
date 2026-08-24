@@ -111,11 +111,11 @@ describe("租户维度（当前单租户，但列与策略已就位）", () => {
     try {
       await o.query("INSERT INTO tenant (id, code, name) VALUES ($1,'other','另一家 CRO')", [T2]);
       const st = await o.query(`INSERT INTO study (tenant_id, code, short_name, sponsor_name,
-        phase, indication, planned_subjects, contract_amount)
-        VALUES ($1,'XX-9999','他家项目','他家申办方','I期','X',10,1000000) RETURNING id`, [T2]);
+        phase, indication, planned_subjects, contract_amount_cents)
+        VALUES ($1,'XX-9999','他家项目','他家申办方','I期','X',10,100000000) RETURNING id`, [T2]);
       await o.query(`INSERT INTO study_site (tenant_id, study_id, code, hospital, dept, city,
-        pi_name, contracted, unit_price) VALUES ($1,$2,'ZZ-99','他家医院','科','城','某某',10,10000)`,
-        [T2, st.rows[0].id]);
+        pi_name, contracted, unit_price_cents)
+        VALUES ($1,$2,'ZZ-99','他家医院','科','城','某某',10,1000000)`, [T2, st.rows[0].id]);
       /* 经营层是 row_rule='all'，但 all 只在本租户内为真 */
       const codes = await sitesVisibleTo(ID.lingyuan);
       expect(codes).not.toContain("ZZ-99");

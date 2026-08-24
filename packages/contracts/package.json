@@ -1,0 +1,29 @@
+{
+  "name": "@sitedesk/contracts",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "openapi": "tsx scripts/gen-openapi.ts",
+    "mocks": "tsx scripts/gen-examples.ts",
+    "build": "npm run openapi && npm run mocks",
+    "check:breaking": "tsx scripts/check-breaking.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
+    "@types/node": "^26.2.0",
+    "js-yaml": "^5.3.0",
+    "tsx": "^4.23.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.0"
+  }
+}

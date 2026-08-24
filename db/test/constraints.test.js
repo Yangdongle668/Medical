@@ -72,11 +72,23 @@ describe("约束不是文档，是数据库拒绝写入", () => {
         .rejects.toThrow(/study_site_state_fkey/);
     }));
 
-  it("金额是 numeric，不是浮点 —— 万元 × float 是对账对不平的经典成因", async () => {
+  it("金额是整数分（bigint），不是浮点、也不是元 —— 与契约层口径一致", async () => {
     const { rows } = await o.query(`
-      SELECT data_type, numeric_precision, numeric_scale FROM information_schema.columns
-       WHERE table_name='study_site' AND column_name='unit_price'`);
-    expect(rows[0]).toMatchObject({ data_type: "numeric", numeric_precision: 14, numeric_scale: 2 });
+      SELECT column_name, data_type FROM information_schema.columns
+       WHERE table_name IN ('study','study_site')
+         AND column_name IN ('contract_amount_cents','unit_price_cents','startup_fee_cents')
+       ORDER BY 1`);
+    expect(rows.map(r => r.column_name))
+      .toEqual(["contract_amount_cents", "startup_fee_cents", "unit_price_cents"]);
+    expect(rows.every(r => r.data_type === "bigint")).toBe(true);
+  });
+
+  it("旧的元口径列已彻底移除 —— 两套口径并存就是对账对不平的开始", async () => {
+    const { rows } = await o.query(`
+      SELECT column_name FROM information_schema.columns
+       WHERE table_name IN ('study','study_site')
+         AND column_name IN ('contract_amount','unit_price','startup_fee')`);
+    expect(rows).toEqual([]);
   });
 
   it("访视日期类字段用 date 而非 timestamp —— 带时区会在跨时区时错一天", async () => {
