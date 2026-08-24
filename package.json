@@ -1,0 +1,15 @@
+{
+  "name": "sitedesk",
+  "private": true,
+  "version": "0.1.0",
+  "description": "临床中心台 SiteDesk — CRO/SMO 运营管理系统",
+  "workspaces": ["db", "packages/*", "apps/*"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "db:up": "npm run migrate:up -w db",
+    "db:down": "npm run migrate:down -w db",
+    "db:reset": "npm run reset -w db",
+    "db:seed": "npm run seed -w db",
+    "test": "npm run test -w db"
+  }
+}

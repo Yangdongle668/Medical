@@ -1,0 +1,294 @@
+-- 由 tools/gen-seed.mjs 从 prototype/index.html 生成，请勿手改。
+-- 全部为虚构演示数据，不含任何真实受试者可识别信息。
+-- 受试者数据不在 Phase 1 范围内；届时录入的筛选号须重新生成，与原型脱钩。
+BEGIN;
+SET LOCAL client_min_messages = warning;
+
+-- ── 角色：行 × 列 × 动作 ──────────────────────────────────────
+INSERT INTO role (id, code, name, is_external, row_rule) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'boss', '经营层', false, 'all');
+INSERT INTO role (id, code, name, is_external, row_rule) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'pm', '项目总监 PM', false, 'team');
+INSERT INTO role (id, code, name, is_external, row_rule) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'cra', '临床监查员 CRA', false, 'assigned');
+INSERT INTO role (id, code, name, is_external, row_rule) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'crc', '临床协调员 CRC', false, 'assigned');
+INSERT INTO role (id, code, name, is_external, row_rule) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'dm', '数据管理 DM', false, 'all');
+INSERT INTO role (id, code, name, is_external, row_rule) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'qa', '质量保证 QA', false, 'all');
+INSERT INTO role (id, code, name, is_external, row_rule) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'inst', '机构办（外部）', true, 'hospital');
+INSERT INTO role (id, code, name, is_external, row_rule) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'pi', '研究者 PI（外部）', true, 'pi');
+
+-- 列维度：外部角色默认拒绝，只有显式为 true 的才写入 visible=true
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'cost', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'margin', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'price', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'subject', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'staff', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'cost', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'margin', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'price', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'subject', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'staff', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'cost', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'margin', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'price', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'subject', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'staff', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'cost', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'margin', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'price', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'subject', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'staff', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'cost', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'margin', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'price', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'subject', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'staff', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'cost', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'margin', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'price', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'subject', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'staff', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'cost', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'margin', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'price', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'subject', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'staff', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'cost', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'margin', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'price', false);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'subject', true);
+INSERT INTO role_field (role_id, field_key, visible) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'staff', false);
+
+-- 动作维度
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'approve', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'closeQA', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'raiseQ', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'advance', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'manage', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'bid', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'ethics', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'approve', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'closeQA', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'raiseQ', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'advance', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'manage', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'bid', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'ethics', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'approve', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'closeQA', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'raiseQ', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'advance', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'manage', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'bid', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'ethics', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'approve', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'closeQA', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'raiseQ', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'advance', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'manage', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'bid', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'ethics', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'approve', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'closeQA', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'raiseQ', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'advance', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'manage', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'bid', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'ethics', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'approve', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'closeQA', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'raiseQ', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'advance', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'manage', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'bid', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'ethics', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'approve', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'closeQA', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'raiseQ', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'advance', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'manage', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'bid', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'ethics', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'approve', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'closeQA', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'raiseQ', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'advance', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'manage', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'bid', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'ethics', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'closeQ', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'closeQ', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'closeQ', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'closeQ', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'closeQ', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'closeQ', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'closeQ', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'closeQ', false);
+
+-- 可访问模块（收敛导航，不是安全边界）
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'dash', 0);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'intake', 1);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'sites', 2);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'enr', 3);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'screen', 4);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'client', 5);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'cash', 6);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'bid', 7);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'change', 8);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'staff', 9);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'people', 10);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'time', 11);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'pnl', 12);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'bill', 13);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'qa', 14);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'mon', 15);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'price', 16);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'org', 17);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'trail', 18);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'pm', 0);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'team', 1);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'approve', 2);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'intake', 3);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'feas', 4);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'sites', 5);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'enr', 6);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'screen', 7);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'mon', 8);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'change', 9);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'qa', 10);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'pnl', 11);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'trail', 12);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'cra', 0);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'mysites', 1);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'mon', 2);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'query', 3);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'screen', 4);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'feas', 5);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'material', 6);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'time', 7);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'qa', 8);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'capa', 9);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'trail', 10);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'crc', 0);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'mysite', 1);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'startup', 2);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'sched', 3);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'subj', 4);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'prescreen', 5);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'ethics', 6);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'query', 7);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'capa', 8);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'isf', 9);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'material', 10);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'pay', 11);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'handover', 12);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'time', 13);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'dm', 0);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'query', 1);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'screen', 2);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'trail', 3);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'audit', 0);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'qa', 1);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'screen', 2);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'mon', 3);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'trail', 4);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'inst', 0);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'instac', 1);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'instqc', 2);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'instreg', 3);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'pi', 0);
+INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'qa', 1);
+
+-- ── 分组 ────────────────────────────────────────────────────
+INSERT INTO team (id, code, name) VALUES ('8b18356d-6323-58c1-9356-e0f2fb50030c', 'G-01', '华东华南组');
+INSERT INTO team (id, code, name) VALUES ('9e8366c3-02fd-5619-9e1c-967ae29554d5', 'G-02', '华北西南组');
+INSERT INTO team (id, code, name) VALUES ('bdf66113-2ad7-577d-ba20-c801bdd76326', 'G-00', '职能与质量');
+
+-- ── 账号 ────────────────────────────────────────────────────
+-- 认证凭据不在此表：内部走 OIDC，外部走一次性魔法链接（Phase 3）。
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('4aa742fb-0c3b-5114-bc5d-efcb611316c0', 'lingyuan', '凌远', '4cabad81-ab2b-59db-a70f-410395a48260', 'bdf66113-2ad7-577d-ba20-c801bdd76326', false, NULL, 'active', '2019-04-01', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('93362269-1e71-5985-ac44-bc3ada438d41', 'hanxue', '韩雪', '65dd9550-c9d6-5235-bd4b-1167dcf55c8c', '8b18356d-6323-58c1-9356-e0f2fb50030c', false, NULL, 'active', '2021-06-15', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('0205cf5f-227a-54ce-b57e-afe23a7f8a01', 'cendi', '岑迪', '65dd9550-c9d6-5235-bd4b-1167dcf55c8c', '9e8366c3-02fd-5619-9e1c-967ae29554d5', false, NULL, 'active', '2022-03-07', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('374a53e7-95ee-5aca-87af-e56090580112', 'linmin', '林敏', '0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', '8b18356d-6323-58c1-9356-e0f2fb50030c', false, NULL, 'active', '2022-09-05', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('870aae7f-f91f-506c-a854-4961d1847f6d', 'zhaokun', '赵坤', '0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', '8b18356d-6323-58c1-9356-e0f2fb50030c', false, NULL, 'active', '2023-02-13', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('554d35d7-5eb0-5fe8-a691-df71031c2c97', 'heyuwei', '何雨薇', '0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', '8b18356d-6323-58c1-9356-e0f2fb50030c', false, NULL, 'active', '2023-07-24', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('c679fb14-f9b7-55b5-bdb9-99bd4f980269', 'duanzhiyu', '段志远', '0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', '9e8366c3-02fd-5619-9e1c-967ae29554d5', false, NULL, 'active', '2025-03-10', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('9095d0a5-6507-53be-bf5d-ee724986fb16', 'xuqian', '徐倩', '0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', '9e8366c3-02fd-5619-9e1c-967ae29554d5', false, NULL, 'active', '2023-05-08', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('1c8425f6-c481-5938-b156-8caddcc5239c', 'wutong', '吴桐', '60080180-bc0e-5d6b-a94a-aae5889621a5', '8b18356d-6323-58c1-9356-e0f2fb50030c', false, NULL, 'active', '2021-11-02', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('afa98104-e4ce-5dae-932d-b0b3818255c6', 'shenyilin', '沈亦琳', '60080180-bc0e-5d6b-a94a-aae5889621a5', '8b18356d-6323-58c1-9356-e0f2fb50030c', false, NULL, 'active', '2023-04-17', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('7e50b0a0-5ea5-56bd-9f67-f45946d8ff24', 'guoxiaoxu', '郭晓萱', '60080180-bc0e-5d6b-a94a-aae5889621a5', '8b18356d-6323-58c1-9356-e0f2fb50030c', false, NULL, 'active', '2023-08-21', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('d9857040-ed68-5ae8-9351-cfdd35f3cb28', 'tangyan', '唐延', '60080180-bc0e-5d6b-a94a-aae5889621a5', '9e8366c3-02fd-5619-9e1c-967ae29554d5', false, NULL, 'active', '2025-06-09', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('8ffe778e-9704-5cf1-a979-c31ea1a49cc1', 'liaomeng', '廖梦然', '60080180-bc0e-5d6b-a94a-aae5889621a5', '9e8366c3-02fd-5619-9e1c-967ae29554d5', false, NULL, 'active', '2021-03-15', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('484f9e15-52f9-57a8-af68-7a56fbe16e0c', 'qiuzhian', '邱志安', '60080180-bc0e-5d6b-a94a-aae5889621a5', '9e8366c3-02fd-5619-9e1c-967ae29554d5', false, NULL, 'active', '2023-01-30', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('fd325647-5ba2-5f67-a1cc-aea053cd8736', 'fengle', '冯乐', '60080180-bc0e-5d6b-a94a-aae5889621a5', '8b18356d-6323-58c1-9356-e0f2fb50030c', false, NULL, 'active', '2023-09-11', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('df9f9042-a3df-5980-b0e3-72d6797a4f73', 'weilan', '卫兰', 'f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'bdf66113-2ad7-577d-ba20-c801bdd76326', false, NULL, 'active', '2022-01-10', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('6d740deb-9e72-5246-94cd-ec6305e19f99', 'miaoqing', '苗青', 'a4b3cebd-5319-556d-a456-e5d01660fa53', 'bdf66113-2ad7-577d-ba20-c801bdd76326', false, NULL, 'active', '2024-02-19', NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('1b658e87-cfb6-5bbd-af71-d079f7574390', 'zhanghm', '张慧敏', '060c16f9-6a53-507a-b065-f2c5ea994ab5', NULL, true, '北京协和医院', 'active', NULL, NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('dc403801-34ef-5dec-828f-e5242098594a', 'chenguod', '陈国栋', 'e3786fde-4dce-512c-8632-6511d42b37bd', NULL, true, '北京协和医院', 'active', NULL, NULL, NULL);
+INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref, status, joined_on, disabled_at, disabled_reason) VALUES ('53b40017-03d4-500d-8aaa-3070d25c4f7e', 'zhouqi', '周琦', '60080180-bc0e-5d6b-a94a-aae5889621a5', NULL, false, NULL, 'disabled', '2022-05-06', '2026-07-15'::timestamptz, '离职 —— 转甲方 CRA');
+
+-- 组长（account 建好后回填，避免建表环）
+UPDATE team SET lead_account_id = '93362269-1e71-5985-ac44-bc3ada438d41' WHERE code = 'G-01';
+UPDATE team SET lead_account_id = '0205cf5f-227a-54ce-b57e-afe23a7f8a01' WHERE code = 'G-02';
+UPDATE team SET lead_account_id = '4aa742fb-0c3b-5114-bc5d-efcb611316c0' WHERE code = 'G-00';
+
+-- ── 项目 ────────────────────────────────────────────────────
+-- 金额一律以「元」存 numeric(14,2)；原型的万元数值在此换算。
+INSERT INTO study (id, code, short_name, sponsor_name, phase, indication, planned_subjects, contract_amount, started_on, ends_on) VALUES ('3572a707-536f-5581-a15a-410c8345203b', 'HJ-2024-017', '艾瑞替尼 III', '华拓生物', 'III期', '肝细胞癌', 240, 18600000.00, '2024-09-01', '2026-12-01');
+INSERT INTO study (id, code, short_name, sponsor_name, phase, indication, planned_subjects, contract_amount, started_on, ends_on) VALUES ('bacfde1c-caaa-5050-a664-df59d3cb5992', 'HJ-2025-003', 'HT-118 II', '安泰医药', 'II期', '非小细胞肺癌', 96, 9200000.00, '2025-03-01', '2027-03-01');
+INSERT INTO study (id, code, short_name, sponsor_name, phase, indication, planned_subjects, contract_amount, started_on, ends_on) VALUES ('1ac52821-ecbe-5d52-8164-d77000eeb967', 'HJ-2025-011', '恒糖宁 III', '中康制药', 'III期', '2型糖尿病', 420, 23400000.00, '2025-06-01', '2027-09-01');
+INSERT INTO study (id, code, short_name, sponsor_name, phase, indication, planned_subjects, contract_amount, started_on, ends_on) VALUES ('2e890e6b-1c17-5618-8a93-60723f7c31cd', 'HJ-2026-004', 'CoroFlex 器械', '捷成医疗', '确证性', '冠状动脉狭窄', 180, 14500000.00, '2026-01-01', '2028-01-01');
+
+-- ── 分组承接项目：PM 行范围的来源 ────────────────────────────
+INSERT INTO team_study (team_id, study_id) VALUES ('8b18356d-6323-58c1-9356-e0f2fb50030c', '3572a707-536f-5581-a15a-410c8345203b');
+INSERT INTO team_study (team_id, study_id) VALUES ('8b18356d-6323-58c1-9356-e0f2fb50030c', 'bacfde1c-caaa-5050-a664-df59d3cb5992');
+INSERT INTO team_study (team_id, study_id) VALUES ('9e8366c3-02fd-5619-9e1c-967ae29554d5', '1ac52821-ecbe-5d52-8164-d77000eeb967');
+INSERT INTO team_study (team_id, study_id) VALUES ('9e8366c3-02fd-5619-9e1c-967ae29554d5', '2e890e6b-1c17-5618-8a93-60723f7c31cd');
+
+-- ── 中心（StudySite：最小作业单元） ──────────────────────────
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('44cb314d-e661-5594-b207-97efc0c52b30', '3572a707-536f-5581-a15a-410c8345203b', 'SS-01', '北京协和医院', '肝胆外科', '北京', 'dc403801-34ef-5dec-828f-e5242098594a', '陈国栋', 'enrolling', 30, 58000.00, 176000.00, '2024-10-18', '2024-12-06', NULL, '2024-12-27');
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('915ff2c3-4a1a-5549-af44-29eb0f4dc9d0', '3572a707-536f-5581-a15a-410c8345203b', 'SS-02', '复旦大学附属中山医院', '肝外科', '上海', NULL, '沈亦农', 'enrolling', 28, 58000.00, 164000.00, '2024-11-02', '2024-12-20', NULL, '2025-01-15');
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('6a659a42-9bf8-52c0-93e8-b77809919b65', '3572a707-536f-5581-a15a-410c8345203b', 'SS-03', '中山大学肿瘤防治中心', '肝胆科', '广州', NULL, '黄志刚', 'enrolling', 25, 58000.00, 180000.00, '2024-10-29', '2024-12-13', NULL, '2025-01-08');
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('0b08f031-8d02-53b8-a193-819317b4bc15', '3572a707-536f-5581-a15a-410c8345203b', 'SS-04', '四川大学华西医院', '腹部肿瘤科', '成都', NULL, '罗建平', 'enrolling', 22, 58000.00, 160000.00, '2025-01-11', '2025-03-07', NULL, '2025-05-19');
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('a7a32e26-70ac-5ce4-ba1a-64d3e4e104e4', '3572a707-536f-5581-a15a-410c8345203b', 'SS-05', '西安交大第一附属医院', '肝胆外科', '西安', NULL, '白玉山', 'siv', 20, 58000.00, 140000.00, '2025-06-20', '2025-11-14', NULL, NULL);
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('e10af465-11b4-5907-8490-a55a94fa6f4e', 'bacfde1c-caaa-5050-a664-df59d3cb5992', 'SS-06', '上海市胸科医院', '肿瘤内科', '上海', NULL, '顾雯', 'enrolling', 20, 84000.00, 180000.00, '2025-04-22', '2025-06-11', NULL, '2025-07-03');
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('fdf08b80-b1cb-51b4-9429-934a9486f59d', 'bacfde1c-caaa-5050-a664-df59d3cb5992', 'SS-07', '天津医科大学肿瘤医院', '胸部肿瘤科', '天津', NULL, '马利', 'enrolling', 18, 84000.00, 150000.00, '2025-05-08', '2025-06-25', NULL, '2025-07-30');
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('f48da167-2756-5f25-b606-b3dbe668d5b5', 'bacfde1c-caaa-5050-a664-df59d3cb5992', 'SS-08', '浙江省肿瘤医院', '胸部内科', '杭州', NULL, '徐宏', 'enrolling', 16, 84000.00, 120000.00, '2025-11-19', '2026-02-10', NULL, '2026-04-22');
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('553ef290-0777-5eb3-8f11-3a2ff21c86d1', '1ac52821-ecbe-5d52-8164-d77000eeb967', 'SS-09', '北京大学人民医院', '内分泌科', '北京', NULL, '纪红梅', 'enrolling', 35, 39000.00, 150000.00, '2025-07-14', '2025-09-02', NULL, '2025-09-24');
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('fab9cef0-c2ed-584b-85d5-7558ae4152eb', '1ac52821-ecbe-5d52-8164-d77000eeb967', 'SS-10', '华中科技大学同济医院', '内分泌科', '武汉', NULL, '邓伟', 'enrolling', 32, 39000.00, 140000.00, '2025-07-30', '2025-09-16', NULL, '2025-10-11');
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('db17fa41-c806-58af-b716-7324d07084b2', '1ac52821-ecbe-5d52-8164-d77000eeb967', 'SS-11', '中南大学湘雅二医院', '内分泌科', '长沙', NULL, '龚敏', 'enrolling', 30, 39000.00, 120000.00, '2025-08-26', '2025-10-21', NULL, '2025-11-28');
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('ee57f7b2-4cb5-5ff7-a318-77f1633eb6a6', '2e890e6b-1c17-5618-8a93-60723f7c31cd', 'SS-12', '中国医学科学院阜外医院', '冠心病中心', '北京', NULL, '石磊', 'enrolling', 40, 46000.00, 160000.00, '2026-02-09', '2026-03-24', NULL, '2026-04-14');
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('e7bc6829-b4f1-5c79-9160-98f38f92be0d', '2e890e6b-1c17-5618-8a93-60723f7c31cd', 'SS-13', '广东省人民医院', '心内科', '广州', NULL, '曾祥', 'irb_submit', 25, 46000.00, 0.00, NULL, NULL, NULL, NULL);
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('d48b78b2-91c1-5784-93ad-f877887a71c6', '2e890e6b-1c17-5618-8a93-60723f7c31cd', 'SS-14', '江苏省人民医院', '心内科', '南京', NULL, '卢建', 'contract', 22, 46000.00, 85000.00, '2026-06-30', NULL, NULL, NULL);
+INSERT INTO study_site (id, study_id, code, hospital, dept, city, pi_account_id, pi_name, state, contracted, unit_price, startup_fee, irb_approved_on, siv_on, siv_planned_on, fpi_on) VALUES ('47fe0b62-9927-5444-83f4-ae44a675dc6b', '1ac52821-ecbe-5d52-8164-d77000eeb967', 'SS-15', '北京协和医院', '内分泌科', '北京', NULL, '苏文彦', 'enrolling', 28, 39000.00, 106000.00, '2025-07-09', '2025-08-28', NULL, '2025-09-19');
+
+-- ── 派工：assigned 行范围的来源 ──────────────────────────────
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('374a53e7-95ee-5aca-87af-e56090580112', '44cb314d-e661-5594-b207-97efc0c52b30', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('374a53e7-95ee-5aca-87af-e56090580112', 'fdf08b80-b1cb-51b4-9429-934a9486f59d', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('374a53e7-95ee-5aca-87af-e56090580112', '553ef290-0777-5eb3-8f11-3a2ff21c86d1', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('374a53e7-95ee-5aca-87af-e56090580112', 'ee57f7b2-4cb5-5ff7-a318-77f1633eb6a6', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('870aae7f-f91f-506c-a854-4961d1847f6d', '915ff2c3-4a1a-5549-af44-29eb0f4dc9d0', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('870aae7f-f91f-506c-a854-4961d1847f6d', 'e10af465-11b4-5907-8490-a55a94fa6f4e', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('870aae7f-f91f-506c-a854-4961d1847f6d', 'f48da167-2756-5f25-b606-b3dbe668d5b5', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('554d35d7-5eb0-5fe8-a691-df71031c2c97', '6a659a42-9bf8-52c0-93e8-b77809919b65', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('554d35d7-5eb0-5fe8-a691-df71031c2c97', 'e7bc6829-b4f1-5c79-9160-98f38f92be0d', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('554d35d7-5eb0-5fe8-a691-df71031c2c97', 'd48b78b2-91c1-5784-93ad-f877887a71c6', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('c679fb14-f9b7-55b5-bdb9-99bd4f980269', '0b08f031-8d02-53b8-a193-819317b4bc15', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('c679fb14-f9b7-55b5-bdb9-99bd4f980269', 'a7a32e26-70ac-5ce4-ba1a-64d3e4e104e4', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('9095d0a5-6507-53be-bf5d-ee724986fb16', 'fab9cef0-c2ed-584b-85d5-7558ae4152eb', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('9095d0a5-6507-53be-bf5d-ee724986fb16', 'db17fa41-c806-58af-b716-7324d07084b2', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('9095d0a5-6507-53be-bf5d-ee724986fb16', '47fe0b62-9927-5444-83f4-ae44a675dc6b', 'CRA', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('1c8425f6-c481-5938-b156-8caddcc5239c', '44cb314d-e661-5594-b207-97efc0c52b30', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('1c8425f6-c481-5938-b156-8caddcc5239c', 'fdf08b80-b1cb-51b4-9429-934a9486f59d', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('afa98104-e4ce-5dae-932d-b0b3818255c6', '915ff2c3-4a1a-5549-af44-29eb0f4dc9d0', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('7e50b0a0-5ea5-56bd-9f67-f45946d8ff24', '6a659a42-9bf8-52c0-93e8-b77809919b65', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('7e50b0a0-5ea5-56bd-9f67-f45946d8ff24', 'e7bc6829-b4f1-5c79-9160-98f38f92be0d', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('d9857040-ed68-5ae8-9351-cfdd35f3cb28', '0b08f031-8d02-53b8-a193-819317b4bc15', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('d9857040-ed68-5ae8-9351-cfdd35f3cb28', 'a7a32e26-70ac-5ce4-ba1a-64d3e4e104e4', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('8ffe778e-9704-5cf1-a979-c31ea1a49cc1', '553ef290-0777-5eb3-8f11-3a2ff21c86d1', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('8ffe778e-9704-5cf1-a979-c31ea1a49cc1', 'ee57f7b2-4cb5-5ff7-a318-77f1633eb6a6', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('8ffe778e-9704-5cf1-a979-c31ea1a49cc1', '47fe0b62-9927-5444-83f4-ae44a675dc6b', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('484f9e15-52f9-57a8-af68-7a56fbe16e0c', 'fab9cef0-c2ed-584b-85d5-7558ae4152eb', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('484f9e15-52f9-57a8-af68-7a56fbe16e0c', 'db17fa41-c806-58af-b716-7324d07084b2', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('fd325647-5ba2-5f67-a1cc-aea053cd8736', 'e10af465-11b4-5907-8490-a55a94fa6f4e', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('fd325647-5ba2-5f67-a1cc-aea053cd8736', 'f48da167-2756-5f25-b606-b3dbe668d5b5', 'CRC', daterange('2024-09-01', NULL, '[)'));
+INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective) VALUES ('fd325647-5ba2-5f67-a1cc-aea053cd8736', 'd48b78b2-91c1-5784-93ad-f877887a71c6', 'CRC', daterange('2024-09-01', NULL, '[)'));
+
+COMMIT;
