@@ -9,11 +9,13 @@ VIEWS.qa = box=>{
   const sae=ISSUES.find(i=>i.sla&&i.st!=="已关闭"&&ids.has(i.ss));
   const overdue=openN.filter(i=>days(TODAY,i.due)<0);
 
+  const SA=saeStats(ids), QS=queryStats(ids);
+
   box.innerHTML=`
   <div class="grid g4" style="margin-bottom:12px">
     ${[["未关闭事件",openN.length,"项",`重大/严重 ${openN.filter(i=>i.sev!=="一般").length} 项`,openN.filter(i=>i.sev!=="一般").length?"var(--crit)":"var(--ink)"],
-       ["SAE 24h 上报及时率","96.4","%","合规红线，目标 100%","var(--crit)"],
-       ["Query 平均关闭",6.2,"天","目标 ≤ 5 天","var(--warn)"],
+       ["SAE 24h 上报及时率",SA.rate===null?"—":n1(SA.rate*100),"%",`${SA.ok} / ${SA.n} 例在 ${SAE_SLA} 小时内上报`,SA.rate===1?"var(--good)":"var(--crit)"],
+       ["Query 平均挂起",QS.avg===null?"—":n1(QS.avg),"天",`${QS.n} 条 · 超 7 天 ${QS.over7} 条`,QS.avg>7?"var(--crit)":QS.avg>5?"var(--warn)":"var(--good)"],
        ["CAPA 逾期",overdue.length,"项",overdue.length?"已超整改到期日":"全部在期内",overdue.length?"var(--crit)":"var(--good)"]
      ].map(([l,v,u,n,c])=>`<div class="card" style="padding:12px 13px">
         <div class="kpi-l">${esc(l)}</div>
@@ -43,6 +45,23 @@ VIEWS.qa = box=>{
       <div class="note" style="margin-top:6px">绿色 = 窗口内，红色 = 超窗部分。SAE 24 小时上报及时率必须 100% —— 这是红线，不是 KPI。</div>
     </div></div>`:""}
 
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>SAE 上报时限台账</h3><span class="sp"></span>
+      <span class="sub">及时率由这张表算出，不是写死的数</span></div>
+    <div class="tw"><table style="min-width:680px">
+      <thead><tr><th>编号</th><th>中心</th><th>受试者</th><th>事件名称</th><th>研究者知晓</th><th>上报申办方</th><th class="ta-r">耗时</th><th>判定</th></tr></thead>
+      <tbody>${SA.list.map(x=>{const ok=x.h<=SAE_SLA;
+        return `<tr><td class="mono" style="font-size:11.5px">${esc(x.id)}</td>
+          <td style="font-size:12px">${esc(site(x.ss).hosp)}</td>
+          <td><span class="subjid">${esc(x.subj)}</span></td>
+          <td class="t-sub">${esc(x.term)}</td>
+          <td class="mono" style="font-size:11px">${esc(x.aware)}</td>
+          <td class="mono" style="font-size:11px">${esc(x.rpt)}</td>
+          <td class="tnum" style="color:${ok?"var(--good)":"var(--crit)"};font-weight:600">${n1(x.h)} h</td>
+          <td><span class="pill ${ok?"p-good":"p-crit"}">${ok?"窗口内":"超窗"}</span></td></tr>`;}).join("")
+        ||`<tr><td colspan="8"><div class="empty">范围内无 SAE 记录</div></td></tr>`}</tbody>
+    </table></div>
+  </div>
   <div class="card" style="margin-bottom:12px">
     <div class="card-h"><h3>问题发现来源</h3><span class="sp"></span>
       <span class="sub">分布本身就是质量指标</span></div>

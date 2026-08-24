@@ -2,10 +2,10 @@
 "use strict";
 /* ════════════════ 6 · 成本与毛利 ════════════════ */
 VIEWS.pnl = box=>{
-  const list=scope().filter(s=>s.revenue>0||s.cost>0), R=rollup(scope());
+  const list=scope().filter(s=>siteRev(s)>0||s.cost>0), R=rollup(scope());
   const sorts={gp:"毛利额",gm:"毛利率",cpe:"每例成本",rev:"收入"};
   const key=state.pnlSort;
-  const val=(s)=>{const m=siteM(s);return key==="gp"?m.gp:key==="gm"?(m.gm??-9):key==="cpe"?(m.cpe??999):s.revenue;};
+  const val=(s)=>{const m=siteM(s);return key==="gp"?m.gp:key==="gm"?(m.gm??-9):key==="cpe"?(m.cpe??999):m.rev;};
   const rows=list.slice().sort((a,b)=>val(b)-val(a));
   const loss=rows.filter(s=>siteM(s).gp<0);
 
@@ -59,7 +59,7 @@ CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
           <td><div class="t-main">${esc(s.hosp)}</div><div class="t-sub">${esc(s.city)} · PI ${esc(s.pi)}</div></td>
           <td class="t-sub">${esc(S[s.sid].short)}</td>
           <td class="tnum">${s.enrolled}</td>
-          <td class="tnum">${wan(s.revenue)}</td>
+          <td class="tnum">${wan(m.rev)}</td>
           <td class="tnum">${wan(s.cost)}</td>
           <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--good)"};font-weight:600">${m.gp>0?"+":""}${n1(m.gp)}</td>
           <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--good)"}">${m.gm===null?"—":pct(m.gm)}</td>
@@ -74,12 +74,21 @@ CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
       </tr></tfoot>
     </table></div>
   </div>
-  <p class="note" style="margin-top:10px">金额单位：万元。收入 = 启动费 + 已入组例数 × 单例单价（按合同里程碑确认）；成本 = 工时归集 + 差旅 + 职能分摊。点击任意行进入中心详情。</p>`;
+  <div class="formula" style="margin-top:12px">收入 = 启动费 + 入组例数 × 单例单价 + <b>筛败例数 × 单例单价 × ${pct(SF_FEE)}</b>
+成本 = 工时归集（含筛选期陪同） + 差旅 + 职能分摊
+
+筛败费此前被整套模型漏掉。补上之后本范围收入 +${wan(sum(list,s=>revParts(s).sf))} 万，
+亏损中心从按旧口径的 ${rows.filter(s=>(s.startup||0)+s.enrolled*s.unit<s.cost).length} 个变为 ${loss.length} 个 ——
+<b>漏算筛败费会让高筛败率中心被误判为亏损，从而砍掉本来赚钱的中心。</b></div>
+  <p class="note" style="margin-top:8px">金额单位：万元。点击任意行进入中心详情。</p>`;
 
   diverging($("#c-dv"), rows.map(s=>{const m=siteM(s);
     return {label:s.hosp.replace(/(大学|医学院|附属|中国医学科学院)/g,""),v:m.gp,
       tip:`<div class="tip-t">${esc(s.hosp)}</div>
-        <div class="tip-r"><span>收入</span><b>${wan(s.revenue)} 万</b></div>
+        <div class="tip-r"><span>收入合计</span><b>${wan(m.rev)} 万</b></div>
+        <div class="tip-r"><span>· 启动费</span><b>${wan(revParts(s).startup)}</b></div>
+        <div class="tip-r"><span>· 入组费</span><b>${wan(revParts(s).enr)}</b></div>
+        <div class="tip-r"><span>· 筛败费</span><b>${wan(revParts(s).sf)}</b></div>
         <div class="tip-r"><span>成本</span><b>${wan(s.cost)} 万</b></div>
         <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--good)"}">${m.gm===null?"—":pct(m.gm)}</b></div>
         <div class="tip-r"><span>每例成本</span><b>${m.cpe?n1(m.cpe)+" 万":"—"}</b></div>

@@ -1,0 +1,148 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   QA 端 —— 我方的第二道防线
+   机构质控是医院查我们，QA 是我们自己查自己。
+   QA 真正的价值不在于再发现一批问题，而在于 CAPA 有效性验证：
+   同类问题是否复发。复发 = 当初只做了纠正，没做预防。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.audit = box=>{
+  const open=AUDIT.filter(a=>a.st!=="已关闭");
+  const fo=AUDIT.flatMap(a=>a.findings.map(f=>({a,f}))).filter(({f})=>f.st!=="已关闭");
+  const rep=AUDIT.flatMap(a=>a.findings).filter(f=>f.repeat);
+  const eff=capaEffect().filter(x=>x.n>0);
+  const SA=saeStats(null), QS=queryStats(null);
+
+  /* 中心质量评级：未关闭事件、复发、SAE 超窗、质疑挂起 四项合成 */
+  const grade = SITES.filter(s=>s.enrolled>0).map(s=>{
+    const iss=ISSUES.filter(i=>i.ss===s.id), openI=iss.filter(i=>i.st!=="已关闭");
+    const sev=openI.filter(i=>i.sev!=="一般").length;
+    const saeBad=SAE_LOG.filter(x=>x.ss===s.id&&x.h>SAE_SLA).length;
+    const qOld=QUERIES.filter(q=>q.ss===s.id&&q.st==="待中心回复"&&q.age>7).length;
+    const rp=AUDIT.flatMap(a=>a.ss===s.id?a.findings.filter(f=>f.repeat):[]).length;
+    const pen=sev*3 + (openI.length-sev) + saeBad*4 + qOld*2 + rp*4;
+    const g = pen===0?{g:"A",k:"good"} : pen<=3?{g:"B",k:"good"} : pen<=7?{g:"C",k:"warn"} : {g:"D",k:"crit"};
+    return {s, pen, sev, openI:openI.length, saeBad, qOld, rp, ...g};
+  }).sort((a,b)=>b.pen-a.pen);
+
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:12px">
+    ${[["进行中稽查",open.length,"项",open.length?"var(--warn)":"var(--good)"],
+       ["待整改发现",fo.length,"项",fo.length?"var(--warn)":"var(--good)"],
+       ["复发问题",rep.length,"项",rep.length?"var(--crit)":"var(--good)"],
+       ["D 级中心",grade.filter(g=>g.g==="D").length,"个",grade.filter(g=>g.g==="D").length?"var(--crit)":"var(--good)"]
+     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+
+  <div class="card" style="margin-bottom:12px;${rep.length?"border-color:color-mix(in srgb,var(--crit) 45%,var(--line))":""}">
+    <div class="card-h" ${rep.length?'style="background:var(--crit-soft)"':""}>
+      ${rep.length?`<span class="dot" style="background:var(--crit)"></span>`:""}
+      <h3 ${rep.length?'style="color:var(--crit)"':""}>CAPA 有效性验证</h3><span class="sp"></span>
+      <span class="sub">复发 = 当初只做了纠正，没做预防</span></div>
+    <div class="card-b">
+      <div class="tw"><table style="min-width:600px">
+        <thead><tr><th>问题类型</th><th class="ta-r">累计发生</th><th class="ta-r">已关闭</th>
+          <th class="ta-r">关闭后复发</th><th>CAPA 有效性判定</th></tr></thead>
+        <tbody>${eff.map(x=>{
+          const v = x.repeat>0 ? ["p-crit","无效：需重做根因分析"]
+                  : x.closed===x.n ? ["p-good","有效：关闭后未复发"]
+                  : ["p-neut","待观察：尚有未关闭项"];
+          return `<tr><td class="t-main">${esc(x.type)}</td>
+            <td class="tnum">${x.n}</td><td class="tnum">${x.closed}</td>
+            <td class="tnum" style="${x.repeat?"color:var(--crit);font-weight:600":""}">${x.repeat}</td>
+            <td><span class="pill ${v[0]}">${v[1]}</span></td></tr>`;}).join("")}</tbody>
+      </table></div>
+      ${rep.length?`<div style="margin-top:12px;border-left:2px solid var(--crit);background:var(--crit-soft);padding:10px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.7">
+        <b style="color:var(--crit)">${rep.length} 项问题在 CAPA 关闭后复发。</b>
+        以「源数据缺陷」为例：QI-2026-0151 的 CAPA 写的是「研究者集中补签并留痕」——
+        <b>那是纠正，不是预防</b>。补完签名，下个月照样缺。真正的预防应当是把签名完整性做进
+        CRC 每周自查清单并留痕，或改用带强制签名字段的电子源数据。<br>
+        <b>只做纠正不做预防的 CAPA，等于把同一个核查风险往后推了一个季度。</b></div>`:""}
+    </div>
+  </div>
+
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>内部稽查</h3><span class="sp"></span>
+        <button class="btn btn-p" id="au-new">+ 发起内部稽查</button></div>
+      <div class="card-b" style="padding:0">
+        ${AUDIT.map(a=>`<div style="padding:12px 16px 12px 18px;border-bottom:1px solid var(--line);position:relative">
+          ${a.st!=="已关闭"?`<span class="stripe" style="background:var(--warn)"></span>`:""}
+          <div class="row" style="gap:7px">
+            <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(a.id)}</span>
+            <b style="font-size:12.5px">${esc(a.type)}</b>
+            <span class="t-sub">${esc(site(a.ss).hosp)} · ${esc(a.date)}</span>
+            <span class="sp"></span>
+            <span class="pill ${a.st==="已关闭"?"p-good":"p-warn"}">${esc(a.st)}</span></div>
+          <div class="note" style="margin-top:4px">${esc(a.scope)}</div>
+          ${a.findings.map((f,k)=>`
+            <div style="margin-top:8px;border:1px solid var(--line);border-left:2px solid var(--${f.st==="已关闭"?"good":SEV[f.sev].k});border-radius:0 3px 3px 0;padding:8px 10px">
+              <div class="row" style="gap:6px">
+                <span class="pill p-${f.st==="已关闭"?"good":SEV[f.sev].k}">${esc(f.sev)}</span>
+                ${f.repeat?`<span class="pill p-crit">复发 · 源自 ${esc(f.repeat)}</span>`:""}
+                <span class="sp"></span>
+                <span class="pill p-neut">${esc(f.st)}</span></div>
+              <div style="font-size:12.5px;margin-top:4px;color:var(--ink-2);line-height:1.6">${esc(f.t)}</div>
+              ${f.st!=="已关闭"?`<button class="btn" style="margin-top:7px" data-auok="${esc(a.id)}:${k}">验证整改并关闭</button>`:""}
+            </div>`).join("")}
+        </div>`).join("")}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>中心质量评级</h3><span class="sub">A–D 四级</span></div>
+      <div class="card-b" style="padding:0">
+        ${grade.map(g=>`<div style="padding:9px 14px;border-bottom:1px solid var(--line)">
+          <div class="row" style="justify-content:space-between;gap:8px">
+            <div style="min-width:0"><b style="font-size:12.5px;font-weight:500">${esc(g.s.hosp)}</b>
+              <div class="t-sub">${esc(S[g.s.sid].short)}</div></div>
+            <span class="pill p-${g.k}" style="font-size:13px;font-weight:700;min-width:26px;justify-content:center">${g.g}</span></div>
+          <div class="note" style="margin-top:2px">
+            ${g.sev?`重大/严重 ${g.sev}·`:""}${g.openI?`未关闭 ${g.openI}·`:""}${g.saeBad?`SAE 超窗 ${g.saeBad}·`:""}${g.qOld?`质疑挂起 ${g.qOld}·`:""}${g.rp?`复发 ${g.rp}·`:""}${g.pen===0?"无扣分项":`扣分 ${g.pen}`}</div>
+        </div>`).join("")}
+      </div>
+    </div>
+  </div>
+  <div class="formula">质量扣分 = 重大/严重未关闭×3 + 一般未关闭×1 + SAE 超窗×4 + 质疑挂起超 7 天×2 + <b>CAPA 后复发×4</b>
+A：0 分｜B：≤3｜C：≤7｜D：&gt;7 —— 复发权重最高，因为它证明的是体系失效，不是单点失误
+公司层面：SAE 及时率 ${SA.rate===null?"—":pct(SA.rate)}（${SA.ok}/${SA.n}）· 质疑平均挂起 ${QS.avg===null?"—":n1(QS.avg)} 天 —— 均由台账算出</div>`;
+
+  $("#au-new").addEventListener("click",()=>{
+    openLayer($("#modal"),`
+      <div class="drawer-h"><h3 style="flex:1;font-size:15px">发起内部稽查</h3><button class="x" data-close aria-label="关闭">✕</button></div>
+      <div style="padding:16px 18px 18px">
+        <div class="field"><div class="slider-h"><label for="au-s">受稽查中心</label></div>
+          <select class="sel" id="au-s" style="width:100%">${SITES.filter(s=>s.enrolled>0).map(s=>
+            `<option value="${s.id}">${esc(s.hosp)}（${esc(S[s.sid].short)}）</option>`).join("")}</select></div>
+        <div class="field"><div class="slider-h"><label for="au-t">稽查类型</label></div>
+          <select class="sel" id="au-t" style="width:100%">
+            <option>中心内部稽查</option><option>体系稽查</option>
+            <option>CAPA 有效性验证</option><option>核查前模拟稽查</option></select></div>
+        <div class="field"><div class="slider-h"><label for="au-sc">稽查范围</label></div>
+          <textarea class="qbox" id="au-sc" placeholder="例：针对该中心质疑挂起超 7 天与源数据签名问题的专项稽查。"></textarea></div>
+        <div id="au-hint" style="margin-bottom:12px"></div>
+        <div class="row" style="justify-content:flex-end">
+          <button class="btn" data-close>取消</button>
+          <button class="btn btn-p" id="au-go">发起</button></div>
+      </div>`);
+    const hint=()=>{ const s=site($("#au-s").value), g=grade.find(x=>x.s.id===s.id);
+      $("#au-hint").innerHTML = g? `<div style="border-left:2px solid var(--${g.k});background:var(--${g.k}-soft);padding:8px 11px;font-size:12px;color:var(--ink-2);line-height:1.6">
+        该中心当前质量评级 <b>${g.g} 级</b>（扣分 ${g.pen}）。${g.rp?`存在 ${g.rp} 项 CAPA 后复发问题，建议本次稽查直接切入根因分析而非重复开发现。`:g.g==="A"?"无扣分项，可按常规抽样。":"建议覆盖未关闭事件对应的源数据。"}</div>`:"";};
+    $("#au-s").addEventListener("change",hint); hint();
+    $("#au-go").addEventListener("click",()=>{
+      const ssid=$("#au-s").value;
+      AUDIT.unshift({id:"AU-2026-0"+(7+AUDIT.length), ss:ssid, type:$("#au-t").value, date:TODAY,
+        by:PERSONA().n, st:"进行中", scope:$("#au-sc").value.trim()||"常规抽样", findings:[]});
+      closeLayer(); toast(`已对 ${site(ssid).hosp} 发起${$("#au-t").value}`); setTimeout(render,220);
+    });
+  });
+  box.addEventListener("click",e=>{
+    const b=e.target.closest("[data-auok]"); if(!b) return;
+    const [id,k]=b.dataset.auok.split(":"); const a=AUDIT.find(x=>x.id===id);
+    a.findings[+k].st="已关闭";
+    if(a.findings.every(f=>f.st==="已关闭")) a.st="已关闭";
+    toast(`稽查发现已验证关闭`); render();
+  });
+};
+</script>

@@ -22,7 +22,7 @@ VIEWS.dash = box=>{
     if(m.rate!==null && m.rate<0.7) alerts.push({sev:"crit",t:`${ss.hosp} 入组仅达计划 ${pct(m.rate)}`,
       d:`已入组 ${ss.enrolled} / 应达 ${ss.planToDate} 例，缺口 ${ss.planToDate-ss.enrolled} 例`,go:"sites"});
     if(m.gm!==null && m.gm<0) alerts.push({sev:"crit",t:`${ss.hosp} 单中心亏损 ${n1(m.gp)} 万`,
-      d:`收入 ${wan(ss.revenue)} 万 / 成本 ${wan(ss.cost)} 万，已消耗 ${n0(ss.md)} 人天`,go:"pnl"});
+      d:`收入 ${wan(m.rev)} 万 / 成本 ${wan(ss.cost)} 万，已消耗 ${n0(ss.md)} 人天`,go:"pnl"});
   });
   ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般"&&(state.study==="all"||site(i.ss).sid===state.study))
     .forEach(i=>alerts.push({sev:"crit",t:`${i.sev}质量事件 ${i.id} · ${i.type}`,
@@ -140,10 +140,10 @@ VIEWS.dash = box=>{
         <div class="tip-r"><span>常驻</span><b>${p.city}</b></div>`};
   }), {max:100, fmt:v=>v, unit:"%", h:18, gap:5});
 
-  const gp = list.filter(s=>s.revenue>0).map(s=>{const m=siteM(s);
+  const gp = list.filter(s=>siteRev(s)>0).map(s=>{const m=siteM(s);
     return {label:s.hosp.replace(/(大学|医学院|附属)/g,""), v:m.gp, tip:
       `<div class="tip-t">${esc(s.hosp)}</div>
-       <div class="tip-r"><span>已确认收入</span><b>${wan(s.revenue)} 万</b></div>
+       <div class="tip-r"><span>已确认收入</span><b>${wan(m.rev)} 万</b></div>
        <div class="tip-r"><span>已发生成本</span><b>${wan(s.cost)} 万</b></div>
        <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--good)"}">${pct(m.gm)}</b></div>
        <div class="tip-r"><span>已入组</span><b>${s.enrolled} / ${s.contracted} 例</b></div>`};

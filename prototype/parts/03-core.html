@@ -14,18 +14,31 @@ const staff = n=>STAFF.find(s=>s.n===n);
 const label = ss=>`${ss.hosp}｜${S[ss.sid].short}`;
 
 /* ════════ 派生指标（所有看板数字都由这里算出，口径唯一） ════════ */
+
+/* 筛败费：合同里筛败例数单独计价，通常为入组单价的 30%–40%。
+   漏掉这块，收入就是错的 —— 而以「算清单中心盈亏」为核心命题的系统，
+   这个错误在源头上会让所有毛利结论失真。 */
+const SF_FEE = 0.35;
+function siteRev(ss){
+  const f = (typeof FN==="function") ? FN(ss.id) : {sf:0};
+  return (ss.startup||0) + ss.enrolled*ss.unit + (f.sf||0)*ss.unit*SF_FEE;
+}
+const revParts = ss=>{ const f=(typeof FN==="function")?FN(ss.id):{sf:0};
+  return {startup:ss.startup||0, enr:ss.enrolled*ss.unit, sf:(f.sf||0)*ss.unit*SF_FEE}; };
+
 function siteM(ss){
-  const gp = ss.revenue - ss.cost;                       // 毛利（万元）
-  const gm = ss.revenue > 0 ? gp/ss.revenue : null;      // 毛利率
+  const rev = siteRev(ss);
+  const gp = rev - ss.cost;                              // 毛利（万元）
+  const gm = rev > 0 ? gp/rev : null;                    // 毛利率
   const rate = ss.planToDate>0 ? ss.enrolled/ss.planToDate : null;  // 入组达成率
   const cpe = ss.enrolled>0 ? ss.cost/ss.enrolled : null;           // 每例入组成本
   const prog = ss.enrolled/ss.contracted;                // 合同完成度
-  return {gp, gm, rate, cpe, prog, mdPerPt: ss.enrolled>0 ? ss.md/ss.enrolled : null};
+  return {rev, gp, gm, rate, cpe, prog, mdPerPt: ss.enrolled>0 ? ss.md/ss.enrolled : null};
 }
 /* scope() / scopeIds() 定义在 04-nav：数据范围由登录身份决定 */
 
 function rollup(list){
-  const rev = sum(list,s=>s.revenue), cost = sum(list,s=>s.cost);
+  const rev = sum(list,s=>siteRev(s)), cost = sum(list,s=>s.cost);
   const enr = sum(list,s=>s.enrolled), plan = sum(list,s=>s.planToDate);
   const ids = new Set(list.map(s=>s.id));
   const people = STAFF.filter(p=>p.role!=="PM"&&p.role!=="QA"&&p.sites.some(x=>ids.has(x)));

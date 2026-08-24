@@ -1,0 +1,189 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   研究者端（PI）—— 法定责任人
+   方案偏离要 PI 签字、SAE 由 PI 上报、授权分工表由 PI 签署。
+   此前 PI 在系统里只是一个字符串，一个动作都做不了 —— 这在合规上说不通。
+   ════════════════════════════════════════════════════════════════════ */
+const piSites = ()=>SITES.filter(s=>s.pi===PERSONA().n);
+const piSubj  = ()=>{const ids=new Set(piSites().map(s=>s.id)); return SUBJ.filter(s=>ids.has(s.ss));};
+
+VIEWS.pi = box=>{
+  const ss=piSites(), ids=new Set(ss.map(s=>s.id));
+  const subs=piSubj();
+  const pend=subs.filter(s=>s.pendPi);   // CRC 已完成的访视，等我确认签署
+  const dev =ISSUES.filter(i=>ids.has(i.ss)&&i.st!=="已关闭"&&/方案偏离|知情同意|人员资质/.test(i.type));
+  const sae =SAE_LOG.filter(x=>ids.has(x.ss));
+  const late=sae.filter(x=>x.h>SAE_SLA);
+  const doa =REG.filter(r=>ids.has(r.ss));
+  const st0 = ss[0] ? S[ss[0].sid] : null;
+
+  box.innerHTML=`
+  <div class="mini" style="margin-bottom:14px">
+    ${[["待我确认访视",pend.length,"例",pend.length?"var(--warn)":"var(--good)"],
+       ["待我签字文件",dev.length,"份",dev.length?"var(--crit)":"var(--good)"],
+       ["我的在组受试者",subs.filter(s=>s.st==="已入组").length,"例","var(--ink)"],
+       ["本中心 SAE",sae.length,"例",late.length?"var(--crit)":"var(--ink)"],
+       ["授权分工表",doa.filter(r=>r.st==="已准入").length+"/"+doa.length,"","var(--ink)"],
+       ["中心入组",ss[0]?`${ss[0].enrolled}/${ss[0].contracted}`:"—","","var(--ink)"]
+     ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
+        <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>待我确认的访视</h3><span class="sp"></span>
+          <span class="sub">CRC 已完成全部访视任务，需研究者确认后方可锁定</span></div>
+        <div class="card-b" style="padding:0">
+          ${pend.length? pend.map(s=>`
+            <div style="padding:12px 16px;border-bottom:1px solid var(--line)">
+              <div class="row" style="gap:6px">
+                <span class="subjid">${esc(s.id)}</span>
+                ${s.rnd!=="—"?`<span class="pill p-neut">随机号 ${esc(s.rnd)}</span>`:`<span class="pill p-warn">筛选期</span>`}
+                <b style="font-size:12.5px">${esc(s.pendPi.visit)}</b>
+                <span class="sp"></span>
+                <span class="t-sub">CRC ${esc(s.crc)}</span></div>
+              <div class="note" style="margin-top:4px">访视完成于 ${esc(s.pendPi.date)}｜全部 ${s.pendPi.tasks.length} 项任务已完成，待研究者签署确认</div>
+              <div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;padding:8px 10px">
+                ${s.pendPi.tasks.map(t=>`<div class="note" style="color:var(--ink-2)">✓ ${esc(t)}</div>`).join("")}
+              </div>
+              <div class="row" style="margin-top:9px">
+                <button class="btn btn-p" data-piok="${esc(s.id)}">确认无误并签署</button>
+                <button class="btn" data-piback="${esc(s.id)}">退回 CRC 补充</button></div>
+            </div>`).join("") : `<div class="empty">没有待确认的访视</div>`}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>待我签字的文件</h3><span class="sub">方案偏离与资质类问题必须由研究者签署</span></div>
+        <div class="card-b" style="padding:0">
+          ${dev.length? dev.map(i=>`
+            <div style="padding:11px 16px 11px 18px;border-bottom:1px solid var(--line);position:relative">
+              <span class="stripe" style="background:var(--${SEV[i.sev].k})"></span>
+              <div class="row" style="gap:6px"><span class="pill p-${SEV[i.sev].k}">${esc(i.sev)}</span>
+                <b style="font-size:12.5px">${esc(i.type)}</b>
+                <span class="t-sub">${esc(i.id)}</span>
+                <span class="pill p-neut">来源 ${esc(i.src)}</span></div>
+              <div class="note" style="margin-top:4px;color:var(--ink-2)">${esc(i.desc)}</div>
+              <div class="row" style="margin-top:8px">
+                <button class="btn btn-p" data-pisign="${esc(i.id)}">签署并同意上报伦理</button>
+                <span class="note">签署即确认事实描述属实，并同意按 CAPA 执行</span></div>
+            </div>`).join("") : `<div class="empty">没有待签署文件</div>`}
+        </div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>SAE 上报记录</h3><span class="sp"></span>
+          <span class="pill ${late.length?"p-crit":"p-good"}">${sae.length-late.length}/${sae.length} 在窗口内</span></div>
+        <div class="card-b" style="padding:0">
+          ${sae.map(x=>`<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+            <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(x.id)}</span>
+              <span class="subjid">${esc(x.subj)}</span>
+              <span class="pill ${x.h<=SAE_SLA?"p-good":"p-crit"}">${n1(x.h)} h</span></div>
+            <div class="note" style="margin-top:3px">${esc(x.term)}｜知晓 ${esc(x.aware)}</div>
+          </div>`).join("")||`<div class="empty">本中心暂无 SAE</div>`}
+          <div style="padding:11px 14px">
+            <button class="btn btn-p" id="pi-sae" style="width:100%;justify-content:center">上报新的 SAE</button>
+            <div class="note" style="margin-top:6px;text-align:center">研究者知晓起 ${SAE_SLA} 小时内必须上报</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>研究者授权分工表</h3><span class="sub">DOA</span></div>
+        <div class="card-b" style="padding:0">
+          ${doa.map(r=>`<div style="padding:9px 14px;border-bottom:1px solid var(--line)">
+            <div class="row" style="justify-content:space-between;gap:8px">
+              <div><b style="font-size:12.5px;font-weight:500">${esc(r.who)}</b>
+                <span class="t-sub"> ${esc(r.role)} · ${esc(r.org)}</span></div>
+              <span class="pill ${r.st==="已准入"?"p-good":r.st==="资质缺失"?"p-crit":"p-warn"}">${esc(r.st)}</span></div>
+            <div class="note" style="margin-top:2px">${esc(r.note)}</div>
+          </div>`).join("")}
+          <div class="note" style="padding:10px 14px;line-height:1.65">
+            未列入本表的人员不得开展任何试验相关工作。这张表由研究者签署 —— <b>签了名，责任就是你的。</b>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>我的受试者</h3><span class="sp"></span>
+      <span class="sub">仅筛选号与随机号，无身份信息</span></div>
+    <div class="tw"><table style="min-width:700px">
+      <thead><tr><th>筛选号</th><th>随机号</th><th>状态</th><th>当前访视</th><th>窗口</th><th>访视任务</th><th>研究者确认</th></tr></thead>
+      <tbody>${subs.map(s=>{const w=winState(s);
+        return `<tr><td><span class="subjid">${esc(s.id)}</span></td>
+          <td class="mono" style="font-size:11.5px">${esc(s.rnd)}</td>
+          <td><span class="pill ${s.st==="已入组"?"p-acc":s.st==="筛败"?"p-crit":"p-warn"}">${esc(s.st)}</span></td>
+          <td style="font-size:12px">${esc(soaLabel(s.ss,s.seq))}</td>
+          <td><span class="pill p-${w.k}">${esc(w.t)}</span></td>
+          <td class="tnum">${subjDone(s)}/${s.tasks.length}</td>
+          <td>${s.pendPi?`<span class="pill p-warn">待确认 · ${esc(s.pendPi.visit)}</span>`
+            :s.piOk?`<span class="pill p-good">已确认</span>`
+            :`<span class="t-mut">访视进行中</span>`}</td></tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:10px">研究者端只看本人担任 PI 的中心。受托方的成本、毛利、人天与利用率不对研究者开放。</p>`;
+
+  box.addEventListener("click",e=>{
+    const ok=e.target.closest("[data-piok]");
+    if(ok){ const s=SUBJ.find(x=>x.id===ok.dataset.piok); const v=s.pendPi.visit;
+      s.piOk=true; s.pendPi=null;
+      toast(`${s.id}「${v}」已由研究者确认签署，该次访视记录锁定`); render(); return; }
+    const bk=e.target.closest("[data-piback]");
+    if(bk){ const s=SUBJ.find(x=>x.id===bk.dataset.piback); const v=s.pendPi.visit;
+      s.pendPi=null; s.piOk=false;
+      ISSUES.unshift({id:"QI-2026-0"+(200+ISSUES.length), src:"中心自查", ss:s.ss, sev:"一般",
+        type:"访视记录退回补充", found:TODAY,
+        desc:`研究者复核 ${s.id}「${v}」访视记录后退回，需 CRC 补充源数据或说明。`,
+        capa:"（待补充）", own:s.crc, due:new Date(Date.now()+5*864e5).toISOString().slice(0,10),
+        st:"待整改", sla:null});
+      toast(`${s.id}「${v}」已退回 ${s.crc} 补充，并生成待办`,"warn"); render(); return; }
+    const sg=e.target.closest("[data-pisign]");
+    if(sg){ const i=ISSUES.find(x=>x.id===sg.dataset.pisign); i.st="待验证";
+      toast(`${i.id} 已由研究者签署，并同意上报伦理委员会`); render(); return; }
+    if(e.target.closest("#pi-sae")) saeModal();
+  });
+};
+
+function saeModal(){
+  const ss=piSites()[0], subs=piSubj().filter(s=>s.st==="已入组");
+  openLayer($("#modal"),`
+    <div class="drawer-h"><h3 style="flex:1;font-size:15px">SAE 上报</h3><button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div class="field"><div class="slider-h"><label for="sa-s">受试者</label></div>
+        <select class="sel" id="sa-s" style="width:100%">${subs.map(s=>
+          `<option value="${s.id}">${esc(s.id)} · 随机号 ${esc(s.rnd)}</option>`).join("")}</select></div>
+      <div class="field"><div class="slider-h"><label for="sa-t">事件名称</label></div>
+        <input class="inp" id="sa-t" style="width:100%" placeholder="例：3 级免疫性肝炎"></div>
+      <div class="field"><div class="slider-h"><label for="sa-h">研究者知晓至上报耗时</label><b id="sa-hv">6 小时</b></div>
+        <input type="range" id="sa-h" min="1" max="72" step="1" value="6"></div>
+      <div id="sa-w" style="margin-bottom:12px"></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="sa-go">提交上报</button></div>
+    </div>`);
+  const upd=()=>{ const h=+$("#sa-h").value; $("#sa-hv").textContent=h+" 小时";
+    const ok=h<=SAE_SLA;
+    $("#sa-w").innerHTML=`<div style="border-left:2px solid var(--${ok?"good":"crit"});background:var(--${ok?"good":"crit"}-soft);padding:8px 11px;font-size:12px;color:var(--ink-2);line-height:1.6">
+      ${ok?`在 ${SAE_SLA} 小时窗口内，及时率不受影响。`
+         :`<b style="color:var(--crit)">超出 ${SAE_SLA} 小时窗口 ${h-SAE_SLA} 小时</b> —— 提交后将立即生成严重质量事件，
+           并使本中心 SAE 及时率跌破 100%。这是合规红线，不是 KPI。`}</div>`; };
+  $("#sa-h").addEventListener("input",upd); upd();
+  $("#sa-go").addEventListener("click",()=>{
+    const h=+$("#sa-h").value, subj=$("#sa-s").value, term=$("#sa-t").value.trim()||"未填写事件名称";
+    const id="SAE-00"+(42+SAE_LOG.length);
+    SAE_LOG.unshift({id, ss:ss.id, subj, term, aware:TODAY+" 09:00",
+      rpt:TODAY+" "+String(9+Math.floor(h/24)).padStart(2,"0")+":00", h});
+    if(h>SAE_SLA) ISSUES.unshift({id:"QI-2026-0"+(170+ISSUES.length), src:"中心自查", ss:ss.id,
+      sev:"严重", type:"SAE 上报超窗", found:TODAY,
+      desc:`受试者 ${subj}「${term}」研究者知晓至上报 ${h} 小时，超出 ${SAE_SLA} 小时窗口。`,
+      capa:"（待提交整改措施）", own:ss.crc[0],
+      due:new Date(Date.now()+10*864e5).toISOString().slice(0,10), st:"待整改", sla:SAE_SLA, elapsed:h});
+    closeLayer();
+    toast(h<=SAE_SLA? `${id} 已上报，${h} 小时，在窗口内`
+      : `${id} 已上报但超窗 ${h-SAE_SLA} 小时，已自动生成严重质量事件`, h<=SAE_SLA?"":"crit");
+    setTimeout(render,220);
+  });
+}
+</script>

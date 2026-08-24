@@ -21,7 +21,13 @@ const IC = {
   intake:'<path d="M12 5v10M8 11l4 4 4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>',
   capa:'<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
   inst:'<path d="M3 21h18M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/>',
-  reg:'<rect x="3" y="4" width="18" height="16" rx="1"/><circle cx="9" cy="10" r="2.2"/><path d="M5.5 17a3.8 3.8 0 0 1 7 0"/><path d="M15 9h4M15 13h4"/>'
+  reg:'<rect x="3" y="4" width="18" height="16" rx="1"/><circle cx="9" cy="10" r="2.2"/><path d="M5.5 17a3.8 3.8 0 0 1 7 0"/><path d="M15 9h4M15 13h4"/>',
+  screen:'<path d="M3 4h18l-7 8v7l-4 2v-9z"/>',
+  feas:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/><path d="M8.5 11h5M11 8.5v5"/>',
+  mat:'<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+  pay:'<rect x="2" y="6" width="20" height="12" rx="1"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+  pi:'<path d="M12 3l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4L7.5 16.8l.9-5L4.8 8.3l5-.7z"/>',
+  audit:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.9-4.9"/><path d="M8 10.5l2 2 3.5-3.5"/>'
 };
 
 /* ════════ 每个角色只看得到自己该看的 ════════ */
@@ -39,16 +45,25 @@ const N = {
   intake:{t:()=>PERSONA().k==="boss"?"立项审批":"立项与建档", ic:IC.intake},
   capa:{t:"我的整改",ic:IC.capa},
   inst:{t:"机构工作台",ic:IC.inst}, instac:{t:"立项受理",ic:IC.intake},
-  instqc:{t:"机构质控",ic:IC.qa}, instreg:{t:"人员备案与准入",ic:IC.reg}
+  instqc:{t:"机构质控",ic:IC.qa}, instreg:{t:"人员备案与准入",ic:IC.reg},
+  screen:{t:"筛选漏斗与筛败",ic:IC.screen}, feas:{t:"中心可行性调查",ic:IC.feas},
+  material:{t:"药品与样本",ic:IC.mat}, pay:{t:"受试者补偿",ic:IC.pay},
+  pi:{t:"研究者工作台",ic:IC.pi}, audit:{t:"内部稽查",ic:IC.audit}
 };
 const openQ  = who=>QUERIES.filter(q=>q.owner===who&&q.st==="待中心回复").length;
 const myQ    = ()=>QUERIES.filter(q=>q.by.startsWith(PERSONA().n)&&q.st==="待中心回复").length;
 const badQA  = ()=>ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般").length;
 const myCapa = ()=>ISSUES.filter(i=>i.own===PERSONA().n&&i.st!=="已关闭").length;
+const myEdc  = ()=>SUBJ.filter(s=>s.crc===PERSONA().n&&edcLate(s)).length;
+const myPay  = ()=>PAY.filter(p=>staff(PERSONA().n)?.sites.includes(p.ss)&&p.st!=="已发放").length;
+const ipBad  = ()=>IP.filter(r=>ipM(r).diff!==0).length;
+const piPend = ()=>{const ids=new Set(SITES.filter(s=>s.pi===PERSONA().n).map(s=>s.id));
+  return SUBJ.filter(s=>ids.has(s.ss)&&!s.piOk&&subjDone(s)===s.tasks.length).length;};
+const auOpen = ()=>AUDIT.flatMap(a=>a.findings).filter(f=>f.st!=="已关闭").length;
 
 const NAV_BY_ROLE = {
   boss:[
-    {g:"经营", items:["dash",["intake",()=>INTAKE.length],"sites","enr"]},
+    {g:"经营", items:["dash",["intake",()=>INTAKE.length],"sites","enr","screen"]},
     {g:"资源", items:["staff","time"]},
     {g:"财务", items:["pnl","bill"]},
     {g:"质量", items:[["qa",badQA],"mon"]},
@@ -56,28 +71,35 @@ const NAV_BY_ROLE = {
   ],
   pm:[
     {g:"团队", items:["pm","team",["approve",()=>APPROVALS.length]]},
-    {g:"项目", items:["intake","sites","enr","mon"]},
+    {g:"项目", items:["intake","feas","sites","enr","screen","mon"]},
     {g:"质量", items:[["qa",badQA]]},
     {g:"财务", items:["pnl"]}
   ],
   cra:[
-    {g:"我的工作", items:["cra","mysites","mon",["query",()=>myQ()]]},
+    {g:"我的工作", items:["cra","mysites","mon",["query",()=>myQ()],"screen","feas"]},
+    {g:"现场", items:[["material",ipBad]]},
     {g:"记录", items:["time"]},
     {g:"质量", items:[["qa",badQA],["capa",myCapa]]}
   ],
   crc:[
     {g:"我的工作", items:["crc",["subj",()=>SUBJ.filter(s=>s.crc===PERSONA().n&&winState(s).k!=="good").length],
-                          ["query",()=>openQ(PERSONA().n)],"isf"]},
-    {g:"质量", items:[["capa",myCapa]]},
+                          ["query",()=>openQ(PERSONA().n)],["capa",myCapa]]},
+    {g:"现场", items:["isf",["material",ipBad],["pay",myPay]]},
     {g:"记录", items:["time"]}
   ],
   inst:[
     {g:"机构办公室", items:["inst",["instac",()=>acOpen().length],
                             ["instqc",()=>qcFindOpen().length],
                             ["instreg",()=>regOpen().length]]}
+  ],
+  pi:[
+    {g:"研究者", items:[["pi",piPend],["qa",badQA]]}
+  ],
+  qa:[
+    {g:"质量保证", items:[["audit",auOpen],["qa",badQA],"screen","mon"]}
   ]
 };
-const HOME = {boss:"dash", pm:"pm", cra:"cra", crc:"crc", inst:"inst"};
+const HOME = {boss:"dash", pm:"pm", cra:"cra", crc:"crc", inst:"inst", pi:"pi", qa:"audit"};
 
 const TITLES = {
   dash:["经营驾驶舱","一页看清人效、毛利、入组与风险。每个数字后面都对应一个具体的人和一个具体的动作。"],
@@ -106,7 +128,13 @@ const TITLES = {
   inst:["机构工作台","医院药物临床试验机构办公室视角。机构对本院承接的每一个项目负质量与合规的最终责任。"],
   instac:["立项受理","受托方递交 → 机构形式审查 → 受理并转伦理。材料不齐就受理，后面每个环节都带着这个缺口往下走。"],
   instqc:["机构质控","医院方对项目的质量反馈闭环：质控发现 → 出具意见 → 派发整改 → 受托方回复 → 机构复核关闭。"],
-  instreg:["人员备案与准入","谁能进这家医院接触受试者源数据，是医院的责任，不是受托方能自行决定的事。"]
+  instreg:["人员备案与准入","谁能进这家医院接触受试者源数据，是医院的责任，不是受托方能自行决定的事。"],
+  screen:["筛选漏斗与筛败","入组数只是漏斗最后一格。「入组落后」没有行动价值，「为什么落后」才有 —— 而答案藏在前面三格。"],
+  feas:["中心可行性调查","报价模型算「要花多少人天」，可行性库算「这家能不能出病人」。事后把亏损中心标红是最便宜也最没用的功能。"],
+  material:["药品与样本","接收 − 发放 = 账面库存，实盘对不上就是严重发现；样本采集→离心→转运→回执，断一环即失效。"],
+  pay:["受试者补偿","CRC 每周固定要花时间的事，也是稽查必查三件套：发放与访视是否对应、有无签收凭证、现金发放是否合规。"],
+  pi:["研究者工作台","方案偏离要 PI 签字、SAE 由 PI 上报、授权分工表由 PI 签署 —— 研究者是法定责任人，不该只是系统里的一个字符串。"],
+  audit:["内部稽查与 CAPA 有效性","机构质控是医院查我们，QA 是我们自己查自己。QA 真正的价值不是再发现一批问题，而是验证 CAPA 到底有没有防住复发。"]
 };
 
 const state = {view:"dash", persona:"boss", study:"all", enrStudy:"HJ-2024-017", dashRange:"12m",
@@ -121,6 +149,8 @@ function myScope(){
   if(p.k==="boss") return SITES;
   if(p.k==="pm")   return SITES.filter(s=>TEAM.studies.includes(s.sid));
   if(p.k==="inst") return SITES.filter(s=>s.hosp===p.hosp);   // 机构只看本院
+  if(p.k==="pi")   return SITES.filter(s=>s.pi===p.n);        // 研究者只看自己负责的中心
+  if(p.k==="qa")   return SITES;                              // QA 覆盖全公司，但只有质量视图
   const me = staff(p.n);
   return SITES.filter(s=>me.sites.includes(s.id));
 }

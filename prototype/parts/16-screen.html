@@ -1,0 +1,116 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   筛选漏斗与筛败分析
+   入组数只是漏斗最后一格。落后中心的根因藏在前面三格里 ——
+   「入组落后」这个结论本身没有行动价值，「为什么落后」才有。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.screen = box=>{
+  const list = scope().filter(s=>FN(s.id).pre>0);
+  const T = list.reduce((a,s)=>{const f=funnelM(s);
+    return {pre:a.pre+f.pre, icf:a.icf+f.icf, enr:a.enr+f.enr, sf:a.sf+f.sf, inScr:a.inScr+f.inScr};},
+    {pre:0,icf:0,enr:0,sf:0,inScr:0});
+  const sfRate = T.icf? T.sf/T.icf : 0;
+  const reasons = SF_REASONS.map((r,i)=>({n:r, v:sum(list,s=>FN(s.id).sfr[i]||0), c:`var(--s${i%5+1})`}))
+    .filter(r=>r.v).sort((a,b)=>b.v-a.v);
+  const diags = list.map(s=>({s, d:enrollDiag(s)})).filter(x=>x.d);
+
+  box.innerHTML=`
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>筛选漏斗</h3><span class="sp"></span>
+      <span class="sub">预筛 → 签署知情 → 入组 / 筛败</span></div>
+    <div class="card-b">
+      <div style="display:flex;gap:2px;align-items:flex-end;margin-bottom:12px">
+        ${[["预筛人数",T.pre,"var(--s1)",1],
+           ["签署知情",T.icf,"var(--s3)",T.icf/T.pre],
+           ["已入组",T.enr,"var(--good)",T.enr/T.pre],
+           ["筛败",T.sf,"var(--s5)",T.sf/T.pre],
+           ["在筛",T.inScr,"var(--plan)",T.inScr/T.pre]
+         ].map(([l,v,c,h])=>`<div style="flex:1;text-align:center">
+            <div class="num" style="font-size:22px;color:${c}">${v}</div>
+            <div style="height:${Math.max(6,clamp(h,0,1)*96)}px;background:${c};border-radius:2px 2px 0 0;margin:6px 0 0"></div>
+            <div class="kpi-l" style="margin-top:5px">${esc(l)}</div>
+            <div class="note">${T.pre?pct(v/T.pre):"—"}</div>
+          </div>`).join("")}
+      </div>
+      <div class="grid g4" style="gap:10px;border-top:1px solid var(--line);padding-top:12px">
+        ${[["筛败率",pct(sfRate),`${T.sf} / ${T.icf} 签署知情者`,sfRate>0.5?"var(--crit)":sfRate>0.35?"var(--warn)":"var(--good)"],
+           ["预筛转化率",T.pre?pct(T.icf/T.pre):"—","预筛 → 签署知情","var(--ink)"],
+           ["总转化率",T.pre?pct(T.enr/T.pre):"—","每入组 1 例需预筛 "+(T.enr?n1(T.pre/T.enr):"—")+" 人","var(--ink)"],
+           ["筛败费收入",wan(sum(list,s=>revParts(s).sf)),`按入组单价 ${pct(SF_FEE)} 计价`,"var(--good)"]
+         ].map(([l,v,n,c])=>`<div><div class="kpi-l">${esc(l)}</div>
+            <div class="num" style="font-size:21px;margin-top:3px;color:${c}">${v}</div>
+            <div class="note">${esc(n)}</div></div>`).join("")}
+      </div>
+    </div>
+  </div>
+
+  ${diags.length?`<div class="card" style="margin-bottom:12px">
+    <div class="card-h"><span class="dot" style="background:var(--crit)"></span>
+      <h3>落后中心根因判定</h3><span class="sp"></span>
+      <span class="sub">三种失败模式，指向完全不同的行动</span></div>
+    <div class="card-b" style="padding:0">
+      ${diags.map(({s,d})=>`<div style="padding:12px 16px 12px 18px;border-bottom:1px solid var(--line);position:relative">
+        <span class="stripe" style="background:${d.c}"></span>
+        <div class="row" style="gap:7px">
+          <span class="pill p-crit" style="background:${d.c};color:var(--surface);border-color:${d.c}">${esc(d.k)}</span>
+          <b style="font-size:13px">${esc(s.hosp)}</b>
+          <span class="t-sub">${esc(S[s.sid].short)} · 入组 ${s.enrolled}/${s.contracted}</span></div>
+        <div class="note" style="margin-top:4px;color:var(--ink-2)">${esc(d.d)}</div>
+        <div class="note" style="margin-top:3px"><b style="color:var(--ink-2)">该做的事</b>：${esc(d.a)}</div>
+      </div>`).join("")}
+    </div>
+  </div>`:""}
+
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>逐中心漏斗</h3><span class="sp"></span>
+        <span class="sub">同一项目内，筛败率差 2 倍是常态</span></div>
+      <div class="tw"><table style="min-width:820px">
+        <thead><tr><th>中心</th><th class="ta-r">预筛</th><th class="ta-r">签知情</th><th class="ta-r">入组</th>
+          <th class="ta-r">筛败</th><th class="ta-r">筛败率</th><th class="ta-r">总转化</th>
+          <th style="width:18%">漏斗</th><th>判定</th></tr></thead>
+        <tbody>${list.map(s=>{const f=funnelM(s), d=enrollDiag(s);
+          const sfc = f.sfRate>0.5?"var(--crit)":f.sfRate>0.35?"var(--warn)":"var(--good)";
+          return `<tr class="clk" data-ss7="${s.id}">
+            <td><div class="t-main">${esc(s.hosp)}</div><div class="t-sub">${esc(S[s.sid].short)} · ${esc(s.city)}</div></td>
+            <td class="tnum">${f.pre}</td><td class="tnum">${f.icf}</td>
+            <td class="tnum" style="font-weight:600">${f.enr}</td>
+            <td class="tnum">${f.sf}</td>
+            <td class="tnum" style="color:${sfc};font-weight:600">${f.sfRate===null?"—":pct(f.sfRate)}</td>
+            <td class="tnum">${f.yield===null?"—":pct(f.yield)}</td>
+            <td><div style="display:flex;height:12px;gap:1px;border-radius:2px;overflow:hidden">
+              <div style="width:${f.enr/f.pre*100}%;background:var(--good)" title="入组"></div>
+              <div style="width:${f.sf/f.pre*100}%;background:var(--s5)" title="筛败"></div>
+              <div style="width:${f.inScr/f.pre*100}%;background:var(--plan)" title="在筛"></div>
+              <div style="flex:1;background:var(--surface-3)" title="预筛未入"></div>
+            </div></td>
+            <td>${d?`<span class="pill p-crit" style="background:${d.c};color:var(--surface);border-color:${d.c}">${esc(d.k)}</span>`
+                  :`<span class="pill p-good">正常</span>`}</td></tr>`;}).join("")}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>筛败原因分布</h3></div>
+      <div class="card-b">
+        <div id="c-sfr"></div>
+        <div class="hr"></div>
+        <div class="note" style="line-height:1.7">
+          原因分布指向不同的对策：<br>
+          <b>实验室指标不符</b>占比高 → 入排窗口与本土人群不匹配，去和申办方谈方案修订；<br>
+          <b>既往治疗史不符</b>占比高 → 中心病源以经治患者为主，选址就选错了；<br>
+          <b>受试者撤回知情</b>占比高 → 知情沟通质量或补偿方案有问题，这是 CRC 可控的。
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="formula">筛败率 = 筛败 ÷ 签署知情｜预筛转化率 = 签署知情 ÷ 预筛｜总转化率 = 入组 ÷ 预筛
+每入组 1 例需预筛人数 = 1 ÷ 总转化率 —— 这个数直接决定招募渠道要铺多大
+收入 = 启动费 + 入组×单价 + <b>筛败×单价×${pct(SF_FEE)}</b>｜成本含筛败例的筛选期工作量</div>`;
+
+  hbars($("#c-sfr"), reasons.map(r=>({label:r.n, v:r.v, color:r.c,
+    tip:`<div class="tip-t">${esc(r.n)}</div><div class="tip-r"><span>例数</span><b>${r.v}</b></div>
+         <div class="tip-r"><span>占筛败</span><b>${pct(r.v/T.sf)}</b></div>`})),
+    {fmt:v=>v, unit:" 例", h:18, gap:6});
+  box.addEventListener("click",e=>{const t=e.target.closest("[data-ss7]"); if(t) openSite(t.dataset.ss7);});
+};
+</script>
