@@ -119,11 +119,21 @@ export class IdentityService {
     const held = await c.client.query<{ code: string }>(
       `SELECT s.code FROM site_assignment sa JOIN study_site s ON s.id = sa.study_site_id
         WHERE sa.account_id = $1 AND sa.effective @> CURRENT_DATE ORDER BY s.code`, [id]);
-    if (held.rowCount)
+    if (held.rowCount) {
+      /* 已经有一笔待完成的交接单时，提示改为「去完成它」而不是「去发起」——
+         否则用户会重复发起第二笔。 */
+      const pend = await c.client.query<{ id: string }>(
+        `SELECT id FROM handover WHERE from_account_id = $1 AND status = 'pending' LIMIT 1`, [id]);
+      const open = pend.rows[0];
       throw new ProblemException("gate-not-satisfied", {
-        detail: `${acc.display_name} 仍负责 ${held.rowCount} 个中心，请先发起交接`,
+        detail: open
+          ? `${acc.display_name} 仍负责 ${held.rowCount} 个中心，且已有一笔待完成的交接单（${open.id}）`
+          : `${acc.display_name} 仍负责 ${held.rowCount} 个中心，请先发起交接`,
         unmet: held.rows.map(r => ({
-          code: "site-still-assigned", message: `${r.code} 尚未交接`, module: "handover" })) });
+          code: "site-still-assigned",
+          message: open ? `${r.code} 的交接尚未完成` : `${r.code} 尚未交接`,
+          module: "handover" })) });
+    }
 
     await c.client.query(
       `UPDATE account SET status='disabled', disabled_at=now(), disabled_reason=$2 WHERE id=$1`,

@@ -10,6 +10,7 @@ export * from "./kernel/registry.js";
 export * from "./auth/api.js";
 export * from "./identity/model.js";
 export * from "./site/model.js";
+export * from "./site/staffing.js";
 
 /* 端点定义有副作用（注册到 registry），必须被导入 */
 import "./auth/api.js";

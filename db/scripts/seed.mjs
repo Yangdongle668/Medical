@@ -2,8 +2,9 @@
 import fs from "node:fs";
 import pg from "pg";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+import { loadEnv, ROOT as REPO } from "./env.mjs";
+loadEnv();
+const ROOT = path.join(REPO, "db");
 const url = process.env.SEED_DATABASE_URL || process.env.DATABASE_URL;
 if (!url) { console.error("缺少 DATABASE_URL"); process.exit(1); }
 const c = new pg.Client({ connectionString: url });

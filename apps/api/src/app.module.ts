@@ -14,15 +14,17 @@ import { IdentityService } from "./modules/identity/identity.service.js";
 import { IdentityController } from "./modules/identity/identity.controller.js";
 import { SiteService } from "./modules/site/site.service.js";
 import { SiteController } from "./modules/site/site.controller.js";
+import { StaffingService } from "./modules/site/staffing.service.js";
+import { StaffingController } from "./modules/site/staffing.controller.js";
 
 /* 拦截器执行顺序 = 注册顺序（外 → 内）：
    TxInterceptor 在最外层，保证脱敏之后才提交/回滚；
    MaskInterceptor 紧贴处理器，对**所有**出口统一脱敏。 */
 @Module({
-  controllers: [AuthController, IdentityController, SiteController],
+  controllers: [AuthController, IdentityController, SiteController, StaffingController],
   providers: [
     { provide: POOL, useFactory: () => makePool() },
-    AuthService, AuditService, IdempotencyService, IdentityService, SiteService,
+    AuthService, AuditService, IdempotencyService, IdentityService, SiteService, StaffingService,
     { provide: APP_FILTER, useClass: ProblemFilter },
     { provide: APP_INTERCEPTOR, useClass: TxInterceptor },
     { provide: APP_INTERCEPTOR, useClass: MaskInterceptor },

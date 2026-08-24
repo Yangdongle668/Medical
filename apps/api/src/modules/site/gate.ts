@@ -24,10 +24,27 @@ const pending = (code: string, what: string, mod: string): Checker =>
   async () => ({ code, module: mod, status: "unavailable",
     message: `${what}（该检查由「${mod}」模块提供，尚未交付 —— 闸门保持关闭）` });
 
-/** 推进到「SIV启动」：启动清单的阻塞项必须清零 */
-const SIV_CHECKS: Checker[] = [
-  pending("startup-blockers", "启动清单仍有阻塞项", "startup")
-];
+/** 推进到「SIV启动」：启动清单的阻塞项必须清零。
+ *  这一项曾是 pending 占位，Site & Staffing 交付后换成了真实查询 ——
+ *  每个模块交付时都该这样把自己的检查项接进来。 */
+const sivBlockers: Checker = async (client, siteId) => {
+  const { rows } = await client.query<{ item: string }>(
+    `SELECT item FROM startup_item
+      WHERE study_site_id = $1 AND is_blocking AND done_at IS NULL
+      ORDER BY sort_order LIMIT 5`, [siteId]);
+  const { rows: cnt } = await client.query<{ n: string }>(
+    `SELECT count(*) AS n FROM startup_item
+      WHERE study_site_id = $1 AND is_blocking AND done_at IS NULL`, [siteId]);
+  const n = Number(cnt[0]?.n ?? 0);
+  if (n === 0) return { code: "startup-blockers", status: "ok", message: "启动阻塞项已清零" };
+  return {
+    code: "startup-blockers", module: "startup", status: "unmet",
+    message: `启动清单仍有 ${n} 项阻塞未完成：` +
+      rows.map(r => r.item).join("；") + (n > rows.length ? " 等" : "")
+  };
+};
+
+const SIV_CHECKS: Checker[] = [sivBlockers];
 
 /** 推进到「中心关闭」：七项前置条件 */
 const CLOSE_CHECKS: Checker[] = [
@@ -47,7 +64,10 @@ export async function evaluateGate(
   client: PoolClient, siteId: string, to: string
 ): Promise<{ satisfied: boolean; items: GateItem[] }> {
   const checks = REGISTRY[to] ?? [];
-  const items = await Promise.all(checks.map(c => c(client, siteId)));
+  /* 顺序执行，不用 Promise.all：这些检查共用请求事务的那一条连接，
+     并发发出去 pg 也只会排队，换不来速度，却会让语句在同一个事务里交错。 */
+  const items: GateItem[] = [];
+  for (const c of checks) items.push(await c(client, siteId));
   return { satisfied: items.every(i => i.status === "ok"), items };
 }
 

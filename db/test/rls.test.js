@@ -126,6 +126,45 @@ describe("租户维度（当前单租户，但列与策略已就位）", () => {
   });
 });
 
+describe("INSERT ... RETURNING 必须能穿过自己的 RLS 策略", () => {
+  /* FOR ALL 策略的 USING 会作用于 INSERT ... RETURNING 的返回行。
+     若策略里的辅助函数是 STABLE 且按 id 回查本表，它看不到刚插入的那一行，
+     插入就会失败并报「new row violates row-level security policy」——
+     而排查时会发现每个条件单独求值都是 true，极难定位。
+
+     防线：策略辅助函数必须**接收行的列值**作为参数，不能按 id 回查本表。
+     这一组测试就是盯住这条约定。 */
+  const returningWorks = async (label, sql, params, login) =>
+    asAccount(c, ID[login], async () => {
+      const r = await c.query(sql, params);
+      expect(r.rows[0]?.id, `${label}：INSERT ... RETURNING 被自己的策略挡住了`).toBeTruthy();
+      return r.rows[0].id;
+    });
+
+  it("study_site", async () => {
+    const st = await o.query("SELECT id FROM study LIMIT 1");
+    await returningWorks("study_site", `
+      INSERT INTO study_site (study_id, code, hospital, dept, city, pi_name,
+        contracted, unit_price_cents)
+      VALUES ($1,'SS-RET','回执测试医院','科','北京','某研究者',5,1000000)
+      RETURNING id`, [st.rows[0].id], "lingyuan");
+  });
+
+  it("handover", async () => {
+    const to = await o.query("SELECT id FROM account WHERE login='shenyilin'");
+    await returningWorks("handover", `
+      INSERT INTO handover (from_account_id, to_account_id, reason, planned_on)
+      VALUES (app.current_account_id(), $1, '回执测试交接', CURRENT_DATE)
+      RETURNING id`, [to.rows[0].id], "wutong");
+  });
+
+  it("audit_entry", async () => {
+    await returningWorks("audit_entry", `
+      INSERT INTO audit_entry (actor_login, actor_role_code, action, target_type, target_id)
+      VALUES ('lingyuan','boss','回执测试','test','T-1') RETURNING id`, [], "lingyuan");
+  });
+});
+
 describe("account 表：外部方只看得到自己", () => {
   const visibleAccounts = id => asAccount(c, id, async () => {
     const { rows } = await c.query("SELECT login FROM account ORDER BY login");

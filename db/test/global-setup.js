@@ -1,15 +1,8 @@
 /* 每次测试前把测试库重建到已知状态：迁移 + 种子。
    测试断言的是 schema 与策略的行为，必须从确定起点出发。 */
 import { execSync } from "node:child_process";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import fs from "node:fs";
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-for (const line of fs.readFileSync(path.join(ROOT, ".env"), "utf8").split("\n")) {
-  const m = line.match(/^([A-Z_]+)=(.*)$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
-}
+import { loadEnv, ROOT } from "../scripts/env.mjs";
+loadEnv();
 
 export async function setup() {
   const url = process.env.TEST_DATABASE_URL;

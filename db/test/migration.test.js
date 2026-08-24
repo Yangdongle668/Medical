@@ -54,15 +54,19 @@ describe("迁移：本地可重复执行（生产只进不退）", () => {
     });
   });
 
-  it("RLS 在恢复后仍然启用（down/up 不会悄悄丢掉策略）", async () => {
+  /* 不再硬编码表名清单：每加一张表都要改测试，改着改着就会有人顺手把新表从清单里
+     "临时"去掉。改为自维护的规则 —— 凡是带 tenant_id 的表，必须启用 RLS。 */
+  it("凡是带 tenant_id 的表都启用了 RLS（down/up 不会悄悄丢掉策略）", async () => {
     const { rows } = await o.query(`
-      SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-       WHERE n.nspname='public' AND c.relrowsecurity ORDER BY 1`);
-    expect(rows.map(r => r.relname)).toEqual([
-      "account", "audit_identity", "audit_entry", "auth_identity", "auth_session",
-      "idempotency_key", "login_token", "role", "site_assignment",
-      "study", "study_site", "team"
-    ].filter(t => t !== "audit_identity").sort());
+      SELECT c.relname FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND c.relkind = 'r'
+         AND EXISTS (SELECT 1 FROM information_schema.columns col
+                      WHERE col.table_name = c.relname AND col.column_name = 'tenant_id')
+         AND c.relname <> 'tenant'
+         AND NOT c.relrowsecurity
+       ORDER BY 1`);
+    expect(rows.map(r => r.relname), "这些表带租户列却没开 RLS").toEqual([]);
   });
 
   it("每张启用了 RLS 的表都至少有一条策略 —— 启用而无策略等于全部拒绝，会静默出事", async () => {

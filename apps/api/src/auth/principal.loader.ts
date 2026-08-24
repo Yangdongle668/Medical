@@ -26,15 +26,13 @@ export async function loadPrincipal(
   const a = rows[0];
   if (!a) throw new Error(`账号不存在或不可见：${accountId}`);
 
-  const [assigned, teamStudies] = await Promise.all([
-    client.query<{ study_site_id: string }>(
-      `SELECT study_site_id FROM site_assignment
-        WHERE account_id = $1 AND effective @> CURRENT_DATE`, [accountId]),
-    a.team_id
-      ? client.query<{ study_id: string }>(
-          `SELECT study_id FROM team_study WHERE team_id = $1`, [a.team_id])
-      : Promise.resolve({ rows: [] as { study_id: string }[] })
-  ]);
+  const assigned = await client.query<{ study_site_id: string }>(
+    `SELECT study_site_id FROM site_assignment
+      WHERE account_id = $1 AND effective @> CURRENT_DATE`, [accountId]);
+  const teamStudies = a.team_id
+    ? await client.query<{ study_id: string }>(
+        `SELECT study_id FROM team_study WHERE team_id = $1`, [a.team_id])
+    : { rows: [] as { study_id: string }[] };
 
   return {
     principal: {

@@ -93,3 +93,100 @@ define({
   response: commandResult(StudySite),
   errors: ["gate-not-satisfied", "conflict-version", "idempotency-key-reused"]
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   启动清单 · 人员 · 交接
+   ════════════════════════════════════════════════════════════════════ */
+import { StartupChecklist, StartupItem, Staff, Handover, RoleKind, HandoverStatus }
+  from "./staffing.js";
+
+define({
+  id: "getStartupChecklist", method: "get",
+  path: "/v1/study-sites/{id}/startup-items", layer: "L1", context: CTX,
+  summary: "中心启动清单",
+  description:
+    "8 类清单项，带负责人、应完成日与**阻塞项**标记。\n" +
+    "阻塞项未清零，`POST /v1/study-sites/{id}:advance` 到 `siv` 会被闸门拦下。",
+  params: ById,
+  response: StartupChecklist
+});
+
+define({
+  id: "completeStartupItem", method: "post", path: "/v1/startup-items/{id}:complete",
+  layer: "L2", context: CTX, summary: "标记启动清单项完成",
+  description:
+    "完成必须同时记下时间与人 —— 只记「做完了」而不记「谁做的」，核查时说不清。\n" +
+    "若本次完成清空了最后一个阻塞项，`sideEffects` 会明确告知「可推进 SIV」。",
+  params: ById,
+  body: z.object({ note: z.string().max(500).optional() }),
+  response: commandResult(StartupItem),
+  errors: ["conflict-version", "idempotency-key-reused"]
+});
+
+define({
+  id: "reopenStartupItem", method: "post", path: "/v1/startup-items/{id}:reopen",
+  layer: "L2", context: CTX, summary: "撤销启动清单项的完成标记",
+  description: "撤销是敏感动作：它可能让一个已经推进的中心回到「其实没准备好」的状态，必须写原因。",
+  params: ById,
+  body: WithReason,
+  response: commandResult(StartupItem),
+  errors: ["conflict-version", "idempotency-key-reused"]
+});
+
+define({
+  id: "listStaff", method: "get", path: "/v1/staff", layer: "L1", context: CTX,
+  summary: "人员与派工",
+  description: "外部方看不到员工名册 —— 那与机构履行监管职责无关。",
+  query: PageQuery.extend({
+    roleKind: RoleKind.optional(),
+    successionGap: z.coerce.boolean().optional().describe("只看「带多个中心却无继任者」的人")
+  }),
+  response: page(Staff)
+});
+
+define({
+  id: "listHandovers", method: "get", path: "/v1/handovers", layer: "L1", context: CTX,
+  summary: "交接列表",
+  query: PageQuery.extend({ status: HandoverStatus.optional() }),
+  response: page(Handover)
+});
+
+define({
+  id: "createHandover", method: "post", path: "/v1/handovers",
+  layer: "L1", context: CTX, status: 201,
+  summary: "发起交接",
+  description:
+    "休假、离职、调岗 —— 中心不会因此停下。\n" +
+    "只能交接自己当前负责的中心；接手人必须是同工种的在职人员。",
+  body: z.object({
+    toAccountId: Uuid,
+    studySiteIds: z.array(Uuid).min(1),
+    reason: z.string().trim().min(5).max(500),
+    plannedOn: DateOnly
+  }),
+  response: Handover,
+  errors: ["invariant-violated"]
+});
+
+define({
+  id: "completeHandoverItem", method: "post",
+  path: "/v1/handovers/{id}/items/{seq}:done", layer: "L2", context: CTX,
+  summary: "确认交接清单的某一项",
+  description: "逐项确认，不是一次打勾了事 —— 交接单签了字但受试者没交底，等于没交接。",
+  params: z.object({ id: Uuid, seq: z.coerce.number().int().min(0) }),
+  body: z.object({}),
+  response: commandResult(Handover),
+  errors: ["idempotency-key-reused"]
+});
+
+define({
+  id: "completeHandover", method: "post", path: "/v1/handovers/{id}:complete",
+  layer: "L2", context: CTX, summary: "确认交接完成",
+  description:
+    "清单未逐项确认不得完成 —— 交接单签了字但受试者没交底，等于没交接。\n" +
+    "完成时把派工从原负责人转到接手人，两边的行范围随即改变。",
+  params: ById,
+  body: z.object({}),
+  response: commandResult(Handover),
+  errors: ["gate-not-satisfied", "idempotency-key-reused"]
+});

@@ -18,21 +18,30 @@ function uuid5(name) {                                        // RFC 4122 v5
 /* 在隔离上下文里求值原型的数据段 */
 const html = fs.readFileSync("prototype/index.html", "utf8");
 const js = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join("\n");
-const grab = name => {
+/* deps：某些字面量会引用先前定义的常量（如 HANDOVER 引用 HO_ITEMS），
+   隔离求值时必须把它们注入作用域。 */
+const grab = (name, deps = {}) => {
   const re = new RegExp(`(?:^|\\n)(?:const|let)\\s+${name}\\s*=\\s*`, "m");
   const i = js.search(re); if (i < 0) throw new Error(`未找到 ${name}`);
-  const start = js.indexOf(js[js.search(re)] === "\n" ? "=" : "=", i) + 1;
+  const start = js.indexOf("=", i) + 1;
   let d = 0, s = -1;
   for (let k = start; k < js.length; k++) {
     const c = js[k];
     if (c === "[" || c === "{") { if (s < 0) s = k; d++; }
-    else if (c === "]" || c === "}") { d--; if (!d) return eval("(" + js.slice(s, k + 1) + ")"); }
+    else if (c === "]" || c === "}") {
+      d--;
+      if (!d) return new Function(...Object.keys(deps),
+        `return (${js.slice(s, k + 1)})`)(...Object.values(deps));
+    }
   }
   throw new Error(`${name} 解析失败`);
 };
 const STUDIES = grab("STUDIES"), SITES = grab("SITES"),
       STAFF = grab("STAFF"), USERS = grab("USERS"),
-      GROUPS = grab("GROUPS"), ROLE_DEF = grab("ROLE_DEF");
+      GROUPS = grab("GROUPS"), ROLE_DEF = grab("ROLE_DEF"),
+      STARTUP = grab("STARTUP"), HO_ITEMS = grab("HO_ITEMS"),
+      HANDOVER = grab("HANDOVER", { HO_ITEMS }), TALENT = grab("TALENT"),
+      SIV_PLAN = grab("SIV_PLAN");
 
 const q  = v => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const d  = v => (!v || v === "—") ? "NULL" : `'${v}'`;
@@ -148,6 +157,55 @@ for (const p of STAFF) {
       `'${uuid5("account:"+u.u)}', '${uuid5("site:"+sid)}', ${q(p.role)}, ` +
       `daterange('2024-09-01', NULL, '[)'));`);
 }
+P(``);
+
+/* ── 人员作业属性 ── */
+P(`-- ── 人员：account 之外的作业属性 ──────────────────────────────`);
+P(`-- account 回答「谁能登录、看得到什么」；staff 回答「他是什么工种、带谁、谁接他」。`);
+const acc = n => { const u = USERS.find(x => x.n === n); return u ? `'${uuid5("account:"+u.u)}'` : "NULL"; };
+for (const p of STAFF) {
+  const u = USERS.find(x => x.n === p.n); if (!u) continue;
+  const t = TALENT[p.n] || {};
+  P(`INSERT INTO staff (account_id, role_kind, level, city, gcp_expires_on,` +
+    ` mentor_account_id, successor_account_id) VALUES (` +
+    `'${uuid5("account:"+u.u)}', ${q(p.role)}, ${q(p.lvl)}, ${q(p.city)}, ${d(p.gcp)}, ` +
+    `${t.mentor ? acc(t.mentor) : "NULL"}, ${t.succ ? acc(t.succ) : "NULL"});`);
+}
+P(``);
+
+/* ── 启动清单 ── */
+const CAT = {"伦理与批件":"ethics","合同与预算":"contract","研究者文件夹":"isf",
+  "人员与培训":"training","药品与物资":"ip","检验与设备":"lab",
+  "系统与账号":"systems","启动会筹备":"meeting"};
+P(`-- ── 启动清单：CRC 最忙的两个月，此前系统对它一无所知 ──────────`);
+STARTUP.forEach((r, i) => {
+  P(`INSERT INTO startup_item (study_site_id, category, item, owner_account_id, due_on,` +
+    ` is_blocking, sort_order, done_at, done_by) VALUES (` +
+    `'${uuid5("site:"+r.ss)}', ${q(CAT[r.cat])}, ${q(r.item)}, ${acc(r.owner)}, ${d(r.due)}, ` +
+    `${r.block ? "true" : "false"}, ${i}, ` +
+    `${r.done ? `'${r.due}T09:00:00+08'::timestamptz` : "NULL"}, ${r.done ? acc(r.owner) : "NULL"});`);
+});
+P(``);
+P(`-- 计划 SIV 日期`);
+for (const [ss, day] of Object.entries(SIV_PLAN))
+  P(`UPDATE study_site SET siv_planned_on = ${d(day)} WHERE code = ${q(ss)};`);
+P(``);
+
+/* ── 交接 ── */
+P(`-- ── 交接：系统此前提出过这个问题，却没有提供机制 ──────────────`);
+HANDOVER.forEach(h => {
+  const id = uuid5("handover:" + h.id);
+  const done = h.st === "已完成";
+  P(`INSERT INTO handover (id, from_account_id, to_account_id, reason, planned_on, status,` +
+    ` completed_at) VALUES ('${id}', ${acc(h.from)}, ${acc(h.to)}, ${q(h.reason)}, ${d(h.d)}, ` +
+    `${q(done ? "completed" : "pending")}, ${done ? `'${h.d}T18:00:00+08'::timestamptz` : "NULL"});`);
+  for (const ss of h.ss)
+    P(`INSERT INTO handover_site (handover_id, study_site_id) VALUES ('${id}', '${uuid5("site:"+ss)}');`);
+  h.items.forEach((it, k) =>
+    P(`INSERT INTO handover_item (handover_id, seq, item, done_at, done_by) VALUES (` +
+      `'${id}', ${k}, ${q(it.t)}, ${it.done ? `'${h.d}T18:00:00+08'::timestamptz` : "NULL"}, ` +
+      `${it.done ? acc(h.from) : "NULL"});`));
+});
 P(``);
 P(`COMMIT;`);
 

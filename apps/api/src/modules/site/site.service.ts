@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { siteScopeSql } from "@sitedesk/policy";
+import { DEFAULT_STARTUP_ITEMS } from "@sitedesk/contracts";
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
@@ -103,8 +104,25 @@ export class SiteService {
        body.piAccountId ?? null, body.contracted, body.unitPriceCents,
        body.startupFeeCents ?? 0, body.sivPlannedOn ?? null]);
     const id = rows[0]!.id;
+
+    /* 建档即铺开标准启动清单。不铺开的话，SIV 闸门查的「阻塞项清零」
+       对每一个新中心天然成立 —— 闸门看着在把关，实际全部放行。 */
+    await c.client.query(
+      `INSERT INTO startup_item (study_site_id, category, item, is_blocking, sort_order, due_on)
+       SELECT $1, t.category, t.item, t.blocking, t.ord,
+              CASE WHEN $2::date IS NULL THEN NULL ELSE $2::date + t.due_offset END
+         FROM unnest($3::text[], $4::text[], $5::boolean[], $6::int[], $7::int[])
+              AS t(category, item, blocking, ord, due_offset)`,
+      [id, body.sivPlannedOn ?? null,
+       DEFAULT_STARTUP_ITEMS.map(t => t.category),
+       DEFAULT_STARTUP_ITEMS.map(t => t.item),
+       DEFAULT_STARTUP_ITEMS.map(t => t.blocking),
+       DEFAULT_STARTUP_ITEMS.map((_, i) => i),
+       DEFAULT_STARTUP_ITEMS.map(t => t.dueOffset)]);
+
     await this.audit.write({ action: "中心建档", targetType: "study_site", targetId: body.code,
-      after: { code: body.code, hospital: body.hospital }, studySiteId: id });
+      after: { code: body.code, hospital: body.hospital,
+               startupItems: DEFAULT_STARTUP_ITEMS.length }, studySiteId: id });
     return this.get(id);
   }
 

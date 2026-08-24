@@ -10,6 +10,41 @@ const tx = async fn => {
   try { return await fn(); } finally { await o.query("ROLLBACK"); }
 };
 
+/** 「这张表的租户归属能不能算出来」—— 一条规则，两处使用：
+ *  一处断言真实 schema 全部合规，一处证明这条规则不是恒真的。 */
+const GROUNDING_SQL = `
+  WITH RECURSIVE t AS (
+    SELECT c.oid, c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'public' AND c.relkind = 'r'
+       AND c.relname NOT IN ('schema_migration', 'tenant')
+  ),
+  no_tenant AS (
+    SELECT t.oid, t.relname FROM t
+     WHERE NOT EXISTS (SELECT 1 FROM information_schema.columns col
+                        WHERE col.table_name = t.relname AND col.column_name = 'tenant_id')
+  ),
+  grounded(oid) AS (
+    -- 基点一：自己带 tenant_id
+    SELECT t.oid FROM t WHERE t.oid NOT IN (SELECT oid FROM no_tenant)
+    UNION
+    -- 基点二：全局枚举表 —— 单列 text 主键，且不引用任何表
+    SELECT nt.oid FROM no_tenant nt
+      JOIN pg_constraint pk ON pk.conrelid = nt.oid AND pk.contype = 'p'
+      JOIN pg_attribute a ON a.attrelid = nt.oid AND a.attnum = pk.conkey[1]
+     WHERE cardinality(pk.conkey) = 1 AND a.atttypid = 'text'::regtype
+       AND NOT EXISTS (SELECT 1 FROM pg_constraint fk
+                        WHERE fk.conrelid = nt.oid AND fk.contype = 'f')
+    UNION
+    -- 递推：主键里的外键指向一张归属已可推导的父表
+    SELECT nt.oid FROM no_tenant nt
+      JOIN pg_constraint pk ON pk.conrelid = nt.oid AND pk.contype = 'p'
+      JOIN pg_constraint fk ON fk.conrelid = nt.oid AND fk.contype = 'f'
+                           AND fk.conkey && pk.conkey
+      JOIN grounded g ON g.oid = fk.confrelid
+  )
+  SELECT relname FROM no_tenant
+   WHERE oid NOT IN (SELECT oid FROM grounded) ORDER BY 1`;
+
 describe("约束不是文档，是数据库拒绝写入", () => {
   it("row_rule=hospital 的账号缺 org_ref 会被拒 —— 否则他能登录却一行都看不到，且没有报错", () =>
     tx(async () => {
@@ -99,15 +134,33 @@ describe("约束不是文档，是数据库拒绝写入", () => {
     expect(rows.every(r => r.data_type === "date")).toBe(true);
   });
 
-  it("每张业务表都有 tenant_id —— 事后补要动全部外键与全部策略", async () => {
-    const { rows } = await o.query(`
-      SELECT t.tablename FROM pg_tables t
-       WHERE t.schemaname='public'
-         AND t.tablename NOT IN ('schema_migration','tenant','row_rule','field_key',
-                                 'action_key','site_state','role_field','role_action',
-                                 'role_module','team_study')
-         AND NOT EXISTS (SELECT 1 FROM information_schema.columns c
-                          WHERE c.table_name=t.tablename AND c.column_name='tenant_id')`);
-    expect(rows.map(r => r.tablename)).toEqual([]);
+  it("每张业务表的租户归属都能被推导出来 —— 事后补 tenant_id 要动全部外键与全部策略", async () => {
+    /* 不是"每张表都要有 tenant_id"，而是"每张表的归属都要能算出来"。
+       允许缺 tenant_id 的只有两类，且判定是算出来的，不是维护白名单
+       —— 白名单会被顺手加东西，加完就再也没人回头看。
+
+       ① 全局枚举表：单列 text 主键，且不引用任何表。取值写死，全租户共用。
+       ② 明细表：主键里包含指向父表的外键，而父表自己的归属已经能算出来。
+          外键必须落在**主键**里 —— 落在普通列上不算：普通列可以 UPDATE 到
+          另一个租户的父行上，归属就成了可篡改的。递归判定，链条必须终止在
+          带 tenant_id 的表或全局枚举表上。 */
+    const { rows } = await o.query(GROUNDING_SQL);
+    expect(rows.map(r => r.relname), "这些表既不带 tenant_id，也无法从主键推导出归属")
+      .toEqual([]);
   });
+
+  it("上一条规则不是恒真的 —— 三种典型错法都必须被抓到", () =>
+    tx(async () => {
+      /* 断言容易写成永远为真而无人察觉。这里故意造三张错表，
+         规则抓不到任何一张，就说明上一条断言已经失效了。 */
+      await o.query(`
+        CREATE TABLE probe_orphan (id uuid PRIMARY KEY, note text);
+        CREATE TABLE probe_side   (id uuid PRIMARY KEY,
+                                   handover_id uuid REFERENCES handover(id));
+        CREATE TABLE probe_chain  (id uuid PRIMARY KEY,
+                                   x uuid REFERENCES probe_orphan(id))`);
+      const { rows } = await o.query(GROUNDING_SQL);
+      expect(rows.map(r => r.relname).filter(n => n.startsWith("probe_")))
+        .toEqual(["probe_chain", "probe_orphan", "probe_side"]);
+    }));
 });
