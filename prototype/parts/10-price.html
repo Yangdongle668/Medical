@@ -77,7 +77,7 @@ VIEWS.price = box=>{
     <div class="stack">
       <div class="grid g4" style="gap:10px">
         ${["建议报价总额","单例报价","预估总成本","人天/例"].map((l,i)=>`
-          <div class="card" style="padding:12px 13px${i===0?";border-color:var(--accent-line);background:var(--accent-soft)":""}">
+          <div class="stat${i===0?" stat-hi":""}">
             <div class="kpi-l">${esc(l)}</div>
             <div class="num" id="o-${i}" style="font-size:${i===0?"26":"23"}px;margin-top:3px;${i===0?"color:var(--accent)":""}">—</div>
             <div class="note" id="n-${i}"></div></div>`).join("")}
@@ -104,7 +104,7 @@ VIEWS.price = box=>{
               <td class="tnum">${pct(h.prog)}</td>
               <td class="tnum">${n1(h.unit)} 万</td><td class="tnum">${n1(h.cost)} 万</td>
               <td class="tnum">${n1(h.md)}</td>
-              <td class="tnum" style="color:${h.gm<0?"var(--crit)":h.gm<.2?"var(--warn)":"var(--good)"}">${pct(h.gm)}</td></tr>`).join("")}</tbody>
+              <td class="tnum" style="color:${h.gm<0?"var(--crit)":h.gm<.2?"var(--warn)":"var(--ink)"}">${pct(h.gm)}</td></tr>`).join("")}</tbody>
           </table></div>
           <div id="p-bench" style="margin-top:12px"></div>
         </div>
@@ -128,23 +128,23 @@ VIEWS.price = box=>{
     $("#n-2").textContent=`CRC ${n0(r.crcMd)} + CRA ${n0(r.craMd)} 人天`;
     $("#o-3").textContent=n1(r.mdPerPt);
     const bl=baseline();
-    $("#n-3").innerHTML=`基准均值 ${n1(bl.md)} · <span style="color:${r.mdPerPt<bl.md*0.85?"var(--crit)":r.mdPerPt>bl.md*1.2?"var(--warn)":"var(--good)"}">${
+    $("#n-3").innerHTML=`基准均值 ${n1(bl.md)} · <span style="color:${r.mdPerPt<bl.md*0.85?"var(--crit)":r.mdPerPt>bl.md*1.2?"var(--warn)":"var(--ink)"}">${
       r.mdPerPt<bl.md*0.85?"低于历史，报价偏乐观":r.mdPerPt>bl.md*1.2?"高于历史，易失标":"与历史相符"}</span>`;
 
     stacked($("#p-stack"),[
-      {n:"CRC 人力",v:r.crcCost,c:"var(--s1)"},{n:"CRA 人力",v:r.craCost,c:"var(--s3)"},
-      {n:"差旅",v:r.travel,c:"var(--s2)"},{n:"职能分摊",v:r.oh,c:"var(--s4)"},
-      {n:"目标毛利",v:r.quote-r.cost,c:"var(--s5)"}],{h:30});
+      {n:"CRC 人力",v:r.crcCost},{n:"CRA 人力",v:r.craCost},
+      {n:"差旅",v:r.travel},{n:"职能分摊",v:r.oh},
+      {n:"目标毛利",v:r.quote-r.cost}],{h:30});
     hbars($("#p-crc"),[
-      {label:"启动与关闭",v:P.sites*12,color:"var(--s1)"},
-      {label:"驻场基线",v:P.sites*P.months*RATE.workdays*P.fte,color:"var(--s1)"},
-      {label:"入组访视陪同",v:r.total*P.visits*0.5*P.cx,color:"var(--s1)"},
-      {label:`筛败筛选期 ×${r.fail}`,v:r.crcScr,color:"var(--s2)"}],{fmt:n0,unit:" 人天",h:16,gap:5});
+      {label:"启动与关闭",v:P.sites*12},
+      {label:"驻场基线",v:P.sites*P.months*RATE.workdays*P.fte},
+      {label:"入组访视陪同",v:r.total*P.visits*0.5*P.cx},
+      {label:`筛败筛选期 ×${r.fail}`,v:r.crcScr,color:"var(--s3)"}],{fmt:n0,unit:" 人天",h:12,gap:10});
     hbars($("#p-cra"),[
-      {label:"SIV 启动",v:P.sites*2,color:"var(--s3)"},
-      {label:`IMV ×${r.nIMV} 轮`,v:P.sites*r.nIMV*1.5,color:"var(--s3)"},
-      {label:"COV 关闭",v:P.sites*1.5,color:"var(--s3)"},
-      {label:"报告与远程",v:(P.sites*2+P.sites*r.nIMV*1.5+P.sites*1.5)*0.6,color:"var(--s3)"}],{fmt:n0,unit:" 人天",h:16,gap:5});
+      {label:"SIV 启动",v:P.sites*2},
+      {label:`IMV ×${r.nIMV} 轮`,v:P.sites*r.nIMV*1.5},
+      {label:"COV 关闭",v:P.sites*1.5},
+      {label:"报告与远程",v:(P.sites*2+P.sites*r.nIMV*1.5+P.sites*1.5)*0.6}],{fmt:n0,unit:" 人天",h:12,gap:10});
 
     const myCost=r.cost/r.total, dev=(myCost-bl.cost)/bl.cost, ok=Math.abs(dev)<0.2;
     $("#p-bench").innerHTML=`<div style="border-left:2px solid var(--${ok?"good":"warn"});background:var(--${ok?"good":"warn"}-soft);padding:9px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.65">

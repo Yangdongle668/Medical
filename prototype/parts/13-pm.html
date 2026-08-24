@@ -31,11 +31,11 @@ VIEWS.pm = box=>{
   box.innerHTML=`
   <div class="mini" style="margin-bottom:14px">
     ${[["组员",team.length,"人","var(--ink)"],
-       ["平均利用率",n1(avg)+"%","",us.c],
-       ["超载",over.length,"人",over.length?"var(--crit)":"var(--good)"],
+       ["平均利用率",n1(avg)+"%","",us.k==="good"?"var(--ink)":us.c],
+       ["超载",over.length,"人",over.length?"var(--crit)":"var(--ink)"],
        ["待我审批",APPROVALS.length,"条",flagged.length?"var(--warn)":"var(--ink)"],
-       ["高风险中心",risks.filter(r=>r.lvl.k==="crit").length,"个",risks.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--good)"],
-       ["组内毛利率",pct(R.gm),"",R.gm<0.2?"var(--warn)":"var(--good)"]
+       ["高风险中心",risks.filter(r=>r.lvl.k==="crit").length,"个",risks.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--ink)"],
+       ["组内毛利率",pct(R.gm),"",R.gm<0.2?"var(--warn)":"var(--ink)"]
      ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
         <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -44,11 +44,9 @@ VIEWS.pm = box=>{
       <div class="card-h"><h3>组员负载</h3><span class="sub">健康带 60–88%</span>
         <span class="sp"></span><button class="btn" data-nav="team">团队明细 →</button></div>
       <div class="card-b"><div id="c-tl"></div>
-        <div class="legend" style="margin-top:10px;border-top:1px solid var(--line);padding-top:9px">
-          <span><span class="dot" style="background:var(--warn)"></span> 闲置</span>
-          <span><span class="dot" style="background:var(--good)"></span> 健康</span>
-          <span><span class="dot" style="background:var(--crit)"></span> 超载</span>
-          <span class="t-mut" style="margin-left:auto">灰线 = 健康下限</span></div>
+        <div class="legend" style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+          <span><i style="background:var(--accent);height:10px;width:2px;border-radius:2px;margin-right:4px"></i><i style="background:var(--accent);height:10px;width:2px;border-radius:2px"></i>健康区间刻度 60 / 88%</span>
+          <span class="t-mut">数值着色：<b style="color:var(--warn);font-weight:600">闲置</b> · <b style="color:var(--crit);font-weight:600">超载</b></span></div>
       </div>
     </div>
     <div class="card">
@@ -94,7 +92,7 @@ VIEWS.pm = box=>{
           <td class="tnum">${s.enrolled}/${s.contracted}</td>
           <td class="t-sub">${[s.cra,...s.crc].map(n=>
             TEAM.members.includes(n)? esc(n) : `${esc(n)} <span class="pill p-warn">跨组</span>`).join(" / ")}</td>
-          <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--good)"};font-weight:500">${m.gp>0?"+":""}${n1(m.gp)} 万</td>
+          <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--ink)"};font-weight:500">${m.gp>0?"+":""}${n1(m.gp)} 万</td>
         </tr>`;}).join("")}</tbody>
     </table></div>
   </div>
@@ -103,16 +101,16 @@ VIEWS.pm = box=>{
     这类中心一旦亮红灯，只能走跨组协调，动作会慢一拍。</p>`;
 
   hbars($("#c-tl"), team.slice().sort((a,b)=>b.util-a.util).map(p=>{const s=utilState(p.util);
-    return {label:`${p.n} · ${p.role}`, v:p.util, color:s.c, marker:60,
+    return {label:`${p.n} · ${p.role}`, v:p.util, color:"var(--ink-2)", vColor:s.k==="good"?"var(--ink)":s.c,
       tip:`<div class="tip-t">${esc(p.n)} · ${p.role}${p.lvl}</div>
         <div class="tip-r"><span>利用率</span><b>${p.util}%</b></div>
         <div class="tip-r"><span>状态</span><b style="color:${s.c}">${s.t}</b></div>
         <div class="tip-r"><span>带中心</span><b>${p.sites.length} 个</b></div>`};
-  }), {max:100, fmt:v=>v, unit:"%", h:18, gap:5});
+  }), {max:100, fmt:v=>v, unit:"%", h:12, gap:10});
   TEAM.studies.forEach(id=>{const e=ENROLL[id];
     lineChart($("#pc-"+id),{x:e.x,series:[
       {name:"计划",color:"var(--plan)",values:e.plan,dash:true},
-      {name:"实际",color:"var(--s1)",values:e.act,fill:true}],h:150});});
+      {name:"实际",color:"var(--accent)",values:e.act,fill:true}],h:150});});
   box.addEventListener("click",e=>{const t=e.target.closest("[data-ss6]"); if(t) openSite(t.dataset.ss6);});
 };
 
@@ -120,9 +118,8 @@ VIEWS.pm = box=>{
 VIEWS.team = box=>{
   const team=myTeam(), rb=rebalance();
   box.innerHTML=`
-  ${rb.length?`<div class="card" style="margin-bottom:12px;border-color:color-mix(in srgb,var(--warn) 40%,var(--line))">
-    <div class="card-h" style="background:var(--warn-soft)"><span class="dot" style="background:var(--warn)"></span>
-      <h3 style="color:var(--warn)">调配建议</h3></div>
+  ${rb.length?`<div class="card alert alert-warn" style="margin-bottom:28px">
+    <div class="card-h"><h3>调配建议</h3></div>
     <div class="card-b">
       ${rb.map(({over,inTeam,outTeam})=>`
         <div style="font-size:12.5px;line-height:1.75;color:var(--ink-2)">
@@ -153,7 +150,7 @@ VIEWS.team = box=>{
             <span class="pill p-${s.k}">${s.t}</span>
           </div>
           <div class="num" style="font-size:22px;margin-top:9px;color:${s.c}">${p.util}<small style="font-size:12px">%</small></div>
-          <div class="bartrack" style="height:7px;margin-top:5px;position:relative">
+          <div class="bartrack" style="height:7px;margin-top:9px;position:relative">
             <div style="position:absolute;left:60%;right:12%;top:0;bottom:0;background:var(--good-soft)"></div>
             <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:${s.c};height:100%;position:relative"></div>
           </div>
@@ -191,10 +188,10 @@ VIEWS.approve = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:14px">
     ${[["待审批",APPROVALS.length,"条","var(--ink)"],
-       ["带风险提示",APPROVALS.filter(a=>a.flag).length,"条",APPROVALS.filter(a=>a.flag).length?"var(--warn)":"var(--good)"],
-       ["挂起超 3 天",APPROVALS.filter(a=>days(a.sub,TODAY)>3).length,"条",APPROVALS.filter(a=>days(a.sub,TODAY)>3).length?"var(--crit)":"var(--good)"],
+       ["带风险提示",APPROVALS.filter(a=>a.flag).length,"条",APPROVALS.filter(a=>a.flag).length?"var(--warn)":"var(--ink)"],
+       ["挂起超 3 天",APPROVALS.filter(a=>days(a.sub,TODAY)>3).length,"条",APPROVALS.filter(a=>days(a.sub,TODAY)>3).length?"var(--crit)":"var(--ink)"],
        ["待批差旅金额",n1(sum(APPROVALS.filter(a=>a.amt),a=>a.amt)),"万","var(--ink)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>

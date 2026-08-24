@@ -131,13 +131,13 @@ function lineChart(box,{x,series,yMax,yFmt=n0,h=200}){
     ? `<text class="axis-t" x="${px(i).toFixed(1)}" y="${H-8}" text-anchor="middle">${esc(t)}</text>`:"").join("");
   const paths = series.map(s=>{
     const d = s.values.map((v,i)=>`${i?"L":"M"}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(" ");
-    const area = s.fill ? `<path d="${d} L${px(x.length-1).toFixed(1)},${P.t+ih} L${px(0).toFixed(1)},${P.t+ih} Z" fill="${s.color}" opacity=".07"/>`:"";
-    return area + `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"${s.dash?' stroke-dasharray="5 4"':""}/>`;
+    const area = s.fill ? `<path d="${d} L${px(x.length-1).toFixed(1)},${P.t+ih} L${px(0).toFixed(1)},${P.t+ih} Z" fill="${s.color}" opacity=".055"/>`:"";
+    return area + `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"${s.dash?' stroke-dasharray="2 4" stroke-linecap="round"':""}/>`;
   }).join("");
   /* 选择性直标：只标终点 */
   const ends = series.map(s=>{
     const i=x.length-1, cx=px(i), cy=py(s.values[i]);
-    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4" fill="${s.color}" stroke="var(--surface)" stroke-width="2"/>`;
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.5" fill="${s.color}" stroke="var(--surface)" stroke-width="2.5"/>`;
   }).join("");
   box.innerHTML =
    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="计划与实际入组累计曲线">
@@ -149,8 +149,8 @@ function lineChart(box,{x,series,yMax,yFmt=n0,h=200}){
   const svg=box.querySelector("svg"), cross=box.querySelector("#cross"), cl=cross.querySelector("line");
   const dots=[];
   series.forEach(s=>{ const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
-    c.setAttribute("r","4.5"); c.setAttribute("fill",s.color);
-    c.setAttribute("stroke","var(--surface)"); c.setAttribute("stroke-width","2");
+    c.setAttribute("r","4"); c.setAttribute("fill",s.color);
+    c.setAttribute("stroke","var(--surface)"); c.setAttribute("stroke-width","2.5");
     cross.appendChild(c); dots.push(c); });
   const hit=box.querySelector("#hit");
   hit.addEventListener("pointermove",e=>{
@@ -158,9 +158,9 @@ function lineChart(box,{x,series,yMax,yFmt=n0,h=200}){
     let i=Math.round((sx-P.l)/(iw/(x.length-1||1))); i=clamp(i,0,x.length-1);
     cross.style.display=""; cl.setAttribute("x1",px(i)); cl.setAttribute("x2",px(i));
     dots.forEach((c,k)=>{c.setAttribute("cx",px(i));c.setAttribute("cy",py(series[k].values[i]));});
-    const rows=series.map(s=>`<div class="tip-r"><span><i style="display:inline-block;width:9px;height:3px;border-radius:2px;background:${s.color};vertical-align:middle;margin-right:6px"></i>${esc(s.name)}</span><b>${yFmt(s.values[i])}</b></div>`).join("");
+    const rows=series.map(s=>`<div class="tip-r"><span><i style="display:inline-block;width:12px;height:2px;border-radius:2px;background:${s.color};vertical-align:middle;margin-right:7px;opacity:.9"></i>${esc(s.name)}</span><b>${yFmt(s.values[i])}</b></div>`).join("");
     const diff = series.length===2 ? (()=>{const d=series[1].values[i]-series[0].values[i];
-      return `<div class="tip-r" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>差额</span><b style="color:${d<0?"var(--crit)":"var(--good)"}">${d>0?"+":""}${n0(d)}</b></div>`;})():"";
+      return `<div class="tip-r" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>差额</span><b style="color:${d<0?"var(--crit)":"var(--ink)"}">${d>0?"+":""}${n0(d)}</b></div>`;})():"";
     showTip(`<div class="tip-t">${esc(x[i])}</div>${rows}${diff}`,e.clientX,e.clientY);
   });
   hit.addEventListener("pointerleave",()=>{cross.style.display="none";hideTip();});
@@ -177,14 +177,14 @@ function spark(vals,color,w=76,h=22){
 }
 
 /* 横向条：基线锚定，只有数据端 4px 圆角 */
-function hbars(box, rows, {max, fmt=n1, unit="", h=22, gap=7}={}){
+function hbars(box, rows, {max, fmt=n1, unit="", h=12, gap=11, band=null}={}){
   const M = max || Math.max(...rows.map(r=>Math.abs(r.v)))*1.05 || 1;
   box.innerHTML = rows.map(r=>{
     const w = clamp(Math.abs(r.v)/M*100, 2, 100);
-    return `<div class="hb" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(90px,150px) 1fr auto;gap:10px;align-items:center;margin-bottom:${gap}px;cursor:default">
-      <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
-      <div class="bartrack" style="height:${h}px"><div class="barfill" style="width:${w}%;background:${r.color};height:100%"></div>${r.marker!=null?`<div style="position:absolute;left:${clamp(r.marker/M*100,0,100)}%;top:-2px;bottom:-2px;width:2px;background:var(--ink-3);opacity:.65"></div>`:""}</div>
-      <div class="tnum" style="font-size:12px;min-width:56px">${fmt(r.v)}${unit}</div>
+    return `<div class="hb" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(96px,158px) 1fr auto;gap:14px;align-items:center;margin-bottom:${gap}px;cursor:default">
+      <div style="font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
+      <div class="bartrack" style="height:${h}px"><div class="barfill" style="width:${w}%;background:${r.color||"var(--accent)"};height:100%;position:relative"></div>${r.marker!=null?`<div style="position:absolute;left:${clamp(r.marker/M*100,0,100)}%;top:0;bottom:0;width:1.5px;background:var(--ink);opacity:.45"></div>`:""}${band?band.map(t=>`<div style="position:absolute;left:${clamp(t/M*100,0,100)}%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>`).join(""):""}</div>
+      <div class="tnum" style="font-size:12.5px;min-width:58px;font-weight:600;color:${r.vColor||"var(--ink)"}">${fmt(r.v)}${unit}</div>
     </div>`;
   }).join("");
   box.querySelectorAll(".hb").forEach(el=>{
@@ -198,11 +198,14 @@ function hbars(box, rows, {max, fmt=n1, unit="", h=22, gap=7}={}){
 function stacked(box, segs, {h=26, fmt=v=>wan(v)+" 万"}={}){
   if(!segs.length){ box.innerHTML=`<div class="empty" style="padding:16px">暂无数据</div>`; return; }
   const tot=sum(segs,s=>s.v)||1;
-  box.innerHTML=`<div style="display:flex;height:${h}px;gap:2px;border-radius:2px;overflow:hidden">${
+  /* 未指定颜色时按占比排名分配单色序列：深浅必须与量级一致 */
+  const rank=[...segs].sort((a,b)=>b.v-a.v).map(x=>x.n);
+  segs=segs.map(x=>({...x, c: x.c || `var(--s${Math.min(rank.indexOf(x.n)+1,5)})`}));
+  box.innerHTML=`<div style="display:flex;height:${h}px;gap:2px;border-radius:6px;overflow:hidden">${
     segs.map(s=>`<div class="sg" data-n="${esc(s.n)}" data-v="${fmt(s.v)}" data-p="${pct(s.v/tot)}"
       style="width:${(s.v/tot*100).toFixed(2)}%;background:${s.c};min-width:2px"></div>`).join("")}</div>
-    <div class="legend" style="margin-top:9px">${segs.map(s=>
-      `<span><i style="background:${s.c}"></i>${esc(s.n)} <b class="mono" style="font-weight:600">${fmt(s.v)}</b> <span class="t-mut mono">${pct(s.v/tot)}</span></span>`).join("")}</div>`;
+    <div class="legend" style="margin-top:14px;gap:20px">${segs.map(s=>
+      `<span><i style="background:${s.c};height:8px;width:8px;border-radius:2px"></i>${esc(s.n)} <b style="font-weight:600;font-variant-numeric:tabular-nums;margin-left:2px">${fmt(s.v)}</b> <span class="t-mut" style="font-variant-numeric:tabular-nums">${pct(s.v/tot)}</span></span>`).join("")}</div>`;
   box.querySelectorAll(".sg").forEach(el=>{
     el.addEventListener("pointermove",e=>showTip(
       `<div class="tip-t">${esc(el.dataset.n)}</div><div class="tip-r"><span>金额</span><b>${el.dataset.v}</b></div><div class="tip-r"><span>占比</span><b>${el.dataset.p}</b></div>`,e.clientX,e.clientY));
@@ -215,13 +218,13 @@ function diverging(box, rows, {fmt=v=>(v>0?"+":"")+n1(v), unit="万"}={}){
   const M=Math.max(...rows.map(r=>Math.abs(r.v)))*1.08||1;
   box.innerHTML = rows.map(r=>{
     const w=Math.abs(r.v)/M*50, pos=r.v>=0;
-    return `<div class="dv" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(96px,168px) 1fr 68px;gap:10px;align-items:center;margin-bottom:6px">
-      <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
-      <div style="position:relative;height:20px;background:var(--surface-3);border-radius:2px">
-        <div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line-2)"></div>
-        <div style="position:absolute;top:0;bottom:0;${pos?`left:50%;border-radius:0 2px 2px 0`:`right:50%;border-radius:2px 0 0 2px`};width:${w}%;background:${pos?"var(--good)":"var(--crit)"}"></div>
+    return `<div class="dv" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(102px,180px) 1fr 74px;gap:14px;align-items:center;margin-bottom:10px">
+      <div style="font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
+      <div style="position:relative;height:11px;background:var(--surface-2);border-radius:99px">
+        <div style="position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--line-2)"></div>
+        <div style="position:absolute;top:0;bottom:0;${pos?`left:50%;border-radius:0 99px 99px 0`:`right:50%;border-radius:99px 0 0 99px`};width:${w}%;background:${pos?"var(--ink-2)":"var(--crit)"}"></div>
       </div>
-      <div class="tnum" style="font-size:12px;color:${pos?"var(--good)":"var(--crit)"};font-weight:500">${fmt(r.v)}${unit}</div>
+      <div class="tnum" style="font-size:12.5px;color:${pos?"var(--ink)":"var(--crit)"};font-weight:600">${fmt(r.v)}${unit}</div>
     </div>`;
   }).join("");
   box.querySelectorAll(".dv").forEach(el=>{

@@ -27,19 +27,17 @@ VIEWS.audit = box=>{
 
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
-    ${[["进行中稽查",open.length,"项",open.length?"var(--warn)":"var(--good)"],
-       ["待整改发现",fo.length,"项",fo.length?"var(--warn)":"var(--good)"],
-       ["复发问题",rep.length,"项",rep.length?"var(--crit)":"var(--good)"],
-       ["D 级中心",grade.filter(g=>g.g==="D").length,"个",grade.filter(g=>g.g==="D").length?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+    ${[["进行中稽查",open.length,"项",open.length?"var(--warn)":"var(--ink)"],
+       ["待整改发现",fo.length,"项",fo.length?"var(--warn)":"var(--ink)"],
+       ["复发问题",rep.length,"项",rep.length?"var(--crit)":"var(--ink)"],
+       ["D 级中心",grade.filter(g=>g.g==="D").length,"个",grade.filter(g=>g.g==="D").length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
 
-  <div class="card" style="margin-bottom:12px;${rep.length?"border-color:color-mix(in srgb,var(--crit) 45%,var(--line))":""}">
-    <div class="card-h" ${rep.length?'style="background:var(--crit-soft)"':""}>
-      ${rep.length?`<span class="dot" style="background:var(--crit)"></span>`:""}
-      <h3 ${rep.length?'style="color:var(--crit)"':""}>CAPA 有效性验证</h3><span class="sp"></span>
+  <div class="card ${rep.length?"alert alert-crit":""}" style="margin-bottom:28px">
+    <div class="card-h"><h3>CAPA 有效性验证</h3><span class="sp"></span>
       <span class="sub">复发 = 当初只做了纠正，没做预防</span></div>
     <div class="card-b">
       <div class="tw"><table style="min-width:600px">
@@ -78,7 +76,7 @@ VIEWS.audit = box=>{
             <span class="pill ${a.st==="已关闭"?"p-good":"p-warn"}">${esc(a.st)}</span></div>
           <div class="note" style="margin-top:4px">${esc(a.scope)}</div>
           ${a.findings.map((f,k)=>`
-            <div style="margin-top:8px;border:1px solid var(--line);border-left:2px solid var(--${f.st==="已关闭"?"good":SEV[f.sev].k});border-radius:0 3px 3px 0;padding:8px 10px">
+            <div style="margin-top:8px;border:1px solid var(--line);border-left:2px solid var(--${f.st==="已关闭"?"good":SEV[f.sev].k});border-radius:0 8px 8px 0;padding:8px 10px">
               <div class="row" style="gap:6px">
                 <span class="pill p-${f.st==="已关闭"?"good":SEV[f.sev].k}">${esc(f.sev)}</span>
                 ${f.repeat?`<span class="pill p-crit">复发 · 源自 ${esc(f.repeat)}</span>`:""}

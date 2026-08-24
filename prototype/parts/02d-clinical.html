@@ -135,11 +135,11 @@ function enrollDiag(ss){
   const m=siteM(ss), f=funnelM(ss);
   if(m.rate===null || m.rate>=0.9) return null;
   if(f.pre>0 && f.icf/Math.max(f.pre,1)>=0.5 && f.sfRate>0.5)
-    return {k:"筛败率过高", c:"var(--s5)",
+    return {k:"筛败率过高", c:"var(--crit)",
       d:`筛败 ${f.sf}/${f.icf}（${pct(f.sfRate)}），远高于同项目其他中心`,
       a:"入排标准与该中心病源不匹配 → 与申办方谈方案修订，或降低该中心的合同例数"};
   if(f.pre>0 && f.pre < ss.contracted*1.8)
-    return {k:"预筛量不足", c:"var(--s2)",
+    return {k:"预筛量不足", c:"var(--warn)",
       d:`累计预筛仅 ${f.pre} 人，合同 ${ss.contracted} 例，按当前筛败率至少需预筛 ${Math.ceil(ss.contracted/Math.max(f.yield||0.3,0.15))} 人`,
       a:"病源本身不够 → 这是可行性调查该拦下的中心；现阶段只能加招募渠道或减例数"};
   if(f.pre<=6)

@@ -18,7 +18,7 @@ VIEWS.feas = box=>{
 
   const card = f=>{
     const r = feasScore(f.q), gapPct = f.actual!=null && r.pred>0 ? (f.actual-r.pred)/r.pred : null;
-    return `<div class="card" style="margin-bottom:11px;${f.override?"border-left:2px solid var(--warn)":""}">
+    return `<div class="card ${f.override?"alert alert-warn":""}" style="margin-bottom:30px">
       <div class="card-h">
         <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(f.id)}</span>
         <h3>${esc(f.hosp)}</h3>
@@ -45,7 +45,7 @@ VIEWS.feas = box=>{
                 ? `<span class="pill p-warn">未采集</span>` : pct(f.q.eligPct)}</dd>
               <dt>PI 承诺月入组</dt><dd>${n1(f.q.piCommit)} 例</dd>
             </dl>
-            <div style="margin-top:10px;border:1px solid var(--line);border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;border-radius:0 3px 3px 0">
+            <div style="margin-top:10px;border:1px solid var(--line);border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;border-radius:0 8px 8px 0">
               <div class="row" style="justify-content:space-between">
                 <span class="kpi-l">系统预测月入组</span>
                 <b class="num" style="font-size:17px;color:var(--accent)">${n1(r.pred)} 例</b></div>
@@ -55,7 +55,7 @@ VIEWS.feas = box=>{
             ${f.actual!=null?`
               <div class="row" style="justify-content:space-between;margin-top:9px;padding-top:9px;border-top:1px solid var(--line)">
                 <span class="kpi-l">实际月入组</span>
-                <b class="num" style="font-size:17px;color:${gapPct<-0.3?"var(--crit)":gapPct<0?"var(--warn)":"var(--good)"}">${n1(f.actual)} 例
+                <b class="num" style="font-size:17px;color:${gapPct<-0.3?"var(--crit)":gapPct<0?"var(--warn)":"var(--ink)"}">${n1(f.actual)} 例
                   <span style="font-size:11px;font-weight:400">（${gapPct>0?"+":""}${pct(gapPct)}）</span></b></div>`:""}
           </div>
         </div>
@@ -75,8 +75,8 @@ VIEWS.feas = box=>{
     ${[["累计调查",FEAS.length,"家","var(--ink)"],
        ["已入选并有结果",done.length,"家","var(--ink)"],
        ["预测校准系数",bias===null?"—":n1(bias)+"×",bias&&bias<0.8?"var(--crit)":"var(--warn)"],
-       ["被覆盖入选",ov.length,"家",ov.length?"var(--warn)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["被覆盖入选",ov.length,"家",ov.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${typeof u==="string"&&!u.startsWith("var")?u:""}</small></div></div>`).join("")}
   </div>
@@ -130,18 +130,18 @@ PI 承诺必须打折 —— 行业经验兑现率 40%–60%。直接用承诺�
         </div>
         <div class="tnum" style="font-size:11.5px;line-height:1.35">
           <div class="t-mut">${n1(r.pred)}</div>
-          <div style="color:${f.actual<r.pred*0.7?"var(--crit)":"var(--good)"};font-weight:600">${n1(f.actual)}</div></div>
+          <div style="color:${f.actual<r.pred*0.7?"var(--crit)":"var(--ink)"};font-weight:600">${n1(f.actual)}</div></div>
       </div>`;}).join("")}`;
 
   list.forEach(f=>{ const r=feasScore(f.q);
     hbars($("#fs-"+f.id), [
-      {label:"病源规模",v:r.parts.src,color:"var(--s1)"},
-      {label:"既往入组表现",v:r.parts.past,color:"var(--s3)"},
-      {label:"启动效率",v:r.parts.start,color:"var(--s4)"},
-      {label:"研究团队",v:r.parts.team,color:"var(--plan)"},
-      {label:"竞争试验",v:r.parts.comp,color:"var(--s5)"},
-      ...(f.q.eligPct!=null?[{label:"入排匹配度",v:r.parts.elig,color:"var(--s2)"}]:[])
-    ], {max:30, fmt:v=>v.toFixed(0), unit:" 分", h:14, gap:4});
+      {label:"病源规模",v:r.parts.src},
+      {label:"既往入组表现",v:r.parts.past},
+      {label:"启动效率",v:r.parts.start},
+      {label:"研究团队",v:r.parts.team},
+      {label:"竞争试验",v:r.parts.comp,color:"var(--crit)"},
+      ...(f.q.eligPct!=null?[{label:"入排匹配度",v:r.parts.elig,color:"var(--good)"}]:[])
+    ], {max:30, fmt:v=>v.toFixed(0), unit:" 分", h:12, gap:10});
   });
 
   box.addEventListener("click",e=>{

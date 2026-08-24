@@ -12,11 +12,11 @@ VIEWS.staff = box=>{
 
   box.innerHTML=`
   <div class="grid g4" style="margin-bottom:12px">
-    ${[["平均利用率",n1(avg)+"%",`健康区间 60–88%`,utilState(avg).c],
-       ["超载人员",over.length+" 人",over.length?over.map(p=>p.n).join("、"):"无",over.length?"var(--crit)":"var(--good)"],
-       ["产能闲置",idle.length+" 人",idle.length?idle.map(p=>p.n).join("、"):"无",idle.length?"var(--warn)":"var(--good)"],
+    ${[["平均利用率",n1(avg)+"%",`健康区间 60–88%`,utilState(avg).k==="good"?"var(--ink)":utilState(avg).c],
+       ["超载人员",over.length+" 人",over.length?over.map(p=>p.n).join("、"):"无",over.length?"var(--crit)":"var(--ink)"],
+       ["产能闲置",idle.length+" 人",idle.length?idle.map(p=>p.n).join("、"):"无",idle.length?"var(--warn)":"var(--ink)"],
        ["CRA / CRC 人均带中心",n1(craSites)+" / "+n1(crcSites),"CRA 行业经验值 8–12 个","var(--ink-3)"]
-     ].map(([l,v,n,c])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,n,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:4px;color:${c}">${esc(v)}</div>
         <div class="note" style="margin-top:2px">${esc(n)}</div></div>`).join("")}
@@ -40,19 +40,22 @@ VIEWS.staff = box=>{
           <td class="tnum">${p.sites.length}</td>
           <td>
             <div style="display:flex;align-items:center;gap:9px">
-              <div class="bartrack" style="height:16px;flex:1;position:relative">
-                <div style="position:absolute;left:60%;right:12%;top:0;bottom:0;background:var(--good-soft)"></div>
-                <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:${s.c};height:100%;position:relative"></div>
+              <div class="bartrack" style="height:8px;flex:1;position:relative">
+                <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:var(--ink-2);height:100%"></div>
+                <div style="position:absolute;left:60%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
+                <div style="position:absolute;left:88%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
               </div>
-              <span class="tnum" style="width:34px;font-size:12px">${p.util}%</span>
-              <span class="pill p-${s.k}" style="width:62px;justify-content:center">${s.t}</span>
+              <span class="tnum" style="width:38px;font-size:12.5px;font-weight:600;color:${s.k==="good"?"var(--ink)":s.c}">${p.util}%</span>
+              <span class="pill p-${s.k==="good"?"neut":s.k}" style="width:64px;justify-content:center">${s.t}</span>
             </div>
           </td>
-          <td class="t-sub">${p.sites.length? p.sites.map(id=>site(id).hosp.slice(0,6)).join("、") : "—"}</td>
+          <td class="t-sub">${p.sites.length
+            ? p.sites.slice(0,2).map(id=>site(id).hosp).join("、") + (p.sites.length>2?` 等 ${p.sites.length} 个`:"")
+            : "—"}</td>
         </tr>`;}).join("")}</tbody>
     </table></div>
   </div>
-  <p class="note" style="margin-top:10px">浅绿区间 = 健康带（60–88%）。点击人员查看派工明细与冲突检测。派工变更会即时重算利用率，并回写到驾驶舱与工时模块。</p>`;
+  <p class="note" style="margin-top:10px">蓝色刻度 = 健康区间边界 60% 与 88%。点击人员查看派工明细与冲突检测。派工变更会即时重算利用率，并回写到驾驶舱与工时模块。</p>`;
 
   box.addEventListener("click",e=>{
     const r=e.target.closest("[data-r]"); if(r){state.roleFilter=r.dataset.r;render();return;}
@@ -76,13 +79,14 @@ function openStaff(name){
     <div class="drawer-b">
       <div class="card" style="padding:12px;margin-bottom:14px">
         <div class="row" style="justify-content:space-between;margin-bottom:8px">
-          <span class="kpi-l">当前利用率</span><span class="pill p-${s.k}">${s.t}</span></div>
+          <span class="kpi-l">当前利用率</span><span class="pill p-${s.k==="good"?"neut":s.k}">${s.t}</span></div>
         <div class="num" style="font-size:30px;line-height:1;color:${s.c}">${p.util}<small style="font-size:14px">%</small></div>
-        <div class="bartrack" style="height:10px;margin-top:9px;position:relative">
-          <div style="position:absolute;left:60%;right:12%;top:0;bottom:0;background:var(--good-soft)"></div>
-          <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:${s.c};height:100%;position:relative"></div>
+        <div class="bartrack" style="height:8px;margin-top:14px;position:relative">
+          <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:var(--ink-2);height:100%"></div>
+          <div style="position:absolute;left:60%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
+          <div style="position:absolute;left:88%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
         </div>
-        <div class="note" style="margin-top:6px">灰底浅绿段为健康带 60–88%。低于 60% 是产能浪费，高于 88% 是质量与流失风险。</div>
+        <div class="note" style="margin-top:8px">蓝色刻度为健康区间边界 60% 与 88%。低于 60% 是产能浪费，高于 88% 是质量与流失风险。</div>
       </div>
       ${conflict?`<div class="card" style="padding:10px 12px;margin-bottom:14px;border-left:2px solid var(--warn);background:var(--warn-soft)">
         <b style="font-size:12.5px;color:var(--warn)">跨城市派驻提示</b>
@@ -90,8 +94,8 @@ function openStaff(name){
       </div>`:""}
       <div class="section-t">派驻明细（${rows.length} 个中心）</div>
       ${rows.length? `<div class="stack" style="gap:7px">${rows.map(({ss,m})=>{
-        const rs=rateState(m.rate);
-        return `<button data-goto2="${ss.id}" style="width:100%;text-align:left;border:1px solid var(--line);border-radius:3px;padding:9px 11px;background:none;cursor:pointer">
+        const rs=rateState(m.rate); const rsC = rs.k==="good"?"var(--ink)":rs.c;
+        return `<button data-goto2="${ss.id}" style="width:100%;text-align:left;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:none;cursor:pointer">
           <div class="row" style="justify-content:space-between">
             <b style="font-size:12.5px;font-weight:500">${esc(ss.hosp)}</b>
             <span class="pill p-${rs.k}">${rs.t}</span></div>
@@ -197,7 +201,7 @@ VIEWS.time = box=>{
            ["可计费人天",n1(bd),"人天",`占比 ${td?pct(bd/td):"—"}`],
            ["不可计费人天",n1(nd),"人天",`占比 ${td?pct(nd/td):"—"} · 毛利蒸发口`],
            ["差旅费用",n1(tv),"万元",`${rows.filter(t=>t.travel>0).length} 笔`]
-         ].map(([l,v,u,n],i)=>`<div class="card" style="padding:12px 13px">
+         ].map(([l,v,u,n],i)=>`<div class="stat">
             <div class="kpi-l">${esc(l)}</div>
             <div class="num" style="font-size:23px;margin-top:3px;${i===2&&td&&nd/td>0.15?"color:var(--crit)":""}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div>
             <div class="note">${esc(n)}</div></div>`).join("")}
@@ -248,7 +252,7 @@ VIEWS.time = box=>{
     const rs=TIMESHEET.filter(inScope);
     const b=sum(rs.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
     const n=sum(rs.filter(t=>!WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
-    stacked($("#c-bill"),[{n:"可计费",v:b,c:"var(--s1)"},{n:"不可计费",v:n,c:"var(--s2)"}],{fmt:v=>n1(v)+" 人天"});
+    stacked($("#c-bill"),[{n:"可计费",v:b},{n:"不可计费",v:n}],{fmt:v=>n1(v)+" 人天"});
   };
   fillSites(); billNote(); drawRows(); drawBill();
   $("#ts-w").addEventListener("change",e=>{state.tsWho=e.target.value;fillSites();});

@@ -21,7 +21,7 @@ VIEWS.pnl = box=>{
        ["已发生成本",wan(R.cost),"万","人力 + 差旅 + 职能分摊"],
        ["毛利",(R.gp>0?"+":"")+wan(R.gp),"万",`毛利率 ${pct(R.gm)}`],
        ["亏损中心",loss.length,"个",loss.length?`合计失血 ${n1(Math.abs(sum(loss,s=>siteM(s).gp)))} 万`:"无"]
-     ].map(([l,v,u,n],i)=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,n],i)=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;${i===2?`color:${R.gp>0?"var(--good)":"var(--crit)"}`:i===3&&loss.length?"color:var(--crit)":""}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
         <div class="note">${esc(n)}</div></div>`).join("")}
@@ -61,15 +61,15 @@ CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
           <td class="tnum">${s.enrolled}</td>
           <td class="tnum">${wan(m.rev)}</td>
           <td class="tnum">${wan(s.cost)}</td>
-          <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--good)"};font-weight:600">${m.gp>0?"+":""}${n1(m.gp)}</td>
-          <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--good)"}">${m.gm===null?"—":pct(m.gm)}</td>
+          <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--ink)"};font-weight:600">${m.gp>0?"+":""}${n1(m.gp)}</td>
+          <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--ink)"}">${m.gm===null?"—":pct(m.gm)}</td>
           <td class="tnum">${m.cpe?n1(m.cpe):"—"}</td>
           <td class="tnum">${m.mdPerPt?n1(m.mdPerPt):"—"}</td>
           <td><span class="pill ${flag[0]}">${flag[1]}</span></td></tr>`;}).join("")}</tbody>
       <tfoot><tr style="border-top:2px solid var(--line-2)">
         <td colspan="3" class="t-main">合计</td>
         <td class="tnum t-main">${wan(R.rev)}</td><td class="tnum t-main">${wan(R.cost)}</td>
-        <td class="tnum t-main" style="color:${R.gp<0?"var(--crit)":"var(--good)"}">${R.gp>0?"+":""}${n1(R.gp)}</td>
+        <td class="tnum t-main" style="color:${R.gp<0?"var(--crit)":"var(--ink)"}">${R.gp>0?"+":""}${n1(R.gp)}</td>
         <td class="tnum t-main">${pct(R.gm)}</td><td class="tnum t-main">${n1(R.cpe)}</td><td colspan="2"></td>
       </tr></tfoot>
     </table></div>
@@ -90,12 +90,12 @@ CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
         <div class="tip-r"><span>· 入组费</span><b>${wan(revParts(s).enr)}</b></div>
         <div class="tip-r"><span>· 筛败费</span><b>${wan(revParts(s).sf)}</b></div>
         <div class="tip-r"><span>成本</span><b>${wan(s.cost)} 万</b></div>
-        <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--good)"}">${m.gm===null?"—":pct(m.gm)}</b></div>
+        <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--ink)"}">${m.gm===null?"—":pct(m.gm)}</b></div>
         <div class="tip-r"><span>每例成本</span><b>${m.cpe?n1(m.cpe)+" 万":"—"}</b></div>
         <div class="tip-r"><span>单例单价</span><b>${n1(s.unit)} 万</b></div>`};}));
   stacked($("#c-cost"),[
-    {n:"CRC 人力",v:crcC,c:"var(--s1)"},{n:"CRA 人力",v:craC,c:"var(--s3)"},
-    {n:"差旅",v:travel,c:"var(--s2)"},{n:"职能分摊",v:oh,c:"var(--s4)"}],{h:30});
+    {n:"CRC 人力",v:crcC},{n:"CRA 人力",v:craC},
+    {n:"差旅",v:travel},{n:"职能分摊",v:oh}],{h:30});
   box.addEventListener("click",e=>{
     const b=e.target.closest("[data-k]"); if(b){state.pnlSort=b.dataset.k;render();return;}
     const t=e.target.closest("[data-ss3]"); if(t) openSite(t.dataset.ss3);
@@ -119,9 +119,9 @@ VIEWS.bill = box=>{
   <div class="grid g4" style="margin-bottom:12px">
     ${[["待开票",wan(sum(unb,m=>m.amt)),"万",`${unb.length} 笔已达成未开票 — 立即可开`,unb.length?"var(--warn)":"var(--ink)"],
        ["已开票未回款",wan(sum(open,m=>m.amt)),"万",`${open.length} 笔在途`,"var(--ink)"],
-       ["账龄 60 天以上",wan(buckets[2].v+buckets[3].v),"万",`占应收 ${open.length?pct((buckets[2].v+buckets[3].v)/sum(open,m=>m.amt)):"—"}`,(buckets[2].v+buckets[3].v)?"var(--crit)":"var(--good)"],
-       ["DSO",dso,"天",`健康线 ≤ 75 天`,dso>75?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,n,c])=>`<div class="card" style="padding:12px 13px">
+       ["账龄 60 天以上",wan(buckets[2].v+buckets[3].v),"万",`占应收 ${open.length?pct((buckets[2].v+buckets[3].v)/sum(open,m=>m.amt)):"—"}`,(buckets[2].v+buckets[3].v)?"var(--crit)":"var(--ink)"],
+       ["DSO",dso,"天",`健康线 ≤ 75 天`,dso>75?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,n,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
         <div class="note">${esc(n)}</div></div>`).join("")}
@@ -170,7 +170,7 @@ VIEWS.bill = box=>{
 
   hbars($("#c-age"), buckets.map(b=>({label:b.n,v:b.v,color:b.c,
     tip:`<div class="tip-t">${esc(b.n)}</div><div class="tip-r"><span>金额</span><b>${n1(b.v)} 万</b></div>`})),
-    {fmt:n1,unit:" 万",h:20,gap:8});
+    {fmt:n1,unit:" 万",h:12,gap:11});
 
   box.addEventListener("click",e=>{
     const i=e.target.closest("[data-inv]");

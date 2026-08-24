@@ -1,326 +1,450 @@
 <title>临床中心台</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap">
 <style>
-/* ── Tokens ───────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════
+   INSTRUMENT — 精密仪器的视觉语言
+   排版承担重量；界面是一个平面，不是一摞卡片。
+   暖中性 × 冷强调色：温差是全部诀窍。强调色只在"活着"的地方出现。
+   ══════════════════════════════════════════════════════════════════ */
+
 :root{
-  --ground:#F1F4F6; --surface:#FFFFFF; --surface-2:#F7F9FA; --surface-3:#ECF1F4;
-  --ink:#12222D; --ink-2:#46596A; --ink-3:#5D7382;
-  --line:#DBE3E9; --line-2:#C4D1DA; --grid:rgba(22,103,176,.055);
-  --accent:#1667B0; --accent-ink:#FFFFFF; --accent-soft:#E7F0F8; --accent-line:#B9D3E9;
-  --good:#1D7A4F; --good-soft:#E4F1EA; --warn:#A66A0B; --warn-soft:#FAF0DE;
-  --crit:#C0342E; --crit-soft:#FBE9E8;
-  --s1:#1667B0; --s2:#C85A24; --s3:#1A8F7A; --s4:#7E4FC0; --s5:#B8244A;
-  --plan:#8DA3B2;
-  --shadow:0 1px 2px rgba(18,34,45,.05), 0 8px 24px -12px rgba(18,34,45,.18);
+  /* 平面 */
+  --ground:#F7F6F3; --surface:#FFFFFF; --surface-2:#F2F1ED; --surface-3:#E9E7E2;
+  /* 墨 */
+  --ink:#111112; --ink-2:#4A4A4D; --ink-3:#74747A;
+  /* 线 */
+  --line:#EAE8E3; --line-2:#DCD9D3;
+  /* 强调（指示灯） */
+  --accent:#1A56DB; --accent-ink:#FFFFFF; --accent-soft:#EFF3FD; --accent-line:#C6D6F7;
+  /* 语义 —— 低饱和，绝不做红绿灯 */
+  --good:#16794C; --good-soft:#EDF5F1; --warn:#8A5B00; --warn-soft:#F8F3E9;
+  --crit:#B3261E; --crit-soft:#FBEFEE;
+  /* 数据序列：计划=中性参考，实际=强调色 */
+  --plan:#87878D;
+  --s1:#16357C; --s2:#2451C0; --s3:#4571DC; --s4:#6D90E3; --s5:#93AEEA;
+  /* 高度：只给悬浮物 */
+  --pop:0 1px 2px rgba(17,17,18,.04), 0 12px 32px -8px rgba(17,17,18,.14);
+  --ease:cubic-bezier(.2,0,0,1); --t:140ms;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
-  --ground:#0D171E; --surface:#16232C; --surface-2:#1B2A34; --surface-3:#22323E;
-  --ink:#E6EDF2; --ink-2:#B3C4D0; --ink-3:#8CA1B0;
-  --line:#263846; --line-2:#33495A; --grid:rgba(120,180,230,.05);
-  --accent:#4A9AE0; --accent-ink:#0B1319; --accent-soft:#17313F; --accent-line:#2C516A;
-  --good:#3FA875; --good-soft:#13291F; --warn:#D19A2E; --warn-soft:#2B2314;
-  --crit:#E0655E; --crit-soft:#301B1A;
-  --s1:#3D93E0; --s2:#D46F30; --s3:#1B9C81; --s4:#9B72DC; --s5:#D9506B;
-  --plan:#6B8494;
-  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.6);
+  --ground:#08080A; --surface:#101012; --surface-2:#191A1C; --surface-3:#232426;
+  --ink:#F4F3F1; --ink-2:#A8A8AD; --ink-3:#8B8B93;
+  --line:#212123; --line-2:#2E2F32;
+  --accent:#5A8CF5; --accent-ink:#08080A; --accent-soft:#111C33; --accent-line:#25375C;
+  --good:#4EA97A; --good-soft:#0E1D16; --warn:#CFA24F; --warn-soft:#1F1A0F;
+  --crit:#E4695C; --crit-soft:#23120F;
+  --plan:#8A8A92;
+  --s1:#A9C2FF; --s2:#7FA3F5; --s3:#5A85E8; --s4:#3E66C9; --s5:#33549F;
+  --pop:0 1px 2px rgba(0,0,0,.5), 0 16px 40px -10px rgba(0,0,0,.7);
   color-scheme:dark;
 }}
 :root[data-theme="dark"]{
-  --ground:#0D171E; --surface:#16232C; --surface-2:#1B2A34; --surface-3:#22323E;
-  --ink:#E6EDF2; --ink-2:#B3C4D0; --ink-3:#8CA1B0;
-  --line:#263846; --line-2:#33495A; --grid:rgba(120,180,230,.05);
-  --accent:#4A9AE0; --accent-ink:#0B1319; --accent-soft:#17313F; --accent-line:#2C516A;
-  --good:#3FA875; --good-soft:#13291F; --warn:#D19A2E; --warn-soft:#2B2314;
-  --crit:#E0655E; --crit-soft:#301B1A;
-  --s1:#3D93E0; --s2:#D46F30; --s3:#1B9C81; --s4:#9B72DC; --s5:#D9506B;
-  --plan:#6B8494;
-  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.6);
+  --ground:#08080A; --surface:#101012; --surface-2:#191A1C; --surface-3:#232426;
+  --ink:#F4F3F1; --ink-2:#A8A8AD; --ink-3:#8B8B93;
+  --line:#212123; --line-2:#2E2F32;
+  --accent:#5A8CF5; --accent-ink:#08080A; --accent-soft:#111C33; --accent-line:#25375C;
+  --good:#4EA97A; --good-soft:#0E1D16; --warn:#CFA24F; --warn-soft:#1F1A0F;
+  --crit:#E4695C; --crit-soft:#23120F;
+  --plan:#8A8A92;
+  --s1:#A9C2FF; --s2:#7FA3F5; --s3:#5A85E8; --s4:#3E66C9; --s5:#33549F;
+  --pop:0 1px 2px rgba(0,0,0,.5), 0 16px 40px -10px rgba(0,0,0,.7);
   color-scheme:dark;
 }
 
-/* ── Base ─────────────────────────────────────────────────────────── */
+/* ── 基底 ─────────────────────────────────────────────────────── */
 *{box-sizing:border-box}
 body{
-  margin:0; background:var(--ground); color:var(--ink);
-  font-family:"IBM Plex Sans","PingFang SC","Microsoft YaHei","Source Han Sans SC","Noto Sans CJK SC",sans-serif;
-  font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  margin:0; background:var(--surface); color:var(--ink);
+  font-family:"DM Sans","PingFang SC","Source Han Sans SC","Microsoft YaHei",-apple-system,system-ui,sans-serif;
+  font-size:13.5px; line-height:1.55; letter-spacing:-.006em;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
 }
-body::before{
-  content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
-  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
-  background-size:28px 28px;
-}
-.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
-.num{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-h1,h2,h3,h4{margin:0;text-wrap:balance;font-weight:600;letter-spacing:-.01em}
-a{color:var(--accent)}
-button{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+.mono,.num,.tnum,.cd,.subjid{font-variant-numeric:tabular-nums}
+.mono{font-family:"DM Mono",ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.01em}
+.num{font-variant-numeric:tabular-nums;letter-spacing:-.03em;font-weight:600}
+h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-.02em;text-wrap:balance}
+a{color:var(--accent);text-underline-offset:2px}
+button{font:inherit;color:inherit;letter-spacing:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 ::selection{background:var(--accent-soft);color:var(--ink)}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
-/* ── Shell ────────────────────────────────────────────────────────── */
-.app{position:relative;z-index:1;display:grid;grid-template-columns:224px 1fr;min-height:100vh}
+/* ── 外壳 ─────────────────────────────────────────────────────── */
+.app{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
 .rail{
-  border-right:1px solid var(--line);background:var(--surface);
+  background:var(--ground);border-right:1px solid var(--line);
   display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;
+  scrollbar-width:thin;
 }
-.brand{padding:16px 16px 14px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:flex-start}
+.brand{padding:26px 24px 20px;display:flex;gap:10px;align-items:center}
 .brand-mark{
-  width:26px;height:26px;flex:none;border:1.5px solid var(--accent);border-radius:3px;
-  display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--accent);
-  font-family:"IBM Plex Mono",monospace;background:var(--accent-soft);
+  width:22px;height:22px;flex:none;border-radius:5px;background:var(--ink);color:var(--surface);
+  display:grid;place-items:center;font-size:11px;font-weight:700;letter-spacing:0;
 }
-.brand-name{font-size:14.5px;font-weight:700;letter-spacing:.01em;line-height:1.3}
-.brand-sub{font-size:10px;color:var(--ink-3);letter-spacing:.09em;text-transform:uppercase;font-family:"IBM Plex Mono",monospace}
-.nav{padding:10px 8px;flex:1}
-.nav-group{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);padding:12px 10px 5px}
+.brand-name{font-size:14.5px;font-weight:600;letter-spacing:-.02em;line-height:1.2}
+.brand-sub{
+  font-family:"DM Mono",monospace;font-size:9.5px;color:var(--ink-3);
+  letter-spacing:.1em;text-transform:uppercase;margin-top:1px;
+}
+.persona{padding:0 24px 20px;display:flex;gap:9px;align-items:center}
+.persona .n{font-size:13px;font-weight:500;line-height:1.25}
+.persona .d{font-size:11px;color:var(--ink-3);line-height:1.3}
+.nav{padding:0 12px 20px;flex:1}
+.nav-group{
+  font-family:"DM Mono",monospace;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--ink-3);padding:20px 12px 7px;
+}
+.nav-group:first-child{padding-top:4px}
 .nav-item{
-  display:flex;align-items:center;gap:9px;width:100%;padding:7px 10px;border:0;background:none;
-  border-radius:3px;cursor:pointer;text-align:left;color:var(--ink-2);font-size:13.5px;position:relative;
+  display:flex;align-items:center;gap:8px;width:100%;padding:6px 12px;border:0;background:none;
+  border-radius:6px;cursor:pointer;text-align:left;color:var(--ink-2);font-size:13.5px;
+  position:relative;transition:color var(--t) var(--ease),background var(--t) var(--ease);
 }
-.nav-item:hover{background:var(--surface-3);color:var(--ink)}
-.nav-item[aria-current="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
-.nav-item[aria-current="true"]::before{content:"";position:absolute;left:-8px;top:6px;bottom:6px;width:2px;background:var(--accent)}
-.nav-ic{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;opacity:.9}
-.nav-badge{margin-left:auto;font-family:"IBM Plex Mono",monospace;font-size:10px;padding:1px 5px;border-radius:2px;background:var(--crit-soft);color:var(--crit);font-weight:600}
-.rail-foot{padding:10px 14px 14px;border-top:1px solid var(--line);font-size:10.5px;color:var(--ink-3);line-height:1.5}
+.nav-item:hover{color:var(--ink);background:var(--surface-2)}
+.nav-item[aria-current="true"]{color:var(--ink);font-weight:500}
+.nav-item[aria-current="true"]::before{
+  content:"";position:absolute;left:-12px;top:7px;bottom:7px;width:2px;
+  background:var(--accent);border-radius:0 2px 2px 0;
+}
+.nav-ic{display:none}                 /* 图标退场：分组与排版已经说清楚了层级 */
+.nav-badge{
+  margin-left:auto;font-family:"DM Mono",monospace;font-size:10px;font-variant-numeric:tabular-nums;
+  color:var(--crit);font-weight:500;
+}
+.rail-foot{padding:16px 24px 24px;font-size:11px;color:var(--ink-3);line-height:1.6}
 
-.main{min-width:0;display:flex;flex-direction:column}
+.main{min-width:0;display:flex;flex-direction:column;background:var(--surface)}
 .topbar{
-  position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--surface) 92%,transparent);
-  backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
-  padding:10px 22px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;
+  position:sticky;top:0;z-index:30;background:var(--surface);border-bottom:1px solid var(--line);
+  padding:0 40px;min-height:57px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;
 }
-.crumb{font-size:12px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
-.crumb b{color:var(--ink);font-weight:600}
+.crumb{font-size:12.5px;color:var(--ink-3)}
+.crumb b{color:var(--ink);font-weight:500}
 .topbar-sp{flex:1}
 .demo-tag{
-  font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-  padding:3px 8px;border:1px dashed var(--warn);color:var(--warn);border-radius:2px;background:var(--warn-soft);
+  font-family:"DM Mono",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  padding:3px 8px;border-radius:4px;background:var(--surface-2);color:var(--ink-3);
 }
-.content{padding:20px 22px 60px;max-width:1560px;width:100%}
-.view-head{margin-bottom:18px}
-.view-head h1{font-size:21px}
-.view-head p{margin:5px 0 0;color:var(--ink-3);font-size:13px;max-width:76ch}
+.content{padding:36px 40px 88px;max-width:1520px;width:100%}
+.view-head{margin-bottom:34px;max-width:78ch}
+.view-head h1{font-size:29px;line-height:1.15;letter-spacing:-.03em;font-weight:600}
+.view-head p{margin:9px 0 0;color:var(--ink-3);font-size:13.5px;line-height:1.65}
 
-/* ── Controls ─────────────────────────────────────────────────────── */
+/* ── 控件 ─────────────────────────────────────────────────────── */
 .sel,.inp{
-  font:inherit;font-size:12.5px;padding:5px 9px;border:1px solid var(--line-2);border-radius:3px;
-  background:var(--surface);color:var(--ink);
+  font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--line-2);border-radius:6px;
+  background:var(--surface);color:var(--ink);transition:border-color var(--t) var(--ease);
 }
+.sel{padding-right:26px}
+.sel:hover,.inp:hover{border-color:var(--ink-3)}
 .inp::placeholder{color:var(--ink-3)}
-.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:3px;overflow:hidden;background:var(--surface)}
+.seg{
+  display:inline-flex;background:var(--surface-2);border-radius:7px;padding:2px;gap:2px;
+}
 .seg button{
-  border:0;background:none;padding:5px 11px;font-size:12px;cursor:pointer;color:var(--ink-2);
-  border-right:1px solid var(--line);font-family:"IBM Plex Mono",monospace;
+  border:0;background:none;padding:4px 11px;font-size:12.5px;cursor:pointer;color:var(--ink-3);
+  border-radius:5px;transition:all var(--t) var(--ease);white-space:nowrap;
 }
-.seg button:last-child{border-right:0}
-.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
-.seg button:not([aria-pressed="true"]):hover{background:var(--surface-3)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:500;box-shadow:0 1px 2px rgba(17,17,18,.07)}
+:root[data-theme="dark"] .seg button[aria-pressed="true"],
+:root:not([data-theme="light"]) .seg button[aria-pressed="true"]{box-shadow:none;background:var(--surface-3)}
+.seg button:not([aria-pressed="true"]):hover{color:var(--ink)}
 .btn{
-  border:1px solid var(--line-2);background:var(--surface);border-radius:3px;padding:5px 11px;
-  font-size:12.5px;cursor:pointer;color:var(--ink-2);display:inline-flex;align-items:center;gap:6px;
+  border:1px solid var(--line-2);background:var(--surface);border-radius:6px;padding:6px 12px;
+  font-size:13px;cursor:pointer;color:var(--ink-2);display:inline-flex;align-items:center;gap:6px;
+  transition:all var(--t) var(--ease);white-space:nowrap;
 }
-.btn:hover{background:var(--surface-3);color:var(--ink)}
-.btn-p{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
-.btn-p:hover{background:var(--accent);filter:brightness(1.08);color:var(--accent-ink)}
-.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:hover{background:var(--surface-2);color:var(--ink);border-color:var(--ink-3)}
+.btn:active{transform:translateY(.5px)}
+.btn-p{background:var(--ink);border-color:var(--ink);color:var(--surface);font-weight:500}
+.btn-p:hover{background:var(--ink);border-color:var(--ink);color:var(--surface);opacity:.86}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
 .chip{
-  border:1px solid var(--line-2);background:var(--surface);border-radius:99px;padding:3px 10px;
-  font-size:11.5px;cursor:pointer;color:var(--ink-2);font-family:"IBM Plex Mono",monospace;
+  border:1px solid var(--line-2);background:var(--surface);border-radius:99px;padding:3px 11px;
+  font-size:12px;cursor:pointer;color:var(--ink-2);transition:all var(--t) var(--ease);
 }
-.chip[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
-.chip:not([aria-pressed="true"]):hover{background:var(--surface-3)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.chip:not([aria-pressed="true"]):hover{border-color:var(--ink-3);color:var(--ink)}
 
-/* ── Cards & grid ─────────────────────────────────────────────────── */
-.card{background:var(--surface);border:1px solid var(--line);border-radius:3px}
-.card-h{padding:11px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.card-h h3{font-size:13.5px;white-space:nowrap}
-.card-h .sub{font-size:11px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+/* ── 区块：发丝线与留白分区，不用盒子 ─────────────────────────── */
+.card{background:none;border:0;border-radius:0;min-width:0}
+.card-h{
+  padding:0 0 12px;border-bottom:1px solid var(--line-2);
+  display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+}
+.card-h h3{font-size:15px;font-weight:600;letter-spacing:-.02em;white-space:nowrap;flex:none}
+.card-h .sub{font-size:12px;color:var(--ink-3);flex:0 1 auto;min-width:0;overflow-wrap:anywhere}
 .card-h .sp{flex:1}
-.card-b{padding:14px}
-.grid{display:grid;gap:12px}
+.card-b{padding:18px 0 0}
+.grid{display:grid;gap:28px}
 .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
-.g21{grid-template-columns:2fr 1fr}
-.g12{grid-template-columns:1fr 2fr}
-.stack{display:flex;flex-direction:column;gap:12px}
+.g21{grid-template-columns:1.9fr 1fr}
+.g12{grid-template-columns:1fr 1.9fr}
+.stack{display:flex;flex-direction:column;gap:22px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
-/* ── KPI tiles ────────────────────────────────────────────────────── */
-.kpi{
-  background:var(--surface);border:1px solid var(--line);border-radius:3px;padding:12px 13px;
-  cursor:pointer;text-align:left;width:100%;display:block;position:relative;transition:border-color .12s;
+/* ── 指标：仪表盘刻度组，被竖线分隔的数字，不是磁贴 ───────────── */
+.stat,.kpi{
+  background:none;border:0;border-radius:0;padding:0 0 0 20px;text-align:left;width:100%;
+  display:block;position:relative;min-width:0;
 }
-.kpi:hover{border-color:var(--accent-line)}
-.kpi-l{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-family:"IBM Plex Mono",monospace;display:flex;align-items:center;gap:5px}
-.kpi-v{font-size:27px;font-weight:600;margin-top:5px;line-height:1.05;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.kpi-v small{font-size:13px;font-weight:400;color:var(--ink-3);margin-left:2px}
-.kpi-f{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:7px}
-.kpi-d{font-size:11px;font-family:"IBM Plex Mono",monospace;display:flex;align-items:center;gap:3px}
-.kpi-note{font-size:10.5px;color:var(--ink-3);margin-top:3px}
+.grid > .stat:first-child,.grid > .kpi:first-child{padding-left:0}
+.grid > .stat::before,.grid > .kpi::before{
+  content:"";position:absolute;left:0;top:2px;bottom:2px;width:1px;background:var(--line);
+}
+.grid > .stat:first-child::before,.grid > .kpi:first-child::before{display:none}
+.kpi{cursor:pointer;transition:opacity var(--t) var(--ease)}
+.kpi:hover{opacity:.62}
+.kpi-l,.stat .kpi-l{
+  font-family:"DM Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);display:flex;align-items:center;gap:5px;
+}
+.kpi-v{
+  font-size:31px;font-weight:600;margin-top:9px;line-height:1;
+  font-variant-numeric:tabular-nums;letter-spacing:-.04em;
+}
+.kpi-v small{font-size:14px;font-weight:400;color:var(--ink-3);margin-left:2px;letter-spacing:-.01em}
+.stat .num{font-size:26px;letter-spacing:-.04em;line-height:1}
+.stat .num small{font-weight:400;letter-spacing:-.01em}
+.kpi-f{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:10px}
+.kpi-d{font-size:12px;display:flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums}
+.kpi-note,.stat .note{font-size:11.5px;color:var(--ink-3);margin-top:4px;line-height:1.5}
+.stat-hi .num{color:var(--accent)}
+.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:0}
+.mini > div{padding:0 0 0 22px;position:relative}
+.mini > div:first-child{padding-left:0}
+.mini > div + div::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:1px;background:var(--line)}
+.mini .v{font-size:23px;font-weight:600;line-height:1.05;margin-top:8px;font-variant-numeric:tabular-nums;letter-spacing:-.035em}
 
-/* ── Status atoms ─────────────────────────────────────────────────── */
+/* ── 状态：安静。颜色只在真正危急时抬高音量 ───────────────────── */
 .pill{
-  display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1.5px 7px;border-radius:2px;
-  font-family:"IBM Plex Mono",monospace;font-weight:500;white-space:nowrap;border:1px solid transparent;
+  display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:2px 7px;border-radius:5px;
+  font-weight:500;white-space:nowrap;background:var(--surface-2);color:var(--ink-2);
+  font-variant-numeric:tabular-nums;
 }
-.p-good{background:var(--good-soft);color:var(--good);border-color:color-mix(in srgb,var(--good) 28%,transparent)}
-.p-warn{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 28%,transparent)}
-.p-crit{background:var(--crit-soft);color:var(--crit);border-color:color-mix(in srgb,var(--crit) 28%,transparent)}
-.p-neut{background:var(--surface-3);color:var(--ink-2);border-color:var(--line)}
-.p-acc{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
-.dot{width:6px;height:6px;border-radius:99px;flex:none;display:inline-block}
+.p-good{color:var(--good);background:var(--good-soft)}
+.p-warn{color:var(--warn);background:var(--warn-soft)}
+.p-crit{color:var(--crit);background:var(--crit-soft)}
+.p-neut{color:var(--ink-2);background:var(--surface-2)}
+.p-acc{color:var(--accent);background:var(--accent-soft)}
+.dot{width:5px;height:5px;border-radius:99px;flex:none;display:inline-block}
 .t-good{color:var(--good)} .t-warn{color:var(--warn)} .t-crit{color:var(--crit)} .t-mut{color:var(--ink-3)}
-.stripe{position:absolute;left:0;top:0;bottom:0;width:2px}
+.stripe{position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:2px}
 
-/* ── Tables ───────────────────────────────────────────────────────── */
-.tw{overflow-x:auto}
-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px}
+/* ── 表格：无外框，发丝线分隔，数字列右对齐等宽 ───────────────── */
+.tw{overflow-x:auto;margin:0 -2px}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
 th{
-  text-align:left;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.09em;
-  text-transform:uppercase;color:var(--ink-3);font-weight:500;padding:7px 10px;
-  border-bottom:1px solid var(--line-2);white-space:nowrap;position:sticky;top:0;background:var(--surface);
+  text-align:left;font-family:"DM Mono",monospace;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);font-weight:400;padding:0 12px 9px;
+  border-bottom:1px solid var(--line-2);white-space:nowrap;
+  background:var(--surface);
 }
-th.s{cursor:pointer;user-select:none}
+th:first-child{padding-left:2px} th:last-child{padding-right:2px}
+th.s{cursor:pointer;user-select:none;transition:color var(--t) var(--ease)}
 th.s:hover{color:var(--ink)}
-th .ar{opacity:.4;margin-left:2px}
+th .ar{opacity:.35;margin-left:3px}
 th[aria-sort] .ar{opacity:1;color:var(--accent)}
-td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:middle;line-height:1.45}
+td:first-child{padding-left:2px} td:last-child{padding-right:2px}
 tbody tr:last-child td{border-bottom:0}
+tfoot td{border-top:1px solid var(--line-2);border-bottom:0;padding-top:12px}
 tr.clk{cursor:pointer}
 tr.clk:hover td{background:var(--surface-2)}
+tr.clk:first-child:hover td:first-child{border-radius:6px 0 0 6px}
+tr.clk:hover td:last-child{border-radius:0 6px 6px 0}
 .ta-r{text-align:right}
-.tnum{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.tnum{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;letter-spacing:-.015em}
 .t-main{font-weight:500}
-.t-sub{font-size:11px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+.t-sub{font-size:11.5px;color:var(--ink-3);line-height:1.4}
 
-/* ── Charts ───────────────────────────────────────────────────────── */
+/* ── 图表 ─────────────────────────────────────────────────────── */
 .chart{position:relative;width:100%}
 .chart svg{display:block;width:100%;overflow:visible}
 .gridline{stroke:var(--line);stroke-width:1}
-.axis-t{fill:var(--ink-3);font-size:10px;font-family:"IBM Plex Mono",monospace}
-.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-2);align-items:center}
-.legend i{width:11px;height:3px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:middle}
-.legend .dash{height:0;border-top:2px dashed currentColor;opacity:.7}
+.axis-t{fill:var(--ink-3);font-size:10px;font-family:"DM Mono",monospace}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);align-items:center}
+.legend i{width:14px;height:2px;border-radius:2px;display:inline-block;margin-right:7px;vertical-align:middle}
 .tip{
-  position:fixed;z-index:200;pointer-events:none;background:var(--surface);border:1px solid var(--line-2);
-  border-radius:3px;padding:7px 9px;font-size:11.5px;box-shadow:var(--shadow);opacity:0;transition:opacity .1s;
-  max-width:250px;
+  position:fixed;z-index:200;pointer-events:none;background:var(--ink);color:var(--surface);
+  border-radius:8px;padding:9px 11px;font-size:12px;box-shadow:var(--pop);
+  opacity:0;transition:opacity 90ms var(--ease);max-width:270px;
 }
 .tip.on{opacity:1}
-.tip-t{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
-.tip-r{display:flex;align-items:center;gap:7px;justify-content:space-between;line-height:1.7}
-.tip-r b{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-weight:600}
-.bartrack{background:var(--surface-3);border-radius:2px;overflow:hidden;position:relative}
-.barfill{height:100%;border-radius:0 2px 2px 0}
+.tip-t{
+  font-family:"DM Mono",monospace;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;
+  opacity:.55;margin-bottom:5px;
+}
+.tip-r{display:flex;align-items:center;gap:14px;justify-content:space-between;line-height:1.75}
+.tip-r b{font-variant-numeric:tabular-nums;font-weight:600}
+.tip-r span{opacity:.8}
+.bartrack{background:var(--surface-2);border-radius:99px;overflow:hidden;position:relative}
+.barfill{height:100%;border-radius:99px;transition:width 260ms var(--ease)}
 
-/* ── Drawer / modal ───────────────────────────────────────────────── */
-.scrim{position:fixed;inset:0;background:rgba(10,20,28,.42);z-index:100;opacity:0;transition:opacity .16s}
+/* ── 悬浮层：只有这里有卡片、圆角与投影 ───────────────────────── */
+.scrim{position:fixed;inset:0;background:rgba(12,12,14,.28);backdrop-filter:blur(2px);z-index:100;opacity:0;transition:opacity 180ms var(--ease)}
 .scrim.on{opacity:1}
 .drawer{
-  position:fixed;top:0;right:0;bottom:0;width:min(560px,94vw);background:var(--surface);z-index:101;
-  border-left:1px solid var(--line-2);transform:translateX(100%);transition:transform .2s cubic-bezier(.3,.7,.3,1);
-  display:flex;flex-direction:column;box-shadow:var(--shadow);
+  position:fixed;top:0;right:0;bottom:0;width:min(600px,96vw);background:var(--surface);z-index:101;
+  transform:translateX(100%);transition:transform 260ms var(--ease);
+  display:flex;flex-direction:column;box-shadow:var(--pop);border-left:1px solid var(--line);
 }
 .drawer.on{transform:translateX(0)}
-.drawer-h{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}
-.drawer-b{padding:16px 18px 40px;overflow-y:auto;flex:1}
+.drawer-h{padding:24px 28px 18px;border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:flex-start}
+.drawer-b{padding:24px 28px 56px;overflow-y:auto;flex:1}
 .modal{
-  position:fixed;top:50%;left:50%;transform:translate(-50%,-48%) scale(.98);z-index:101;
-  width:min(460px,94vw);background:var(--surface);border:1px solid var(--line-2);border-radius:4px;
-  opacity:0;transition:opacity .14s,transform .14s;box-shadow:var(--shadow);
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-48%) scale(.985);z-index:101;
+  width:min(500px,94vw);background:var(--surface);border-radius:12px;
+  opacity:0;transition:opacity 160ms var(--ease),transform 160ms var(--ease);box-shadow:var(--pop);
+  border:1px solid var(--line);
 }
 .modal.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
-.x{border:0;background:none;cursor:pointer;color:var(--ink-3);font-size:18px;line-height:1;padding:2px 5px;border-radius:2px}
-.x:hover{background:var(--surface-3);color:var(--ink)}
+.modal .drawer-h{padding:20px 22px 16px}
+.x{
+  border:0;background:none;cursor:pointer;color:var(--ink-3);font-size:15px;line-height:1;
+  padding:5px 7px;border-radius:6px;transition:all var(--t) var(--ease);
+}
+.x:hover{background:var(--surface-2);color:var(--ink)}
 
-/* ── Toast ────────────────────────────────────────────────────────── */
-.toasts{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:7px;align-items:center}
+/* ── 反馈 ─────────────────────────────────────────────────────── */
+.toasts{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:8px;align-items:center}
 .toast{
-  background:var(--ink);color:var(--ground);padding:8px 14px;border-radius:3px;font-size:12.5px;
-  box-shadow:var(--shadow);animation:tin .22s ease-out;display:flex;gap:8px;align-items:center;max-width:88vw;
+  background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:9px;font-size:13px;
+  box-shadow:var(--pop);animation:tin 220ms var(--ease);display:flex;gap:9px;align-items:center;max-width:88vw;
 }
-.toast i{width:6px;height:6px;border-radius:99px;background:var(--good);flex:none}
+.toast i{width:5px;height:5px;border-radius:99px;background:var(--good);flex:none}
 .toast.warn i{background:var(--warn)} .toast.crit i{background:var(--crit)}
-@keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes tin{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
 
-/* ── Misc ─────────────────────────────────────────────────────────── */
-.section-t{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);margin:0 0 8px}
-.hr{height:1px;background:var(--line);border:0;margin:14px 0}
-.kv{display:grid;grid-template-columns:88px 1fr;gap:5px 12px;font-size:12.5px}
-.kv dt{color:var(--ink-3);font-size:11.5px}
-.kv dd{margin:0;font-family:"IBM Plex Mono",monospace}
-.empty{padding:28px;text-align:center;color:var(--ink-3);font-size:12.5px}
-.note{font-size:11.5px;color:var(--ink-3);line-height:1.6}
-.formula{
-  background:var(--surface-2);border:1px solid var(--line);border-left:2px solid var(--accent);
-  padding:9px 11px;font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-2);
-  line-height:1.75;overflow-x:auto;border-radius:0 3px 3px 0;white-space:pre-wrap;
+/* ── 排版元件 ─────────────────────────────────────────────────── */
+.section-t{
+  font-family:"DM Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);margin:0 0 12px;
 }
-input[type=range]{width:100%;accent-color:var(--accent);height:18px}
-.slider-h{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:1px}
-.slider-h b{font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--accent);font-weight:600}
-.field{margin-bottom:13px}
-.cbx{display:flex;gap:9px;align-items:flex-start;padding:7px 0;cursor:pointer;font-size:12.5px;line-height:1.5}
-.cbx input{margin:3px 0 0;accent-color:var(--accent);flex:none;width:14px;height:14px}
-.cbx.done span{color:var(--ink-3);text-decoration:line-through}
+.hr{height:1px;background:var(--line);border:0;margin:22px 0}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:7px 16px;font-size:13px}
+.kv dt{color:var(--ink-3);font-size:12px}
+.kv dd{margin:0;font-variant-numeric:tabular-nums}
+.empty{padding:36px 8px;text-align:center;color:var(--ink-3);font-size:12.5px}
+.note{font-size:12px;color:var(--ink-3);line-height:1.65}
+.formula{
+  background:var(--surface-2);border-left:2px solid var(--accent);
+  padding:14px 16px;font-family:"DM Mono",monospace;font-size:11.5px;color:var(--ink-2);
+  line-height:1.85;overflow-x:auto;white-space:pre-wrap;border-radius:0 8px 8px 0;
+}
+.formula b{color:var(--ink);font-weight:500}
+input[type=range]{width:100%;accent-color:var(--accent);height:20px;cursor:pointer}
+.slider-h{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;margin-bottom:3px;color:var(--ink-2)}
+.slider-h b{font-variant-numeric:tabular-nums;font-size:13.5px;color:var(--ink);font-weight:600;letter-spacing:-.02em}
+.field{margin-bottom:18px}
+.cbx{display:flex;gap:10px;align-items:flex-start;padding:8px 0;cursor:pointer;font-size:13px;line-height:1.5}
+.cbx input{margin:2px 0 0;accent-color:var(--accent);flex:none;width:15px;height:15px;cursor:pointer}
+.cbx span{transition:color var(--t) var(--ease)}
+.cbx.done span{color:var(--ink-3);text-decoration:line-through;text-decoration-thickness:1px}
 
-@media(max-width:1180px){
-  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* ── 角色与临床元件 ───────────────────────────────────────────── */
+.who{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--ink-2)}
+.avatar{
+  width:26px;height:26px;border-radius:99px;background:var(--surface-2);color:var(--ink-2);
+  display:grid;place-items:center;font-size:11px;font-weight:600;flex:none;
+}
+.who b{font-weight:600;color:var(--ink)}
+.who .r{font-size:11px;color:var(--ink-3)}
+.tcard{
+  border:1px solid var(--line);border-radius:10px;position:relative;background:var(--surface);
+  transition:border-color var(--t) var(--ease);
+}
+.tcard:hover{border-color:var(--line-2)}
+.tcard.crit{border-color:color-mix(in srgb,var(--crit) 32%,var(--line))}
+.tcard.warn{border-color:color-mix(in srgb,var(--warn) 32%,var(--line))}
+.tcard-h{padding:14px 16px 11px;display:flex;gap:12px;align-items:flex-start}
+.tcard > div:last-child{padding-left:16px!important;padding-right:16px!important;padding-bottom:14px!important}
+.cd{font-variant-numeric:tabular-nums;font-weight:600;line-height:1;letter-spacing:-.035em}
+.subjid{
+  font-family:"DM Mono",monospace;font-size:11.5px;padding:1px 6px;border-radius:4px;
+  background:var(--surface-2);color:var(--ink-2);letter-spacing:0;
+}
+.winbar{position:relative;height:18px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+.winbar .ok{position:absolute;top:0;bottom:0;background:var(--accent-soft)}
+.winbar .now{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--ink);border-radius:2px}
+.winbar .lbl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-family:"DM Mono",monospace;color:var(--ink-3)}
+.qbox{
+  width:100%;font:inherit;font-size:13px;padding:10px 12px;border:1px solid var(--line-2);
+  border-radius:8px;background:var(--surface);color:var(--ink);resize:vertical;min-height:64px;
+  transition:border-color var(--t) var(--ease);
+}
+.qbox:hover{border-color:var(--ink-3)}
+.apr{border:1px solid var(--line);border-radius:10px;padding:16px 18px;position:relative;background:var(--surface)}
+.apr.flag{border-color:color-mix(in srgb,var(--warn) 30%,var(--line))}
+.daybar{display:flex;gap:2px;height:22px;border-radius:6px;overflow:hidden}
+.daybar div{flex:1;display:grid;place-items:center;font-size:9.5px;font-family:"DM Mono",monospace}
+
+/* 警示区块：一条左规则，不是一整条色带 */
+.card.alert{padding-left:18px;position:relative}
+.card.alert::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:2px;border-radius:2px}
+.card.alert-crit::before{background:var(--crit)}
+.card.alert-warn::before{background:var(--warn)}
+.card.alert-crit .card-h h3{color:var(--crit)}
+.card.alert-warn .card-h h3{color:var(--warn)}
+
+/* 视图里手写的左规则提示块，统一收进这套语言 */
+[style*="border-left:2px solid"]{border-radius:0 8px 8px 0}
+.card.alert[style*="border-left"],.card.alert{border-radius:0}
+/* 联系状态：一个安静的文字控件，不是黑色药丸 */
+.ct{
+  border:0;background:var(--surface-2);border-radius:5px;padding:2px 8px;font-size:11.5px;
+  cursor:pointer;color:var(--ink-2);font-weight:500;transition:all var(--t) var(--ease);
+}
+.ct:hover{background:var(--surface-3);color:var(--ink)}
+.ct-good{color:var(--good);background:var(--good-soft)}
+.ct-warn{color:var(--warn);background:var(--warn-soft)}
+.ct-crit{color:var(--crit);background:var(--crit-soft)}
+
+/* ── 响应式 ───────────────────────────────────────────────────── */
+@media(max-width:1240px){
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 28px}
   .g21,.g12,.g3{grid-template-columns:1fr}
+  .grid > .stat:nth-child(3)::before,.grid > .kpi:nth-child(3)::before{display:none}
+  .grid > .stat:nth-child(odd),.grid > .kpi:nth-child(odd){padding-left:0}
+  .grid > .stat:nth-child(odd)::before,.grid > .kpi:nth-child(odd)::before{display:none}
+  .content{padding:32px 28px 80px}
+  .topbar{padding:0 28px}
 }
 @media(max-width:860px){
   .app{grid-template-columns:1fr}
-  .rail{position:static;height:auto;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line)}
-  .brand{border-bottom:0;border-right:1px solid var(--line);white-space:nowrap}
-  .nav{display:flex;gap:4px;padding:8px}
+  .rail{position:static;height:auto;flex-direction:row;align-items:center;overflow-x:auto;
+    border-right:0;border-bottom:1px solid var(--line);padding-right:12px}
+  .brand{padding:14px 18px;white-space:nowrap}
+  .persona{display:none}
+  .nav{display:flex;gap:4px;padding:10px 0;flex:none}
   .nav-group,.rail-foot{display:none}
-  .nav-item{white-space:nowrap;padding:6px 9px}
+  .nav-item{white-space:nowrap;padding:6px 11px}
+  .nav-item[aria-current="true"]{background:var(--surface-2)}
   .nav-item[aria-current="true"]::before{display:none}
-  .g4,.g2{grid-template-columns:1fr}
-  .content{padding:14px 12px 50px}
-  .topbar{padding:9px 12px}
+  .g4,.g2{grid-template-columns:1fr;gap:22px}
+  .grid > .stat,.grid > .kpi{padding-left:0}
+  .grid > .stat::before,.grid > .kpi::before{display:none}
+  .mini{grid-template-columns:repeat(2,1fr);gap:20px 0}
+  .mini > div{padding-left:20px}
+  .mini > div:nth-child(odd){padding-left:0}
+  .mini > div:nth-child(odd)::before{display:none}
+  .content{padding:24px 18px 72px}
+  .topbar{padding:10px 18px;min-height:0;gap:8px 10px;row-gap:8px}
+  .topbar .crumb:not(#crumb){display:none}          /* "身份""项目范围"标签在窄屏是噪声 */
+  .topbar .who .r:last-child{display:none}           /* 长范围描述折行太占地方 */
+  .topbar .who{font-size:11.5px}
+  .topbar-sp{display:none}
+  .topbar .sel{flex:1 1 132px;min-width:0;font-size:12px;padding:5px 8px}
+  #crumb{flex:1 1 100%}
+  .demo-tag{margin-left:auto}
+  .view-head h1{font-size:24px}
+  .drawer-h,.drawer-b{padding-left:20px;padding-right:20px}
 }
-
-/* ── Role & employee-facing atoms ──────────────────────────────────── */
-.who{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2)}
-.avatar{
-  width:25px;height:25px;border-radius:99px;background:var(--accent-soft);color:var(--accent);
-  display:grid;place-items:center;font-size:11px;font-weight:600;border:1px solid var(--accent-line);flex:none;
-}
-.who b{font-weight:600;color:var(--ink)}
-.who .r{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.06em;color:var(--ink-3)}
-.rail .persona{padding:9px 14px;border-bottom:1px solid var(--line);display:flex;gap:9px;align-items:center}
-.rail .persona .n{font-size:12.5px;font-weight:600;line-height:1.25}
-.rail .persona .d{font-size:10px;color:var(--ink-3);font-family:"IBM Plex Mono",monospace}
-
-.tcard{border:1px solid var(--line);border-radius:3px;position:relative;background:var(--surface)}
-.tcard.crit{border-color:color-mix(in srgb,var(--crit) 45%,var(--line))}
-.tcard.warn{border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
-.tcard-h{padding:10px 12px 9px 14px;display:flex;gap:10px;align-items:flex-start}
-.cd{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-weight:600;line-height:1.05}
-.subjid{
-  font-family:"IBM Plex Mono",monospace;font-size:11px;padding:1px 6px;border-radius:2px;
-  background:var(--surface-3);color:var(--ink-2);border:1px solid var(--line);letter-spacing:.03em;
-}
-.winbar{position:relative;height:16px;background:var(--surface-3);border-radius:2px;overflow:hidden}
-.winbar .ok{position:absolute;top:0;bottom:0;background:var(--good-soft)}
-.winbar .now{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
-.winbar .lbl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-family:"IBM Plex Mono",monospace;color:var(--ink-3)}
-.qbox{width:100%;font:inherit;font-size:12.5px;padding:7px 9px;border:1px solid var(--line-2);border-radius:3px;background:var(--surface);color:var(--ink);resize:vertical;min-height:56px}
-.apr{border:1px solid var(--line);border-radius:3px;padding:11px 13px;position:relative;background:var(--surface)}
-.apr.flag{border-left:2px solid var(--warn)}
-.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:9px}
-.mini > div{border:1px solid var(--line);border-radius:3px;padding:8px 10px}
-.mini .v{font-family:"IBM Plex Mono",monospace;font-size:18px;font-weight:600;line-height:1.1;margin-top:2px}
-.daybar{display:flex;gap:2px;height:22px;border-radius:2px;overflow:hidden;border:1px solid var(--line)}
-.daybar div{flex:1;display:grid;place-items:center;font-size:9.5px;font-family:"IBM Plex Mono",monospace}
 </style>
 
 <div class="app">
@@ -916,11 +1040,11 @@ function enrollDiag(ss){
   const m=siteM(ss), f=funnelM(ss);
   if(m.rate===null || m.rate>=0.9) return null;
   if(f.pre>0 && f.icf/Math.max(f.pre,1)>=0.5 && f.sfRate>0.5)
-    return {k:"筛败率过高", c:"var(--s5)",
+    return {k:"筛败率过高", c:"var(--crit)",
       d:`筛败 ${f.sf}/${f.icf}（${pct(f.sfRate)}），远高于同项目其他中心`,
       a:"入排标准与该中心病源不匹配 → 与申办方谈方案修订，或降低该中心的合同例数"};
   if(f.pre>0 && f.pre < ss.contracted*1.8)
-    return {k:"预筛量不足", c:"var(--s2)",
+    return {k:"预筛量不足", c:"var(--warn)",
       d:`累计预筛仅 ${f.pre} 人，合同 ${ss.contracted} 例，按当前筛败率至少需预筛 ${Math.ceil(ss.contracted/Math.max(f.yield||0.3,0.15))} 人`,
       a:"病源本身不够 → 这是可行性调查该拦下的中心；现阶段只能加招募渠道或减例数"};
   if(f.pre<=6)
@@ -1221,13 +1345,13 @@ function lineChart(box,{x,series,yMax,yFmt=n0,h=200}){
     ? `<text class="axis-t" x="${px(i).toFixed(1)}" y="${H-8}" text-anchor="middle">${esc(t)}</text>`:"").join("");
   const paths = series.map(s=>{
     const d = s.values.map((v,i)=>`${i?"L":"M"}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(" ");
-    const area = s.fill ? `<path d="${d} L${px(x.length-1).toFixed(1)},${P.t+ih} L${px(0).toFixed(1)},${P.t+ih} Z" fill="${s.color}" opacity=".07"/>`:"";
-    return area + `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"${s.dash?' stroke-dasharray="5 4"':""}/>`;
+    const area = s.fill ? `<path d="${d} L${px(x.length-1).toFixed(1)},${P.t+ih} L${px(0).toFixed(1)},${P.t+ih} Z" fill="${s.color}" opacity=".055"/>`:"";
+    return area + `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"${s.dash?' stroke-dasharray="2 4" stroke-linecap="round"':""}/>`;
   }).join("");
   /* 选择性直标：只标终点 */
   const ends = series.map(s=>{
     const i=x.length-1, cx=px(i), cy=py(s.values[i]);
-    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="4" fill="${s.color}" stroke="var(--surface)" stroke-width="2"/>`;
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.5" fill="${s.color}" stroke="var(--surface)" stroke-width="2.5"/>`;
   }).join("");
   box.innerHTML =
    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="计划与实际入组累计曲线">
@@ -1239,8 +1363,8 @@ function lineChart(box,{x,series,yMax,yFmt=n0,h=200}){
   const svg=box.querySelector("svg"), cross=box.querySelector("#cross"), cl=cross.querySelector("line");
   const dots=[];
   series.forEach(s=>{ const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
-    c.setAttribute("r","4.5"); c.setAttribute("fill",s.color);
-    c.setAttribute("stroke","var(--surface)"); c.setAttribute("stroke-width","2");
+    c.setAttribute("r","4"); c.setAttribute("fill",s.color);
+    c.setAttribute("stroke","var(--surface)"); c.setAttribute("stroke-width","2.5");
     cross.appendChild(c); dots.push(c); });
   const hit=box.querySelector("#hit");
   hit.addEventListener("pointermove",e=>{
@@ -1248,9 +1372,9 @@ function lineChart(box,{x,series,yMax,yFmt=n0,h=200}){
     let i=Math.round((sx-P.l)/(iw/(x.length-1||1))); i=clamp(i,0,x.length-1);
     cross.style.display=""; cl.setAttribute("x1",px(i)); cl.setAttribute("x2",px(i));
     dots.forEach((c,k)=>{c.setAttribute("cx",px(i));c.setAttribute("cy",py(series[k].values[i]));});
-    const rows=series.map(s=>`<div class="tip-r"><span><i style="display:inline-block;width:9px;height:3px;border-radius:2px;background:${s.color};vertical-align:middle;margin-right:6px"></i>${esc(s.name)}</span><b>${yFmt(s.values[i])}</b></div>`).join("");
+    const rows=series.map(s=>`<div class="tip-r"><span><i style="display:inline-block;width:12px;height:2px;border-radius:2px;background:${s.color};vertical-align:middle;margin-right:7px;opacity:.9"></i>${esc(s.name)}</span><b>${yFmt(s.values[i])}</b></div>`).join("");
     const diff = series.length===2 ? (()=>{const d=series[1].values[i]-series[0].values[i];
-      return `<div class="tip-r" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>差额</span><b style="color:${d<0?"var(--crit)":"var(--good)"}">${d>0?"+":""}${n0(d)}</b></div>`;})():"";
+      return `<div class="tip-r" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>差额</span><b style="color:${d<0?"var(--crit)":"var(--ink)"}">${d>0?"+":""}${n0(d)}</b></div>`;})():"";
     showTip(`<div class="tip-t">${esc(x[i])}</div>${rows}${diff}`,e.clientX,e.clientY);
   });
   hit.addEventListener("pointerleave",()=>{cross.style.display="none";hideTip();});
@@ -1267,14 +1391,14 @@ function spark(vals,color,w=76,h=22){
 }
 
 /* 横向条：基线锚定，只有数据端 4px 圆角 */
-function hbars(box, rows, {max, fmt=n1, unit="", h=22, gap=7}={}){
+function hbars(box, rows, {max, fmt=n1, unit="", h=12, gap=11, band=null}={}){
   const M = max || Math.max(...rows.map(r=>Math.abs(r.v)))*1.05 || 1;
   box.innerHTML = rows.map(r=>{
     const w = clamp(Math.abs(r.v)/M*100, 2, 100);
-    return `<div class="hb" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(90px,150px) 1fr auto;gap:10px;align-items:center;margin-bottom:${gap}px;cursor:default">
-      <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
-      <div class="bartrack" style="height:${h}px"><div class="barfill" style="width:${w}%;background:${r.color};height:100%"></div>${r.marker!=null?`<div style="position:absolute;left:${clamp(r.marker/M*100,0,100)}%;top:-2px;bottom:-2px;width:2px;background:var(--ink-3);opacity:.65"></div>`:""}</div>
-      <div class="tnum" style="font-size:12px;min-width:56px">${fmt(r.v)}${unit}</div>
+    return `<div class="hb" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(96px,158px) 1fr auto;gap:14px;align-items:center;margin-bottom:${gap}px;cursor:default">
+      <div style="font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
+      <div class="bartrack" style="height:${h}px"><div class="barfill" style="width:${w}%;background:${r.color||"var(--accent)"};height:100%;position:relative"></div>${r.marker!=null?`<div style="position:absolute;left:${clamp(r.marker/M*100,0,100)}%;top:0;bottom:0;width:1.5px;background:var(--ink);opacity:.45"></div>`:""}${band?band.map(t=>`<div style="position:absolute;left:${clamp(t/M*100,0,100)}%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>`).join(""):""}</div>
+      <div class="tnum" style="font-size:12.5px;min-width:58px;font-weight:600;color:${r.vColor||"var(--ink)"}">${fmt(r.v)}${unit}</div>
     </div>`;
   }).join("");
   box.querySelectorAll(".hb").forEach(el=>{
@@ -1288,11 +1412,14 @@ function hbars(box, rows, {max, fmt=n1, unit="", h=22, gap=7}={}){
 function stacked(box, segs, {h=26, fmt=v=>wan(v)+" 万"}={}){
   if(!segs.length){ box.innerHTML=`<div class="empty" style="padding:16px">暂无数据</div>`; return; }
   const tot=sum(segs,s=>s.v)||1;
-  box.innerHTML=`<div style="display:flex;height:${h}px;gap:2px;border-radius:2px;overflow:hidden">${
+  /* 未指定颜色时按占比排名分配单色序列：深浅必须与量级一致 */
+  const rank=[...segs].sort((a,b)=>b.v-a.v).map(x=>x.n);
+  segs=segs.map(x=>({...x, c: x.c || `var(--s${Math.min(rank.indexOf(x.n)+1,5)})`}));
+  box.innerHTML=`<div style="display:flex;height:${h}px;gap:2px;border-radius:6px;overflow:hidden">${
     segs.map(s=>`<div class="sg" data-n="${esc(s.n)}" data-v="${fmt(s.v)}" data-p="${pct(s.v/tot)}"
       style="width:${(s.v/tot*100).toFixed(2)}%;background:${s.c};min-width:2px"></div>`).join("")}</div>
-    <div class="legend" style="margin-top:9px">${segs.map(s=>
-      `<span><i style="background:${s.c}"></i>${esc(s.n)} <b class="mono" style="font-weight:600">${fmt(s.v)}</b> <span class="t-mut mono">${pct(s.v/tot)}</span></span>`).join("")}</div>`;
+    <div class="legend" style="margin-top:14px;gap:20px">${segs.map(s=>
+      `<span><i style="background:${s.c};height:8px;width:8px;border-radius:2px"></i>${esc(s.n)} <b style="font-weight:600;font-variant-numeric:tabular-nums;margin-left:2px">${fmt(s.v)}</b> <span class="t-mut" style="font-variant-numeric:tabular-nums">${pct(s.v/tot)}</span></span>`).join("")}</div>`;
   box.querySelectorAll(".sg").forEach(el=>{
     el.addEventListener("pointermove",e=>showTip(
       `<div class="tip-t">${esc(el.dataset.n)}</div><div class="tip-r"><span>金额</span><b>${el.dataset.v}</b></div><div class="tip-r"><span>占比</span><b>${el.dataset.p}</b></div>`,e.clientX,e.clientY));
@@ -1305,13 +1432,13 @@ function diverging(box, rows, {fmt=v=>(v>0?"+":"")+n1(v), unit="万"}={}){
   const M=Math.max(...rows.map(r=>Math.abs(r.v)))*1.08||1;
   box.innerHTML = rows.map(r=>{
     const w=Math.abs(r.v)/M*50, pos=r.v>=0;
-    return `<div class="dv" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(96px,168px) 1fr 68px;gap:10px;align-items:center;margin-bottom:6px">
-      <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
-      <div style="position:relative;height:20px;background:var(--surface-3);border-radius:2px">
-        <div style="position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line-2)"></div>
-        <div style="position:absolute;top:0;bottom:0;${pos?`left:50%;border-radius:0 2px 2px 0`:`right:50%;border-radius:2px 0 0 2px`};width:${w}%;background:${pos?"var(--good)":"var(--crit)"}"></div>
+    return `<div class="dv" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(102px,180px) 1fr 74px;gap:14px;align-items:center;margin-bottom:10px">
+      <div style="font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
+      <div style="position:relative;height:11px;background:var(--surface-2);border-radius:99px">
+        <div style="position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--line-2)"></div>
+        <div style="position:absolute;top:0;bottom:0;${pos?`left:50%;border-radius:0 99px 99px 0`:`right:50%;border-radius:99px 0 0 99px`};width:${w}%;background:${pos?"var(--ink-2)":"var(--crit)"}"></div>
       </div>
-      <div class="tnum" style="font-size:12px;color:${pos?"var(--good)":"var(--crit)"};font-weight:500">${fmt(r.v)}${unit}</div>
+      <div class="tnum" style="font-size:12.5px;color:${pos?"var(--ink)":"var(--crit)"};font-weight:600">${fmt(r.v)}${unit}</div>
     </div>`;
   }).join("");
   box.querySelectorAll(".dv").forEach(el=>{
@@ -1527,7 +1654,7 @@ function render(){
   const [t,sub] = titleOf(state.view);
   $("#content").innerHTML = `<div class="view-head"><h1>${esc(t)}</h1><p>${esc(sub)}</p></div><div id="vbody"></div>`;
   VIEWS[state.view]($("#vbody"));
-  $("#content").scrollIntoView({block:"start"});
+  scrollTo({top:0, behavior:"instant"});
 }
 function go(v,opts={}){ Object.assign(state,opts); state.view=v; render(); }
 
@@ -1601,21 +1728,21 @@ VIEWS.dash = box=>{
 
   box.innerHTML = `
   <div class="grid g4" style="margin-bottom:12px">
-    ${K("人员利用率", n1(R.util), "%", `健康区间 60–88%｜${R.people} 名一线`, SPARK.util, us.c,
+    ${K("人员利用率", n1(R.util), "%", `健康区间 60–88%｜${R.people} 名一线`, SPARK.util, us.k==="good"?"var(--ink-3)":us.c,
         `<span class="dot" style="background:${us.c}"></span>${us.t}`, us.c, "staff")}
-    ${K("综合毛利率", n1(R.gm*100), "%", `收入 ${wan(R.rev)} 万 · 成本 ${wan(R.cost)} 万`, SPARK.gm, "var(--s3)",
+    ${K("综合毛利率", n1(R.gm*100), "%", `收入 ${wan(R.rev)} 万 · 成本 ${wan(R.cost)} 万`, SPARK.gm, "var(--ink-3)",
         "▲ 较上月 +0.8pt", "var(--good)", "pnl")}
     ${(()=>{ const g=R.enr-R.plan, c=g>=0?"var(--good)":R.rate<0.9?"var(--crit)":"var(--warn)";
       return K("入组达成率", n1(R.rate*100), "%", `实际 ${R.enr} 例 / 计划到今日 ${R.plan} 例`, SPARK.rate, c,
         `${g>=0?"▲ 领先":"▼ 落后"} ${Math.abs(g)} 例`, c, "enr"); })()}
-    ${K("每例入组成本", n1(R.cpe), "万", `${R.active} 个中心在组｜共 ${R.total} 个中心`, SPARK.cpe, "var(--s2)",
+    ${K("每例入组成本", n1(R.cpe), "万", `${R.active} 个中心在组｜共 ${R.total} 个中心`, SPARK.cpe, "var(--warn)",
         "▲ 较年初 +0.6 万", "var(--warn)", "pnl")}
   </div>
   <div class="grid g4" style="margin-bottom:12px">
     ${K("未关闭质量事件", R.open.length, "", `其中重大/严重 ${R.crit} 项`, null, null,
-        `<span class="dot" style="background:${R.crit?"var(--crit)":"var(--good)"}"></span>${R.crit?"需立即处理":"无高危"}`,
-        R.crit?"var(--crit)":"var(--good)", "qa")}
-    ${K("应收未回款", wan(R.arAmt), "万", `账龄超 60 天 ${wan(R.arOver)} 万`, SPARK.dso, "var(--s5)",
+        `<span class="dot" style="background:${R.crit?"var(--crit)":"var(--ink)"}"></span>${R.crit?"需立即处理":"无高危"}`,
+        R.crit?"var(--crit)":"var(--ink)", "qa")}
+    ${K("应收未回款", wan(R.arAmt), "万", `账龄超 60 天 ${wan(R.arOver)} 万`, SPARK.dso, "var(--crit)",
         `DSO ${R.dso} 天`, R.dso>75?"var(--crit)":"var(--warn)", "bill")}
     ${K("待开票里程碑", wan(R.unbilledAmt), "万", `${R.unbilled} 笔已达成未开票`, null, null,
         "立即可开票", "var(--accent)", "bill")}
@@ -1664,11 +1791,9 @@ VIEWS.dash = box=>{
           <div style="position:absolute;left:calc(90px + 10px + 60%*.6);right:0;top:0;bottom:0;pointer-events:none"></div>
         </div>
         <div id="c-util"></div>
-        <div class="legend" style="margin-top:10px;border-top:1px solid var(--line);padding-top:9px">
-          <span><span class="dot" style="background:var(--warn)"></span> 闲置 &lt;60%</span>
-          <span><span class="dot" style="background:var(--good)"></span> 健康 60–88%</span>
-          <span><span class="dot" style="background:var(--crit)"></span> 超载 &gt;88%</span>
-          <span class="t-mut" style="margin-left:auto">灰线 = 健康下限</span>
+        <div class="legend" style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+          <span><i style="background:var(--accent);height:10px;width:2px;border-radius:2px;margin-right:4px"></i><i style="background:var(--accent);height:10px;width:2px;border-radius:2px"></i>健康区间刻度 60 / 88%</span>
+          <span class="t-mut">数值着色：<b style="color:var(--warn);font-weight:600">闲置</b> · <b style="color:var(--crit);font-weight:600">超载</b>，健康即常态、不着色</span>
         </div>
       </div>
     </div>
@@ -1681,24 +1806,24 @@ VIEWS.dash = box=>{
 
   lineChart($("#c-enr"),{x:ex,series:[
     {name:"计划累计",color:"var(--plan)",values:ep,dash:true},
-    {name:"实际累计",color:"var(--s1)",values:ea,fill:true}],h:230});
+    {name:"实际累计",color:"var(--accent)",values:ea,fill:true}],h:230});
 
   const people = STAFF.filter(p=>p.role==="CRA"||p.role==="CRC").sort((a,b)=>b.util-a.util);
   hbars($("#c-util"), people.map(p=>{ const s=utilState(p.util);
-    return {label:`${p.n} · ${p.role}`, v:p.util, color:s.c, marker:60,
+    return {label:`${p.n} · ${p.role}`, v:p.util, color:"var(--ink-2)", vColor:s.k==="good"?"var(--ink)":s.c,
       tip:`<div class="tip-t">${esc(p.n)} · ${p.role}${p.lvl}</div>
         <div class="tip-r"><span>利用率</span><b>${p.util}%</b></div>
         <div class="tip-r"><span>状态</span><b style="color:${s.c}">${s.t}</b></div>
         <div class="tip-r"><span>带中心</span><b>${p.sites.length} 个</b></div>
         <div class="tip-r"><span>常驻</span><b>${p.city}</b></div>`};
-  }), {max:100, fmt:v=>v, unit:"%", h:18, gap:5});
+  }), {max:100, fmt:v=>v, unit:"%", h:12, gap:10});
 
   const gp = list.filter(s=>siteRev(s)>0).map(s=>{const m=siteM(s);
     return {label:s.hosp.replace(/(大学|医学院|附属)/g,""), v:m.gp, tip:
       `<div class="tip-t">${esc(s.hosp)}</div>
        <div class="tip-r"><span>已确认收入</span><b>${wan(m.rev)} 万</b></div>
        <div class="tip-r"><span>已发生成本</span><b>${wan(s.cost)} 万</b></div>
-       <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--good)"}">${pct(m.gm)}</b></div>
+       <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--ink)"}">${pct(m.gm)}</b></div>
        <div class="tip-r"><span>已入组</span><b>${s.enrolled} / ${s.contracted} 例</b></div>`};
   }).sort((a,b)=>b.v-a.v);
   diverging($("#c-gp"), gp);
@@ -1764,7 +1889,7 @@ VIEWS.sites = box=>{
         <td><span class="pill ${s.st==="入组中"?"p-acc":"p-neut"}">${esc(s.st)}</span></td>
         <td class="tnum">${s.enrolled}<span class="t-mut"> / ${s.contracted}</span></td>
         <td class="ta-r"><span class="pill p-${rs.k}">${m.rate===null?"—":pct(m.rate)}</span></td>
-        <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--good)"};font-weight:500">${m.gm===null?"—":pct(m.gm)}</td>
+        <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--ink)"};font-weight:500">${m.gm===null?"—":pct(m.gm)}</td>
         <td class="tnum">${n0(s.md)}</td>
         <td><div class="t-sub">CRA ${esc(s.cra)}</div><div class="t-sub">CRC ${esc(s.crc.join("、"))}</div></td>
       </tr>`;}).join("") : `<tr><td colspan="8"><div class="empty">没有匹配的中心，试试放宽筛选条件</div></td></tr>`;
@@ -1811,15 +1936,15 @@ function openSite(id){
         ${next?`<button class="btn btn-p" id="adv">推进到「${esc(next)}」</button>`
               :`<span class="pill p-good">流程已完成</span>`}
       </div>
-      <div class="grid g2" style="gap:8px;margin-bottom:14px">
-        <div class="card" style="padding:10px 12px">
+      <div class="grid g2" style="gap:0;margin-bottom:26px">
+        <div class="stat">
           <div class="kpi-l">入组达成</div>
-          <div class="num" style="font-size:20px;margin-top:3px;color:${rs.c}">${m.rate===null?"—":pct(m.rate)}</div>
+          <div class="num" style="font-size:26px;margin-top:8px;color:${rsC}">${m.rate===null?"—":pct(m.rate)}</div>
           <div class="note">实际 ${ss.enrolled} / 计划到今日 ${ss.planToDate}｜合同 ${ss.contracted} 例</div>
         </div>
-        <div class="card" style="padding:10px 12px">
+        <div class="stat">
           <div class="kpi-l">单中心毛利</div>
-          <div class="num" style="font-size:20px;margin-top:3px;color:${m.gp<0?"var(--crit)":"var(--good)"}">${m.gp>0?"+":""}${n1(m.gp)} 万</div>
+          <div class="num" style="font-size:20px;margin-top:3px;color:${m.gp<0?"var(--crit)":"var(--ink)"}">${m.gp>0?"+":""}${n1(m.gp)} 万</div>
           <div class="note">毛利率 ${m.gm===null?"—":pct(m.gm)}｜每例成本 ${m.cpe?n1(m.cpe)+" 万":"—"}</div>
         </div>
       </div>
@@ -1835,13 +1960,13 @@ function openSite(id){
       <div class="stack" style="gap:6px;margin-bottom:14px">
         ${[[ss.cra,"CRA"],...ss.crc.map(c=>[c,"CRC"])].map(([n,r])=>{
           const p=staff(n), s=utilState(p.util);
-          return `<div class="row" style="justify-content:space-between;border:1px solid var(--line);border-radius:3px;padding:7px 10px">
+          return `<div class="row" style="justify-content:space-between;border:1px solid var(--line);border-radius:8px;padding:7px 10px">
             <div><b style="font-weight:500">${esc(n)}</b> <span class="t-sub">${r} · ${esc(p.lvl)} · ${esc(p.city)}</span></div>
             <span class="pill p-${s.k}">利用率 ${p.util}% · ${s.t}</span></div>`;}).join("")}
       </div>
       ${iss.length?`<div class="section-t">未关闭质量事件（${iss.length}）</div>
       <div class="stack" style="gap:6px;margin-bottom:14px">${iss.map(x=>`
-        <button data-goto="qa" style="text-align:left;border:1px solid var(--line);border-left:2px solid ${SEV[x.sev].c};background:none;border-radius:0 3px 3px 0;padding:8px 10px;cursor:pointer;width:100%">
+        <button data-goto="qa" style="text-align:left;border:1px solid var(--line);border-left:2px solid ${SEV[x.sev].c};background:none;border-radius:0 8px 8px 0;padding:8px 10px;cursor:pointer;width:100%">
           <div class="row" style="gap:6px"><span class="pill p-${SEV[x.sev].k}">${esc(x.sev)}</span>
             <b style="font-size:12.5px;font-weight:500">${esc(x.type)}</b><span class="t-sub">${esc(x.id)}</span></div>
           <div class="note" style="margin-top:3px">责任人 ${esc(x.own)} · CAPA 到期 ${esc(x.due)} · ${esc(x.st)}</div>
@@ -1896,7 +2021,7 @@ VIEWS.enr = box=>{
            ["参研中心",st.sites,"个",`本系统在管 ${sites.length} 个`]].map(([l,v,u,n],i)=>`
           <div>
             <div class="kpi-l">${esc(l)}</div>
-            <div class="num" style="font-size:23px;margin-top:3px;${i===2?`color:${gap<0?"var(--crit)":"var(--good)"}`:""}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+            <div class="num" style="font-size:23px;margin-top:3px;${i===2?`color:${gap<0?"var(--crit)":"var(--ink)"}`:""}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
             <div class="note">${esc(n)}</div>
           </div>`).join("")}
       </div>
@@ -1930,7 +2055,7 @@ VIEWS.enr = box=>{
 
   lineChart($("#c-main"),{x:e.x,series:[
     {name:monthly?"计划月增":"计划累计",color:"var(--plan)",values:monthly?mp:e.plan,dash:true},
-    {name:monthly?"实际月增":"实际累计",color:"var(--s1)",values:monthly?ma:e.act,fill:!monthly}],h:250});
+    {name:monthly?"实际月增":"实际累计",color:"var(--accent)",values:monthly?ma:e.act,fill:!monthly}],h:250});
 
   box.addEventListener("click",e2=>{
     const t=e2.target.closest("[data-s]"); if(t){ state.enrStudy=t.dataset.s;
@@ -1954,11 +2079,11 @@ VIEWS.staff = box=>{
 
   box.innerHTML=`
   <div class="grid g4" style="margin-bottom:12px">
-    ${[["平均利用率",n1(avg)+"%",`健康区间 60–88%`,utilState(avg).c],
-       ["超载人员",over.length+" 人",over.length?over.map(p=>p.n).join("、"):"无",over.length?"var(--crit)":"var(--good)"],
-       ["产能闲置",idle.length+" 人",idle.length?idle.map(p=>p.n).join("、"):"无",idle.length?"var(--warn)":"var(--good)"],
+    ${[["平均利用率",n1(avg)+"%",`健康区间 60–88%`,utilState(avg).k==="good"?"var(--ink)":utilState(avg).c],
+       ["超载人员",over.length+" 人",over.length?over.map(p=>p.n).join("、"):"无",over.length?"var(--crit)":"var(--ink)"],
+       ["产能闲置",idle.length+" 人",idle.length?idle.map(p=>p.n).join("、"):"无",idle.length?"var(--warn)":"var(--ink)"],
        ["CRA / CRC 人均带中心",n1(craSites)+" / "+n1(crcSites),"CRA 行业经验值 8–12 个","var(--ink-3)"]
-     ].map(([l,v,n,c])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,n,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:4px;color:${c}">${esc(v)}</div>
         <div class="note" style="margin-top:2px">${esc(n)}</div></div>`).join("")}
@@ -1982,19 +2107,22 @@ VIEWS.staff = box=>{
           <td class="tnum">${p.sites.length}</td>
           <td>
             <div style="display:flex;align-items:center;gap:9px">
-              <div class="bartrack" style="height:16px;flex:1;position:relative">
-                <div style="position:absolute;left:60%;right:12%;top:0;bottom:0;background:var(--good-soft)"></div>
-                <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:${s.c};height:100%;position:relative"></div>
+              <div class="bartrack" style="height:8px;flex:1;position:relative">
+                <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:var(--ink-2);height:100%"></div>
+                <div style="position:absolute;left:60%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
+                <div style="position:absolute;left:88%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
               </div>
-              <span class="tnum" style="width:34px;font-size:12px">${p.util}%</span>
-              <span class="pill p-${s.k}" style="width:62px;justify-content:center">${s.t}</span>
+              <span class="tnum" style="width:38px;font-size:12.5px;font-weight:600;color:${s.k==="good"?"var(--ink)":s.c}">${p.util}%</span>
+              <span class="pill p-${s.k==="good"?"neut":s.k}" style="width:64px;justify-content:center">${s.t}</span>
             </div>
           </td>
-          <td class="t-sub">${p.sites.length? p.sites.map(id=>site(id).hosp.slice(0,6)).join("、") : "—"}</td>
+          <td class="t-sub">${p.sites.length
+            ? p.sites.slice(0,2).map(id=>site(id).hosp).join("、") + (p.sites.length>2?` 等 ${p.sites.length} 个`:"")
+            : "—"}</td>
         </tr>`;}).join("")}</tbody>
     </table></div>
   </div>
-  <p class="note" style="margin-top:10px">浅绿区间 = 健康带（60–88%）。点击人员查看派工明细与冲突检测。派工变更会即时重算利用率，并回写到驾驶舱与工时模块。</p>`;
+  <p class="note" style="margin-top:10px">蓝色刻度 = 健康区间边界 60% 与 88%。点击人员查看派工明细与冲突检测。派工变更会即时重算利用率，并回写到驾驶舱与工时模块。</p>`;
 
   box.addEventListener("click",e=>{
     const r=e.target.closest("[data-r]"); if(r){state.roleFilter=r.dataset.r;render();return;}
@@ -2018,13 +2146,14 @@ function openStaff(name){
     <div class="drawer-b">
       <div class="card" style="padding:12px;margin-bottom:14px">
         <div class="row" style="justify-content:space-between;margin-bottom:8px">
-          <span class="kpi-l">当前利用率</span><span class="pill p-${s.k}">${s.t}</span></div>
+          <span class="kpi-l">当前利用率</span><span class="pill p-${s.k==="good"?"neut":s.k}">${s.t}</span></div>
         <div class="num" style="font-size:30px;line-height:1;color:${s.c}">${p.util}<small style="font-size:14px">%</small></div>
-        <div class="bartrack" style="height:10px;margin-top:9px;position:relative">
-          <div style="position:absolute;left:60%;right:12%;top:0;bottom:0;background:var(--good-soft)"></div>
-          <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:${s.c};height:100%;position:relative"></div>
+        <div class="bartrack" style="height:8px;margin-top:14px;position:relative">
+          <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:var(--ink-2);height:100%"></div>
+          <div style="position:absolute;left:60%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
+          <div style="position:absolute;left:88%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
         </div>
-        <div class="note" style="margin-top:6px">灰底浅绿段为健康带 60–88%。低于 60% 是产能浪费，高于 88% 是质量与流失风险。</div>
+        <div class="note" style="margin-top:8px">蓝色刻度为健康区间边界 60% 与 88%。低于 60% 是产能浪费，高于 88% 是质量与流失风险。</div>
       </div>
       ${conflict?`<div class="card" style="padding:10px 12px;margin-bottom:14px;border-left:2px solid var(--warn);background:var(--warn-soft)">
         <b style="font-size:12.5px;color:var(--warn)">跨城市派驻提示</b>
@@ -2032,8 +2161,8 @@ function openStaff(name){
       </div>`:""}
       <div class="section-t">派驻明细（${rows.length} 个中心）</div>
       ${rows.length? `<div class="stack" style="gap:7px">${rows.map(({ss,m})=>{
-        const rs=rateState(m.rate);
-        return `<button data-goto2="${ss.id}" style="width:100%;text-align:left;border:1px solid var(--line);border-radius:3px;padding:9px 11px;background:none;cursor:pointer">
+        const rs=rateState(m.rate); const rsC = rs.k==="good"?"var(--ink)":rs.c;
+        return `<button data-goto2="${ss.id}" style="width:100%;text-align:left;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:none;cursor:pointer">
           <div class="row" style="justify-content:space-between">
             <b style="font-size:12.5px;font-weight:500">${esc(ss.hosp)}</b>
             <span class="pill p-${rs.k}">${rs.t}</span></div>
@@ -2139,7 +2268,7 @@ VIEWS.time = box=>{
            ["可计费人天",n1(bd),"人天",`占比 ${td?pct(bd/td):"—"}`],
            ["不可计费人天",n1(nd),"人天",`占比 ${td?pct(nd/td):"—"} · 毛利蒸发口`],
            ["差旅费用",n1(tv),"万元",`${rows.filter(t=>t.travel>0).length} 笔`]
-         ].map(([l,v,u,n],i)=>`<div class="card" style="padding:12px 13px">
+         ].map(([l,v,u,n],i)=>`<div class="stat">
             <div class="kpi-l">${esc(l)}</div>
             <div class="num" style="font-size:23px;margin-top:3px;${i===2&&td&&nd/td>0.15?"color:var(--crit)":""}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div>
             <div class="note">${esc(n)}</div></div>`).join("")}
@@ -2190,7 +2319,7 @@ VIEWS.time = box=>{
     const rs=TIMESHEET.filter(inScope);
     const b=sum(rs.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
     const n=sum(rs.filter(t=>!WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
-    stacked($("#c-bill"),[{n:"可计费",v:b,c:"var(--s1)"},{n:"不可计费",v:n,c:"var(--s2)"}],{fmt:v=>n1(v)+" 人天"});
+    stacked($("#c-bill"),[{n:"可计费",v:b},{n:"不可计费",v:n}],{fmt:v=>n1(v)+" 人天"});
   };
   fillSites(); billNote(); drawRows(); drawBill();
   $("#ts-w").addEventListener("change",e=>{state.tsWho=e.target.value;fillSites();});
@@ -2240,7 +2369,7 @@ VIEWS.pnl = box=>{
        ["已发生成本",wan(R.cost),"万","人力 + 差旅 + 职能分摊"],
        ["毛利",(R.gp>0?"+":"")+wan(R.gp),"万",`毛利率 ${pct(R.gm)}`],
        ["亏损中心",loss.length,"个",loss.length?`合计失血 ${n1(Math.abs(sum(loss,s=>siteM(s).gp)))} 万`:"无"]
-     ].map(([l,v,u,n],i)=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,n],i)=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;${i===2?`color:${R.gp>0?"var(--good)":"var(--crit)"}`:i===3&&loss.length?"color:var(--crit)":""}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
         <div class="note">${esc(n)}</div></div>`).join("")}
@@ -2280,15 +2409,15 @@ CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
           <td class="tnum">${s.enrolled}</td>
           <td class="tnum">${wan(m.rev)}</td>
           <td class="tnum">${wan(s.cost)}</td>
-          <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--good)"};font-weight:600">${m.gp>0?"+":""}${n1(m.gp)}</td>
-          <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--good)"}">${m.gm===null?"—":pct(m.gm)}</td>
+          <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--ink)"};font-weight:600">${m.gp>0?"+":""}${n1(m.gp)}</td>
+          <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--ink)"}">${m.gm===null?"—":pct(m.gm)}</td>
           <td class="tnum">${m.cpe?n1(m.cpe):"—"}</td>
           <td class="tnum">${m.mdPerPt?n1(m.mdPerPt):"—"}</td>
           <td><span class="pill ${flag[0]}">${flag[1]}</span></td></tr>`;}).join("")}</tbody>
       <tfoot><tr style="border-top:2px solid var(--line-2)">
         <td colspan="3" class="t-main">合计</td>
         <td class="tnum t-main">${wan(R.rev)}</td><td class="tnum t-main">${wan(R.cost)}</td>
-        <td class="tnum t-main" style="color:${R.gp<0?"var(--crit)":"var(--good)"}">${R.gp>0?"+":""}${n1(R.gp)}</td>
+        <td class="tnum t-main" style="color:${R.gp<0?"var(--crit)":"var(--ink)"}">${R.gp>0?"+":""}${n1(R.gp)}</td>
         <td class="tnum t-main">${pct(R.gm)}</td><td class="tnum t-main">${n1(R.cpe)}</td><td colspan="2"></td>
       </tr></tfoot>
     </table></div>
@@ -2309,12 +2438,12 @@ CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
         <div class="tip-r"><span>· 入组费</span><b>${wan(revParts(s).enr)}</b></div>
         <div class="tip-r"><span>· 筛败费</span><b>${wan(revParts(s).sf)}</b></div>
         <div class="tip-r"><span>成本</span><b>${wan(s.cost)} 万</b></div>
-        <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--good)"}">${m.gm===null?"—":pct(m.gm)}</b></div>
+        <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--ink)"}">${m.gm===null?"—":pct(m.gm)}</b></div>
         <div class="tip-r"><span>每例成本</span><b>${m.cpe?n1(m.cpe)+" 万":"—"}</b></div>
         <div class="tip-r"><span>单例单价</span><b>${n1(s.unit)} 万</b></div>`};}));
   stacked($("#c-cost"),[
-    {n:"CRC 人力",v:crcC,c:"var(--s1)"},{n:"CRA 人力",v:craC,c:"var(--s3)"},
-    {n:"差旅",v:travel,c:"var(--s2)"},{n:"职能分摊",v:oh,c:"var(--s4)"}],{h:30});
+    {n:"CRC 人力",v:crcC},{n:"CRA 人力",v:craC},
+    {n:"差旅",v:travel},{n:"职能分摊",v:oh}],{h:30});
   box.addEventListener("click",e=>{
     const b=e.target.closest("[data-k]"); if(b){state.pnlSort=b.dataset.k;render();return;}
     const t=e.target.closest("[data-ss3]"); if(t) openSite(t.dataset.ss3);
@@ -2338,9 +2467,9 @@ VIEWS.bill = box=>{
   <div class="grid g4" style="margin-bottom:12px">
     ${[["待开票",wan(sum(unb,m=>m.amt)),"万",`${unb.length} 笔已达成未开票 — 立即可开`,unb.length?"var(--warn)":"var(--ink)"],
        ["已开票未回款",wan(sum(open,m=>m.amt)),"万",`${open.length} 笔在途`,"var(--ink)"],
-       ["账龄 60 天以上",wan(buckets[2].v+buckets[3].v),"万",`占应收 ${open.length?pct((buckets[2].v+buckets[3].v)/sum(open,m=>m.amt)):"—"}`,(buckets[2].v+buckets[3].v)?"var(--crit)":"var(--good)"],
-       ["DSO",dso,"天",`健康线 ≤ 75 天`,dso>75?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,n,c])=>`<div class="card" style="padding:12px 13px">
+       ["账龄 60 天以上",wan(buckets[2].v+buckets[3].v),"万",`占应收 ${open.length?pct((buckets[2].v+buckets[3].v)/sum(open,m=>m.amt)):"—"}`,(buckets[2].v+buckets[3].v)?"var(--crit)":"var(--ink)"],
+       ["DSO",dso,"天",`健康线 ≤ 75 天`,dso>75?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,n,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
         <div class="note">${esc(n)}</div></div>`).join("")}
@@ -2389,7 +2518,7 @@ VIEWS.bill = box=>{
 
   hbars($("#c-age"), buckets.map(b=>({label:b.n,v:b.v,color:b.c,
     tip:`<div class="tip-t">${esc(b.n)}</div><div class="tip-r"><span>金额</span><b>${n1(b.v)} 万</b></div>`})),
-    {fmt:n1,unit:" 万",h:20,gap:8});
+    {fmt:n1,unit:" 万",h:12,gap:11});
 
   box.addEventListener("click",e=>{
     const i=e.target.closest("[data-inv]");
@@ -2423,18 +2552,18 @@ VIEWS.qa = box=>{
   <div class="grid g4" style="margin-bottom:12px">
     ${[["未关闭事件",openN.length,"项",`重大/严重 ${openN.filter(i=>i.sev!=="一般").length} 项`,openN.filter(i=>i.sev!=="一般").length?"var(--crit)":"var(--ink)"],
        ["SAE 24h 上报及时率",SA.rate===null?"—":n1(SA.rate*100),"%",`${SA.ok} / ${SA.n} 例在 ${SAE_SLA} 小时内上报`,SA.rate===1?"var(--good)":"var(--crit)"],
-       ["Query 平均挂起",QS.avg===null?"—":n1(QS.avg),"天",`${QS.n} 条 · 超 7 天 ${QS.over7} 条`,QS.avg>7?"var(--crit)":QS.avg>5?"var(--warn)":"var(--good)"],
-       ["CAPA 逾期",overdue.length,"项",overdue.length?"已超整改到期日":"全部在期内",overdue.length?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,n,c])=>`<div class="card" style="padding:12px 13px">
+       ["Query 平均挂起",QS.avg===null?"—":n1(QS.avg),"天",`${QS.n} 条 · 超 7 天 ${QS.over7} 条`,QS.avg>7?"var(--crit)":QS.avg>5?"var(--warn)":"var(--ink)"],
+       ["CAPA 逾期",overdue.length,"项",overdue.length?"已超整改到期日":"全部在期内",overdue.length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,n,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
         <div class="note">${esc(n)}</div></div>`).join("")}
   </div>
 
-  ${sae?`<div class="card" style="margin-bottom:12px;border-color:color-mix(in srgb,var(--crit) 45%,var(--line))">
-    <div class="card-h" style="background:var(--crit-soft);border-bottom-color:color-mix(in srgb,var(--crit) 25%,transparent)">
+  ${sae?`<div class="card alert alert-crit" style="margin-bottom:28px">
+    <div class="card-h">
       <span class="dot" style="background:var(--crit)"></span>
-      <h3 style="color:var(--crit)">SAE 上报时限监控 · ${esc(sae.id)}</h3><span class="sp"></span>
+      <h3>SAE 上报时限监控 · ${esc(sae.id)}</h3><span class="sp"></span>
       <span class="pill p-crit">已超窗</span></div>
     <div class="card-b">
       <div class="grid g3" style="gap:14px;align-items:center">
@@ -2504,7 +2633,7 @@ VIEWS.qa = box=>{
           </button>
           <div id="d-${i.id}" hidden style="padding:0 16px 14px 18px">
             <div class="section-t">CAPA 纠正与预防措施</div>
-            <div style="font-size:12.5px;line-height:1.7;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);padding:10px 12px;border-radius:3px">${esc(i.capa)}</div>
+            <div style="font-size:12.5px;line-height:1.7;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);padding:10px 12px;border-radius:8px">${esc(i.capa)}</div>
             ${i.st!=="已关闭"?`<div class="row" style="margin-top:10px">
               <button class="btn btn-p" data-close-iss="${i.id}">验证通过并关闭</button>
               <button class="btn" data-goto3="${i.ss}">查看中心</button></div>`
@@ -2552,7 +2681,7 @@ VIEWS.mon = box=>{
        ["MVR 跟进项",`${doneItems} / ${totItems}`,"",`完成率 ${totItems?pct(doneItems/totItems):"—"}`],
        ["待确认排期",vs.filter(v=>v.st==="待确认").length,"次","需与中心确认时间"],
        ["预估差旅",n1(vs.length*RATE.travel),"万",`${RATE.travel} 万/次 × ${vs.length} 次`]
-     ].map(([l,v,u,n])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,n])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:23px;margin-top:3px">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
         <div class="note">${esc(n)}</div></div>`).join("")}
@@ -2709,7 +2838,7 @@ VIEWS.price = box=>{
     <div class="stack">
       <div class="grid g4" style="gap:10px">
         ${["建议报价总额","单例报价","预估总成本","人天/例"].map((l,i)=>`
-          <div class="card" style="padding:12px 13px${i===0?";border-color:var(--accent-line);background:var(--accent-soft)":""}">
+          <div class="stat${i===0?" stat-hi":""}">
             <div class="kpi-l">${esc(l)}</div>
             <div class="num" id="o-${i}" style="font-size:${i===0?"26":"23"}px;margin-top:3px;${i===0?"color:var(--accent)":""}">—</div>
             <div class="note" id="n-${i}"></div></div>`).join("")}
@@ -2736,7 +2865,7 @@ VIEWS.price = box=>{
               <td class="tnum">${pct(h.prog)}</td>
               <td class="tnum">${n1(h.unit)} 万</td><td class="tnum">${n1(h.cost)} 万</td>
               <td class="tnum">${n1(h.md)}</td>
-              <td class="tnum" style="color:${h.gm<0?"var(--crit)":h.gm<.2?"var(--warn)":"var(--good)"}">${pct(h.gm)}</td></tr>`).join("")}</tbody>
+              <td class="tnum" style="color:${h.gm<0?"var(--crit)":h.gm<.2?"var(--warn)":"var(--ink)"}">${pct(h.gm)}</td></tr>`).join("")}</tbody>
           </table></div>
           <div id="p-bench" style="margin-top:12px"></div>
         </div>
@@ -2760,23 +2889,23 @@ VIEWS.price = box=>{
     $("#n-2").textContent=`CRC ${n0(r.crcMd)} + CRA ${n0(r.craMd)} 人天`;
     $("#o-3").textContent=n1(r.mdPerPt);
     const bl=baseline();
-    $("#n-3").innerHTML=`基准均值 ${n1(bl.md)} · <span style="color:${r.mdPerPt<bl.md*0.85?"var(--crit)":r.mdPerPt>bl.md*1.2?"var(--warn)":"var(--good)"}">${
+    $("#n-3").innerHTML=`基准均值 ${n1(bl.md)} · <span style="color:${r.mdPerPt<bl.md*0.85?"var(--crit)":r.mdPerPt>bl.md*1.2?"var(--warn)":"var(--ink)"}">${
       r.mdPerPt<bl.md*0.85?"低于历史，报价偏乐观":r.mdPerPt>bl.md*1.2?"高于历史，易失标":"与历史相符"}</span>`;
 
     stacked($("#p-stack"),[
-      {n:"CRC 人力",v:r.crcCost,c:"var(--s1)"},{n:"CRA 人力",v:r.craCost,c:"var(--s3)"},
-      {n:"差旅",v:r.travel,c:"var(--s2)"},{n:"职能分摊",v:r.oh,c:"var(--s4)"},
-      {n:"目标毛利",v:r.quote-r.cost,c:"var(--s5)"}],{h:30});
+      {n:"CRC 人力",v:r.crcCost},{n:"CRA 人力",v:r.craCost},
+      {n:"差旅",v:r.travel},{n:"职能分摊",v:r.oh},
+      {n:"目标毛利",v:r.quote-r.cost}],{h:30});
     hbars($("#p-crc"),[
-      {label:"启动与关闭",v:P.sites*12,color:"var(--s1)"},
-      {label:"驻场基线",v:P.sites*P.months*RATE.workdays*P.fte,color:"var(--s1)"},
-      {label:"入组访视陪同",v:r.total*P.visits*0.5*P.cx,color:"var(--s1)"},
-      {label:`筛败筛选期 ×${r.fail}`,v:r.crcScr,color:"var(--s2)"}],{fmt:n0,unit:" 人天",h:16,gap:5});
+      {label:"启动与关闭",v:P.sites*12},
+      {label:"驻场基线",v:P.sites*P.months*RATE.workdays*P.fte},
+      {label:"入组访视陪同",v:r.total*P.visits*0.5*P.cx},
+      {label:`筛败筛选期 ×${r.fail}`,v:r.crcScr,color:"var(--s3)"}],{fmt:n0,unit:" 人天",h:12,gap:10});
     hbars($("#p-cra"),[
-      {label:"SIV 启动",v:P.sites*2,color:"var(--s3)"},
-      {label:`IMV ×${r.nIMV} 轮`,v:P.sites*r.nIMV*1.5,color:"var(--s3)"},
-      {label:"COV 关闭",v:P.sites*1.5,color:"var(--s3)"},
-      {label:"报告与远程",v:(P.sites*2+P.sites*r.nIMV*1.5+P.sites*1.5)*0.6,color:"var(--s3)"}],{fmt:n0,unit:" 人天",h:16,gap:5});
+      {label:"SIV 启动",v:P.sites*2},
+      {label:`IMV ×${r.nIMV} 轮`,v:P.sites*r.nIMV*1.5},
+      {label:"COV 关闭",v:P.sites*1.5},
+      {label:"报告与远程",v:(P.sites*2+P.sites*r.nIMV*1.5+P.sites*1.5)*0.6}],{fmt:n0,unit:" 人天",h:12,gap:10});
 
     const myCost=r.cost/r.total, dev=(myCost-bl.cost)/bl.cost, ok=Math.abs(dev)<0.2;
     $("#p-bench").innerHTML=`<div style="border-left:2px solid var(--${ok?"good":"warn"});background:var(--${ok?"good":"warn"}-soft);padding:9px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.65">
@@ -2856,8 +2985,7 @@ function subjCard(s,{open=false}={}){
         <div style="font-size:13px;font-weight:600;margin-top:5px">${esc(soaLabel(s.ss,s.seq))}</div>
         <div class="note">${esc(ss.hosp)} · ${esc(S[ss.sid].short)}｜目标日 ${esc(s.due)} ± ${s.win} 天</div>
         <div class="row" style="gap:5px;margin-top:6px">
-          <button class="chip" data-ct="${s.id}" aria-pressed="${s.contact==="已确认"}"
-            style="border-color:var(--${cs.k});color:var(--${cs.k})">联系：${esc(s.contact)}</button>
+          <button class="ct ct-${cs.k}" data-ct="${s.id}">联系 · ${esc(s.contact)}</button>
           <span class="pill ${s.edc==="已录入"?"p-good":late?"p-crit":"p-warn"}">EDC ${esc(s.edc)}${
             s.edc!=="已录入"&&lag>0?` · 滞后 ${lag} 天`:""}</span>
           ${s.piOk?`<span class="pill p-good">研究者已确认</span>`:""}
@@ -2904,18 +3032,17 @@ VIEWS.crc = box=>{
 
   box.innerHTML=`
   <div class="mini" style="margin-bottom:14px">
-    ${[["窗口告警",alert.length,"例",alert.length?"var(--crit)":"var(--good)"],
-       ["EDC 待录入",edcQ.length,"例",edcLateN.length?"var(--crit)":edcQ.length?"var(--warn)":"var(--good)"],
-       ["待联系受试者",contactQ.length,"人",contactQ.length?"var(--warn)":"var(--good)"],
-       ["待我回复质疑",qs.length,"条",qs.length?"var(--warn)":"var(--good)"],
-       ["待发放补偿",payQ.length,"笔",payQ.length?"var(--warn)":"var(--good)"],
-       ["我的利用率",p.util+"%","",us.c]
+    ${[["窗口告警",alert.length,"例",alert.length?"var(--crit)":"var(--ink)"],
+       ["EDC 待录入",edcQ.length,"例",edcLateN.length?"var(--crit)":edcQ.length?"var(--warn)":"var(--ink)"],
+       ["待联系受试者",contactQ.length,"人",contactQ.length?"var(--warn)":"var(--ink)"],
+       ["待我回复质疑",qs.length,"条",qs.length?"var(--warn)":"var(--ink)"],
+       ["待发放补偿",payQ.length,"笔",payQ.length?"var(--warn)":"var(--ink)"],
+       ["我的利用率",p.util+"%","",us.k==="good"?"var(--ink)":us.c]
      ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
         <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
-  ${edcLateN.length?`<div class="card" style="margin-bottom:12px;border-color:color-mix(in srgb,var(--crit) 45%,var(--line))">
-    <div class="card-h" style="background:var(--crit-soft)"><span class="dot" style="background:var(--crit)"></span>
-      <h3 style="color:var(--crit)">EDC 录入滞后</h3><span class="sp"></span>
+  ${edcLateN.length?`<div class="card alert alert-crit" style="margin-bottom:28px">
+    <div class="card-h"><h3>EDC 录入滞后</h3><span class="sp"></span>
       <span class="sub">访视后 5 个工作日内录入才算及时 —— 质疑都是录入之后才产生的</span></div>
     <div class="card-b" style="padding:0">
       ${edcLateN.map(s=>`<div style="padding:9px 14px;border-bottom:1px solid var(--line)">
@@ -2958,7 +3085,7 @@ VIEWS.crc = box=>{
               <div class="row" style="justify-content:space-between;gap:8px">
                 <div style="min-width:0"><span class="subjid">${esc(s.id)}</span>
                   <span class="t-sub"> ${esc(soaLabel(s.ss,s.seq))}</span></div>
-                <button class="chip" data-ct="${s.id}" style="border-color:var(--${cs.k});color:var(--${cs.k})">${esc(s.contact)}</button></div>
+                <button class="ct ct-${cs.k}" data-ct="${s.id}">${esc(s.contact)}</button></div>
             </div>`;}).join("")}
           <div class="note" style="padding:10px 14px;line-height:1.6">点击可切换状态：待联系 → 已确认 → 已改期 → 失联。
             改期会自动把目标日顺延一周并重算窗口。</div>
@@ -2994,7 +3121,7 @@ VIEWS.subj = box=>{
        ["窗口临期",g.warn.length,"例","var(--warn)","3 天内必须完成"],
        ["窗口内",g.good.length,"例","var(--good)","按计划推进"],
        ["我登记的筛败",failed.length,"例","var(--ink-3)","筛败也是工作量，且合同单独计价"]
-     ].map(([l,v,u,c,n])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,c,n])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
         <div class="note">${esc(n)}</div></div>`).join("")}
@@ -3067,7 +3194,7 @@ function doneModal(id){
       <div class="field"><div class="slider-h"><label for="dv-h">本次访视陪同耗时</label><b id="dv-hv">4.0 小时</b></div>
         <input type="range" id="dv-h" min="0.5" max="12" step="0.5" value="4"></div>
       <div class="field"><label class="cbx"><input type="checkbox" id="dv-pay" checked><span>本次访视发放受试者补偿（交通 + 营养费）</span></label></div>
-      <div style="border:1px solid var(--line);background:var(--surface-2);padding:9px 11px;border-radius:3px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+      <div style="border:1px solid var(--line);background:var(--surface-2);padding:9px 11px;border-radius:8px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
         提交后系统会一次性完成：<br>
         ① 记一条工时，<b>关联到本次访视</b>（这样「每次访视实际耗时」才算得出来）<br>
         ② 成本归集到 ${esc(site(s.ss).hosp)}<br>
@@ -3149,11 +3276,11 @@ VIEWS.query = box=>{
 
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:14px">
-    ${[[isCRC?"待我回复":"待中心回复",open.length,"条",open.length?"var(--warn)":"var(--good)"],
-       ["挂起超 7 天",open.filter(q=>q.age>7).length,"条",open.filter(q=>q.age>7).length?"var(--crit)":"var(--good)"],
-       ["平均挂起",n1(avg),"天",avg>7?"var(--crit)":avg>5?"var(--warn)":"var(--good)"],
+    ${[[isCRC?"待我回复":"待中心回复",open.length,"条",open.length?"var(--warn)":"var(--ink)"],
+       ["挂起超 7 天",open.filter(q=>q.age>7).length,"条",open.filter(q=>q.age>7).length?"var(--crit)":"var(--ink)"],
+       ["平均挂起",n1(avg),"天",avg>7?"var(--crit)":avg>5?"var(--warn)":"var(--ink)"],
        ["已回复待关闭",waiting.length,"条","var(--ink)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -3213,10 +3340,10 @@ VIEWS.isf = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:14px">
     ${[["清单项",list.length,"项","var(--ink)"],
-       ["缺失 / 过期",list.filter(i=>i.st==="crit").length,"项",list.filter(i=>i.st==="crit").length?"var(--crit)":"var(--good)"],
-       ["临期待办",list.filter(i=>i.st==="warn").length,"项",list.filter(i=>i.st==="warn").length?"var(--warn)":"var(--good)"],
-       ["齐备率",pct((list.length-bad.length)/list.length),"",bad.length?"var(--warn)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["缺失 / 过期",list.filter(i=>i.st==="crit").length,"项",list.filter(i=>i.st==="crit").length?"var(--crit)":"var(--ink)"],
+       ["临期待办",list.filter(i=>i.st==="warn").length,"项",list.filter(i=>i.st==="warn").length?"var(--warn)":"var(--ink)"],
+       ["齐备率",pct((list.length-bad.length)/list.length),"",bad.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -3287,11 +3414,11 @@ VIEWS.cra = box=>{
   box.innerHTML=`
   <div class="mini" style="margin-bottom:14px">
     ${[["我的中心",mine.length,"个","var(--ink)"],
-       ["高风险中心",risks.filter(r=>r.lvl.k==="crit").length,"个",risks.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--good)"],
+       ["高风险中心",risks.filter(r=>r.lvl.k==="crit").length,"个",risks.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--ink)"],
        ["排期访视",vs.length,"次","var(--ink)"],
-       ["未关闭跟进项",openItems,"项",openItems?"var(--warn)":"var(--good)"],
+       ["未关闭跟进项",openItems,"项",openItems?"var(--warn)":"var(--ink)"],
        ["待中心回复质疑",qs.length,"条",qs.filter(q=>q.age>7).length?"var(--crit)":"var(--ink)"],
-       ["我的利用率",p.util+"%","",us.c]
+       ["我的利用率",p.util+"%","",us.k==="good"?"var(--ink)":us.c]
      ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
         <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -3375,10 +3502,10 @@ VIEWS.mysites = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:14px">
     ${[["在管中心",rows.length,"个","var(--ink)"],
-       ["高风险",rows.filter(r=>r.lvl.k==="crit").length,"个",rows.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--good)"],
-       ["风险总分",tot,"分",tot>10?"var(--crit)":tot>5?"var(--warn)":"var(--good)"],
+       ["高风险",rows.filter(r=>r.lvl.k==="crit").length,"个",rows.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--ink)"],
+       ["风险总分",tot,"分",tot>10?"var(--crit)":tot>5?"var(--warn)":"var(--ink)"],
        ["行业经验值","8–12","个中心/CRA","var(--ink-3)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -3395,7 +3522,7 @@ VIEWS.mysites = box=>{
           <td class="ta-r"><span class="pill p-${lvl.k}">${r}</span></td>
           <td class="t-sub" style="max-width:230px">${why.length?esc(why.join("；")):"—"}</td>
           <td class="tnum">${s.enrolled}/${s.contracted}<div class="t-sub" style="text-align:right">${m.rate===null?"—":pct(m.rate)}</div></td>
-          <td>${sd?`<div class="bartrack" style="height:14px"><div class="barfill" style="width:${sd.done/sd.total*100}%;background:var(--accent);height:100%"></div></div>
+          <td>${sd?`<div class="bartrack" style="height:9px"><div class="barfill" style="width:${sd.done/sd.total*100}%;background:var(--accent);height:100%"></div></div>
                 <div class="t-sub">${sd.done}/${sd.total} · ${esc(sd.note)}</div>`:`<span class="t-mut">未启动</span>`}</td>
           <td class="t-sub">${nv?`${nv.d}<div class="t-sub">${nv.kind}</div>`:"未排期"}</td>
           <td><span class="pill p-${lvl.k}">${esc(lvl.f)}</span></td></tr>`;}).join("")}</tbody>
@@ -3443,11 +3570,11 @@ VIEWS.pm = box=>{
   box.innerHTML=`
   <div class="mini" style="margin-bottom:14px">
     ${[["组员",team.length,"人","var(--ink)"],
-       ["平均利用率",n1(avg)+"%","",us.c],
-       ["超载",over.length,"人",over.length?"var(--crit)":"var(--good)"],
+       ["平均利用率",n1(avg)+"%","",us.k==="good"?"var(--ink)":us.c],
+       ["超载",over.length,"人",over.length?"var(--crit)":"var(--ink)"],
        ["待我审批",APPROVALS.length,"条",flagged.length?"var(--warn)":"var(--ink)"],
-       ["高风险中心",risks.filter(r=>r.lvl.k==="crit").length,"个",risks.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--good)"],
-       ["组内毛利率",pct(R.gm),"",R.gm<0.2?"var(--warn)":"var(--good)"]
+       ["高风险中心",risks.filter(r=>r.lvl.k==="crit").length,"个",risks.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--ink)"],
+       ["组内毛利率",pct(R.gm),"",R.gm<0.2?"var(--warn)":"var(--ink)"]
      ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
         <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -3456,11 +3583,9 @@ VIEWS.pm = box=>{
       <div class="card-h"><h3>组员负载</h3><span class="sub">健康带 60–88%</span>
         <span class="sp"></span><button class="btn" data-nav="team">团队明细 →</button></div>
       <div class="card-b"><div id="c-tl"></div>
-        <div class="legend" style="margin-top:10px;border-top:1px solid var(--line);padding-top:9px">
-          <span><span class="dot" style="background:var(--warn)"></span> 闲置</span>
-          <span><span class="dot" style="background:var(--good)"></span> 健康</span>
-          <span><span class="dot" style="background:var(--crit)"></span> 超载</span>
-          <span class="t-mut" style="margin-left:auto">灰线 = 健康下限</span></div>
+        <div class="legend" style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+          <span><i style="background:var(--accent);height:10px;width:2px;border-radius:2px;margin-right:4px"></i><i style="background:var(--accent);height:10px;width:2px;border-radius:2px"></i>健康区间刻度 60 / 88%</span>
+          <span class="t-mut">数值着色：<b style="color:var(--warn);font-weight:600">闲置</b> · <b style="color:var(--crit);font-weight:600">超载</b></span></div>
       </div>
     </div>
     <div class="card">
@@ -3506,7 +3631,7 @@ VIEWS.pm = box=>{
           <td class="tnum">${s.enrolled}/${s.contracted}</td>
           <td class="t-sub">${[s.cra,...s.crc].map(n=>
             TEAM.members.includes(n)? esc(n) : `${esc(n)} <span class="pill p-warn">跨组</span>`).join(" / ")}</td>
-          <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--good)"};font-weight:500">${m.gp>0?"+":""}${n1(m.gp)} 万</td>
+          <td class="tnum" style="color:${m.gp<0?"var(--crit)":"var(--ink)"};font-weight:500">${m.gp>0?"+":""}${n1(m.gp)} 万</td>
         </tr>`;}).join("")}</tbody>
     </table></div>
   </div>
@@ -3515,16 +3640,16 @@ VIEWS.pm = box=>{
     这类中心一旦亮红灯，只能走跨组协调，动作会慢一拍。</p>`;
 
   hbars($("#c-tl"), team.slice().sort((a,b)=>b.util-a.util).map(p=>{const s=utilState(p.util);
-    return {label:`${p.n} · ${p.role}`, v:p.util, color:s.c, marker:60,
+    return {label:`${p.n} · ${p.role}`, v:p.util, color:"var(--ink-2)", vColor:s.k==="good"?"var(--ink)":s.c,
       tip:`<div class="tip-t">${esc(p.n)} · ${p.role}${p.lvl}</div>
         <div class="tip-r"><span>利用率</span><b>${p.util}%</b></div>
         <div class="tip-r"><span>状态</span><b style="color:${s.c}">${s.t}</b></div>
         <div class="tip-r"><span>带中心</span><b>${p.sites.length} 个</b></div>`};
-  }), {max:100, fmt:v=>v, unit:"%", h:18, gap:5});
+  }), {max:100, fmt:v=>v, unit:"%", h:12, gap:10});
   TEAM.studies.forEach(id=>{const e=ENROLL[id];
     lineChart($("#pc-"+id),{x:e.x,series:[
       {name:"计划",color:"var(--plan)",values:e.plan,dash:true},
-      {name:"实际",color:"var(--s1)",values:e.act,fill:true}],h:150});});
+      {name:"实际",color:"var(--accent)",values:e.act,fill:true}],h:150});});
   box.addEventListener("click",e=>{const t=e.target.closest("[data-ss6]"); if(t) openSite(t.dataset.ss6);});
 };
 
@@ -3532,9 +3657,8 @@ VIEWS.pm = box=>{
 VIEWS.team = box=>{
   const team=myTeam(), rb=rebalance();
   box.innerHTML=`
-  ${rb.length?`<div class="card" style="margin-bottom:12px;border-color:color-mix(in srgb,var(--warn) 40%,var(--line))">
-    <div class="card-h" style="background:var(--warn-soft)"><span class="dot" style="background:var(--warn)"></span>
-      <h3 style="color:var(--warn)">调配建议</h3></div>
+  ${rb.length?`<div class="card alert alert-warn" style="margin-bottom:28px">
+    <div class="card-h"><h3>调配建议</h3></div>
     <div class="card-b">
       ${rb.map(({over,inTeam,outTeam})=>`
         <div style="font-size:12.5px;line-height:1.75;color:var(--ink-2)">
@@ -3565,7 +3689,7 @@ VIEWS.team = box=>{
             <span class="pill p-${s.k}">${s.t}</span>
           </div>
           <div class="num" style="font-size:22px;margin-top:9px;color:${s.c}">${p.util}<small style="font-size:12px">%</small></div>
-          <div class="bartrack" style="height:7px;margin-top:5px;position:relative">
+          <div class="bartrack" style="height:7px;margin-top:9px;position:relative">
             <div style="position:absolute;left:60%;right:12%;top:0;bottom:0;background:var(--good-soft)"></div>
             <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:${s.c};height:100%;position:relative"></div>
           </div>
@@ -3603,10 +3727,10 @@ VIEWS.approve = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:14px">
     ${[["待审批",APPROVALS.length,"条","var(--ink)"],
-       ["带风险提示",APPROVALS.filter(a=>a.flag).length,"条",APPROVALS.filter(a=>a.flag).length?"var(--warn)":"var(--good)"],
-       ["挂起超 3 天",APPROVALS.filter(a=>days(a.sub,TODAY)>3).length,"条",APPROVALS.filter(a=>days(a.sub,TODAY)>3).length?"var(--crit)":"var(--good)"],
+       ["带风险提示",APPROVALS.filter(a=>a.flag).length,"条",APPROVALS.filter(a=>a.flag).length?"var(--warn)":"var(--ink)"],
+       ["挂起超 3 天",APPROVALS.filter(a=>days(a.sub,TODAY)>3).length,"条",APPROVALS.filter(a=>days(a.sub,TODAY)>3).length?"var(--crit)":"var(--ink)"],
        ["待批差旅金额",n1(sum(APPROVALS.filter(a=>a.amt),a=>a.amt)),"万","var(--ink)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -3669,11 +3793,11 @@ VIEWS.intake = box=>{
 
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:14px">
-    ${[["待审批立项",INTAKE.length,"个",INTAKE.length?"var(--warn)":"var(--good)"],
-       ["低于毛利门槛",below.length,"个",below.length?"var(--crit)":"var(--good)"],
+    ${[["待审批立项",INTAKE.length,"个",INTAKE.length?"var(--warn)":"var(--ink)"],
+       ["低于毛利门槛",below.length,"个",below.length?"var(--crit)":"var(--ink)"],
        ["合计合同额",n1(sum(INTAKE,x=>x.contract)),"万","var(--ink)"],
        ["毛利门槛",pct(GM_GATE),"","var(--ink-3)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -3698,7 +3822,7 @@ VIEWS.intake = box=>{
           <div class="mini" style="margin-top:9px;grid-template-columns:repeat(auto-fit,minmax(96px,1fr))">
             <div><div class="kpi-l">合同总额</div><div class="v">${n1(x.contract)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
             <div><div class="kpi-l">预估成本</div><div class="v">${n1(x.cost)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
-            <div><div class="kpi-l">预估毛利</div><div class="v" style="color:${low?"var(--crit)":"var(--good)"}">${n1(x.contract-x.cost)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
+            <div><div class="kpi-l">预估毛利</div><div class="v" style="color:${low?"var(--crit)":"var(--ink)"}">${n1(x.contract-x.cost)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
             <div><div class="kpi-l">单例单价</div><div class="v">${n1(x.contract/x.planned)}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
             <div><div class="kpi-l">保本合同额</div><div class="v">${n1(x.cost/(1-GM_GATE))}<small style="font-size:10px;color:var(--ink-3)"> 万</small></div></div>
           </div>
@@ -3724,7 +3848,7 @@ VIEWS.intake = box=>{
           <td><span class="pill p-neut">${esc(st.phase)}</span></td>
           <td class="t-sub">${esc(st.indication)}</td>
           <td class="tnum">${st.planned}</td><td class="tnum">${st.sites}</td>
-          <td class="tnum" style="color:${built<st.sites?"var(--warn)":"var(--good)"}">${built}<span class="t-mut"> / ${st.sites}</span></td>
+          <td class="tnum" style="color:${built<st.sites?"var(--warn)":"var(--ink)"}">${built}<span class="t-mut"> / ${st.sites}</span></td>
           <td class="tnum">${n1(st.contract)} 万</td></tr>`;}).join("")}</tbody>
     </table></div>
   </div>
@@ -3788,7 +3912,7 @@ function newStudyModal(){
     $("#v-sites").textContent=v.sites+" 个"; $("#v-pts").textContent=v.pts+" 例";
     $("#v-mon").textContent=v.months+" 个月";
     $("#i-calc").innerHTML=`
-      <div style="border:1px solid var(--line);border-left:2px solid var(--${low?"crit":"good"});background:var(--${low?"crit":"good"}-soft);padding:10px 12px;border-radius:0 3px 3px 0">
+      <div style="border:1px solid var(--line);border-left:2px solid var(--${low?"crit":"good"});background:var(--${low?"crit":"good"}-soft);padding:10px 12px;border-radius:0 8px 8px 0">
         <div class="row" style="justify-content:space-between;margin-bottom:6px">
           <b style="font-size:12.5px">立项测算</b>
           <span class="pill ${low?"p-crit":"p-good"}">毛利率 ${pct(r.gm)}${low?` · 低于门槛 ${pct(GM_GATE)}`:""}</span></div>
@@ -3917,7 +4041,7 @@ const qcFindOpen= ()=>qcOpen().flatMap(q=>q.findings.filter(f=>f.st!=="已关闭
 const acOpen    = ()=>ACCEPT.filter(a=>a.hosp===PERSONA().hosp&&a.st!=="已受理");
 const regOpen   = ()=>REG.filter(r=>instIds().has(r.ss)&&r.st!=="已准入");
 
-const NOTICE = `<div style="border:1px dashed var(--line-2);background:var(--surface-2);padding:9px 12px;border-radius:3px;font-size:11.5px;color:var(--ink-3);line-height:1.6">
+const NOTICE = `<div style="border:1px dashed var(--line-2);background:var(--surface-2);padding:9px 12px;border-radius:8px;font-size:11.5px;color:var(--ink-3);line-height:1.6">
   <b style="color:var(--ink-2)">机构端可见范围</b>：仅本机构承接的项目与中心，内容限于质量、合规、人员资质与文件。
   受托方（CRO/SMO）的成本、毛利、人天与人员利用率<b>不对机构开放</b> —— 那是受托方的商业信息，
   与机构履行监管职责无关。同样，机构的内部质控底稿也不向受托方开放全文，只发送质控意见与整改要求。</div>`;
@@ -3933,10 +4057,10 @@ VIEWS.inst = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
     ${[["本院在研项目",new Set(ss.map(s=>s.sid)).size,"个","var(--ink)"],
-       ["待受理立项",ac.length,"项",ac.length?"var(--warn)":"var(--good)"],
-       ["质控待整改",fo.length,"项",overdue.length?"var(--crit)":fo.length?"var(--warn)":"var(--good)"],
-       ["人员资质异常",rg.length,"人",rg.length?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["待受理立项",ac.length,"项",ac.length?"var(--warn)":"var(--ink)"],
+       ["质控待整改",fo.length,"项",overdue.length?"var(--crit)":fo.length?"var(--warn)":"var(--ink)"],
+       ["人员资质异常",rg.length,"人",rg.length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -4029,7 +4153,7 @@ VIEWS.instac = box=>{
             <span class="note">递交方 ${esc(a.by)}（受托方）｜递交日期 ${esc(a.sub)}</span>
             <span class="note">材料齐备 ${ok} / ${a.docs.length}</span></div>
           <div class="bartrack" style="height:5px;margin-bottom:12px">
-            <div class="barfill" style="width:${ok/a.docs.length*100}%;background:${miss.length?"var(--warn)":"var(--good)"};height:100%"></div></div>
+            <div class="barfill" style="width:${ok/a.docs.length*100}%;background:${miss.length?"var(--warn)":"var(--ink)"};height:100%"></div></div>
           <div class="section-t">立项材料形式审查</div>
           <div class="grid g2" style="gap:0 16px">
             ${a.docs.map((d,k)=>`<label class="cbx ${d[1]?"done":""}" style="border-bottom:1px solid var(--line)">
@@ -4070,10 +4194,10 @@ VIEWS.instqc = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
     ${[["累计质控",list.length,"轮","var(--ink)"],
-       ["待整改发现",fo.length,"项",fo.length?"var(--warn)":"var(--good)"],
-       ["整改逾期",fo.filter(f=>days(TODAY,f.due)<0).length,"项",fo.filter(f=>days(TODAY,f.due)<0).length?"var(--crit)":"var(--good)"],
-       ["严重及以上",fo.filter(f=>f.sev!=="一般").length,"项",fo.filter(f=>f.sev!=="一般").length?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["待整改发现",fo.length,"项",fo.length?"var(--warn)":"var(--ink)"],
+       ["整改逾期",fo.filter(f=>days(TODAY,f.due)<0).length,"项",fo.filter(f=>days(TODAY,f.due)<0).length?"var(--crit)":"var(--ink)"],
+       ["严重及以上",fo.filter(f=>f.sev!=="一般").length,"项",fo.filter(f=>f.sev!=="一般").length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -4093,7 +4217,7 @@ VIEWS.instqc = box=>{
           <div class="note" style="margin-bottom:10px"><b>质控范围</b>：${esc(q.scope)}</div>
           <div class="section-t">质控意见与整改跟踪</div>
           ${q.findings.map((f,k)=>{const od=f.st!=="已关闭"&&days(TODAY,f.due)<0;
-            return `<div style="border:1px solid var(--line);border-left:2px solid var(--${f.st==="已关闭"?"good":od?"crit":SEV[f.sev].k});border-radius:0 3px 3px 0;padding:10px 12px;margin-bottom:8px">
+            return `<div style="border:1px solid var(--line);border-left:2px solid var(--${f.st==="已关闭"?"good":od?"crit":SEV[f.sev].k});border-radius:0 8px 8px 0;padding:10px 12px;margin-bottom:8px">
               <div class="row" style="gap:6px">
                 <span class="pill p-${f.st==="已关闭"?"good":SEV[f.sev].k}">${esc(f.sev)}</span>
                 <b style="font-size:12.5px">${esc(f.item)}</b>
@@ -4102,7 +4226,7 @@ VIEWS.instqc = box=>{
                 <span class="pill ${f.st==="已关闭"?"p-good":od?"p-crit":"p-neut"}">${esc(f.st)}${od?` · 逾期 ${Math.abs(days(TODAY,f.due))} 天`:""}</span></div>
               <div style="font-size:12.5px;margin-top:5px;color:var(--ink-2);line-height:1.6">${esc(f.desc)}</div>
               <div class="note" style="margin-top:3px">责任人 ${esc(f.resp)}（受托方）｜整改期限 ${esc(f.due)}</div>
-              ${f.reply?`<div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--line);padding:8px 10px;border-radius:3px;font-size:12px;color:var(--ink-2);line-height:1.6">
+              ${f.reply?`<div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--line);padding:8px 10px;border-radius:8px;font-size:12px;color:var(--ink-2);line-height:1.6">
                 <b style="color:var(--ink)">整改回复（${esc(f.resp)}）</b><br>${esc(f.reply)}</div>`:""}
               ${f.st==="待复核"?`<div class="row" style="margin-top:9px">
                 <button class="btn btn-p" data-qcok="${esc(q.id)}:${k}">复核通过并关闭</button>
@@ -4211,10 +4335,10 @@ VIEWS.instreg = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
     ${[["备案人员",list.length,"人","var(--ink)"],
-       ["已准入",list.filter(r=>r.st==="已准入").length,"人","var(--good)"],
-       ["备案中",list.filter(r=>r.st==="备案中").length,"人",list.filter(r=>r.st==="备案中").length?"var(--warn)":"var(--good)"],
-       ["资质缺失",list.filter(r=>r.st==="资质缺失").length,"人",list.filter(r=>r.st==="资质缺失").length?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["已准入",list.filter(r=>r.st==="已准入").length,"人","var(--ink)"],
+       ["备案中",list.filter(r=>r.st==="备案中").length,"人",list.filter(r=>r.st==="备案中").length?"var(--warn)":"var(--ink)"],
+       ["资质缺失",list.filter(r=>r.st==="资质缺失").length,"人",list.filter(r=>r.st==="资质缺失").length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -4277,11 +4401,11 @@ VIEWS.capa = box=>{
   const overdue=mine.filter(i=>days(TODAY,i.due)<0);
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
-    ${[["待我整改",mine.length,"项",mine.length?"var(--warn)":"var(--good)"],
-       ["其中机构质控",fromQC.length,"项",fromQC.length?"var(--crit)":"var(--good)"],
-       ["整改逾期",overdue.length,"项",overdue.length?"var(--crit)":"var(--good)"],
+    ${[["待我整改",mine.length,"项",mine.length?"var(--warn)":"var(--ink)"],
+       ["其中机构质控",fromQC.length,"项",fromQC.length?"var(--crit)":"var(--ink)"],
+       ["整改逾期",overdue.length,"项",overdue.length?"var(--crit)":"var(--ink)"],
        ["最近到期",mine.length?mine.map(i=>i.due).sort()[0]:"—","","var(--ink)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:${String(v).length>6?"15":"24"}px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -4306,7 +4430,7 @@ VIEWS.capa = box=>{
             <div class="row" style="margin-top:8px">
               <button class="btn btn-p" data-cp="${k}">提交整改回复</button>
               <span class="note">提交后转机构复核，复核通过才算关闭</span></div>`
-          :`<div style="background:var(--surface-2);border:1px solid var(--line);padding:8px 10px;border-radius:3px;font-size:12px;color:var(--ink-2);line-height:1.6">
+          :`<div style="background:var(--surface-2);border:1px solid var(--line);padding:8px 10px;border-radius:8px;font-size:12px;color:var(--ink-2);line-height:1.6">
               <b style="color:var(--ink)">已提交整改回复</b><br>${esc(f.reply||"")}</div>
             <div class="note" style="margin-top:6px">等待 ${esc(site(q.ss).hosp)}机构办复核</div>`}
         </div></div>`;}).join("")
@@ -4348,7 +4472,7 @@ VIEWS.screen = box=>{
     return {pre:a.pre+f.pre, icf:a.icf+f.icf, enr:a.enr+f.enr, sf:a.sf+f.sf, inScr:a.inScr+f.inScr};},
     {pre:0,icf:0,enr:0,sf:0,inScr:0});
   const sfRate = T.icf? T.sf/T.icf : 0;
-  const reasons = SF_REASONS.map((r,i)=>({n:r, v:sum(list,s=>FN(s.id).sfr[i]||0), c:`var(--s${i%5+1})`}))
+  const reasons = SF_REASONS.map((r,i)=>({n:r, v:sum(list,s=>FN(s.id).sfr[i]||0)}))
     .filter(r=>r.v).sort((a,b)=>b.v-a.v);
   const diags = list.map(s=>({s, d:enrollDiag(s)})).filter(x=>x.d);
 
@@ -4358,23 +4482,23 @@ VIEWS.screen = box=>{
       <span class="sub">预筛 → 签署知情 → 入组 / 筛败</span></div>
     <div class="card-b">
       <div style="display:flex;gap:2px;align-items:flex-end;margin-bottom:12px">
-        ${[["预筛人数",T.pre,"var(--s1)",1],
+        ${[["预筛人数",T.pre,"var(--s5)",1],
            ["签署知情",T.icf,"var(--s3)",T.icf/T.pre],
-           ["已入组",T.enr,"var(--good)",T.enr/T.pre],
-           ["筛败",T.sf,"var(--s5)",T.sf/T.pre],
-           ["在筛",T.inScr,"var(--plan)",T.inScr/T.pre]
+           ["已入组",T.enr,"var(--accent)",T.enr/T.pre],
+           ["筛败",T.sf,"var(--ink-3)",T.sf/T.pre],
+           ["在筛",T.inScr,"var(--line-2)",T.inScr/T.pre]
          ].map(([l,v,c,h])=>`<div style="flex:1;text-align:center">
-            <div class="num" style="font-size:22px;color:${c}">${v}</div>
-            <div style="height:${Math.max(6,clamp(h,0,1)*96)}px;background:${c};border-radius:2px 2px 0 0;margin:6px 0 0"></div>
-            <div class="kpi-l" style="margin-top:5px">${esc(l)}</div>
-            <div class="note">${T.pre?pct(v/T.pre):"—"}</div>
+            <div class="num" style="font-size:24px;letter-spacing:-.04em">${v}</div>
+            <div style="height:${Math.max(5,clamp(h,0,1)*104)}px;background:${c};border-radius:3px 3px 0 0;margin:10px 0 0"></div>
+            <div class="kpi-l" style="margin-top:8px">${esc(l)}</div>
+            <div class="note" style="margin-top:3px">${T.pre?pct(v/T.pre):"—"}</div>
           </div>`).join("")}
       </div>
       <div class="grid g4" style="gap:10px;border-top:1px solid var(--line);padding-top:12px">
-        ${[["筛败率",pct(sfRate),`${T.sf} / ${T.icf} 签署知情者`,sfRate>0.5?"var(--crit)":sfRate>0.35?"var(--warn)":"var(--good)"],
+        ${[["筛败率",pct(sfRate),`${T.sf} / ${T.icf} 签署知情者`,sfRate>0.5?"var(--crit)":sfRate>0.35?"var(--warn)":"var(--ink)"],
            ["预筛转化率",T.pre?pct(T.icf/T.pre):"—","预筛 → 签署知情","var(--ink)"],
            ["总转化率",T.pre?pct(T.enr/T.pre):"—","每入组 1 例需预筛 "+(T.enr?n1(T.pre/T.enr):"—")+" 人","var(--ink)"],
-           ["筛败费收入",wan(sum(list,s=>revParts(s).sf)),`按入组单价 ${pct(SF_FEE)} 计价`,"var(--good)"]
+           ["筛败费收入",wan(sum(list,s=>revParts(s).sf)),`按入组单价 ${pct(SF_FEE)} 计价`,"var(--ink)"]
          ].map(([l,v,n,c])=>`<div><div class="kpi-l">${esc(l)}</div>
             <div class="num" style="font-size:21px;margin-top:3px;color:${c}">${v}</div>
             <div class="note">${esc(n)}</div></div>`).join("")}
@@ -4382,16 +4506,15 @@ VIEWS.screen = box=>{
     </div>
   </div>
 
-  ${diags.length?`<div class="card" style="margin-bottom:12px">
-    <div class="card-h"><span class="dot" style="background:var(--crit)"></span>
-      <h3>落后中心根因判定</h3><span class="sp"></span>
+  ${diags.length?`<div class="card alert alert-crit" style="margin-bottom:28px">
+    <div class="card-h"><h3>落后中心根因判定</h3><span class="sp"></span>
       <span class="sub">三种失败模式，指向完全不同的行动</span></div>
     <div class="card-b" style="padding:0">
       ${diags.map(({s,d})=>`<div style="padding:12px 16px 12px 18px;border-bottom:1px solid var(--line);position:relative">
         <span class="stripe" style="background:${d.c}"></span>
         <div class="row" style="gap:7px">
-          <span class="pill p-crit" style="background:${d.c};color:var(--surface);border-color:${d.c}">${esc(d.k)}</span>
-          <b style="font-size:13px">${esc(s.hosp)}</b>
+          <span class="pill p-neut" style="font-weight:600">${esc(d.k)}</span>
+          <b style="font-size:13.5px">${esc(s.hosp)}</b>
           <span class="t-sub">${esc(S[s.sid].short)} · 入组 ${s.enrolled}/${s.contracted}</span></div>
         <div class="note" style="margin-top:4px;color:var(--ink-2)">${esc(d.d)}</div>
         <div class="note" style="margin-top:3px"><b style="color:var(--ink-2)">该做的事</b>：${esc(d.a)}</div>
@@ -4399,16 +4522,15 @@ VIEWS.screen = box=>{
     </div>
   </div>`:""}
 
-  <div class="grid g21" style="gap:12px;margin-bottom:12px">
-    <div class="card">
+  <div class="card" style="margin-bottom:34px">
       <div class="card-h"><h3>逐中心漏斗</h3><span class="sp"></span>
         <span class="sub">同一项目内，筛败率差 2 倍是常态</span></div>
-      <div class="tw"><table style="min-width:820px">
-        <thead><tr><th>中心</th><th class="ta-r">预筛</th><th class="ta-r">签知情</th><th class="ta-r">入组</th>
+      <div class="tw"><table style="min-width:920px">
+        <thead><tr><th>中心 <span class="t-mut" style="text-transform:none;letter-spacing:0">（漏斗条：<span style="color:var(--accent)">入组</span> / <span style="color:var(--ink-3)">筛败</span> / 在筛）</span></th><th class="ta-r">预筛</th><th class="ta-r">签知情</th><th class="ta-r">入组</th>
           <th class="ta-r">筛败</th><th class="ta-r">筛败率</th><th class="ta-r">总转化</th>
           <th style="width:18%">漏斗</th><th>判定</th></tr></thead>
         <tbody>${list.map(s=>{const f=funnelM(s), d=enrollDiag(s);
-          const sfc = f.sfRate>0.5?"var(--crit)":f.sfRate>0.35?"var(--warn)":"var(--good)";
+          const sfc = f.sfRate>0.5?"var(--crit)":f.sfRate>0.35?"var(--warn)":"var(--ink)";
           return `<tr class="clk" data-ss7="${s.id}">
             <td><div class="t-main">${esc(s.hosp)}</div><div class="t-sub">${esc(S[s.sid].short)} · ${esc(s.city)}</div></td>
             <td class="tnum">${f.pre}</td><td class="tnum">${f.icf}</td>
@@ -4417,37 +4539,38 @@ VIEWS.screen = box=>{
             <td class="tnum" style="color:${sfc};font-weight:600">${f.sfRate===null?"—":pct(f.sfRate)}</td>
             <td class="tnum">${f.yield===null?"—":pct(f.yield)}</td>
             <td><div style="display:flex;height:12px;gap:1px;border-radius:2px;overflow:hidden">
-              <div style="width:${f.enr/f.pre*100}%;background:var(--good)" title="入组"></div>
-              <div style="width:${f.sf/f.pre*100}%;background:var(--s5)" title="筛败"></div>
-              <div style="width:${f.inScr/f.pre*100}%;background:var(--plan)" title="在筛"></div>
+              <div style="width:${f.enr/f.pre*100}%;background:var(--accent)" title="入组"></div>
+              <div style="width:${f.sf/f.pre*100}%;background:var(--ink-3)" title="筛败"></div>
+              <div style="width:${f.inScr/f.pre*100}%;background:var(--line-2)" title="在筛"></div>
               <div style="flex:1;background:var(--surface-3)" title="预筛未入"></div>
             </div></td>
-            <td>${d?`<span class="pill p-crit" style="background:${d.c};color:var(--surface);border-color:${d.c}">${esc(d.k)}</span>`
-                  :`<span class="pill p-good">正常</span>`}</td></tr>`;}).join("")}</tbody>
+            <td>${d?`<span class="pill p-${d.k==="筛败率过高"||d.k==="中心未真正启动"?"crit":"warn"}">${esc(d.k)}</span>`
+                  :`<span class="t-mut">—</span>`}</td></tr>`;}).join("")}</tbody>
       </table></div>
-    </div>
-    <div class="card">
-      <div class="card-h"><h3>筛败原因分布</h3></div>
+  </div>
+  <div class="card" style="margin-bottom:34px">
+      <div class="card-h"><h3>筛败原因分布</h3><span class="sp"></span>
+        <span class="sub">原因指向对策，比总数更有用</span></div>
       <div class="card-b">
+        <div class="grid g21" style="gap:36px">
         <div id="c-sfr"></div>
-        <div class="hr"></div>
-        <div class="note" style="line-height:1.7">
+        <div class="note" style="line-height:1.75">
           原因分布指向不同的对策：<br>
           <b>实验室指标不符</b>占比高 → 入排窗口与本土人群不匹配，去和申办方谈方案修订；<br>
           <b>既往治疗史不符</b>占比高 → 中心病源以经治患者为主，选址就选错了；<br>
           <b>受试者撤回知情</b>占比高 → 知情沟通质量或补偿方案有问题，这是 CRC 可控的。
         </div>
+        </div>
       </div>
-    </div>
   </div>
   <div class="formula">筛败率 = 筛败 ÷ 签署知情｜预筛转化率 = 签署知情 ÷ 预筛｜总转化率 = 入组 ÷ 预筛
 每入组 1 例需预筛人数 = 1 ÷ 总转化率 —— 这个数直接决定招募渠道要铺多大
 收入 = 启动费 + 入组×单价 + <b>筛败×单价×${pct(SF_FEE)}</b>｜成本含筛败例的筛选期工作量</div>`;
 
-  hbars($("#c-sfr"), reasons.map(r=>({label:r.n, v:r.v, color:r.c,
+  hbars($("#c-sfr"), reasons.map(r=>({label:r.n, v:r.v,
     tip:`<div class="tip-t">${esc(r.n)}</div><div class="tip-r"><span>例数</span><b>${r.v}</b></div>
          <div class="tip-r"><span>占筛败</span><b>${pct(r.v/T.sf)}</b></div>`})),
-    {fmt:v=>v, unit:" 例", h:18, gap:6});
+    {fmt:v=>v, unit:" 例", h:12, gap:10});
   box.addEventListener("click",e=>{const t=e.target.closest("[data-ss7]"); if(t) openSite(t.dataset.ss7);});
 };
 </script>
@@ -4471,7 +4594,7 @@ VIEWS.feas = box=>{
 
   const card = f=>{
     const r = feasScore(f.q), gapPct = f.actual!=null && r.pred>0 ? (f.actual-r.pred)/r.pred : null;
-    return `<div class="card" style="margin-bottom:11px;${f.override?"border-left:2px solid var(--warn)":""}">
+    return `<div class="card ${f.override?"alert alert-warn":""}" style="margin-bottom:30px">
       <div class="card-h">
         <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(f.id)}</span>
         <h3>${esc(f.hosp)}</h3>
@@ -4498,7 +4621,7 @@ VIEWS.feas = box=>{
                 ? `<span class="pill p-warn">未采集</span>` : pct(f.q.eligPct)}</dd>
               <dt>PI 承诺月入组</dt><dd>${n1(f.q.piCommit)} 例</dd>
             </dl>
-            <div style="margin-top:10px;border:1px solid var(--line);border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;border-radius:0 3px 3px 0">
+            <div style="margin-top:10px;border:1px solid var(--line);border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;border-radius:0 8px 8px 0">
               <div class="row" style="justify-content:space-between">
                 <span class="kpi-l">系统预测月入组</span>
                 <b class="num" style="font-size:17px;color:var(--accent)">${n1(r.pred)} 例</b></div>
@@ -4508,7 +4631,7 @@ VIEWS.feas = box=>{
             ${f.actual!=null?`
               <div class="row" style="justify-content:space-between;margin-top:9px;padding-top:9px;border-top:1px solid var(--line)">
                 <span class="kpi-l">实际月入组</span>
-                <b class="num" style="font-size:17px;color:${gapPct<-0.3?"var(--crit)":gapPct<0?"var(--warn)":"var(--good)"}">${n1(f.actual)} 例
+                <b class="num" style="font-size:17px;color:${gapPct<-0.3?"var(--crit)":gapPct<0?"var(--warn)":"var(--ink)"}">${n1(f.actual)} 例
                   <span style="font-size:11px;font-weight:400">（${gapPct>0?"+":""}${pct(gapPct)}）</span></b></div>`:""}
           </div>
         </div>
@@ -4528,8 +4651,8 @@ VIEWS.feas = box=>{
     ${[["累计调查",FEAS.length,"家","var(--ink)"],
        ["已入选并有结果",done.length,"家","var(--ink)"],
        ["预测校准系数",bias===null?"—":n1(bias)+"×",bias&&bias<0.8?"var(--crit)":"var(--warn)"],
-       ["被覆盖入选",ov.length,"家",ov.length?"var(--warn)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["被覆盖入选",ov.length,"家",ov.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${typeof u==="string"&&!u.startsWith("var")?u:""}</small></div></div>`).join("")}
   </div>
@@ -4583,18 +4706,18 @@ PI 承诺必须打折 —— 行业经验兑现率 40%–60%。直接用承诺�
         </div>
         <div class="tnum" style="font-size:11.5px;line-height:1.35">
           <div class="t-mut">${n1(r.pred)}</div>
-          <div style="color:${f.actual<r.pred*0.7?"var(--crit)":"var(--good)"};font-weight:600">${n1(f.actual)}</div></div>
+          <div style="color:${f.actual<r.pred*0.7?"var(--crit)":"var(--ink)"};font-weight:600">${n1(f.actual)}</div></div>
       </div>`;}).join("")}`;
 
   list.forEach(f=>{ const r=feasScore(f.q);
     hbars($("#fs-"+f.id), [
-      {label:"病源规模",v:r.parts.src,color:"var(--s1)"},
-      {label:"既往入组表现",v:r.parts.past,color:"var(--s3)"},
-      {label:"启动效率",v:r.parts.start,color:"var(--s4)"},
-      {label:"研究团队",v:r.parts.team,color:"var(--plan)"},
-      {label:"竞争试验",v:r.parts.comp,color:"var(--s5)"},
-      ...(f.q.eligPct!=null?[{label:"入排匹配度",v:r.parts.elig,color:"var(--s2)"}]:[])
-    ], {max:30, fmt:v=>v.toFixed(0), unit:" 分", h:14, gap:4});
+      {label:"病源规模",v:r.parts.src},
+      {label:"既往入组表现",v:r.parts.past},
+      {label:"启动效率",v:r.parts.start},
+      {label:"研究团队",v:r.parts.team},
+      {label:"竞争试验",v:r.parts.comp,color:"var(--crit)"},
+      ...(f.q.eligPct!=null?[{label:"入排匹配度",v:r.parts.elig,color:"var(--good)"}]:[])
+    ], {max:30, fmt:v=>v.toFixed(0), unit:" 分", h:12, gap:10});
   });
 
   box.addEventListener("click",e=>{
@@ -4651,8 +4774,8 @@ VIEWS.pi = box=>{
 
   box.innerHTML=`
   <div class="mini" style="margin-bottom:14px">
-    ${[["待我确认访视",pend.length,"例",pend.length?"var(--warn)":"var(--good)"],
-       ["待我签字文件",dev.length,"份",dev.length?"var(--crit)":"var(--good)"],
+    ${[["待我确认访视",pend.length,"例",pend.length?"var(--warn)":"var(--ink)"],
+       ["待我签字文件",dev.length,"份",dev.length?"var(--crit)":"var(--ink)"],
        ["我的在组受试者",subs.filter(s=>s.st==="已入组").length,"例","var(--ink)"],
        ["本中心 SAE",sae.length,"例",late.length?"var(--crit)":"var(--ink)"],
        ["授权分工表",doa.filter(r=>r.st==="已准入").length+"/"+doa.length,"","var(--ink)"],
@@ -4676,7 +4799,7 @@ VIEWS.pi = box=>{
                 <span class="sp"></span>
                 <span class="t-sub">CRC ${esc(s.crc)}</span></div>
               <div class="note" style="margin-top:4px">访视完成于 ${esc(s.pendPi.date)}｜全部 ${s.pendPi.tasks.length} 项任务已完成，待研究者签署确认</div>
-              <div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;padding:8px 10px">
+              <div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px">
                 ${s.pendPi.tasks.map(t=>`<div class="note" style="color:var(--ink-2)">✓ ${esc(t)}</div>`).join("")}
               </div>
               <div class="row" style="margin-top:9px">
@@ -4847,19 +4970,17 @@ VIEWS.audit = box=>{
 
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
-    ${[["进行中稽查",open.length,"项",open.length?"var(--warn)":"var(--good)"],
-       ["待整改发现",fo.length,"项",fo.length?"var(--warn)":"var(--good)"],
-       ["复发问题",rep.length,"项",rep.length?"var(--crit)":"var(--good)"],
-       ["D 级中心",grade.filter(g=>g.g==="D").length,"个",grade.filter(g=>g.g==="D").length?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+    ${[["进行中稽查",open.length,"项",open.length?"var(--warn)":"var(--ink)"],
+       ["待整改发现",fo.length,"项",fo.length?"var(--warn)":"var(--ink)"],
+       ["复发问题",rep.length,"项",rep.length?"var(--crit)":"var(--ink)"],
+       ["D 级中心",grade.filter(g=>g.g==="D").length,"个",grade.filter(g=>g.g==="D").length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
 
-  <div class="card" style="margin-bottom:12px;${rep.length?"border-color:color-mix(in srgb,var(--crit) 45%,var(--line))":""}">
-    <div class="card-h" ${rep.length?'style="background:var(--crit-soft)"':""}>
-      ${rep.length?`<span class="dot" style="background:var(--crit)"></span>`:""}
-      <h3 ${rep.length?'style="color:var(--crit)"':""}>CAPA 有效性验证</h3><span class="sp"></span>
+  <div class="card ${rep.length?"alert alert-crit":""}" style="margin-bottom:28px">
+    <div class="card-h"><h3>CAPA 有效性验证</h3><span class="sp"></span>
       <span class="sub">复发 = 当初只做了纠正，没做预防</span></div>
     <div class="card-b">
       <div class="tw"><table style="min-width:600px">
@@ -4898,7 +5019,7 @@ VIEWS.audit = box=>{
             <span class="pill ${a.st==="已关闭"?"p-good":"p-warn"}">${esc(a.st)}</span></div>
           <div class="note" style="margin-top:4px">${esc(a.scope)}</div>
           ${a.findings.map((f,k)=>`
-            <div style="margin-top:8px;border:1px solid var(--line);border-left:2px solid var(--${f.st==="已关闭"?"good":SEV[f.sev].k});border-radius:0 3px 3px 0;padding:8px 10px">
+            <div style="margin-top:8px;border:1px solid var(--line);border-left:2px solid var(--${f.st==="已关闭"?"good":SEV[f.sev].k});border-radius:0 8px 8px 0;padding:8px 10px">
               <div class="row" style="gap:6px">
                 <span class="pill p-${f.st==="已关闭"?"good":SEV[f.sev].k}">${esc(f.sev)}</span>
                 ${f.repeat?`<span class="pill p-crit">复发 · 源自 ${esc(f.repeat)}</span>`:""}
@@ -4985,11 +5106,11 @@ VIEWS.material = box=>{
 
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
-    ${[["数量不平衡",bad.length,"批",bad.length?"var(--crit)":"var(--good)"],
-       ["效期 60 天内",expSoon.length,"批",expSoon.length?"var(--warn)":"var(--good)"],
-       ["温度越限",sum(ip,r=>r.exc),"次",sum(ip,r=>r.exc)?"var(--warn)":"var(--good)"],
-       ["样本链未闭环",spBad.length,"份",spBad.length?"var(--warn)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+    ${[["数量不平衡",bad.length,"批",bad.length?"var(--crit)":"var(--ink)"],
+       ["效期 60 天内",expSoon.length,"批",expSoon.length?"var(--warn)":"var(--ink)"],
+       ["温度越限",sum(ip,r=>r.exc),"次",sum(ip,r=>r.exc)?"var(--warn)":"var(--ink)"],
+       ["样本链未闭环",spBad.length,"份",spBad.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -5078,10 +5199,10 @@ VIEWS.pay = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
     ${[["累计补偿",n0(tot),"元","var(--ink)"],
-       ["待发放 / 待签收",pend.length,"笔",pend.length?"var(--warn)":"var(--good)"],
-       ["无签收凭证",noRc.length,"笔",noRc.length?"var(--crit)":"var(--good)"],
-       ["现金发放",cash.length,"笔",cash.length?"var(--warn)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["待发放 / 待签收",pend.length,"笔",pend.length?"var(--warn)":"var(--ink)"],
+       ["无签收凭证",noRc.length,"笔",noRc.length?"var(--crit)":"var(--ink)"],
+       ["现金发放",cash.length,"笔",cash.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>

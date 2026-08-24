@@ -55,7 +55,7 @@ VIEWS.sites = box=>{
         <td><span class="pill ${s.st==="入组中"?"p-acc":"p-neut"}">${esc(s.st)}</span></td>
         <td class="tnum">${s.enrolled}<span class="t-mut"> / ${s.contracted}</span></td>
         <td class="ta-r"><span class="pill p-${rs.k}">${m.rate===null?"—":pct(m.rate)}</span></td>
-        <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--good)"};font-weight:500">${m.gm===null?"—":pct(m.gm)}</td>
+        <td class="tnum" style="color:${m.gm===null?"var(--ink-3)":m.gm<0?"var(--crit)":m.gm<0.2?"var(--warn)":"var(--ink)"};font-weight:500">${m.gm===null?"—":pct(m.gm)}</td>
         <td class="tnum">${n0(s.md)}</td>
         <td><div class="t-sub">CRA ${esc(s.cra)}</div><div class="t-sub">CRC ${esc(s.crc.join("、"))}</div></td>
       </tr>`;}).join("") : `<tr><td colspan="8"><div class="empty">没有匹配的中心，试试放宽筛选条件</div></td></tr>`;
@@ -102,15 +102,15 @@ function openSite(id){
         ${next?`<button class="btn btn-p" id="adv">推进到「${esc(next)}」</button>`
               :`<span class="pill p-good">流程已完成</span>`}
       </div>
-      <div class="grid g2" style="gap:8px;margin-bottom:14px">
-        <div class="card" style="padding:10px 12px">
+      <div class="grid g2" style="gap:0;margin-bottom:26px">
+        <div class="stat">
           <div class="kpi-l">入组达成</div>
-          <div class="num" style="font-size:20px;margin-top:3px;color:${rs.c}">${m.rate===null?"—":pct(m.rate)}</div>
+          <div class="num" style="font-size:26px;margin-top:8px;color:${rsC}">${m.rate===null?"—":pct(m.rate)}</div>
           <div class="note">实际 ${ss.enrolled} / 计划到今日 ${ss.planToDate}｜合同 ${ss.contracted} 例</div>
         </div>
-        <div class="card" style="padding:10px 12px">
+        <div class="stat">
           <div class="kpi-l">单中心毛利</div>
-          <div class="num" style="font-size:20px;margin-top:3px;color:${m.gp<0?"var(--crit)":"var(--good)"}">${m.gp>0?"+":""}${n1(m.gp)} 万</div>
+          <div class="num" style="font-size:20px;margin-top:3px;color:${m.gp<0?"var(--crit)":"var(--ink)"}">${m.gp>0?"+":""}${n1(m.gp)} 万</div>
           <div class="note">毛利率 ${m.gm===null?"—":pct(m.gm)}｜每例成本 ${m.cpe?n1(m.cpe)+" 万":"—"}</div>
         </div>
       </div>
@@ -126,13 +126,13 @@ function openSite(id){
       <div class="stack" style="gap:6px;margin-bottom:14px">
         ${[[ss.cra,"CRA"],...ss.crc.map(c=>[c,"CRC"])].map(([n,r])=>{
           const p=staff(n), s=utilState(p.util);
-          return `<div class="row" style="justify-content:space-between;border:1px solid var(--line);border-radius:3px;padding:7px 10px">
+          return `<div class="row" style="justify-content:space-between;border:1px solid var(--line);border-radius:8px;padding:7px 10px">
             <div><b style="font-weight:500">${esc(n)}</b> <span class="t-sub">${r} · ${esc(p.lvl)} · ${esc(p.city)}</span></div>
             <span class="pill p-${s.k}">利用率 ${p.util}% · ${s.t}</span></div>`;}).join("")}
       </div>
       ${iss.length?`<div class="section-t">未关闭质量事件（${iss.length}）</div>
       <div class="stack" style="gap:6px;margin-bottom:14px">${iss.map(x=>`
-        <button data-goto="qa" style="text-align:left;border:1px solid var(--line);border-left:2px solid ${SEV[x.sev].c};background:none;border-radius:0 3px 3px 0;padding:8px 10px;cursor:pointer;width:100%">
+        <button data-goto="qa" style="text-align:left;border:1px solid var(--line);border-left:2px solid ${SEV[x.sev].c};background:none;border-radius:0 8px 8px 0;padding:8px 10px;cursor:pointer;width:100%">
           <div class="row" style="gap:6px"><span class="pill p-${SEV[x.sev].k}">${esc(x.sev)}</span>
             <b style="font-size:12.5px;font-weight:500">${esc(x.type)}</b><span class="t-sub">${esc(x.id)}</span></div>
           <div class="note" style="margin-top:3px">责任人 ${esc(x.own)} · CAPA 到期 ${esc(x.due)} · ${esc(x.st)}</div>
@@ -187,7 +187,7 @@ VIEWS.enr = box=>{
            ["参研中心",st.sites,"个",`本系统在管 ${sites.length} 个`]].map(([l,v,u,n],i)=>`
           <div>
             <div class="kpi-l">${esc(l)}</div>
-            <div class="num" style="font-size:23px;margin-top:3px;${i===2?`color:${gap<0?"var(--crit)":"var(--good)"}`:""}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+            <div class="num" style="font-size:23px;margin-top:3px;${i===2?`color:${gap<0?"var(--crit)":"var(--ink)"}`:""}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
             <div class="note">${esc(n)}</div>
           </div>`).join("")}
       </div>
@@ -221,7 +221,7 @@ VIEWS.enr = box=>{
 
   lineChart($("#c-main"),{x:e.x,series:[
     {name:monthly?"计划月增":"计划累计",color:"var(--plan)",values:monthly?mp:e.plan,dash:true},
-    {name:monthly?"实际月增":"实际累计",color:"var(--s1)",values:monthly?ma:e.act,fill:!monthly}],h:250});
+    {name:monthly?"实际月增":"实际累计",color:"var(--accent)",values:monthly?ma:e.act,fill:!monthly}],h:250});
 
   box.addEventListener("click",e2=>{
     const t=e2.target.closest("[data-s]"); if(t){ state.enrStudy=t.dataset.s;

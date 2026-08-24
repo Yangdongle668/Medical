@@ -34,8 +34,7 @@ function subjCard(s,{open=false}={}){
         <div style="font-size:13px;font-weight:600;margin-top:5px">${esc(soaLabel(s.ss,s.seq))}</div>
         <div class="note">${esc(ss.hosp)} · ${esc(S[ss.sid].short)}｜目标日 ${esc(s.due)} ± ${s.win} 天</div>
         <div class="row" style="gap:5px;margin-top:6px">
-          <button class="chip" data-ct="${s.id}" aria-pressed="${s.contact==="已确认"}"
-            style="border-color:var(--${cs.k});color:var(--${cs.k})">联系：${esc(s.contact)}</button>
+          <button class="ct ct-${cs.k}" data-ct="${s.id}">联系 · ${esc(s.contact)}</button>
           <span class="pill ${s.edc==="已录入"?"p-good":late?"p-crit":"p-warn"}">EDC ${esc(s.edc)}${
             s.edc!=="已录入"&&lag>0?` · 滞后 ${lag} 天`:""}</span>
           ${s.piOk?`<span class="pill p-good">研究者已确认</span>`:""}
@@ -82,18 +81,17 @@ VIEWS.crc = box=>{
 
   box.innerHTML=`
   <div class="mini" style="margin-bottom:14px">
-    ${[["窗口告警",alert.length,"例",alert.length?"var(--crit)":"var(--good)"],
-       ["EDC 待录入",edcQ.length,"例",edcLateN.length?"var(--crit)":edcQ.length?"var(--warn)":"var(--good)"],
-       ["待联系受试者",contactQ.length,"人",contactQ.length?"var(--warn)":"var(--good)"],
-       ["待我回复质疑",qs.length,"条",qs.length?"var(--warn)":"var(--good)"],
-       ["待发放补偿",payQ.length,"笔",payQ.length?"var(--warn)":"var(--good)"],
-       ["我的利用率",p.util+"%","",us.c]
+    ${[["窗口告警",alert.length,"例",alert.length?"var(--crit)":"var(--ink)"],
+       ["EDC 待录入",edcQ.length,"例",edcLateN.length?"var(--crit)":edcQ.length?"var(--warn)":"var(--ink)"],
+       ["待联系受试者",contactQ.length,"人",contactQ.length?"var(--warn)":"var(--ink)"],
+       ["待我回复质疑",qs.length,"条",qs.length?"var(--warn)":"var(--ink)"],
+       ["待发放补偿",payQ.length,"笔",payQ.length?"var(--warn)":"var(--ink)"],
+       ["我的利用率",p.util+"%","",us.k==="good"?"var(--ink)":us.c]
      ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
         <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
-  ${edcLateN.length?`<div class="card" style="margin-bottom:12px;border-color:color-mix(in srgb,var(--crit) 45%,var(--line))">
-    <div class="card-h" style="background:var(--crit-soft)"><span class="dot" style="background:var(--crit)"></span>
-      <h3 style="color:var(--crit)">EDC 录入滞后</h3><span class="sp"></span>
+  ${edcLateN.length?`<div class="card alert alert-crit" style="margin-bottom:28px">
+    <div class="card-h"><h3>EDC 录入滞后</h3><span class="sp"></span>
       <span class="sub">访视后 5 个工作日内录入才算及时 —— 质疑都是录入之后才产生的</span></div>
     <div class="card-b" style="padding:0">
       ${edcLateN.map(s=>`<div style="padding:9px 14px;border-bottom:1px solid var(--line)">
@@ -136,7 +134,7 @@ VIEWS.crc = box=>{
               <div class="row" style="justify-content:space-between;gap:8px">
                 <div style="min-width:0"><span class="subjid">${esc(s.id)}</span>
                   <span class="t-sub"> ${esc(soaLabel(s.ss,s.seq))}</span></div>
-                <button class="chip" data-ct="${s.id}" style="border-color:var(--${cs.k});color:var(--${cs.k})">${esc(s.contact)}</button></div>
+                <button class="ct ct-${cs.k}" data-ct="${s.id}">${esc(s.contact)}</button></div>
             </div>`;}).join("")}
           <div class="note" style="padding:10px 14px;line-height:1.6">点击可切换状态：待联系 → 已确认 → 已改期 → 失联。
             改期会自动把目标日顺延一周并重算窗口。</div>
@@ -172,7 +170,7 @@ VIEWS.subj = box=>{
        ["窗口临期",g.warn.length,"例","var(--warn)","3 天内必须完成"],
        ["窗口内",g.good.length,"例","var(--good)","按计划推进"],
        ["我登记的筛败",failed.length,"例","var(--ink-3)","筛败也是工作量，且合同单独计价"]
-     ].map(([l,v,u,c,n])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,c,n])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
         <div class="note">${esc(n)}</div></div>`).join("")}
@@ -245,7 +243,7 @@ function doneModal(id){
       <div class="field"><div class="slider-h"><label for="dv-h">本次访视陪同耗时</label><b id="dv-hv">4.0 小时</b></div>
         <input type="range" id="dv-h" min="0.5" max="12" step="0.5" value="4"></div>
       <div class="field"><label class="cbx"><input type="checkbox" id="dv-pay" checked><span>本次访视发放受试者补偿（交通 + 营养费）</span></label></div>
-      <div style="border:1px solid var(--line);background:var(--surface-2);padding:9px 11px;border-radius:3px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+      <div style="border:1px solid var(--line);background:var(--surface-2);padding:9px 11px;border-radius:8px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
         提交后系统会一次性完成：<br>
         ① 记一条工时，<b>关联到本次访视</b>（这样「每次访视实际耗时」才算得出来）<br>
         ② 成本归集到 ${esc(site(s.ss).hosp)}<br>
@@ -327,11 +325,11 @@ VIEWS.query = box=>{
 
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:14px">
-    ${[[isCRC?"待我回复":"待中心回复",open.length,"条",open.length?"var(--warn)":"var(--good)"],
-       ["挂起超 7 天",open.filter(q=>q.age>7).length,"条",open.filter(q=>q.age>7).length?"var(--crit)":"var(--good)"],
-       ["平均挂起",n1(avg),"天",avg>7?"var(--crit)":avg>5?"var(--warn)":"var(--good)"],
+    ${[[isCRC?"待我回复":"待中心回复",open.length,"条",open.length?"var(--warn)":"var(--ink)"],
+       ["挂起超 7 天",open.filter(q=>q.age>7).length,"条",open.filter(q=>q.age>7).length?"var(--crit)":"var(--ink)"],
+       ["平均挂起",n1(avg),"天",avg>7?"var(--crit)":avg>5?"var(--warn)":"var(--ink)"],
        ["已回复待关闭",waiting.length,"条","var(--ink)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -391,10 +389,10 @@ VIEWS.isf = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:14px">
     ${[["清单项",list.length,"项","var(--ink)"],
-       ["缺失 / 过期",list.filter(i=>i.st==="crit").length,"项",list.filter(i=>i.st==="crit").length?"var(--crit)":"var(--good)"],
-       ["临期待办",list.filter(i=>i.st==="warn").length,"项",list.filter(i=>i.st==="warn").length?"var(--warn)":"var(--good)"],
-       ["齐备率",pct((list.length-bad.length)/list.length),"",bad.length?"var(--warn)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["缺失 / 过期",list.filter(i=>i.st==="crit").length,"项",list.filter(i=>i.st==="crit").length?"var(--crit)":"var(--ink)"],
+       ["临期待办",list.filter(i=>i.st==="warn").length,"项",list.filter(i=>i.st==="warn").length?"var(--warn)":"var(--ink)"],
+       ["齐备率",pct((list.length-bad.length)/list.length),"",bad.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>

@@ -15,18 +15,18 @@ VIEWS.qa = box=>{
   <div class="grid g4" style="margin-bottom:12px">
     ${[["未关闭事件",openN.length,"项",`重大/严重 ${openN.filter(i=>i.sev!=="一般").length} 项`,openN.filter(i=>i.sev!=="一般").length?"var(--crit)":"var(--ink)"],
        ["SAE 24h 上报及时率",SA.rate===null?"—":n1(SA.rate*100),"%",`${SA.ok} / ${SA.n} 例在 ${SAE_SLA} 小时内上报`,SA.rate===1?"var(--good)":"var(--crit)"],
-       ["Query 平均挂起",QS.avg===null?"—":n1(QS.avg),"天",`${QS.n} 条 · 超 7 天 ${QS.over7} 条`,QS.avg>7?"var(--crit)":QS.avg>5?"var(--warn)":"var(--good)"],
-       ["CAPA 逾期",overdue.length,"项",overdue.length?"已超整改到期日":"全部在期内",overdue.length?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,n,c])=>`<div class="card" style="padding:12px 13px">
+       ["Query 平均挂起",QS.avg===null?"—":n1(QS.avg),"天",`${QS.n} 条 · 超 7 天 ${QS.over7} 条`,QS.avg>7?"var(--crit)":QS.avg>5?"var(--warn)":"var(--ink)"],
+       ["CAPA 逾期",overdue.length,"项",overdue.length?"已超整改到期日":"全部在期内",overdue.length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,n,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
         <div class="note">${esc(n)}</div></div>`).join("")}
   </div>
 
-  ${sae?`<div class="card" style="margin-bottom:12px;border-color:color-mix(in srgb,var(--crit) 45%,var(--line))">
-    <div class="card-h" style="background:var(--crit-soft);border-bottom-color:color-mix(in srgb,var(--crit) 25%,transparent)">
+  ${sae?`<div class="card alert alert-crit" style="margin-bottom:28px">
+    <div class="card-h">
       <span class="dot" style="background:var(--crit)"></span>
-      <h3 style="color:var(--crit)">SAE 上报时限监控 · ${esc(sae.id)}</h3><span class="sp"></span>
+      <h3>SAE 上报时限监控 · ${esc(sae.id)}</h3><span class="sp"></span>
       <span class="pill p-crit">已超窗</span></div>
     <div class="card-b">
       <div class="grid g3" style="gap:14px;align-items:center">
@@ -96,7 +96,7 @@ VIEWS.qa = box=>{
           </button>
           <div id="d-${i.id}" hidden style="padding:0 16px 14px 18px">
             <div class="section-t">CAPA 纠正与预防措施</div>
-            <div style="font-size:12.5px;line-height:1.7;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);padding:10px 12px;border-radius:3px">${esc(i.capa)}</div>
+            <div style="font-size:12.5px;line-height:1.7;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);padding:10px 12px;border-radius:8px">${esc(i.capa)}</div>
             ${i.st!=="已关闭"?`<div class="row" style="margin-top:10px">
               <button class="btn btn-p" data-close-iss="${i.id}">验证通过并关闭</button>
               <button class="btn" data-goto3="${i.ss}">查看中心</button></div>`
@@ -144,7 +144,7 @@ VIEWS.mon = box=>{
        ["MVR 跟进项",`${doneItems} / ${totItems}`,"",`完成率 ${totItems?pct(doneItems/totItems):"—"}`],
        ["待确认排期",vs.filter(v=>v.st==="待确认").length,"次","需与中心确认时间"],
        ["预估差旅",n1(vs.length*RATE.travel),"万",`${RATE.travel} 万/次 × ${vs.length} 次`]
-     ].map(([l,v,u,n])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,n])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:23px;margin-top:3px">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
         <div class="note">${esc(n)}</div></div>`).join("")}

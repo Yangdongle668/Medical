@@ -17,11 +17,11 @@ VIEWS.material = box=>{
 
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
-    ${[["数量不平衡",bad.length,"批",bad.length?"var(--crit)":"var(--good)"],
-       ["效期 60 天内",expSoon.length,"批",expSoon.length?"var(--warn)":"var(--good)"],
-       ["温度越限",sum(ip,r=>r.exc),"次",sum(ip,r=>r.exc)?"var(--warn)":"var(--good)"],
-       ["样本链未闭环",spBad.length,"份",spBad.length?"var(--warn)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+    ${[["数量不平衡",bad.length,"批",bad.length?"var(--crit)":"var(--ink)"],
+       ["效期 60 天内",expSoon.length,"批",expSoon.length?"var(--warn)":"var(--ink)"],
+       ["温度越限",sum(ip,r=>r.exc),"次",sum(ip,r=>r.exc)?"var(--warn)":"var(--ink)"],
+       ["样本链未闭环",spBad.length,"份",spBad.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -110,10 +110,10 @@ VIEWS.pay = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
     ${[["累计补偿",n0(tot),"元","var(--ink)"],
-       ["待发放 / 待签收",pend.length,"笔",pend.length?"var(--warn)":"var(--good)"],
-       ["无签收凭证",noRc.length,"笔",noRc.length?"var(--crit)":"var(--good)"],
-       ["现金发放",cash.length,"笔",cash.length?"var(--warn)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["待发放 / 待签收",pend.length,"笔",pend.length?"var(--warn)":"var(--ink)"],
+       ["无签收凭证",noRc.length,"笔",noRc.length?"var(--crit)":"var(--ink)"],
+       ["现金发放",cash.length,"笔",cash.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>

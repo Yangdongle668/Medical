@@ -16,7 +16,7 @@ const qcFindOpen= ()=>qcOpen().flatMap(q=>q.findings.filter(f=>f.st!=="已关闭
 const acOpen    = ()=>ACCEPT.filter(a=>a.hosp===PERSONA().hosp&&a.st!=="已受理");
 const regOpen   = ()=>REG.filter(r=>instIds().has(r.ss)&&r.st!=="已准入");
 
-const NOTICE = `<div style="border:1px dashed var(--line-2);background:var(--surface-2);padding:9px 12px;border-radius:3px;font-size:11.5px;color:var(--ink-3);line-height:1.6">
+const NOTICE = `<div style="border:1px dashed var(--line-2);background:var(--surface-2);padding:9px 12px;border-radius:8px;font-size:11.5px;color:var(--ink-3);line-height:1.6">
   <b style="color:var(--ink-2)">机构端可见范围</b>：仅本机构承接的项目与中心，内容限于质量、合规、人员资质与文件。
   受托方（CRO/SMO）的成本、毛利、人天与人员利用率<b>不对机构开放</b> —— 那是受托方的商业信息，
   与机构履行监管职责无关。同样，机构的内部质控底稿也不向受托方开放全文，只发送质控意见与整改要求。</div>`;
@@ -32,10 +32,10 @@ VIEWS.inst = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
     ${[["本院在研项目",new Set(ss.map(s=>s.sid)).size,"个","var(--ink)"],
-       ["待受理立项",ac.length,"项",ac.length?"var(--warn)":"var(--good)"],
-       ["质控待整改",fo.length,"项",overdue.length?"var(--crit)":fo.length?"var(--warn)":"var(--good)"],
-       ["人员资质异常",rg.length,"人",rg.length?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["待受理立项",ac.length,"项",ac.length?"var(--warn)":"var(--ink)"],
+       ["质控待整改",fo.length,"项",overdue.length?"var(--crit)":fo.length?"var(--warn)":"var(--ink)"],
+       ["人员资质异常",rg.length,"人",rg.length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -128,7 +128,7 @@ VIEWS.instac = box=>{
             <span class="note">递交方 ${esc(a.by)}（受托方）｜递交日期 ${esc(a.sub)}</span>
             <span class="note">材料齐备 ${ok} / ${a.docs.length}</span></div>
           <div class="bartrack" style="height:5px;margin-bottom:12px">
-            <div class="barfill" style="width:${ok/a.docs.length*100}%;background:${miss.length?"var(--warn)":"var(--good)"};height:100%"></div></div>
+            <div class="barfill" style="width:${ok/a.docs.length*100}%;background:${miss.length?"var(--warn)":"var(--ink)"};height:100%"></div></div>
           <div class="section-t">立项材料形式审查</div>
           <div class="grid g2" style="gap:0 16px">
             ${a.docs.map((d,k)=>`<label class="cbx ${d[1]?"done":""}" style="border-bottom:1px solid var(--line)">
@@ -169,10 +169,10 @@ VIEWS.instqc = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
     ${[["累计质控",list.length,"轮","var(--ink)"],
-       ["待整改发现",fo.length,"项",fo.length?"var(--warn)":"var(--good)"],
-       ["整改逾期",fo.filter(f=>days(TODAY,f.due)<0).length,"项",fo.filter(f=>days(TODAY,f.due)<0).length?"var(--crit)":"var(--good)"],
-       ["严重及以上",fo.filter(f=>f.sev!=="一般").length,"项",fo.filter(f=>f.sev!=="一般").length?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["待整改发现",fo.length,"项",fo.length?"var(--warn)":"var(--ink)"],
+       ["整改逾期",fo.filter(f=>days(TODAY,f.due)<0).length,"项",fo.filter(f=>days(TODAY,f.due)<0).length?"var(--crit)":"var(--ink)"],
+       ["严重及以上",fo.filter(f=>f.sev!=="一般").length,"项",fo.filter(f=>f.sev!=="一般").length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -192,7 +192,7 @@ VIEWS.instqc = box=>{
           <div class="note" style="margin-bottom:10px"><b>质控范围</b>：${esc(q.scope)}</div>
           <div class="section-t">质控意见与整改跟踪</div>
           ${q.findings.map((f,k)=>{const od=f.st!=="已关闭"&&days(TODAY,f.due)<0;
-            return `<div style="border:1px solid var(--line);border-left:2px solid var(--${f.st==="已关闭"?"good":od?"crit":SEV[f.sev].k});border-radius:0 3px 3px 0;padding:10px 12px;margin-bottom:8px">
+            return `<div style="border:1px solid var(--line);border-left:2px solid var(--${f.st==="已关闭"?"good":od?"crit":SEV[f.sev].k});border-radius:0 8px 8px 0;padding:10px 12px;margin-bottom:8px">
               <div class="row" style="gap:6px">
                 <span class="pill p-${f.st==="已关闭"?"good":SEV[f.sev].k}">${esc(f.sev)}</span>
                 <b style="font-size:12.5px">${esc(f.item)}</b>
@@ -201,7 +201,7 @@ VIEWS.instqc = box=>{
                 <span class="pill ${f.st==="已关闭"?"p-good":od?"p-crit":"p-neut"}">${esc(f.st)}${od?` · 逾期 ${Math.abs(days(TODAY,f.due))} 天`:""}</span></div>
               <div style="font-size:12.5px;margin-top:5px;color:var(--ink-2);line-height:1.6">${esc(f.desc)}</div>
               <div class="note" style="margin-top:3px">责任人 ${esc(f.resp)}（受托方）｜整改期限 ${esc(f.due)}</div>
-              ${f.reply?`<div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--line);padding:8px 10px;border-radius:3px;font-size:12px;color:var(--ink-2);line-height:1.6">
+              ${f.reply?`<div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--line);padding:8px 10px;border-radius:8px;font-size:12px;color:var(--ink-2);line-height:1.6">
                 <b style="color:var(--ink)">整改回复（${esc(f.resp)}）</b><br>${esc(f.reply)}</div>`:""}
               ${f.st==="待复核"?`<div class="row" style="margin-top:9px">
                 <button class="btn btn-p" data-qcok="${esc(q.id)}:${k}">复核通过并关闭</button>
@@ -310,10 +310,10 @@ VIEWS.instreg = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
     ${[["备案人员",list.length,"人","var(--ink)"],
-       ["已准入",list.filter(r=>r.st==="已准入").length,"人","var(--good)"],
-       ["备案中",list.filter(r=>r.st==="备案中").length,"人",list.filter(r=>r.st==="备案中").length?"var(--warn)":"var(--good)"],
-       ["资质缺失",list.filter(r=>r.st==="资质缺失").length,"人",list.filter(r=>r.st==="资质缺失").length?"var(--crit)":"var(--good)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+       ["已准入",list.filter(r=>r.st==="已准入").length,"人","var(--ink)"],
+       ["备案中",list.filter(r=>r.st==="备案中").length,"人",list.filter(r=>r.st==="备案中").length?"var(--warn)":"var(--ink)"],
+       ["资质缺失",list.filter(r=>r.st==="资质缺失").length,"人",list.filter(r=>r.st==="资质缺失").length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -376,11 +376,11 @@ VIEWS.capa = box=>{
   const overdue=mine.filter(i=>days(TODAY,i.due)<0);
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:12px">
-    ${[["待我整改",mine.length,"项",mine.length?"var(--warn)":"var(--good)"],
-       ["其中机构质控",fromQC.length,"项",fromQC.length?"var(--crit)":"var(--good)"],
-       ["整改逾期",overdue.length,"项",overdue.length?"var(--crit)":"var(--good)"],
+    ${[["待我整改",mine.length,"项",mine.length?"var(--warn)":"var(--ink)"],
+       ["其中机构质控",fromQC.length,"项",fromQC.length?"var(--crit)":"var(--ink)"],
+       ["整改逾期",overdue.length,"项",overdue.length?"var(--crit)":"var(--ink)"],
        ["最近到期",mine.length?mine.map(i=>i.due).sort()[0]:"—","","var(--ink)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:${String(v).length>6?"15":"24"}px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -405,7 +405,7 @@ VIEWS.capa = box=>{
             <div class="row" style="margin-top:8px">
               <button class="btn btn-p" data-cp="${k}">提交整改回复</button>
               <span class="note">提交后转机构复核，复核通过才算关闭</span></div>`
-          :`<div style="background:var(--surface-2);border:1px solid var(--line);padding:8px 10px;border-radius:3px;font-size:12px;color:var(--ink-2);line-height:1.6">
+          :`<div style="background:var(--surface-2);border:1px solid var(--line);padding:8px 10px;border-radius:8px;font-size:12px;color:var(--ink-2);line-height:1.6">
               <b style="color:var(--ink)">已提交整改回复</b><br>${esc(f.reply||"")}</div>
             <div class="note" style="margin-top:6px">等待 ${esc(site(q.ss).hosp)}机构办复核</div>`}
         </div></div>`;}).join("")

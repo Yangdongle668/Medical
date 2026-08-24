@@ -20,8 +20,8 @@ VIEWS.pi = box=>{
 
   box.innerHTML=`
   <div class="mini" style="margin-bottom:14px">
-    ${[["待我确认访视",pend.length,"例",pend.length?"var(--warn)":"var(--good)"],
-       ["待我签字文件",dev.length,"份",dev.length?"var(--crit)":"var(--good)"],
+    ${[["待我确认访视",pend.length,"例",pend.length?"var(--warn)":"var(--ink)"],
+       ["待我签字文件",dev.length,"份",dev.length?"var(--crit)":"var(--ink)"],
        ["我的在组受试者",subs.filter(s=>s.st==="已入组").length,"例","var(--ink)"],
        ["本中心 SAE",sae.length,"例",late.length?"var(--crit)":"var(--ink)"],
        ["授权分工表",doa.filter(r=>r.st==="已准入").length+"/"+doa.length,"","var(--ink)"],
@@ -45,7 +45,7 @@ VIEWS.pi = box=>{
                 <span class="sp"></span>
                 <span class="t-sub">CRC ${esc(s.crc)}</span></div>
               <div class="note" style="margin-top:4px">访视完成于 ${esc(s.pendPi.date)}｜全部 ${s.pendPi.tasks.length} 项任务已完成，待研究者签署确认</div>
-              <div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:3px;padding:8px 10px">
+              <div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px">
                 ${s.pendPi.tasks.map(t=>`<div class="note" style="color:var(--ink-2)">✓ ${esc(t)}</div>`).join("")}
               </div>
               <div class="row" style="margin-top:9px">

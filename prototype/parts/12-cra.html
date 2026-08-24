@@ -42,11 +42,11 @@ VIEWS.cra = box=>{
   box.innerHTML=`
   <div class="mini" style="margin-bottom:14px">
     ${[["我的中心",mine.length,"个","var(--ink)"],
-       ["高风险中心",risks.filter(r=>r.lvl.k==="crit").length,"个",risks.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--good)"],
+       ["高风险中心",risks.filter(r=>r.lvl.k==="crit").length,"个",risks.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--ink)"],
        ["排期访视",vs.length,"次","var(--ink)"],
-       ["未关闭跟进项",openItems,"项",openItems?"var(--warn)":"var(--good)"],
+       ["未关闭跟进项",openItems,"项",openItems?"var(--warn)":"var(--ink)"],
        ["待中心回复质疑",qs.length,"条",qs.filter(q=>q.age>7).length?"var(--crit)":"var(--ink)"],
-       ["我的利用率",p.util+"%","",us.c]
+       ["我的利用率",p.util+"%","",us.k==="good"?"var(--ink)":us.c]
      ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
         <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -130,10 +130,10 @@ VIEWS.mysites = box=>{
   box.innerHTML=`
   <div class="grid g4" style="gap:10px;margin-bottom:14px">
     ${[["在管中心",rows.length,"个","var(--ink)"],
-       ["高风险",rows.filter(r=>r.lvl.k==="crit").length,"个",rows.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--good)"],
-       ["风险总分",tot,"分",tot>10?"var(--crit)":tot>5?"var(--warn)":"var(--good)"],
+       ["高风险",rows.filter(r=>r.lvl.k==="crit").length,"个",rows.filter(r=>r.lvl.k==="crit").length?"var(--crit)":"var(--ink)"],
+       ["风险总分",tot,"分",tot>10?"var(--crit)":tot>5?"var(--warn)":"var(--ink)"],
        ["行业经验值","8–12","个中心/CRA","var(--ink-3)"]
-     ].map(([l,v,u,c])=>`<div class="card" style="padding:12px 13px">
+     ].map(([l,v,u,c])=>`<div class="stat">
         <div class="kpi-l">${esc(l)}</div>
         <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
   </div>
@@ -150,7 +150,7 @@ VIEWS.mysites = box=>{
           <td class="ta-r"><span class="pill p-${lvl.k}">${r}</span></td>
           <td class="t-sub" style="max-width:230px">${why.length?esc(why.join("；")):"—"}</td>
           <td class="tnum">${s.enrolled}/${s.contracted}<div class="t-sub" style="text-align:right">${m.rate===null?"—":pct(m.rate)}</div></td>
-          <td>${sd?`<div class="bartrack" style="height:14px"><div class="barfill" style="width:${sd.done/sd.total*100}%;background:var(--accent);height:100%"></div></div>
+          <td>${sd?`<div class="bartrack" style="height:9px"><div class="barfill" style="width:${sd.done/sd.total*100}%;background:var(--accent);height:100%"></div></div>
                 <div class="t-sub">${sd.done}/${sd.total} · ${esc(sd.note)}</div>`:`<span class="t-mut">未启动</span>`}</td>
           <td class="t-sub">${nv?`${nv.d}<div class="t-sub">${nv.kind}</div>`:"未排期"}</td>
           <td><span class="pill p-${lvl.k}">${esc(lvl.f)}</span></td></tr>`;}).join("")}</tbody>

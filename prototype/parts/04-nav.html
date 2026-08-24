@@ -204,7 +204,7 @@ function render(){
   const [t,sub] = titleOf(state.view);
   $("#content").innerHTML = `<div class="view-head"><h1>${esc(t)}</h1><p>${esc(sub)}</p></div><div id="vbody"></div>`;
   VIEWS[state.view]($("#vbody"));
-  $("#content").scrollIntoView({block:"start"});
+  scrollTo({top:0, behavior:"instant"});
 }
 function go(v,opts={}){ Object.assign(state,opts); state.view=v; render(); }
 
