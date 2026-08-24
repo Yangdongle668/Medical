@@ -20,13 +20,33 @@
       <div class="crumb" id="crumb"></div>
       <div class="topbar-sp"></div>
       <div class="who" id="who"></div>
-      <label class="crumb" for="grole">身份</label>
-      <select class="sel" id="grole"></select>
+      <button class="btn" id="glogout">退出登录</button>
       <label class="crumb" for="gstudy">项目范围</label>
       <select class="sel" id="gstudy"></select>
       <span class="demo-tag">演示数据 · 非真实</span>
     </header>
     <main class="content" id="content"></main>
+  </div>
+</div>
+<div class="login" id="login" hidden>
+  <div class="login-box">
+    <div class="login-brand">
+      <div class="brand-mark">中</div>
+      <div><div class="brand-name">临床中心台</div><div class="brand-sub">SiteDesk&nbsp;v1.0</div></div>
+    </div>
+    <h2>登录</h2>
+    <p class="login-sub">权限由账号决定：看得到哪些中心、哪些字段、能做哪些动作，登录那一刻就定了。</p>
+    <div class="field"><div class="slider-h"><label for="li-u">登录账号</label></div>
+      <input class="sel" id="li-u" style="width:100%" autocomplete="username" placeholder="例：wutong"></div>
+    <div class="field"><div class="slider-h"><label for="li-p">密码</label></div>
+      <input class="sel" id="li-p" type="password" style="width:100%" autocomplete="current-password" placeholder="演示密码：demo"></div>
+    <div id="li-err" class="login-err" hidden></div>
+    <button class="btn btn-p login-go" id="li-go">登录</button>
+    <div class="login-demo">
+      <div class="section-t">演示账号 —— 点击直接登录（密码统一 demo）</div>
+      <div id="li-list"></div>
+    </div>
+    <div class="login-foot">演示原型 · 全部数据为硬编码虚构数据，不含任何真实受试者信息，不发起任何网络请求。</div>
   </div>
 </div>
 <div class="scrim" id="scrim" hidden></div>
@@ -230,15 +250,47 @@ const VISITS = [
 const MILES = [
   {id:"M-041", ss:"SS-01", name:"入组达成 80%", amt:42.0, hit:"2026-08-12", inv:"已开票", due:"2026-10-11", paid:false, age:10},
   {id:"M-038", ss:"SS-09", name:"入组达成 80%", amt:31.2, hit:"2026-07-28", inv:"已开票", due:"2026-09-26", paid:false, age:25},
-  {id:"M-035", ss:"SS-12", name:"入组达成 75%", amt:38.6, hit:"2026-07-15", inv:"已开票", due:"2026-09-13", paid:false, age:38},
+  {id:"M-035", ss:"SS-12", name:"入组达成 80%", amt:38.6, hit:"2026-07-15", inv:"已开票", due:"2026-09-13", paid:false, age:38},
   {id:"M-029", ss:"SS-03", name:"入组达成 80%", amt:28.9, hit:"2026-05-20", inv:"已开票", due:"2026-07-19", paid:false, age:94},
   {id:"M-026", ss:"SS-06", name:"入组过半", amt:33.6, hit:"2026-04-30", inv:"已开票", due:"2026-06-29", paid:false, age:114},
   {id:"M-044", ss:"SS-10", name:"入组达成 80%", amt:29.4, hit:"2026-08-18", inv:"待开票", due:"—", paid:false, age:4},
   {id:"M-045", ss:"SS-07", name:"入组过半", amt:22.1, hit:"2026-08-06", inv:"待开票", due:"—", paid:false, age:16},
   {id:"M-046", ss:"SS-14", name:"合同签署", amt:8.5, hit:"2026-08-20", inv:"待开票", due:"—", paid:false, age:2},
   {id:"M-021", ss:"SS-02", name:"入组过半", amt:35.4, hit:"2026-03-11", inv:"已回款", due:"2026-05-10", paid:true, age:0},
-  {id:"M-018", ss:"SS-01", name:"入组过半", amt:40.6, hit:"2026-01-22", inv:"已回款", due:"2026-03-23", paid:true, age:0}
+  {id:"M-018", ss:"SS-01", name:"入组过半", amt:40.6, hit:"2026-01-22", inv:"已回款", due:"2026-03-23", paid:true, age:0},
+  {id:"M-086", ss:"SS-12", name:"入组过半", amt:50.0, hit:"2026-07-01", inv:"已开票", due:"2026-09-14", paid:false, age:37},
+  {id:"M-081", ss:"SS-10", name:"入组过半", amt:34.7, hit:"2026-04-15", inv:"已回款", due:"2026-06-29", paid:true, age:0},
+  {id:"M-078", ss:"SS-09", name:"入组过半", amt:37.9, hit:"2026-03-30", inv:"已回款", due:"2026-06-13", paid:true, age:0},
+  {id:"M-085", ss:"SS-12", name:"中心启动 SIV", amt:30.0, hit:"2026-03-24", inv:"已回款", due:"2026-06-07", paid:true, age:0},
+  {id:"M-084", ss:"SS-12", name:"合同签署", amt:20.0, hit:"2026-03-07", inv:"已回款", due:"2026-05-21", paid:true, age:0},
+  {id:"M-075", ss:"SS-08", name:"中心启动 SIV", amt:22.0, hit:"2026-02-10", inv:"已回款", due:"2026-04-26", paid:true, age:0},
+  {id:"M-066", ss:"SS-03", name:"入组过半", amt:40.8, hit:"2025-12-25", inv:"已回款", due:"2026-03-10", paid:true, age:0},
+  {id:"M-074", ss:"SS-08", name:"合同签署", amt:14.6, hit:"2025-12-15", inv:"已回款", due:"2026-02-28", paid:true, age:0},
+  {id:"M-083", ss:"SS-11", name:"中心启动 SIV", amt:19.3, hit:"2025-10-21", inv:"已回款", due:"2026-01-04", paid:true, age:0},
+  {id:"M-082", ss:"SS-11", name:"合同签署", amt:12.9, hit:"2025-09-21", inv:"已回款", due:"2025-12-05", paid:true, age:0},
+  {id:"M-080", ss:"SS-10", name:"中心启动 SIV", amt:20.8, hit:"2025-09-16", inv:"已回款", due:"2025-11-30", paid:true, age:0},
+  {id:"M-077", ss:"SS-09", name:"中心启动 SIV", amt:22.7, hit:"2025-09-02", inv:"已回款", due:"2025-11-16", paid:true, age:0},
+  {id:"M-088", ss:"SS-15", name:"中心启动 SIV", amt:18.0, hit:"2025-08-28", inv:"已回款", due:"2025-11-11", paid:true, age:0},
+  {id:"M-079", ss:"SS-10", name:"合同签署", amt:13.9, hit:"2025-08-25", inv:"已回款", due:"2025-11-08", paid:true, age:0},
+  {id:"M-076", ss:"SS-09", name:"合同签署", amt:15.2, hit:"2025-08-09", inv:"已回款", due:"2025-10-23", paid:true, age:0},
+  {id:"M-087", ss:"SS-15", name:"合同签署", amt:12.0, hit:"2025-08-04", inv:"已回款", due:"2025-10-18", paid:true, age:0},
+  {id:"M-069", ss:"SS-05", name:"合同签署", amt:13.0, hit:"2025-07-16", inv:"已回款", due:"2025-09-29", paid:true, age:0},
+  {id:"M-073", ss:"SS-07", name:"中心启动 SIV", amt:24.9, hit:"2025-06-25", inv:"已回款", due:"2025-09-08", paid:true, age:0},
+  {id:"M-071", ss:"SS-06", name:"中心启动 SIV", amt:27.9, hit:"2025-06-11", inv:"已回款", due:"2025-08-25", paid:true, age:0},
+  {id:"M-072", ss:"SS-07", name:"合同签署", amt:16.6, hit:"2025-06-03", inv:"已回款", due:"2025-08-17", paid:true, age:0},
+  {id:"M-070", ss:"SS-06", name:"合同签署", amt:18.6, hit:"2025-05-18", inv:"已回款", due:"2025-08-01", paid:true, age:0},
+  {id:"M-068", ss:"SS-04", name:"中心启动 SIV", amt:21.5, hit:"2025-03-07", inv:"已回款", due:"2025-05-21", paid:true, age:0},
+  {id:"M-067", ss:"SS-04", name:"合同签署", amt:14.4, hit:"2025-02-06", inv:"已回款", due:"2025-04-22", paid:true, age:0},
+  {id:"M-063", ss:"SS-02", name:"中心启动 SIV", amt:26.8, hit:"2024-12-20", inv:"已回款", due:"2025-03-05", paid:true, age:0},
+  {id:"M-065", ss:"SS-03", name:"中心启动 SIV", amt:24.4, hit:"2024-12-13", inv:"已回款", due:"2025-02-26", paid:true, age:0},
+  {id:"M-061", ss:"SS-01", name:"中心启动 SIV", amt:28.7, hit:"2024-12-06", inv:"已回款", due:"2025-02-19", paid:true, age:0},
+  {id:"M-062", ss:"SS-02", name:"合同签署", amt:17.9, hit:"2024-11-28", inv:"已回款", due:"2025-02-11", paid:true, age:0},
+  {id:"M-064", ss:"SS-03", name:"合同签署", amt:16.3, hit:"2024-11-24", inv:"已回款", due:"2025-02-07", paid:true, age:0},
+  {id:"M-060", ss:"SS-01", name:"合同签署", amt:19.2, hit:"2024-11-13", inv:"已回款", due:"2025-01-27", paid:true, age:0},
 ];
+/* 台账里刻意留了三处缺口（SS-15 入组过半、SS-11 入组过半、SS-05 中心启动 SIV）：
+   这三个里程碑按中心实际进度早已达成，却没人补记录，因此没开票、没回款。
+   现金流预测把它们单独列出来，而不是算成未来收入 —— 见 §「已达成，却不在开票队列里」。 */
 
 /* ── 工时记录（演示用，可在"工时与差旅"中新增） ──────────────────── */
 const WORKTYPES = [

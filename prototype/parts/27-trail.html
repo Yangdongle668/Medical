@@ -1,0 +1,86 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   审计轨迹 —— GCP 语境下的底线，不是功能。
+   核查时问的是"这条记录谁在什么时候改的、改前是什么、为什么改"。
+   答不上来，这个系统在合规上就是不成立的。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.trail = box=>{
+  const q = (state.trailQ||"").trim();
+  const f = state.trailF || "all";
+  let list = TRAIL;
+  if(f==="write") list = list.filter(t=>t.before!=="—" && t.after!=="—");
+  if(f==="perm")  list = list.filter(t=>/权限|角色|账号|分组|模块/.test(t.act));
+  if(f==="mine")  list = list.filter(t=>t.who===(ME()?.n));
+  if(q) list = list.filter(t=>[t.who,t.act,t.tgt,t.ss,t.why,t.before,t.after]
+    .some(x=>String(x).toLowerCase().includes(q.toLowerCase())));
+
+  const byAct = [...new Set(TRAIL.map(t=>t.act))]
+    .map(a=>({n:a, v:TRAIL.filter(t=>t.act===a).length}))
+    .sort((a,b)=>b.v-a.v).slice(0,6);
+  const noWhy = TRAIL.filter(t=>t.before!=="—" && t.after!=="—" && !t.why);
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["轨迹条数",TRAIL.length,"条","var(--ink)","本次会话内的全部写操作"],
+       ["涉及人员",new Set(TRAIL.map(t=>t.who)).size,"人","var(--ink)",""],
+       ["权限类变更",TRAIL.filter(t=>/权限|角色|账号|分组|模块/.test(t.act)).length,"条",
+        "var(--ink)","核查必查：谁给谁开了什么"],
+       ["未填写变更原因",noWhy.length,"条",noWhy.length?"var(--warn)":"var(--ink)","关键字段改动应留原因"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>高频操作</h3><span class="sub">哪类改动最多，哪类就最该被抽查</span></div>
+    <div class="card-b"><div id="c-tr"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-h">
+      <div class="seg" id="tf">
+        <button data-tf="all" aria-pressed="${f==="all"}">全部 ${TRAIL.length}</button>
+        <button data-tf="write" aria-pressed="${f==="write"}">值变更</button>
+        <button data-tf="perm" aria-pressed="${f==="perm"}">权限类</button>
+        <button data-tf="mine" aria-pressed="${f==="mine"}">我的操作</button>
+      </div>
+      <span class="sp"></span>
+      <input class="sel" id="tq" placeholder="搜索人 / 动作 / 对象" value="${esc(q)}" style="min-width:200px">
+    </div>
+    <div class="tw"><table style="min-width:1040px">
+      <thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>对象</th>
+        <th>改前</th><th>改后</th><th>中心</th><th>原因</th></tr></thead>
+      <tbody>${list.map(t=>`<tr>
+        <td class="mono" style="font-size:11.5px;white-space:nowrap">${esc(t.t)}</td>
+        <td><div class="t-main">${esc(t.who)}</div><div class="t-sub">${esc(ROLE_DEF[t.role]?ROLE_DEF[t.role].t:t.role)}</div></td>
+        <td><span class="pill ${/权限|角色|账号|分组|模块/.test(t.act)?"p-warn":"p-neut"}">${esc(t.act)}</span></td>
+        <td style="font-size:12px">${esc(t.tgt)}</td>
+        <td class="t-sub" style="max-width:150px">${esc(t.before)}</td>
+        <td style="font-size:12px;font-weight:500;max-width:180px">${esc(t.after)}</td>
+        <td class="t-sub">${t.ss==="—"?"—":esc(site(t.ss)?site(t.ss).hosp:t.ss)}</td>
+        <td class="t-sub" style="max-width:220px;line-height:1.6">${t.why?esc(t.why):`<span style="color:var(--ink-3)">—</span>`}</td>
+      </tr>`).join("")||`<tr><td colspan="8"><div class="empty">没有匹配的记录</div></td></tr>`}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">轨迹是<b>只追加</b>的：不能改、不能删，只能往上叠。
+架构文档 §4 里的 <code>audit_log</code> 表就是这个东西 —— 那里有 DDL，这里是它长出来的样子。
+
+每条必须回答四件事：<b>谁</b>（who + 当时的角色）、<b>什么时候</b>、<b>改了什么</b>（对象 + 改前 → 改后）、<b>为什么</b>。
+第四件最容易被省掉，也最要命：核查员看到"访视目标日从 08-18 改成 08-25"，
+真正要问的从来不是"改了吗"，而是<b>"为什么改"</b> —— 是受试者确实改期，还是为了让超窗看起来没发生。
+
+这一页此前<b>完全不存在</b>：原型里改任何东西都不留痕。
+在 GCP 语境下这不是缺个功能，是整个系统不成立 —— 所以它该进 M1，不是往后排。</div>`;
+
+  hbars($("#c-tr"), byAct.map(x=>({label:x.n, v:x.v,
+    color:/权限|角色|账号|分组|模块/.test(x.n)?"var(--warn)":"var(--ink-2)"})),
+    {fmt:v=>String(v), unit:" 次"});
+
+  box.addEventListener("click",e=>{
+    const t = e.target.closest("[data-tf]");
+    if(t){ state.trailF = t.dataset.tf; render(); }
+  });
+  const qi = $("#tq");
+  qi?.addEventListener("input",e=>{ state.trailQ = e.target.value;
+    clearTimeout(window.__tq); window.__tq = setTimeout(()=>{ render(); $("#tq")?.focus(); },260); });
+};
+</script>

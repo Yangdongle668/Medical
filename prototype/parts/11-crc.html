@@ -4,7 +4,7 @@
    CRC 端 —— 现场协调员。手机为主、时间碎片、最怕访视超窗。
    ════════════════════════════════════════════════════════════════════ */
 
-const mySubj = ()=>SUBJ.filter(s=>s.crc===PERSONA().n && s.st!=="筛败" && s.st!=="已出组")
+const mySubj = ()=>SUBJ.filter(s=>s.crc===PERSONA().n && !["筛败","已出组","已脱落"].includes(s.st))
   .sort((a,b)=>winState(a).rem-winState(b).rem);
 const CONTACT = {"已确认":{k:"good"},"待联系":{k:"warn"},"已改期":{k:"warn"},"失联":{k:"crit"}};
 
@@ -58,7 +58,9 @@ function subjCard(s,{open=false}={}){
         <div class="row" style="margin-top:9px">
           <button class="btn btn-p" data-sdone="${s.id}">完成访视并记工时</button>
           ${s.edc!=="已录入"?`<button class="btn" data-edc="${s.id}">标记 EDC 已录入</button>`:""}
-          ${scr?`<button class="btn" data-sfail="${s.id}">登记筛败</button>`:""}
+          ${scr?`<button class="btn" data-sfail="${s.id}">登记筛败</button>`
+               :`<button class="btn" data-sdrop="${s.id}">登记退出 / 脱落</button>`}
+          <button class="btn" data-sae="${s.id}">上报 SAE</button>
           <button class="btn" data-goto4="${s.ss}">中心详情</button>
         </div>
       </div>
@@ -200,6 +202,7 @@ function wireSubj(box){
     const g=e.target.closest("[data-goto4]"); if(g){ openSite(g.dataset.goto4); return; }
     const ed=e.target.closest("[data-edc]");
     if(ed){ const s=SUBJ.find(x=>x.id===ed.dataset.edc); const lag=edcLag(s);
+      logAct("标记 EDC 已录入", s.id, "待录入", `已录入（滞后 ${lag} 天）`, {ss:s.ss});
       s.edc="已录入";
       toast(lag>5? `${s.id} EDC 已录入，滞后 ${lag} 天 —— 超出 5 个工作日及时线` : `${s.id} EDC 已录入（滞后 ${lag} 天）`,
         lag>5?"warn":""); render(); return; }
@@ -207,11 +210,15 @@ function wireSubj(box){
     if(ct){ const s=SUBJ.find(x=>x.id===ct.dataset.ct);
       const order=["待联系","已确认","已改期","失联"];
       s.contact=order[(order.indexOf(s.contact)+1)%order.length];
-      if(s.contact==="已改期"){ s.due=new Date(new Date(s.due).getTime()+7*864e5).toISOString().slice(0,10);
+      if(s.contact==="已改期"){ const was=s.due;
+        s.due=new Date(new Date(s.due).getTime()+7*864e5).toISOString().slice(0,10);
+        logAct("修改访视目标日", s.id, was, s.due, {ss:s.ss, why:"受试者改期"});
         toast(`${s.id} 已改期，目标日顺延至 ${s.due}，窗口已重算`,"warn"); }
       else toast(`${s.id} 联系状态：${s.contact}`);
       render(); return; }
     const sf=e.target.closest("[data-sfail]"); if(sf){ failModal(sf.dataset.sfail); return; }
+    const dp=e.target.closest("[data-sdrop]"); if(dp){ dropModal(dp.dataset.sdrop); return; }
+    const sa=e.target.closest("[data-sae]");   if(sa){ saeModal(sa.dataset.sae); return; }
     const dn=e.target.closest("[data-sdone]"); if(dn){ doneModal(dn.dataset.sdone); return; }
   });
   box.addEventListener("change",e=>{
@@ -316,9 +323,10 @@ function failModal(id){
 
 /* ── 数据质疑（CRC 回复 / CRA 跟进，同一页两种视角） ── */
 VIEWS.query = box=>{
-  const p=PERSONA(), isCRC=p.k==="crc";
+  const p=PERSONA(), isCRC=p.k==="crc", ids=scopeIds();
+  /* 非 CRC 视角按行权限取范围，而不是按 STAFF 表 —— DM / QA 不在派工表里 */
   const all = isCRC ? QUERIES.filter(q=>q.owner===p.n)
-                    : QUERIES.filter(q=>q.by.startsWith(p.n)||staff(p.n).sites.includes(q.ss));
+                    : QUERIES.filter(q=>q.by.startsWith(p.n)||ids.has(q.ss));
   const open=all.filter(q=>q.st==="待中心回复"), waiting=all.filter(q=>q.st!=="待中心回复");
   const shown = state.qTab==="open"? open : waiting;
   const avg = all.length? sum(all,q=>q.age)/all.length : 0;

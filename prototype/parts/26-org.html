@@ -1,0 +1,346 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   组织与权限 —— 老板端
+   增减人员、分组、以及三维权限（行范围 × 字段 × 动作）的实际编辑。
+   权限改完立即生效：导航、数据范围、字段遮罩同时变。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.org = box=>{
+  if(!canAct("manage")){ box.innerHTML = `<div class="empty">当前身份无权管理组织与权限</div>`; return; }
+  const tab = state.orgTab || "user";
+  const active = USERS.filter(u=>u.st==="在职"), off = USERS.filter(u=>u.st!=="在职");
+  const ext = USERS.filter(u=>u.ext);
+  const unassigned = active.filter(u=>!u.ext && !groupOf(u.n));
+
+  const head = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["在职账号",active.length,"个","var(--ink)",`其中外部 ${ext.filter(u=>u.st==="在职").length} 个`],
+       ["分组",GROUPS.length,"个","var(--ink)",`未分组 ${unassigned.length} 人`],
+       ["角色",Object.keys(ROLE_DEF).length,"种","var(--ink)",`外部角色 ${Object.values(ROLE_DEF).filter(r=>r.ext).length} 种`],
+       ["已停用",off.length,"个",off.length?"var(--warn)":"var(--ink)","保留账号但不可登录"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="seg" id="ot" style="margin-bottom:14px">
+    <button data-ot="user" aria-pressed="${tab==="user"}">人员账号 ${USERS.length}</button>
+    <button data-ot="group" aria-pressed="${tab==="group"}">分组 ${GROUPS.length}</button>
+    <button data-ot="perm" aria-pressed="${tab==="perm"}">角色权限 ${Object.keys(ROLE_DEF).length}</button>
+  </div>`;
+
+  /* ── 人员账号 ── */
+  const userTab = ()=>`
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>新增人员</h3><span class="sp"></span>
+      <span class="sub">新账号立即可登录，权限由角色决定</span></div>
+    <div class="card-b">
+      <div class="grid g4" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="ou-n">姓名</label></div>
+          <input class="sel" id="ou-n" style="width:100%" placeholder="例：周敏"></div>
+        <div class="field"><div class="slider-h"><label for="ou-u">登录账号</label></div>
+          <input class="sel" id="ou-u" style="width:100%" placeholder="例：zhoumin"></div>
+        <div class="field"><div class="slider-h"><label for="ou-r">角色</label></div>
+          <select class="sel" id="ou-r" style="width:100%">${Object.entries(ROLE_DEF).map(([k,r])=>
+            `<option value="${k}">${esc(r.t)}</option>`).join("")}</select></div>
+        <div class="field"><div class="slider-h"><label for="ou-g">分组</label></div>
+          <select class="sel" id="ou-g" style="width:100%"><option value="">不分组</option>
+            ${GROUPS.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join("")}</select></div>
+      </div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-p" id="ou-go">创建账号</button></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>账号台账</h3><span class="sp"></span>
+      <span class="sub">停用不删除 —— 审计轨迹必须能追溯到人</span></div>
+    <div class="tw"><table style="min-width:1000px">
+      <thead><tr><th>姓名</th><th>登录账号</th><th>角色</th><th>分组</th>
+        <th>行范围</th><th class="ta-r">带中心</th><th>入职</th><th>最近登录</th><th>状态</th><th></th></tr></thead>
+      <tbody>${USERS.map((u,k)=>{
+        const r = ROLE_DEF[u.role], g = groupOf(u.n), s = staff(u.n);
+        return `<tr style="${u.st!=="在职"?"opacity:.5":""}">
+          <td><div class="t-main">${esc(u.n)}${u.ext?` <span class="pill p-warn">外部</span>`:""}</div>
+            ${u.offWhy?`<div class="t-sub">${esc(u.offWhy)}</div>`:""}</td>
+          <td class="mono" style="font-size:11.5px">${esc(u.u)}</td>
+          <td><span class="pill p-neut">${esc(r?r.t:u.role)}</span></td>
+          <td class="t-sub">${g?esc(g.name):(u.ext?esc(u.hosp||"外部机构"):"—")}</td>
+          <td class="t-sub">${esc(r?ROW_RULE[r.rows]:"—")}</td>
+          <td class="tnum">${s?s.sites.length:"—"}</td>
+          <td class="mono" style="font-size:11px">${esc(u.joined)}</td>
+          <td class="mono" style="font-size:11px;color:var(--ink-3)">${esc(u.last)}</td>
+          <td><span class="pill ${u.st==="在职"?"p-good":"p-neut"}">${esc(u.st)}</span></td>
+          <td class="ta-r"><div class="row" style="gap:4px;justify-content:flex-end">
+            <button class="btn" data-urole="${k}">改角色</button>
+            ${u.u===SESSION.u?`<span class="t-sub">当前登录</span>`
+              :u.st==="在职"?`<button class="btn" data-uoff="${k}">停用</button>`
+              :`<button class="btn" data-uon="${k}">启用</button>`}</div></td>
+        </tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>`;
+
+  /* ── 分组 ── */
+  const groupTab = ()=>`
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>新建分组</h3><span class="sp"></span>
+      <span class="sub">分组决定 PM 的行范围：只看得到本组承接的项目</span></div>
+    <div class="card-b">
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="og-n">组名</label></div>
+          <input class="sel" id="og-n" style="width:100%" placeholder="例：华中组"></div>
+        <div class="field"><div class="slider-h"><label for="og-l">组长</label></div>
+          <select class="sel" id="og-l" style="width:100%">${USERS.filter(u=>u.st==="在职"&&!u.ext).map(u=>
+            `<option value="${esc(u.n)}">${esc(u.n)}（${esc(ROLE_DEF[u.role].t)}）</option>`).join("")}</select></div>
+      </div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-p" id="og-go">创建</button></div>
+    </div>
+  </div>
+  ${GROUPS.map((g,gi)=>{
+    const ms = g.members.map(staff).filter(Boolean);
+    const load = ms.length? sum(ms,m=>m.util)/ms.length : 0;
+    const sitesN = new Set(ms.flatMap(m=>m.sites)).size;
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="card-h"><h3>${esc(g.name)}</h3>
+        <span class="sub">组长 ${esc(g.lead)} · ${g.members.length} 人 · ${sitesN} 个中心</span>
+        <span class="sp"></span>
+        <span class="pill ${load>88?"p-crit":load>80?"p-warn":"p-neut"}">平均利用率 ${Math.round(load)}%</span></div>
+      <div class="card-b">
+        <div class="note" style="margin-bottom:9px">承接项目：${g.studies.length
+          ? g.studies.map(s=>esc(S[s].short)).join("、") : "—（职能组不承接项目）"}</div>
+        <div class="row" style="gap:5px;flex-wrap:wrap;margin-bottom:10px">
+          ${g.members.map(n=>{const s=staff(n), u=userOf(n);
+            return `<span class="ct ct-${s&&utilState(s.util).k==="good"?"good":"warn"}" style="cursor:default">
+              ${esc(n)}${s?` · ${s.role} ${s.util}%`:""}${u&&u.st!=="在职"?" · 已停用":""}</span>`;}).join("")
+            || `<span class="t-sub">暂无成员</span>`}
+        </div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <select class="sel" data-gadd="${gi}">
+            <option value="">— 添加成员 —</option>
+            ${USERS.filter(u=>u.st==="在职"&&!u.ext&&!g.members.includes(u.n)&&u.n!==g.lead).map(u=>
+              `<option value="${esc(u.n)}">${esc(u.n)}（${esc(ROLE_DEF[u.role].t)}${groupOf(u.n)?` · 现属 ${esc(groupOf(u.n).name)}`:""}）</option>`).join("")}
+          </select>
+          <select class="sel" data-gdel="${gi}">
+            <option value="">— 移出成员 —</option>
+            ${g.members.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}
+          </select>
+          <select class="sel" data-gstudy="${gi}">
+            <option value="">— 增减承接项目 —</option>
+            ${STUDIES.map(s=>`<option value="${esc(s.id)}">${g.studies.includes(s.id)?"移除":"加入"}：${esc(s.short)}</option>`).join("")}
+          </select>
+        </div>
+      </div></div>`;}).join("")}
+  <div class="formula">分组不是通讯录，是<b>权限的行维度</b>。
+PM 的行范围规则是 <code>team</code>：他看得到的中心 = 本组承接项目下的全部中心。
+把一个项目从 A 组划到 B 组，A 组组长立刻看不到它 —— 这就是权限，不是显示偏好。
+
+${unassigned.length?`<b style="color:var(--warn)">当前有 ${unassigned.length} 人未分组</b>：${unassigned.map(u=>esc(u.n)).join("、")}。
+未分组人员的 PM 看不到他们的工时与负载。`:"当前所有内部人员均已分组。"}</div>`;
+
+  /* ── 角色权限：三维矩阵 ── */
+  const permTab = ()=>`
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>行范围 · 字段 · 动作</h3><span class="sp"></span>
+      <span class="sub">改完立即生效 —— 导航、数据范围、字段遮罩同时变</span></div>
+    <div class="tw"><table style="min-width:1080px">
+      <thead><tr><th>角色</th><th>行范围（看得到哪些中心）</th>
+        ${Object.entries(FIELDS).map(([k,v])=>`<th class="ta-c" style="text-align:center">${esc(v)}</th>`).join("")}
+        <th class="ta-r">可访问模块</th></tr></thead>
+      <tbody>${Object.entries(ROLE_DEF).map(([k,r])=>`<tr>
+        <td><div class="t-main">${esc(r.t)}</div>
+          <div class="t-sub">${esc(k)}${r.ext?" · 外部":""}</div></td>
+        <td><select class="sel" data-prow="${k}" style="min-width:150px">
+          ${Object.entries(ROW_RULE).map(([rk,rv])=>
+            `<option value="${rk}" ${r.rows===rk?"selected":""}>${esc(rv)}</option>`).join("")}</select></td>
+        ${Object.keys(FIELDS).map(f=>`<td style="text-align:center">
+          <input type="checkbox" data-pf="${k}:${f}" ${r.fields[f]?"checked":""}
+            ${r.ext&&f!=="subj"?'title="外部角色默认拒绝"':""}></td>`).join("")}
+        <td class="ta-r"><button class="btn" data-pmod="${k}">${r.mods.length} 个模块</button></td>
+      </tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>动作权限</h3><span class="sub">能看到不等于能操作</span></div>
+    <div class="tw"><table style="min-width:1000px">
+      <thead><tr><th>角色</th>${Object.entries(ACTS).map(([k,v])=>
+        `<th style="text-align:center">${esc(v)}</th>`).join("")}</tr></thead>
+      <tbody>${Object.entries(ROLE_DEF).map(([k,r])=>`<tr>
+        <td><div class="t-main">${esc(r.t)}</div></td>
+        ${Object.keys(ACTS).map(a=>`<td style="text-align:center">
+          <input type="checkbox" data-pa="${k}:${a}" ${r.acts[a]?"checked":""}></td>`).join("")}
+      </tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">权限是三件事同时成立，缺一个都会出事：
+
+<b>行</b>：你能看到哪些中心。CRA 只看被指派的、PM 看本组的、机构办只看本院的。
+<b>列</b>：同一行里哪些字段对你可见。CRA 看得到中心，但看不到这个中心的成本与毛利。
+<b>动作</b>：你能对它做什么。QA 看得到全部质量事件，但只有 QA 能关闭；CRC 看得到，只能整改。
+
+<b>外部角色默认拒绝</b>：机构办和研究者的字段权限初始全关，靠白名单一项项加回来 ——
+而不是"先给全部、再关掉敏感的"。这两种做法在正常情况下结果一样，
+在<b>新增一个字段</b>的时候结果完全不同：前者新字段默认不可见，后者新字段默认泄漏。
+
+把「报价与合同金额」勾给 CRA 试试 —— 客户台账那一页的金额列会立刻从 — 变成数字。</div>`;
+
+  box.innerHTML = head + (tab==="user"? userTab() : tab==="group"? groupTab() : permTab());
+
+  /* ── 交互 ── */
+  box.addEventListener("click",e=>{
+    const t = e.target.closest("[data-ot]");
+    if(t){ state.orgTab = t.dataset.ot; render(); return; }
+
+    const off = e.target.closest("[data-uoff]");
+    if(off){ const u = USERS[+off.dataset.uoff];
+      const s = staff(u.n);
+      if(s && s.sites.length){
+        toast(`${u.n} 还带着 ${s.sites.length} 个中心，请先发起交接再停用`,"crit");
+        return; }
+      u.st = "已停用"; u.off = TODAY;
+      logAct("停用账号", `${u.u}（${u.n}）`, "在职", "已停用");
+      toast(`${u.n} 的账号已停用，历史记录与审计轨迹保留`,"warn"); render(); return; }
+
+    const on = e.target.closest("[data-uon]");
+    if(on){ const u = USERS[+on.dataset.uon]; u.st = "在职";
+      logAct("启用账号", `${u.u}（${u.n}）`, "已停用", "在职");
+      toast(`${u.n} 的账号已启用`); render(); return; }
+
+    const ur = e.target.closest("[data-urole]");
+    if(ur){ roleModal(USERS[+ur.dataset.urole]); return; }
+
+    const pm = e.target.closest("[data-pmod]");
+    if(pm){ modModal(pm.dataset.pmod); return; }
+  });
+
+  box.addEventListener("change",e=>{
+    const pr = e.target.closest("[data-prow]");
+    if(pr){ const r = ROLE_DEF[pr.dataset.prow], was = r.rows;
+      r.rows = pr.value;
+      logAct("调整角色行范围", `${pr.dataset.prow}.rows`, ROW_RULE[was], ROW_RULE[r.rows]);
+      toast(`${r.t} 的行范围已改为「${ROW_RULE[r.rows]}」`,"warn"); render(); return; }
+
+    const pf = e.target.closest("[data-pf]");
+    if(pf){ const [k,f] = pf.dataset.pf.split(":"), r = ROLE_DEF[k];
+      r.fields[f] = pf.checked ? 1 : 0;
+      logAct("调整字段权限", `${k}.fields.${f}`, pf.checked?"不可见":"可见", pf.checked?"可见":"不可见");
+      toast(`${r.t}：「${FIELDS[f]}」${pf.checked?"已开放":"已关闭"}`,"warn"); render(); return; }
+
+    const pa = e.target.closest("[data-pa]");
+    if(pa){ const [k,a] = pa.dataset.pa.split(":"), r = ROLE_DEF[k];
+      r.acts[a] = pa.checked ? 1 : 0;
+      logAct("调整动作权限", `${k}.acts.${a}`, pa.checked?"不可用":"可用", pa.checked?"可用":"不可用");
+      toast(`${r.t}：「${ACTS[a]}」${pa.checked?"已授予":"已收回"}`,"warn"); render(); return; }
+
+    const ga = e.target.closest("[data-gadd]");
+    if(ga && ga.value){ const g = GROUPS[+ga.dataset.gadd], n = ga.value;
+      GROUPS.forEach(x=>{ x.members = x.members.filter(m=>m!==n); });
+      g.members.push(n);
+      logAct("调整分组", n, "—", g.name);
+      toast(`${n} 已加入 ${g.name}`); render(); return; }
+
+    const gd = e.target.closest("[data-gdel]");
+    if(gd && gd.value){ const g = GROUPS[+gd.dataset.gdel], n = gd.value;
+      g.members = g.members.filter(m=>m!==n);
+      logAct("移出分组", n, g.name, "未分组");
+      toast(`${n} 已移出 ${g.name}`,"warn"); render(); return; }
+
+    const gs = e.target.closest("[data-gstudy]");
+    if(gs && gs.value){ const g = GROUPS[+gs.dataset.gstudy], sid = gs.value;
+      if(g.studies.includes(sid)){ g.studies = g.studies.filter(x=>x!==sid);
+        logAct("分组移除项目", g.name, S[sid].short, "—");
+        toast(`${S[sid].short} 已移出 ${g.name} —— 该组 PM 立刻看不到它了`,"warn"); }
+      else { GROUPS.forEach(x=>{ if(x!==g) x.studies = x.studies.filter(y=>y!==sid); });
+        g.studies.push(sid);
+        logAct("分组承接项目", g.name, "—", S[sid].short);
+        toast(`${S[sid].short} 已划归 ${g.name}`); }
+      if(g.lead) TEAM.studies = GROUPS.find(x=>x.lead===TEAM.pm)?.studies || TEAM.studies;
+      render(); return; }
+  });
+
+  $("#ou-go")?.addEventListener("click",()=>{
+    const n = $("#ou-n").value.trim(), u = $("#ou-u").value.trim().toLowerCase();
+    const role = $("#ou-r").value, gid = $("#ou-g").value;
+    if(n.length<2){ toast("请填写姓名","crit"); return; }
+    if(!/^[a-z][a-z0-9]{2,}$/.test(u)){ toast("登录账号需为 3 位以上小写字母或数字，且以字母开头","crit"); return; }
+    if(USERS.some(x=>x.u===u)){ toast(`账号 ${u} 已存在`,"crit"); return; }
+    if(USERS.some(x=>x.n===n)){ toast(`已存在名为 ${n} 的人员`,"crit"); return; }
+    USERS.push({u, n, role, st:"在职", joined:TODAY, last:"—"});
+    if(!["boss","inst","pi"].includes(role))
+      STAFF.push({n, role:role.toUpperCase()==="DM"?"DM":ROLE_DEF[role].t.split(" ").pop().replace(/[（(].*/,"")||role.toUpperCase(),
+        lvl:"初级", city:"—", gcp:"2028-12-31", util:0, sites:[]});
+    if(gid){ const g = GROUPS.find(x=>x.id===gid); if(g) g.members.push(n); }
+    logAct("新增账号", `${u}（${n}）`, "—", `${ROLE_DEF[role].t}${gid?` · ${GROUPS.find(x=>x.id===gid).name}`:""}`);
+    toast(`账号 ${u} 已创建，${n} 现在可以用密码 demo 登录`);
+    render();
+  });
+
+  $("#og-go")?.addEventListener("click",()=>{
+    const n = $("#og-n").value.trim(), l = $("#og-l").value;
+    if(n.length<2){ toast("请填写组名","crit"); return; }
+    if(GROUPS.some(g=>g.name===n)){ toast("该组名已存在","crit"); return; }
+    const id = "G-"+String(GROUPS.length+1).padStart(2,"0");
+    GROUPS.push({id, name:n, lead:l, members:[], studies:[]});
+    logAct("新建分组", n, "—", `组长 ${l}`);
+    toast(`分组「${n}」已创建，组长 ${l}`); render();
+  });
+};
+
+/* 改角色 */
+function roleModal(u){
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(u.u)}</div>
+      <h3 style="font-size:15px">${esc(u.n)} · 变更角色</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div class="field"><div class="slider-h"><label for="rm-r">角色</label></div>
+        <select class="sel" id="rm-r" style="width:100%">${Object.entries(ROLE_DEF).map(([k,r])=>
+          `<option value="${k}" ${u.role===k?"selected":""}>${esc(r.t)}</option>`).join("")}</select></div>
+      <div id="rm-p" style="border:1px solid var(--line);background:var(--surface-2);padding:10px 12px;border-radius:8px;font-size:12px;color:var(--ink-2);line-height:1.8;margin-bottom:12px"></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="rm-go">确认变更</button></div>
+    </div>`);
+  const prev = ()=>{ const r = ROLE_DEF[$("#rm-r").value];
+    $("#rm-p").innerHTML = `<b>行范围</b>：${esc(ROW_RULE[r.rows])}<br>
+      <b>可见字段</b>：${Object.keys(FIELDS).filter(f=>r.fields[f]).map(f=>esc(FIELDS[f])).join("、")||"<span style='color:var(--crit)'>全部遮蔽</span>"}<br>
+      <b>可用动作</b>：${Object.keys(ACTS).filter(a=>r.acts[a]).map(a=>esc(ACTS[a])).join("、")||"仅查看"}<br>
+      <b>可访问模块</b>：${r.mods.length} 个`; };
+  $("#rm-r").addEventListener("change",prev); prev();
+  $("#rm-go").addEventListener("click",()=>{
+    const to = $("#rm-r").value, was = u.role;
+    if(to===was){ closeLayer(); return; }
+    u.role = to;
+    logAct("变更角色", `${u.u}（${u.n}）`, ROLE_DEF[was].t, ROLE_DEF[to].t);
+    closeLayer();
+    toast(`${u.n} 的角色已由「${ROLE_DEF[was].t}」变更为「${ROLE_DEF[to].t}」`,"warn");
+    setTimeout(render,220);
+  });
+}
+/* 改可访问模块 */
+function modModal(k){
+  const r = ROLE_DEF[k];
+  const all = Object.keys(N);
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(k)}</div>
+      <h3 style="font-size:15px">${esc(r.t)} · 可访问模块</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:14px 18px 18px;max-height:60vh;overflow:auto">
+      ${all.map(v=>`<label class="cbx ${r.mods.includes(v)?"done":""}" style="border-bottom:1px solid var(--line)">
+        <input type="checkbox" data-mm="${v}" ${r.mods.includes(v)?"checked":""}>
+        <span>${esc(typeof N[v].t==="function"?N[v].t():N[v].t)}
+          <span class="t-sub" style="margin-left:6px">${esc(v)}</span></span></label>`).join("")}
+    </div>
+    <div style="padding:12px 18px;border-top:1px solid var(--line)">
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="mm-go">保存</button></div>
+    </div>`);
+  $("#mm-go").addEventListener("click",()=>{
+    const was = r.mods.length;
+    r.mods = [...$("#modal").querySelectorAll("[data-mm]")].filter(x=>x.checked).map(x=>x.dataset.mm);
+    logAct("调整可访问模块", `${k}.mods`, `${was} 个`, `${r.mods.length} 个`);
+    closeLayer();
+    toast(`${r.t} 的可访问模块已由 ${was} 个改为 ${r.mods.length} 个`,"warn");
+    setTimeout(render,220);
+  });
+}
+</script>

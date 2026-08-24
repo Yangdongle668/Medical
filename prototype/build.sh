@@ -9,6 +9,9 @@ cat parts/01-head.html \
     parts/02c-intake.html \
     parts/02d-clinical.html \
     parts/02e-ops.html \
+    parts/02f-org.html \
+    parts/02g-life.html \
+    parts/02h-biz.html \
     parts/03-core.html \
     parts/04-nav.html \
     parts/05-dash.html \
@@ -27,5 +30,14 @@ cat parts/01-head.html \
     parts/18-pi.html \
     parts/19-qaudit.html \
     parts/20-crcops.html \
+    parts/21-crclife.html \
+    parts/22-lifeops.html \
+    parts/23-cash.html \
+    parts/24-bizdev.html \
+    parts/25-talent.html \
+    parts/26-org.html \
+    parts/27-trail.html \
+    parts/28-dm.html \
+    parts/29-auth.html \
     parts/99-boot.html > index.html
 echo "index.html 已重新生成（$(wc -l < index.html) 行）"

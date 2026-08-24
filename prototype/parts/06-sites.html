@@ -83,6 +83,9 @@ function openSite(id){
   const ms =MILES.filter(x=>x.ss===id);
   const vs =VISITS.filter(x=>x.ss===id);
   const rs = rateState(m.rate);
+  const rsC = rs.k==="good" ? "var(--ink)" : rs.c;   /* 健康即常态，常态不着色 */
+  const r = retentionM(ss), su = startupM(id);
+  const gate = next==="中心关闭" ? closeGate(ss) : next==="SIV启动" ? sivGate(ss) : [];
   openLayer($("#drawer"),`
     <div class="drawer-h">
       <div style="flex:1">
@@ -102,6 +105,10 @@ function openSite(id){
         ${next?`<button class="btn btn-p" id="adv">推进到「${esc(next)}」</button>`
               :`<span class="pill p-good">流程已完成</span>`}
       </div>
+      ${gate.length?`<div style="border-left:2px solid var(--crit);background:var(--surface-2);padding:9px 11px;font-size:12.5px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        <b style="color:var(--crit)">推进到「${esc(next)}」还差 ${gate.length} 项</b>：${gate.map(g=>esc(g.t)).join("；")}</div>`:""}
+      ${su&&su.blocks.length?`<div style="border-left:2px solid var(--warn);background:var(--surface-2);padding:9px 11px;font-size:12.5px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        <b style="color:var(--warn)">启动阻塞 ${su.blocks.length} 项</b>${su.plan?` · 计划 SIV ${esc(su.plan)}（剩 ${su.dToSiv} 天）`:""}</div>`:""}
       <div class="grid g2" style="gap:0;margin-bottom:26px">
         <div class="stat">
           <div class="kpi-l">入组达成</div>
@@ -112,6 +119,7 @@ function openSite(id){
           <div class="kpi-l">单中心毛利</div>
           <div class="num" style="font-size:20px;margin-top:3px;color:${m.gp<0?"var(--crit)":"var(--ink)"}">${m.gp>0?"+":""}${n1(m.gp)} 万</div>
           <div class="note">毛利率 ${m.gm===null?"—":pct(m.gm)}｜每例成本 ${m.cpe?n1(m.cpe)+" 万":"—"}</div>
+          <div class="note">保留率 ${r.rate===null?"—":pct(r.rate)}｜脱落 ${r.n} 例，收入调减 ${n1(r.lost)} 万</div>
         </div>
       </div>
       <div class="section-t">关键日期</div>
@@ -149,11 +157,20 @@ function openSite(id){
         <span class="pill p-neut">${esc(v.st)} · ${v.days} 天</span></div>`).join("")}</div>`:""}
     </div>`);
   $("#adv")?.addEventListener("click",()=>{
+    if(!canAct("advance")){ toast("当前角色无「推进中心阶段」动作权限","crit"); return; }
+    /* 闸门：推进不是改一个字符串，是断言一组前置条件已经成立 */
+    const gate = next==="SIV启动" ? sivGate(ss) : next==="中心关闭" ? closeGate(ss) : [];
+    if(gate.length){ gateModal(ss, next, gate); return; }
+    const was = ss.st;
     ss.st=next;
+    logAct("推进中心阶段", ss.hosp, was, next, {ss:ss.id});
     if(next==="入组中"&&ss.fpi==="—"){ ss.fpi=TODAY; toast(`${ss.hosp} 首例入组（FPI）日期已记录：${TODAY}`); }
     if(next==="SIV启动"&&ss.siv==="—"){ ss.siv=TODAY;
       MILES.unshift({id:"M-0"+(50+MILES.length),ss:ss.id,name:"中心启动 SIV",amt:14.0,hit:TODAY,inv:"待开票",due:"—",paid:false,age:0});
       toast(`SIV 里程碑已达成，14.0 万自动进入待开票队列`); }
+    if(next==="中心关闭")
+      MILES.unshift({id:"M-0"+(50+MILES.length),ss:ss.id,name:"中心结题",
+        amt:+(siteContract(ss)*0.25).toFixed(1),hit:TODAY,inv:"待开票",due:"—",paid:false,age:0});
     toast(`${ss.hosp} 状态推进至「${next}」`);
     closeLayer(); setTimeout(render,220);
   });
@@ -230,4 +247,38 @@ VIEWS.enr = box=>{
     const c=e2.target.closest("[data-ss2]"); if(c) openSite(c.dataset.ss2);
   });
 };
+</script>
+<script>
+"use strict";
+/* 闸门拦截：把"为什么不能推进"说清楚，并给出去处 —— 而不是一个禁用的按钮 */
+function gateModal(ss, next, gate){
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(ss.hosp)}</div>
+      <h3 style="font-size:15px">不能推进到「${esc(next)}」</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div style="border-left:2px solid var(--crit);background:var(--surface-2);padding:10px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.8;margin-bottom:14px">
+        <b style="color:var(--crit)">还有 ${gate.length} 项前置条件未满足</b><br>
+        ${next==="中心关闭"
+          ? "中心关闭意味着这个中心的一切都已了结、可归档、可接受核查。带着未闭环的事项关闭，等于把问题永久留在归档里。"
+          : "启动阻塞项是「没有它就不能合法开展受试者相关工作」的那些。带着缺口启动，后面每个环节都带着这个缺口往下走。"}
+      </div>
+      <div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:14px">
+        ${gate.map(g=>`<div class="row" style="justify-content:space-between;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line)">
+          <span style="font-size:12.5px;color:var(--ink-2)">${esc(g.t)}</span>
+          ${g.v&&canMod(g.v)?`<button class="btn" data-gnav="${esc(g.v)}">去处理</button>`:""}
+        </div>`).join("")}
+      </div>
+      <div class="note" style="line-height:1.7;margin-bottom:12px">
+        此前这个按钮的全部逻辑是一句 <code>ss.st = next</code> —— 没有任何校验。
+        中心状态机的每一次推进都对应真实世界的一组事实，系统的职责是<b>断言这些事实成立</b>，而不是记录一个人点过按钮。
+      </div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-p" data-close>知道了</button></div>
+    </div>`);
+  $("#modal").addEventListener("click",e=>{
+    const g = e.target.closest("[data-gnav]"); if(!g) return;
+    closeLayer(); go(g.dataset.gnav);
+  }, {once:true});
+}
 </script>

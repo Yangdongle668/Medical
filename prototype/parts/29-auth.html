@@ -1,0 +1,73 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   登录与会话
+   演示原型：密码统一 demo，不发起任何网络请求，不存任何真实凭据。
+   真实系统的对应设计见架构文档 §4（三维权限、服务端强制、RLS）与 §11。
+   ════════════════════════════════════════════════════════════════════ */
+const DEMO_USERS = ["lingyuan","hanxue","cendi","linmin","wutong","liaomeng","miaoqing","weilan","zhanghm","chenguod"];
+const DEMO_PW = "demo";
+
+function showLogin(){
+  const box = $("#login");
+  $("#li-list").innerHTML = DEMO_USERS.map(u=>{
+    const x = USERS.find(y=>y.u===u); if(!x) return "";
+    const r = ROLE_DEF[x.role];
+    const g = groupOf(x.n);
+    return `<button class="login-u" data-li="${esc(u)}">
+      <span class="avatar" style="width:22px;height:22px;font-size:10px">${esc(x.n.slice(0,1))}</span>
+      <b>${esc(x.n)}</b>
+      <span class="lu-r">${esc(r.t)}${g?` · ${esc(g.name)}`:x.ext?` · ${esc(x.hosp||"外部")}`:""}</span>
+      <span class="lu-u">${esc(u)}</span></button>`;
+  }).join("");
+  $("#li-err").hidden = true;
+  $("#li-p").value = "";
+  box.hidden = false;
+  setTimeout(()=>$("#li-u")?.focus(), 30);
+}
+
+function loginErr(msg){
+  const e = $("#li-err"); e.textContent = msg; e.hidden = false;
+}
+
+function doLogin(u, pw){
+  const x = USERS.find(y=>y.u === String(u).trim().toLowerCase());
+  if(!x){ loginErr("账号不存在。演示账号见下方列表。"); return false; }
+  if(pw !== DEMO_PW){ loginErr("密码不正确。本演示原型的密码统一为 demo。"); return false; }
+  if(x.st !== "在职"){
+    loginErr(`账号「${x.n}」已停用${x.offWhy?`（${x.offWhy}）`:""}，不可登录。停用不删除 —— 审计轨迹必须能追溯到人。`);
+    return false; }
+  SESSION.u = x.u; SESSION.at = TODAY;
+  x.last = `${TODAY} ${new Date().toTimeString().slice(0,5)}`;
+  state.persona = x.role;
+  state.study = "all";
+  state.view = HOME[x.role] || ROLE_DEF[x.role].mods[0];
+  state.stFilter.clear(); state.sevFilter.clear();
+  state.q = ""; state.subjSel = null; state.qTab = "open";
+  state.orgTab = "user"; state.trailF = "all"; state.trailQ = "";
+  if(staff(x.n)) state.tsWho = x.n;
+  $("#login").hidden = true;
+  logAct("登录", `${x.u}（${x.n}）`, "—", ROLE_DEF[x.role].t);
+  render();
+  const r = ROLE_DEF[x.role];
+  toast(`${x.n} · ${r.t}｜数据范围：${PERSONA().scope}`);
+  return true;
+}
+
+function logout(){
+  const m = ME();
+  if(m) logAct("退出登录", `${m.u}（${m.n}）`, "—", "—");
+  SESSION.u = null; SESSION.at = null;
+  showLogin();
+}
+
+$("#li-go").addEventListener("click",()=>doLogin($("#li-u").value, $("#li-p").value));
+$("#login").addEventListener("keydown",e=>{
+  if(e.key === "Enter"){ e.preventDefault(); doLogin($("#li-u").value, $("#li-p").value); }
+});
+$("#login").addEventListener("click",e=>{
+  const b = e.target.closest("[data-li]"); if(!b) return;
+  $("#li-u").value = b.dataset.li; $("#li-p").value = DEMO_PW;
+  doLogin(b.dataset.li, DEMO_PW);
+});
+</script>

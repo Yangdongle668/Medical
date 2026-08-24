@@ -74,12 +74,14 @@ CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
       </tr></tfoot>
     </table></div>
   </div>
-  <div class="formula" style="margin-top:12px">收入 = 启动费 + 入组例数 × 单例单价 + <b>筛败例数 × 单例单价 × ${pct(SF_FEE)}</b>
+  <div class="formula" style="margin-top:12px">收入 = 启动费 + 入组例数 × 单例单价 <b>− 脱落未完成部分</b> + <b>筛败例数 × 单例单价 × ${pct(SF_FEE)}</b>
 成本 = 工时归集（含筛选期陪同） + 差旅 + 职能分摊
+脱落扣减 = Σ（1 − 该受试者已完成访视数 ÷ 计划访视数）× 单例单价
 
-筛败费此前被整套模型漏掉。补上之后本范围收入 +${wan(sum(list,s=>revParts(s).sf))} 万，
-亏损中心从按旧口径的 ${rows.filter(s=>(s.startup||0)+s.enrolled*s.unit<s.cost).length} 个变为 ${loss.length} 个 ——
-<b>漏算筛败费会让高筛败率中心被误判为亏损，从而砍掉本来赚钱的中心。</b></div>
+两次口径修正方向相反，都必须做：
+筛败费 <b style="color:var(--good)">+${wan(sum(list,s=>revParts(s).sf))} 万</b>（漏算会误砍高筛败中心）
+脱落扣减 <b style="color:var(--crit)">${wan(sum(list,s=>revParts(s).drop))} 万</b>（漏算会误保高脱落中心）
+本范围亏损中心：旧口径 ${rows.filter(s=>(s.startup||0)+s.enrolled*s.unit<s.cost).length} 个 → 现口径 ${loss.length} 个。</div>
   <p class="note" style="margin-top:8px">金额单位：万元。点击任意行进入中心详情。</p>`;
 
   diverging($("#c-dv"), rows.map(s=>{const m=siteM(s);
@@ -89,6 +91,7 @@ CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
         <div class="tip-r"><span>· 启动费</span><b>${wan(revParts(s).startup)}</b></div>
         <div class="tip-r"><span>· 入组费</span><b>${wan(revParts(s).enr)}</b></div>
         <div class="tip-r"><span>· 筛败费</span><b>${wan(revParts(s).sf)}</b></div>
+        <div class="tip-r"><span>· 脱落扣减</span><b style="color:${revParts(s).drop<0?"var(--crit)":"var(--ink-3)"}">${wan(revParts(s).drop)}</b></div>
         <div class="tip-r"><span>成本</span><b>${wan(s.cost)} 万</b></div>
         <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--ink)"}">${m.gm===null?"—":pct(m.gm)}</b></div>
         <div class="tip-r"><span>每例成本</span><b>${m.cpe?n1(m.cpe)+" 万":"—"}</b></div>

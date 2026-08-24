@@ -1,0 +1,286 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   预筛登记 · 伦理事务 · 交接
+   漏斗的第一格此前没有门；伦理只是 ISF 里一行文本；
+   系统已经提出了交接问题（A-304 的 flag），却没有提供机制。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 预筛登记：入组漏斗的入口 ────────────────────────────────────── */
+VIEWS.prescreen = box=>{
+  const p = PERSONA();
+  const mine = p.k==="crc" ? (staff(p.n)?.sites||[]) : [...scopeIds()];
+  const ids = new Set(mine);
+  const list = PRESCREEN.filter(x=>ids.has(x.ss));
+  const icf = list.filter(x=>x.result==="已签知情 · 进入筛选").length;
+  const rej = list.filter(x=>x.result==="拒绝参加").length;
+  const unfit = list.filter(x=>x.result==="不合格 · 入排不符").length;
+  const wait = list.filter(x=>x.result==="合格 · 待知情");
+  const bySrc = psBySrc(ids);
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["已登记预筛",list.length,"人","var(--ink)","本页登记的量会直接进入中心漏斗"],
+       ["转化签署知情",icf,"人",icf?"var(--good)":"var(--ink)",list.length?pct(icf/list.length)+" 转化率":"—"],
+       ["入排不符",unfit,"人",unfit?"var(--warn)":"var(--ink)","占比高 = 入排与病源不匹配"],
+       ["拒绝参加",rej,"人",rej?"var(--warn)":"var(--ink)","占比高 = 沟通或方案负担问题"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="gap:12px">
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>登记一次预筛</h3><span class="sp"></span>
+          <span class="sub">30 秒，门诊间隙就能填完</span></div>
+        <div class="card-b">
+          <div class="grid g2" style="gap:10px">
+            <div class="field"><div class="slider-h"><label for="ps-ss">中心</label></div>
+              <select class="sel" id="ps-ss" style="width:100%">${mine.map(id=>`<option value="${id}">${esc(site(id).hosp)}</option>`).join("")}</select></div>
+            <div class="field"><div class="slider-h"><label for="ps-src">来源渠道</label></div>
+              <select class="sel" id="ps-src" style="width:100%">${PS_SRC.map(x=>`<option>${esc(x)}</option>`).join("")}</select></div>
+          </div>
+          <div class="field"><div class="slider-h"><label for="ps-r">判定结果</label></div>
+            <select class="sel" id="ps-r" style="width:100%">${PS_RESULT.map(x=>`<option>${esc(x)}</option>`).join("")}</select></div>
+          <div class="field"><div class="slider-h"><label for="ps-w">不合格 / 拒绝的原因</label></div>
+            <textarea class="qbox" id="ps-w" placeholder="例：ALT 3.4×ULN，超出入排上限。合格或已签知情可留空。"></textarea></div>
+          <div class="row" style="justify-content:flex-end"><button class="btn btn-p" id="ps-go">登记</button></div>
+          <div class="note" style="margin-top:9px;line-height:1.7">
+            这一页此前<b>不存在</b>。中心的预筛量是硬编码的聚合数 —— 可它恰恰是判断
+            「病源不足」还是「入排太窄」的唯一依据。数从哪来？只能是这里，每天一条一条录。</div>
+        </div>
+      </div>
+      ${wait.length?`<div class="card">
+        <div class="card-h"><h3>合格待知情</h3><span class="sp"></span>
+          <span class="sub">这些人还没签 ICF —— 拖久了就流失了</span></div>
+        <div class="card-b" style="padding:0">
+          ${wait.map(x=>`<div style="padding:9px 14px;border-bottom:1px solid var(--line)">
+            <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(x.id)}</span>
+              <b style="font-size:12.5px;font-weight:500">${esc(site(x.ss).hosp)}</b>
+              <span class="pill p-neut">${esc(x.src)}</span>
+              <span class="pill ${days(x.d,TODAY)>7?"p-crit":"p-warn"}">已 ${days(x.d,TODAY)} 天</span>
+              <span class="sp"></span>
+              <button class="btn" data-psicf="${esc(x.id)}">已签知情</button></div>
+          </div>`).join("")}
+        </div></div>`:""}
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>渠道产出</h3><span class="sub">哪个渠道真的出人，哪个只是热闹</span></div>
+        <div class="card-b"><div id="c-ps"></div>
+          <div class="note" style="margin-top:9px;line-height:1.7">
+            条形为预筛人数，数字为<b>转化签署知情的比例</b>。
+            广告与义诊常常量最大、转化最低 —— 花的钱和出的人不是一回事。</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>登记流水</h3><span class="sp"></span><span class="sub">最近 ${Math.min(list.length,12)} 条</span></div>
+        <div class="card-b" style="padding:0">
+          ${list.slice(0,12).map(x=>{
+            const k = x.result.startsWith("已签")?"good":x.result.startsWith("合格")?"neut":"warn";
+            return `<div style="padding:8px 14px;border-bottom:1px solid var(--line)">
+              <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(x.d)}</span>
+                <span class="t-sub">${esc(site(x.ss).hosp)}</span>
+                <span class="pill p-neut">${esc(x.src)}</span>
+                <span class="sp"></span><span class="pill p-${k}">${esc(x.result)}</span></div>
+              ${x.why?`<div class="note" style="margin-top:2px">${esc(x.why)}</div>`:""}
+            </div>`;}).join("")||`<div class="empty">尚无登记</div>`}
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  /* 条形=预筛人数（中性），右侧数字=转化率（有好坏，才着色） */
+  const psMax = Math.max(...bySrc.map(x=>x.total), 1);
+  $("#c-ps").innerHTML = bySrc.map(x=>`
+    <div style="display:grid;grid-template-columns:minmax(84px,110px) 1fr auto;gap:12px;align-items:center;margin-bottom:11px">
+      <div style="font-size:12.5px;color:var(--ink-2)">${esc(x.n)}</div>
+      <div class="bartrack" style="height:12px">
+        <div class="barfill" style="width:${clamp(x.total/psMax*100,3,100)}%;background:var(--ink-2);height:100%"></div></div>
+      <div class="tnum" style="font-size:12.5px;min-width:78px;font-weight:600;color:${
+        x.rate===null?"var(--ink-3)":x.rate>=.5?"var(--good)":x.rate>=.3?"var(--ink)":"var(--warn)"}">
+        ${x.total} 人 · ${x.rate===null?"—":pct(x.rate)}</div>
+    </div>`).join("") || `<div class="empty">尚无登记</div>`;
+
+  $("#ps-go").addEventListener("click",()=>{
+    const ss = $("#ps-ss").value, src = $("#ps-src").value, r = $("#ps-r").value, w = $("#ps-w").value.trim();
+    if((r.startsWith("不合格")||r.startsWith("拒绝")) && w.length<4){
+      toast("不合格或拒绝必须写原因 —— 没有原因分布，就无法判断是入排问题还是病源问题","crit"); return; }
+    const id = "PS-0"+(psSeq++);
+    PRESCREEN.unshift({id, ss, d:TODAY, by:PERSONA().n, src, result:r, why:w});
+    const f = FUNNEL[ss]; if(f){ f.pre++; if(r==="已签知情 · 进入筛选") f.icf++; }
+    logAct("登记预筛", id, "—", `${site(ss).hosp} · ${src} · ${r}`, {ss, why:w});
+    toast(`${id} 已登记，已计入 ${site(ss).hosp} 的预筛漏斗${r==="已签知情 · 进入筛选"?"（并推进到筛选期）":""}`);
+    render();
+  });
+  box.addEventListener("click",e=>{
+    const b = e.target.closest("[data-psicf]"); if(!b) return;
+    const x = PRESCREEN.find(y=>y.id===b.dataset.psicf);
+    x.result = "已签知情 · 进入筛选";
+    const f = FUNNEL[x.ss]; if(f) f.icf++;
+    logAct("预筛转签署知情", x.id, "合格 · 待知情", "已签知情 · 进入筛选", {ss:x.ss});
+    toast(`${x.id} 已签署知情，进入筛选期`); render();
+  });
+};
+
+/* ── 伦理事务：贯穿全周期的周期性义务，不是一次性动作 ────────────── */
+VIEWS.ethics = box=>{
+  const p = PERSONA();
+  const mine = p.k==="crc" ? (staff(p.n)?.sites||[]) : [...scopeIds()];
+  const ids = new Set(mine);
+  const list = ETHICS.filter(e=>ids.has(e.ss));
+  const od = list.filter(e=>ethState(e)==="crit"), soon = list.filter(e=>ethState(e)==="warn");
+  const open = list.filter(e=>e.st==="待递交"||e.st==="审查中");
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["未了结事务",open.length,"项",open.length?"var(--warn)":"var(--ink)","递交 + 审查中"],
+       ["已逾期",od.length,"项",od.length?"var(--crit)":"var(--ink)","批件断档中心即停摆"],
+       ["14 天内到期",soon.length,"项",soon.length?"var(--warn)":"var(--ink)","年度跟踪须提前 60 天准备"],
+       ["本年度已办结",list.filter(e=>e.st==="已批准"||e.st==="已备案").length,"项","var(--ink)",""]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${od.length?`<div class="card alert alert-crit" style="margin-bottom:22px">
+    <div class="card-h"><h3>已逾期</h3><span class="sp"></span>
+      <span class="sub">伦理批件断档，该中心必须停止入组与给药</span></div>
+    <div class="card-b" style="padding:0">
+      ${od.map(e=>`<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(e.id)}</span>
+          <b style="font-size:12.5px;font-weight:500">${esc(e.kind)}</b>
+          <span class="t-sub">${esc(site(e.ss).hosp)}</span>
+          <span class="pill p-crit">逾期 ${days(e.due,TODAY)} 天</span>
+          <span class="sp"></span>
+          ${canAct("ethics")?`<button class="btn btn-p" data-esub="${esc(e.id)}">登记已递交</button>`:""}</div>
+        <div class="note" style="margin-top:3px;line-height:1.7">${esc(e.note)}</div>
+      </div>`).join("")}
+    </div></div>`:""}
+  <div class="card">
+    <div class="card-h"><h3>伦理事务台账</h3><span class="sp"></span>
+      <span class="sub">初始 · 年度跟踪 · 方案修订 · SAE 快报 · 严重违背 · 结题</span></div>
+    <div class="tw"><table style="min-width:900px">
+      <thead><tr><th>编号</th><th>中心</th><th>事务类型</th><th>应递交</th><th>实际递交</th>
+        <th>批准 / 备案</th><th>状态</th><th></th></tr></thead>
+      <tbody>${list.sort((a,b)=>a.due.localeCompare(b.due)).map(e=>{
+        const k = ethState(e);
+        return `<tr>
+          <td class="mono" style="font-size:11.5px">${esc(e.id)}</td>
+          <td style="font-size:12px">${esc(site(e.ss).hosp)}</td>
+          <td><div class="t-main">${esc(e.kind)}</div><div class="t-sub">${esc(e.note)}</div></td>
+          <td class="mono" style="font-size:11.5px;color:${k==="crit"?"var(--crit)":"var(--ink-2)"}">${esc(e.due)}</td>
+          <td class="mono" style="font-size:11.5px">${esc(e.sub)}</td>
+          <td class="mono" style="font-size:11.5px">${esc(e.appr)}</td>
+          <td><span class="pill p-${k==="good"?"good":k==="crit"?"crit":k==="warn"?"warn":"neut"}">${esc(e.st)}</span></td>
+          <td class="ta-r">${e.st==="待递交"&&canAct("ethics")?`<button class="btn" data-esub="${esc(e.id)}">登记递交</button>`
+            :e.st==="审查中"&&canAct("ethics")?`<button class="btn" data-eok="${esc(e.id)}">登记批准</button>`:""}</td>
+        </tr>`;}).join("")||`<tr><td colspan="8"><div class="empty">范围内暂无伦理事务</div></td></tr>`}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">此前伦理在系统里只有两处：中心状态机里的「伦理递交 / 伦理批件」两格，
+和 ISF 清单里的一行文本「批件 2026-10-18 到期」。
+
+但伦理不是一次性动作，是<b>贯穿全周期的周期性义务</b>：
+年度跟踪审查每年一次、须提前 60 天递交；方案每修订一次要重新审查、重签知情、重新培训；
+SAE 要在知晓后 5 日内快报；严重违背要单独报告；中心关闭前要递交结题报告。
+
+<b>批件断档 = 该中心必须停止入组与给药。</b>这是比超窗严重得多的事，此前却没有任何倒计时兜住它。</div>`;
+
+  box.addEventListener("click",e=>{
+    const s = e.target.closest("[data-esub]");
+    if(s){ const x = ETHICS.find(y=>y.id===s.dataset.esub);
+      x.sub = TODAY; x.st = "审查中";
+      logAct("递交伦理事务", `${x.id} ${x.kind}`, "待递交", "审查中", {ss:x.ss});
+      toast(`${x.id} ${x.kind} 已登记递交，转审查中`); render(); return; }
+    const k = e.target.closest("[data-eok]");
+    if(k){ const x = ETHICS.find(y=>y.id===k.dataset.eok);
+      x.appr = TODAY; x.st = x.kind==="SAE 快速报告" ? "已备案" : "已批准";
+      logAct("伦理事务办结", `${x.id} ${x.kind}`, "审查中", x.st, {ss:x.ss});
+      toast(`${x.id} ${x.kind} 已${x.st}`); render(); }
+  });
+};
+
+/* ── 交接：人会休假、会离职、会被调岗，中心不会因此停下 ──────────── */
+VIEWS.handover = box=>{
+  const p = PERSONA(), me = p.n;
+  const list = p.k==="crc" ? HANDOVER.filter(h=>h.from===me||h.to===me) : HANDOVER;
+  const open = list.filter(h=>h.st!=="已完成");
+  const peers = STAFF.filter(s=>s.role===(staff(me)?.role||"CRC") && s.n!==me);
+  const mySites = staff(me)?.sites || [];
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["进行中的交接",open.length,"笔",open.length?"var(--warn)":"var(--ink)"],
+       ["我带的中心",mySites.length,"个","var(--ink)"],
+       ["预计交接工时",n1(mySites.length*HO_COST_DAY),"人天","var(--ink)"],
+       ["历史交接",list.filter(h=>h.st==="已完成").length,"笔","var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  ${list.map(h=>{
+    const done = h.items.filter(i=>i.done).length;
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="card-h"><h3>${esc(h.from)} → ${esc(h.to)}</h3>
+        <span class="sub">${h.ss.map(x=>esc(site(x).hosp)).join(" · ")}</span><span class="sp"></span>
+        <span class="pill ${h.st==="已完成"?"p-good":"p-warn"}">${esc(h.st)}</span>
+        <span class="pill p-neut">${done} / ${h.items.length}</span></div>
+      <div class="card-b" style="padding:0">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+          <div class="note" style="line-height:1.7"><b>原因</b>：${esc(h.reason)}｜<b>交接日</b> ${esc(h.d)}</div>
+          <div class="bartrack" style="height:4px;margin-top:7px"><div class="barfill" style="width:${done/h.items.length*100}%;background:${done===h.items.length?"var(--good)":"var(--accent)"};height:100%"></div></div>
+        </div>
+        ${h.items.map((it,k)=>`<label class="cbx ${it.done?"done":""}" style="padding:8px 14px;border-bottom:1px solid var(--line)">
+          <input type="checkbox" data-ho="${esc(h.id)}:${k}" ${it.done?"checked":""} ${h.st==="已完成"?"disabled":""}>
+          <span>${esc(it.t)}</span></label>`).join("")}
+        ${h.st!=="已完成"?`<div style="padding:10px 14px">
+          <button class="btn btn-p" data-hodone="${esc(h.id)}" ${done<h.items.length?"disabled":""}>
+            ${done<h.items.length?`还差 ${h.items.length-done} 项`:"确认交接完成"}</button></div>`:""}
+      </div></div>`;}).join("")}
+  <div class="card">
+    <div class="card-h"><h3>发起交接</h3><span class="sub">休假、离职、调岗 —— 中心不会因此停下</span></div>
+    <div class="card-b">
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="ho-ss">要交接的中心</label></div>
+          <select class="sel" id="ho-ss" style="width:100%">${mySites.map(id=>`<option value="${id}">${esc(site(id).hosp)}</option>`).join("")||`<option value="">无</option>`}</select></div>
+        <div class="field"><div class="slider-h"><label for="ho-to">接手人</label></div>
+          <select class="sel" id="ho-to" style="width:100%">${peers.map(s=>`<option value="${esc(s.n)}">${esc(s.n)}（${s.role}，利用率 ${s.util}%）</option>`).join("")}</select></div>
+      </div>
+      <div class="field"><div class="slider-h"><label for="ho-why">原因</label></div>
+        <textarea class="qbox" id="ho-why" placeholder="例：09-02 至 09-04 年假，期间广东省人民医院 SIV 排期 09-01。"></textarea></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-p" id="ho-go">发起交接</button></div>
+    </div>
+  </div>
+  <div class="formula">系统此前已经<b>提出过这个问题</b>：待审批队列里郭晓萱的请假单挂着一条提示
+「期间广东省人民医院 SIV 排期 09-01，需先确认交接人」。
+
+提出了问题，却没有提供机制 —— 全库 <code>交接</code> 出现 2 次、<code>接手</code> 1 次，都是文字。
+交接清单里最容易漏、也最要命的是<b>在组受试者逐例交底</b>：
+新人不知道哪个受试者依从性差、哪个家属有顾虑、哪个只能周三来 —— 这些东西不在 EDC 里，只在上一个 CRC 脑子里。</div>`;
+
+  box.addEventListener("change",e=>{
+    const c = e.target.closest("[data-ho]"); if(!c) return;
+    const [id,k] = c.dataset.ho.split(":");
+    const h = HANDOVER.find(x=>x.id===id); h.items[+k].done = c.checked;
+    c.closest("label").classList.toggle("done", c.checked);
+  });
+  box.addEventListener("click",e=>{
+    const d = e.target.closest("[data-hodone]");
+    if(d){ const h = HANDOVER.find(x=>x.id===d.dataset.hodone);
+      h.st = "已完成";
+      logAct("完成交接", `${h.from} → ${h.to}`, "待确认", "已完成",
+        {ss:h.ss[0], why:h.reason});
+      toast(`交接完成：${h.ss.map(x=>site(x).hosp).join("、")} 已移交 ${h.to}`); render(); }
+  });
+  $("#ho-go")?.addEventListener("click",()=>{
+    const ss = $("#ho-ss").value, to = $("#ho-to").value, why = $("#ho-why").value.trim();
+    if(!ss){ toast("没有可交接的中心","crit"); return; }
+    if(why.length < 5){ toast("请写清交接原因","crit"); return; }
+    const id = "HO-00"+(hoSeq++);
+    HANDOVER.unshift({id, from:me, to, ss:[ss], reason:why, d:TODAY, st:"待确认",
+      items:HO_ITEMS.map(t=>({t, done:false}))});
+    logAct("发起交接", `${me} → ${to}`, "—", site(ss).hosp, {ss, why});
+    toast(`${id} 已发起：${site(ss).hosp} 交接给 ${to}，${HO_ITEMS.length} 项清单待逐项确认`);
+    render();
+  });
+};
+</script>

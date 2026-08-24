@@ -19,12 +19,18 @@ const label = ss=>`${ss.hosp}｜${S[ss.sid].short}`;
    漏掉这块，收入就是错的 —— 而以「算清单中心盈亏」为核心命题的系统，
    这个错误在源头上会让所有毛利结论失真。 */
 const SF_FEE = 0.35;
+/* 脱落扣减：入组后中途退出的受试者，按已完成访视比例计费，不是按整例。
+   与筛败费方向相反 —— 一个把收入调高，一个把收入调低，两个都不做，
+   高筛败中心被误砍，高脱落中心被误保。 */
+const dropLost = ss => (typeof DROPS==="undefined") ? 0
+  : DROPS.filter(d=>d.ss===ss.id).reduce((t,d)=>t + (1 - d.done/d.total), 0) * ss.unit;
 function siteRev(ss){
   const f = (typeof FN==="function") ? FN(ss.id) : {sf:0};
-  return (ss.startup||0) + ss.enrolled*ss.unit + (f.sf||0)*ss.unit*SF_FEE;
+  return (ss.startup||0) + ss.enrolled*ss.unit - dropLost(ss) + (f.sf||0)*ss.unit*SF_FEE;
 }
 const revParts = ss=>{ const f=(typeof FN==="function")?FN(ss.id):{sf:0};
-  return {startup:ss.startup||0, enr:ss.enrolled*ss.unit, sf:(f.sf||0)*ss.unit*SF_FEE}; };
+  return {startup:ss.startup||0, enr:ss.enrolled*ss.unit, sf:(f.sf||0)*ss.unit*SF_FEE,
+          drop:-dropLost(ss)}; };
 
 function siteM(ss){
   const rev = siteRev(ss);

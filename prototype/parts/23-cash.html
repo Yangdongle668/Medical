@@ -1,0 +1,146 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   现金流预测 —— 系统此前只有后视镜（DSO、应收账龄），没有前挡风。
+   CRO/SMO 的命门：人力成本每月刚性支出，回款是里程碑制 + 账期。
+   要回答的不是"我应收多少"，而是"哪个月我会没钱发工资"。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.cash = box=>{
+  const f = cashF(6), rows = f.rows, b = f.burn;
+  const worst = rows.reduce((a,x)=> x.cum < a.cum ? x : a, rows[0]);
+  const neg = rows.filter(r=>r.cum < 0);
+  const totIn = sum(rows,r=>r.cash), totOut = sum(rows,r=>r.out);
+  const KIND = {overdue:["逾期应收","var(--crit)"], invoiced:["已开票在途","var(--accent)"],
+                pending:["待开票","var(--warn)"], forecast:["预计达成","var(--ink-3)"]};
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["未来 6 个月预计回款",wan(totIn),"万","var(--ink)","在途应收 + 待开票 + 预计达成"],
+       ["同期刚性人力支出",wan(totOut),"万","var(--ink)",`${b.heads} 人在职 · 月均 ${wan(b.total)} 万`],
+       ["期末累计净额",wan(rows.at(-1).cum),"万",rows.at(-1).cum<0?"var(--crit)":"var(--good)",
+        rows.at(-1).cum<0?"六个月后仍为负":"六个月后转正"],
+       ["压力情景最低点",wan(f.stress.worst),"万",f.stress.worst<0?"var(--crit)":"var(--warn)",
+        `逾期再拖 3 个月 · ${esc(f.stress.worstKey)}`]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+
+  ${f.gaps.length?`<div class="card alert alert-warn" style="margin-bottom:26px">
+    <div class="card-h"><h3>已达成，却不在开票队列里</h3><span class="sp"></span>
+      <span class="sub">${f.gaps.length} 个里程碑 · 合计 ${wan(f.gapAmt)} 万</span></div>
+    <div class="card-b">
+      <div class="note" style="line-height:1.8;color:var(--ink-2);margin-bottom:10px">
+        这些里程碑按中心的实际进度<b>早已达成</b>，但里程碑台账里没有对应记录，也就没有开票、没有回款。
+        它们<b>不计入上面的预计回款</b> —— 把记录缺口算成未来现金，做出来的预测会好看，但会骗人。<br>
+        这是本页最快的现金杠杆：<b>补记录 → 开票 → ${wan(f.gapAmt)} 万在两三个月内可收</b>。
+      </div>
+      <div class="tw"><table style="min-width:640px">
+        <thead><tr><th>中心</th><th>里程碑</th><th class="ta-r">金额</th></tr></thead>
+        <tbody>${f.gaps.map(g=>`<tr>
+          <td style="font-size:12px">${esc(site(g.ss).hosp)}</td>
+          <td class="t-sub">${esc(g.name)}</td>
+          <td class="tnum">${wan(g.amt)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="row" style="margin-top:11px"><button class="btn" data-nav="bill">去里程碑台账补记录</button></div>
+    </div></div>`:""}
+  ${neg.length?`<div class="card alert alert-crit" style="margin-bottom:26px">
+    <div class="card-h"><h3>现金缺口</h3><span class="sp"></span>
+      <span class="sub">${neg.length} 个月累计净额为负 —— 最深 ${wan(worst.cum)} 万，出现在 ${esc(worst.key)}</span></div>
+    <div class="card-b">
+      <div class="note" style="line-height:1.8;color:var(--ink-2)">
+        人力成本每月 <b>${wan(b.total)} 万</b>雷打不动（${b.heads} 人 × 人天成本 × ${RATE.workdays} 天 + ${pct(RATE.overhead)} 分摊），
+        而回款要等里程碑达成、开票、再过账期。<br>
+        可动的杠杆只有三个：<b>把待开票的赶紧开出去</b>（${wan(sum(rows.flatMap(r=>r.items).filter(i=>i.kind==="pending"),i=>i.amt))} 万卡在这一步）、
+        <b>催逾期</b>（${wan(sum(rows.flatMap(r=>r.items).filter(i=>i.kind==="overdue"),i=>i.amt))} 万已超 60 天）、
+        <b>加快落后中心入组</b>（预计里程碑 ${wan(sum(rows.flatMap(r=>r.items).filter(i=>i.kind==="forecast"),i=>i.amt))} 万取决于入组速度）。
+      </div>
+      <div class="row" style="margin-top:11px">
+        <button class="btn" data-nav="bill">去里程碑与开票</button>
+        <button class="btn" data-nav="enr">看入组进度</button></div>
+    </div></div>`:""}
+
+  ${f.stress.worst<0?`<div class="card alert alert-crit" style="margin-bottom:26px">
+    <div class="card-h"><h3>压力情景：现金会断在 ${esc(f.stress.worstKey)}</h3><span class="sp"></span>
+      <span class="sub">最低点 ${wan(f.stress.worst)} 万</span></div>
+    <div class="card-b"><div class="note" style="line-height:1.8;color:var(--ink-2)">
+      基准情景假设逾期应收下个月就能收回来 —— 可它们之所以逾期，恰恰是因为对方还没打算付。<br>
+      压力情景只改两个假设：<b>逾期应收再拖 3 个月</b>、<b>预计达成的里程碑延后 1 个月</b>。
+      结果是累计净额在 ${esc(f.stress.worstKey)} 掉到 <b style="color:var(--crit)">${wan(f.stress.worst)} 万</b>。<br>
+      这就是为什么催收和补开票不是财务的杂活 —— 它们是这家公司唯一能自己控制的现金杠杆。
+    </div></div></div>`:`<div class="card" style="margin-bottom:26px">
+    <div class="card-h"><h3>压力情景</h3><span class="sp"></span>
+      <span class="sub">最低点 ${wan(f.stress.worst)} 万 · ${esc(f.stress.worstKey)}</span></div>
+    <div class="card-b"><div class="note" style="line-height:1.8;color:var(--ink-2)">
+      把两个乐观假设去掉 —— <b>逾期应收再拖 3 个月</b>、<b>预计达成的里程碑延后 1 个月</b> ——
+      累计净额最低仍有 ${wan(f.stress.worst)} 万，出现在 ${esc(f.stress.worstKey)}，期末 ${wan(f.stress.end)} 万。
+      本期现金安全，但安全的原因主要是在途应收兑现，而不是经营性流入 —— 一旦大客户账期再拉长，缓冲会很快消失。
+    </div></div></div>`}
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>每月净额</h3><span class="sub">基准情景：预计回款 − 刚性支出。负数即当月失血</span></div>
+      <div class="card-b"><div id="c-cf"></div>
+        <div class="note" style="margin-top:12px">条形为当月净额，非累计。连续负月才是真问题 —— 单月为负可以靠账上余额扛过去。</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>回款构成</h3><span class="sub">按确定性排序</span></div>
+      <div class="card-b"><div id="c-kind"></div>
+        <div class="note" style="margin-top:12px;line-height:1.7">
+          <b>逾期应收</b>最确定也最该催；<b>预计达成</b>确定性最低 ——
+          它建立在"入组按当前速度继续"这个假设上，而落后中心恰恰不会。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h3>逐月明细</h3><span class="sp"></span>
+      <span class="sub">金额单位：万元</span></div>
+    <div class="tw"><table style="min-width:900px">
+      <thead><tr><th>月份</th><th class="ta-r">预计回款</th><th class="ta-r">刚性支出</th>
+        <th class="ta-r">当月净额</th><th class="ta-r">累计净额</th><th class="ta-r">压力情景累计</th><th>主要回款来源</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td class="mono" style="font-size:12px">${esc(r.key)}</td>
+        <td class="tnum">${wan(r.cash)}</td>
+        <td class="tnum" style="color:var(--ink-3)">−${wan(r.out)}</td>
+        <td class="tnum" style="font-weight:600;color:${r.net<0?"var(--crit)":"var(--ink)"}">${r.net>0?"+":""}${wan(r.net)}</td>
+        <td class="tnum" style="font-weight:700;color:${r.cum<0?"var(--crit)":"var(--good)"}">${r.cum>0?"+":""}${wan(r.cum)}</td>
+        <td class="tnum" style="color:${f.stress.rows[r.mo-1].cum<0?"var(--crit)":"var(--ink-3)"}">${f.stress.rows[r.mo-1].cum>0?"+":""}${wan(f.stress.rows[r.mo-1].cum)}</td>
+        <td><div class="t-sub" style="line-height:1.6">${r.items.length
+          ? r.items.slice(0,3).map(i=>`<span class="pill p-${i.kind==="overdue"?"crit":i.kind==="pending"?"warn":"neut"}" style="margin:1px 3px 1px 0">${esc(i.label)} ${wan(i.amt)}</span>`).join("")
+            + (r.items.length>3?`<span class="t-sub"> 等 ${r.items.length} 笔</span>`:"")
+          : "—"}</div></td>
+      </tr>`).join("")}</tbody>
+      <tfoot><tr>
+        <td><b>合计</b></td>
+        <td class="tnum"><b>${wan(totIn)}</b></td>
+        <td class="tnum"><b>−${wan(totOut)}</b></td>
+        <td class="tnum"><b style="color:${totIn-totOut<0?"var(--crit)":"var(--ink)"}">${totIn-totOut>0?"+":""}${wan(totIn-totOut)}</b></td>
+        <td class="tnum"><b style="color:${f.stress.end<0?"var(--crit)":"var(--ink-3)"}">${f.stress.end>0?"+":""}${wan(f.stress.end)}</b></td><td></td>
+      </tr></tfoot>
+    </table></div>
+  </div>
+
+  <div class="formula">刚性支出 = Σ(在职人员 × 角色人天成本 × ${RATE.workdays} 工作日) × (1 + ${pct(RATE.overhead)} 分摊)
+预计回款 = 已开票在途（按到期日落月） + 待开票（假设 15 天内开票 + 60 天账期）
+         + 预计达成里程碑（按该中心实际入组速度外推达成月 + 2 个月账期）
+         <b>不含</b>「已达成但不在开票队列」的里程碑 —— 那是记录缺口，不是未来收入
+
+里程碑计价：合同签署 10% · 中心启动 SIV 15% · 入组过半 25% · 入组达成 80% 25% · 中心结题 25%
+中心合同额 = 启动费 + 合同例数 × 单例单价
+
+<b>这张图和「里程碑 · 开票 · 回款」的区别</b>：那一页回答"我应收多少、拖了多久"，全是已经发生的；
+这一页回答"哪个月会没钱"。原料完全相同，方向相反 —— 而经营决策只发生在后者上。</div>`;
+
+  diverging($("#c-cf"), rows.map(r=>({label:r.key, v:r.net,
+    tip:`<div class="tip-t">${esc(r.key)}</div>
+      <div class="tip-r"><span>预计回款</span><b>${wan(r.cash)} 万</b></div>
+      <div class="tip-r"><span>刚性支出</span><b>−${wan(r.out)} 万</b></div>
+      <div class="tip-r"><span>当月净额</span><b style="color:${r.net<0?"var(--crit)":"var(--ink)"}">${r.net>0?"+":""}${wan(r.net)} 万</b></div>
+      <div class="tip-r" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>累计</span><b style="color:${r.cum<0?"var(--crit)":"var(--good)"}">${r.cum>0?"+":""}${wan(r.cum)} 万</b></div>`})));
+
+  const all = rows.flatMap(r=>r.items);
+  stacked($("#c-kind"), Object.keys(KIND).map(k=>({
+    n:KIND[k][0], v:sum(all.filter(i=>i.kind===k),i=>i.amt), c:KIND[k][1]
+  })).filter(x=>x.v>0));
+};
+</script>

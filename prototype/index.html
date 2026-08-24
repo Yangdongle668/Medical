@@ -183,8 +183,8 @@ button{font:inherit;color:inherit;letter-spacing:inherit}
 .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
-.g21{grid-template-columns:1.9fr 1fr}
-.g12{grid-template-columns:1fr 1.9fr}
+.g21{grid-template-columns:minmax(0,1.9fr) minmax(0,1fr)}
+.g12{grid-template-columns:minmax(0,1fr) minmax(0,1.9fr)}
 .stack{display:flex;flex-direction:column;gap:22px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
@@ -406,9 +406,42 @@ input[type=range]{width:100%;accent-color:var(--accent);height:20px;cursor:point
 .ct-crit{color:var(--crit);background:var(--crit-soft)}
 
 /* ── 响应式 ───────────────────────────────────────────────────── */
+/* ── 登录 ─────────────────────────────────────────────────────── */
+.login{
+  position:fixed;inset:0;z-index:200;background:var(--ground);
+  display:grid;place-items:center;padding:32px 20px;overflow-y:auto;
+}
+.login[hidden]{display:none}
+.login-box{
+  width:100%;max-width:400px;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;padding:32px 32px 26px;
+}
+.login-brand{display:flex;align-items:center;gap:11px;margin-bottom:28px}
+.login-box h2{font-size:20px;font-weight:600;letter-spacing:-.02em;margin:0 0 6px}
+.login-sub{margin:0 0 22px;font-size:12.5px;line-height:1.7;color:var(--ink-3)}
+.login-err{
+  border-left:2px solid var(--crit);background:var(--surface-2);padding:8px 11px;
+  font-size:12.5px;color:var(--crit);margin-bottom:14px;line-height:1.6;
+}
+.login-go{width:100%;justify-content:center;padding:9px 12px;font-size:13.5px}
+.login-demo{margin-top:26px;padding-top:20px;border-top:1px solid var(--line)}
+.login-demo .section-t{margin-bottom:10px}
+.login-u{
+  display:flex;align-items:center;gap:9px;width:100%;text-align:left;cursor:pointer;
+  border:0;border-bottom:1px solid var(--line);background:none;padding:8px 2px;
+  font:inherit;font-size:12.5px;color:var(--ink-2);transition:background var(--t) var(--ease);
+}
+.login-u:last-child{border-bottom:0}
+.login-u:hover{background:var(--surface-2)}
+.login-u b{font-weight:600;color:var(--ink);flex:none}
+.login-u .lu-r{color:var(--ink-3);font-size:11.5px}
+.login-u .lu-u{margin-left:auto;font-family:"DM Mono",ui-monospace,monospace;font-size:11px;color:var(--ink-3)}
+.login-foot{margin-top:20px;font-size:11px;line-height:1.7;color:var(--ink-3)}
+@media(max-width:520px){ .login-box{padding:24px 20px 20px} }
+
 @media(max-width:1240px){
   .g4{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 28px}
-  .g21,.g12,.g3{grid-template-columns:1fr}
+  .g21,.g12,.g3{grid-template-columns:minmax(0,1fr)}
   .grid > .stat:nth-child(3)::before,.grid > .kpi:nth-child(3)::before{display:none}
   .grid > .stat:nth-child(odd),.grid > .kpi:nth-child(odd){padding-left:0}
   .grid > .stat:nth-child(odd)::before,.grid > .kpi:nth-child(odd)::before{display:none}
@@ -426,7 +459,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:20px;cursor:point
   .nav-item{white-space:nowrap;padding:6px 11px}
   .nav-item[aria-current="true"]{background:var(--surface-2)}
   .nav-item[aria-current="true"]::before{display:none}
-  .g4,.g2{grid-template-columns:1fr;gap:22px}
+  .g4,.g2{grid-template-columns:minmax(0,1fr);gap:22px}
   .grid > .stat,.grid > .kpi{padding-left:0}
   .grid > .stat::before,.grid > .kpi::before{display:none}
   .mini{grid-template-columns:repeat(2,1fr);gap:20px 0}
@@ -468,13 +501,33 @@ input[type=range]{width:100%;accent-color:var(--accent);height:20px;cursor:point
       <div class="crumb" id="crumb"></div>
       <div class="topbar-sp"></div>
       <div class="who" id="who"></div>
-      <label class="crumb" for="grole">身份</label>
-      <select class="sel" id="grole"></select>
+      <button class="btn" id="glogout">退出登录</button>
       <label class="crumb" for="gstudy">项目范围</label>
       <select class="sel" id="gstudy"></select>
       <span class="demo-tag">演示数据 · 非真实</span>
     </header>
     <main class="content" id="content"></main>
+  </div>
+</div>
+<div class="login" id="login" hidden>
+  <div class="login-box">
+    <div class="login-brand">
+      <div class="brand-mark">中</div>
+      <div><div class="brand-name">临床中心台</div><div class="brand-sub">SiteDesk&nbsp;v1.0</div></div>
+    </div>
+    <h2>登录</h2>
+    <p class="login-sub">权限由账号决定：看得到哪些中心、哪些字段、能做哪些动作，登录那一刻就定了。</p>
+    <div class="field"><div class="slider-h"><label for="li-u">登录账号</label></div>
+      <input class="sel" id="li-u" style="width:100%" autocomplete="username" placeholder="例：wutong"></div>
+    <div class="field"><div class="slider-h"><label for="li-p">密码</label></div>
+      <input class="sel" id="li-p" type="password" style="width:100%" autocomplete="current-password" placeholder="演示密码：demo"></div>
+    <div id="li-err" class="login-err" hidden></div>
+    <button class="btn btn-p login-go" id="li-go">登录</button>
+    <div class="login-demo">
+      <div class="section-t">演示账号 —— 点击直接登录（密码统一 demo）</div>
+      <div id="li-list"></div>
+    </div>
+    <div class="login-foot">演示原型 · 全部数据为硬编码虚构数据，不含任何真实受试者信息，不发起任何网络请求。</div>
   </div>
 </div>
 <div class="scrim" id="scrim" hidden></div>
@@ -678,15 +731,47 @@ const VISITS = [
 const MILES = [
   {id:"M-041", ss:"SS-01", name:"入组达成 80%", amt:42.0, hit:"2026-08-12", inv:"已开票", due:"2026-10-11", paid:false, age:10},
   {id:"M-038", ss:"SS-09", name:"入组达成 80%", amt:31.2, hit:"2026-07-28", inv:"已开票", due:"2026-09-26", paid:false, age:25},
-  {id:"M-035", ss:"SS-12", name:"入组达成 75%", amt:38.6, hit:"2026-07-15", inv:"已开票", due:"2026-09-13", paid:false, age:38},
+  {id:"M-035", ss:"SS-12", name:"入组达成 80%", amt:38.6, hit:"2026-07-15", inv:"已开票", due:"2026-09-13", paid:false, age:38},
   {id:"M-029", ss:"SS-03", name:"入组达成 80%", amt:28.9, hit:"2026-05-20", inv:"已开票", due:"2026-07-19", paid:false, age:94},
   {id:"M-026", ss:"SS-06", name:"入组过半", amt:33.6, hit:"2026-04-30", inv:"已开票", due:"2026-06-29", paid:false, age:114},
   {id:"M-044", ss:"SS-10", name:"入组达成 80%", amt:29.4, hit:"2026-08-18", inv:"待开票", due:"—", paid:false, age:4},
   {id:"M-045", ss:"SS-07", name:"入组过半", amt:22.1, hit:"2026-08-06", inv:"待开票", due:"—", paid:false, age:16},
   {id:"M-046", ss:"SS-14", name:"合同签署", amt:8.5, hit:"2026-08-20", inv:"待开票", due:"—", paid:false, age:2},
   {id:"M-021", ss:"SS-02", name:"入组过半", amt:35.4, hit:"2026-03-11", inv:"已回款", due:"2026-05-10", paid:true, age:0},
-  {id:"M-018", ss:"SS-01", name:"入组过半", amt:40.6, hit:"2026-01-22", inv:"已回款", due:"2026-03-23", paid:true, age:0}
+  {id:"M-018", ss:"SS-01", name:"入组过半", amt:40.6, hit:"2026-01-22", inv:"已回款", due:"2026-03-23", paid:true, age:0},
+  {id:"M-086", ss:"SS-12", name:"入组过半", amt:50.0, hit:"2026-07-01", inv:"已开票", due:"2026-09-14", paid:false, age:37},
+  {id:"M-081", ss:"SS-10", name:"入组过半", amt:34.7, hit:"2026-04-15", inv:"已回款", due:"2026-06-29", paid:true, age:0},
+  {id:"M-078", ss:"SS-09", name:"入组过半", amt:37.9, hit:"2026-03-30", inv:"已回款", due:"2026-06-13", paid:true, age:0},
+  {id:"M-085", ss:"SS-12", name:"中心启动 SIV", amt:30.0, hit:"2026-03-24", inv:"已回款", due:"2026-06-07", paid:true, age:0},
+  {id:"M-084", ss:"SS-12", name:"合同签署", amt:20.0, hit:"2026-03-07", inv:"已回款", due:"2026-05-21", paid:true, age:0},
+  {id:"M-075", ss:"SS-08", name:"中心启动 SIV", amt:22.0, hit:"2026-02-10", inv:"已回款", due:"2026-04-26", paid:true, age:0},
+  {id:"M-066", ss:"SS-03", name:"入组过半", amt:40.8, hit:"2025-12-25", inv:"已回款", due:"2026-03-10", paid:true, age:0},
+  {id:"M-074", ss:"SS-08", name:"合同签署", amt:14.6, hit:"2025-12-15", inv:"已回款", due:"2026-02-28", paid:true, age:0},
+  {id:"M-083", ss:"SS-11", name:"中心启动 SIV", amt:19.3, hit:"2025-10-21", inv:"已回款", due:"2026-01-04", paid:true, age:0},
+  {id:"M-082", ss:"SS-11", name:"合同签署", amt:12.9, hit:"2025-09-21", inv:"已回款", due:"2025-12-05", paid:true, age:0},
+  {id:"M-080", ss:"SS-10", name:"中心启动 SIV", amt:20.8, hit:"2025-09-16", inv:"已回款", due:"2025-11-30", paid:true, age:0},
+  {id:"M-077", ss:"SS-09", name:"中心启动 SIV", amt:22.7, hit:"2025-09-02", inv:"已回款", due:"2025-11-16", paid:true, age:0},
+  {id:"M-088", ss:"SS-15", name:"中心启动 SIV", amt:18.0, hit:"2025-08-28", inv:"已回款", due:"2025-11-11", paid:true, age:0},
+  {id:"M-079", ss:"SS-10", name:"合同签署", amt:13.9, hit:"2025-08-25", inv:"已回款", due:"2025-11-08", paid:true, age:0},
+  {id:"M-076", ss:"SS-09", name:"合同签署", amt:15.2, hit:"2025-08-09", inv:"已回款", due:"2025-10-23", paid:true, age:0},
+  {id:"M-087", ss:"SS-15", name:"合同签署", amt:12.0, hit:"2025-08-04", inv:"已回款", due:"2025-10-18", paid:true, age:0},
+  {id:"M-069", ss:"SS-05", name:"合同签署", amt:13.0, hit:"2025-07-16", inv:"已回款", due:"2025-09-29", paid:true, age:0},
+  {id:"M-073", ss:"SS-07", name:"中心启动 SIV", amt:24.9, hit:"2025-06-25", inv:"已回款", due:"2025-09-08", paid:true, age:0},
+  {id:"M-071", ss:"SS-06", name:"中心启动 SIV", amt:27.9, hit:"2025-06-11", inv:"已回款", due:"2025-08-25", paid:true, age:0},
+  {id:"M-072", ss:"SS-07", name:"合同签署", amt:16.6, hit:"2025-06-03", inv:"已回款", due:"2025-08-17", paid:true, age:0},
+  {id:"M-070", ss:"SS-06", name:"合同签署", amt:18.6, hit:"2025-05-18", inv:"已回款", due:"2025-08-01", paid:true, age:0},
+  {id:"M-068", ss:"SS-04", name:"中心启动 SIV", amt:21.5, hit:"2025-03-07", inv:"已回款", due:"2025-05-21", paid:true, age:0},
+  {id:"M-067", ss:"SS-04", name:"合同签署", amt:14.4, hit:"2025-02-06", inv:"已回款", due:"2025-04-22", paid:true, age:0},
+  {id:"M-063", ss:"SS-02", name:"中心启动 SIV", amt:26.8, hit:"2024-12-20", inv:"已回款", due:"2025-03-05", paid:true, age:0},
+  {id:"M-065", ss:"SS-03", name:"中心启动 SIV", amt:24.4, hit:"2024-12-13", inv:"已回款", due:"2025-02-26", paid:true, age:0},
+  {id:"M-061", ss:"SS-01", name:"中心启动 SIV", amt:28.7, hit:"2024-12-06", inv:"已回款", due:"2025-02-19", paid:true, age:0},
+  {id:"M-062", ss:"SS-02", name:"合同签署", amt:17.9, hit:"2024-11-28", inv:"已回款", due:"2025-02-11", paid:true, age:0},
+  {id:"M-064", ss:"SS-03", name:"合同签署", amt:16.3, hit:"2024-11-24", inv:"已回款", due:"2025-02-07", paid:true, age:0},
+  {id:"M-060", ss:"SS-01", name:"合同签署", amt:19.2, hit:"2024-11-13", inv:"已回款", due:"2025-01-27", paid:true, age:0},
 ];
+/* 台账里刻意留了三处缺口（SS-15 入组过半、SS-11 入组过半、SS-05 中心启动 SIV）：
+   这三个里程碑按中心实际进度早已达成，却没人补记录，因此没开票、没回款。
+   现金流预测把它们单独列出来，而不是算成未来收入 —— 见 §「已达成，却不在开票队列里」。 */
 
 /* ── 工时记录（演示用，可在"工时与差旅"中新增） ──────────────────── */
 const WORKTYPES = [
@@ -942,7 +1027,10 @@ const soaLabel = (ss,i) => soa(ss).label(i);
 const soaTasks = (ss,i) => soa(ss).tasks(i).map(t=>[t,0]);
 
 /* ── 受试者 ────────────────────────────────────────────────────────
-   st：预筛 / 筛选中 / 已入组 / 筛败 / 已出组
+   st：预筛 / 筛选中 / 已入组 / 筛败 / 已脱落 / 已出组
+   「已脱落」= 入组后中途退出（撤回知情 / 失访 / AE 终止 / 研究者判断 / 死亡 / 方案违背）。
+   缺这个状态会同时错两件事：受试者永远刷红超窗，且按整例计收入。
+   见 02g-life 的 DROPS 与 03-core 的 dropLost()。
    只存筛选号与随机号。见 §2.3 数据红线与 §8 关于准标识符的补充约束。 */
 let SUBJ = [
   {id:"S-0203", ss:"SS-01", st:"已入组", rnd:"R-018", seq:8, due:"2026-08-18", win:3, crc:"吴桐",
@@ -964,7 +1052,8 @@ let SUBJ = [
    tasks:[["知情同意签署（核对现行版本 V3.0）",1],["入排标准逐条核对并由 PI 签字",0],
           ["基线增强 CT / MRI 影像",0],["血常规 + 生化 + 凝血 + 肿瘤标志物",0],
           ["既往抗肿瘤治疗史与合并用药采集",0]]},
-  {id:"S-0224", ss:"SS-07", st:"已入组", rnd:"R-009", seq:3, due:"2026-08-23", win:2, crc:"吴桐",
+  /* 与 S-0240（北京协和，同为 08-24）构成跨院冲突 —— 超窗多半就是这么来的 */
+  {id:"S-0224", ss:"SS-07", st:"已入组", rnd:"R-009", seq:3, due:"2026-08-24", win:2, crc:"吴桐",
    icf:"2026-06-02", contact:"待联系", edc:"待录入", lastVisit:"2026-08-02", piOk:false,
    tasks:[["生命体征与体格检查",1],["采血与样本离心送检（2 小时内）",0],
           ["免疫相关不良事件专项问询",0],["研究药物配制核对与输注陪同",0]]},
@@ -1214,6 +1303,547 @@ function capaEffect(){
 </script>
 <script>
 "use strict";
+/* ════════════════════════════════════════════════════════════════════
+   组织 · 账号 · 权限 · 审计轨迹
+   —— 把架构文档 §4「行 × 列 × 动作」三维权限落成可操作的对象。
+   权限不是"能不能看到这个菜单"，而是三件事同时成立：
+     行：你能看到哪些中心的数据（scope）
+     列：同一行里哪些字段对你可见（成本、毛利、报价、受试者标识）
+     动作：你能对它做什么（审批、关闭、发起、改权限）
+   外部角色（机构办 / 研究者）默认拒绝，字段靠白名单加回。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 角色定义：可被老板在「组织与权限」里改，改完立即生效 ────────── */
+const ROW_RULE = {
+  all:      "全部中心",
+  team:     "本组承接的项目",
+  assigned: "被指派的中心",
+  hospital: "本院承接的项目",
+  pi:       "本人担任研究者的中心",
+  none:     "无"
+};
+/* 敏感字段：默认对外部角色全部关闭，靠白名单加回 */
+const FIELDS = {
+  cost:   "成本与人天",
+  margin: "毛利与利润率",
+  price:  "报价与合同金额",
+  subj:   "受试者筛选号",
+  staff:  "员工薪资口径"
+};
+const ACTS = {
+  approve:  "审批工时 / 差旅 / 偏离",
+  closeQA:  "关闭质量事件",
+  raiseQ:   "发起数据质疑",
+  advance:  "推进中心阶段",
+  manage:   "管理人员与权限",
+  bid:      "维护报价与投标",
+  ethics:   "递交伦理事务"
+};
+
+let ROLE_DEF = {
+  boss: {t:"经营层", ext:false, rows:"all",
+    mods:["dash","intake","sites","enr","screen","client","cash","bid","change","staff","people","time","pnl","bill","qa","mon","price","org","trail"],
+    fields:{cost:1,margin:1,price:1,subj:0,staff:1}, acts:{approve:1,closeQA:0,raiseQ:0,advance:1,manage:1,bid:1,ethics:0}},
+  pm:   {t:"项目总监 PM", ext:false, rows:"team",
+    mods:["pm","team","approve","intake","feas","sites","enr","screen","mon","change","qa","pnl","trail"],
+    fields:{cost:1,margin:1,price:1,subj:1,staff:0}, acts:{approve:1,closeQA:0,raiseQ:1,advance:1,manage:0,bid:1,ethics:1}},
+  cra:  {t:"临床监查员 CRA", ext:false, rows:"assigned",
+    mods:["cra","mysites","mon","query","screen","feas","material","time","qa","capa","trail"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:0,raiseQ:1,advance:0,manage:0,bid:0,ethics:0}},
+  crc:  {t:"临床协调员 CRC", ext:false, rows:"assigned",
+    mods:["crc","mysite","startup","sched","subj","prescreen","ethics","query","capa","isf","material","pay","handover","time"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:0,raiseQ:0,advance:0,manage:0,bid:0,ethics:1}},
+  dm:   {t:"数据管理 DM", ext:false, rows:"all",
+    mods:["dm","query","screen","trail"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:0,raiseQ:1,advance:0,manage:0,bid:0,ethics:0}},
+  qa:   {t:"质量保证 QA", ext:false, rows:"all",
+    mods:["audit","qa","screen","mon","trail"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:1,raiseQ:1,advance:0,manage:0,bid:0,ethics:0}},
+  inst: {t:"机构办（外部）", ext:true, rows:"hospital",
+    mods:["inst","instac","instqc","instreg"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:1,raiseQ:0,advance:0,manage:0,bid:0,ethics:0}},
+  pi:   {t:"研究者 PI（外部）", ext:true, rows:"pi",
+    mods:["pi","qa"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:0,raiseQ:0,advance:0,manage:0,bid:0,ethics:0}}
+};
+
+/* ── 分组：老板可增删改，组决定 PM 的行范围 ──────────────────────── */
+let GROUPS = [
+  {id:"G-01", name:"华东华南组", lead:"韩雪",
+   members:["林敏","赵坤","何雨薇","吴桐","沈亦琳","郭晓萱","冯乐"],
+   studies:["HJ-2024-017","HJ-2025-003"]},
+  {id:"G-02", name:"华北西南组", lead:"岑迪",
+   members:["段志远","徐倩","唐延","廖梦然","邱志安"],
+   studies:["HJ-2025-011","HJ-2026-004"]},
+  {id:"G-00", name:"职能与质量", lead:"凌远",
+   members:["卫兰","苗青"], studies:[]}
+];
+const groupOf = n => GROUPS.find(g=>g.members.includes(n)||g.lead===n) || null;
+
+/* ── 账号：一个人一个账号，账号绑定角色与分组 ──────────────────────
+   演示原型：密码统一为 demo，不做任何网络请求，不存任何真实凭据。 */
+let USERS = [
+  {u:"lingyuan",  n:"凌远",   role:"boss", st:"在职", joined:"2019-04-01", last:"2026-08-22 08:12"},
+  {u:"hanxue",    n:"韩雪",   role:"pm",   st:"在职", joined:"2021-06-15", last:"2026-08-22 07:50"},
+  {u:"cendi",     n:"岑迪",   role:"pm",   st:"在职", joined:"2022-03-07", last:"2026-08-21 18:30"},
+  {u:"linmin",    n:"林敏",   role:"cra",  st:"在职", joined:"2022-09-05", last:"2026-08-22 07:31"},
+  {u:"zhaokun",   n:"赵坤",   role:"cra",  st:"在职", joined:"2023-02-13", last:"2026-08-21 21:04"},
+  {u:"heyuwei",   n:"何雨薇", role:"cra",  st:"在职", joined:"2023-07-24", last:"2026-08-22 09:02"},
+  {u:"duanzhiyu", n:"段志远", role:"cra",  st:"在职", joined:"2025-03-10", last:"2026-08-20 17:45"},
+  {u:"xuqian",    n:"徐倩",   role:"cra",  st:"在职", joined:"2023-05-08", last:"2026-08-22 08:40"},
+  {u:"wutong",    n:"吴桐",   role:"crc",  st:"在职", joined:"2021-11-02", last:"2026-08-22 07:15"},
+  {u:"shenyilin", n:"沈亦琳", role:"crc",  st:"在职", joined:"2023-04-17", last:"2026-08-21 19:22"},
+  {u:"guoxiaoxu", n:"郭晓萱", role:"crc",  st:"在职", joined:"2023-08-21", last:"2026-08-21 16:08"},
+  {u:"tangyan",   n:"唐延",   role:"crc",  st:"在职", joined:"2025-06-09", last:"2026-08-22 08:55"},
+  {u:"liaomeng",  n:"廖梦然", role:"crc",  st:"在职", joined:"2021-03-15", last:"2026-08-22 07:02"},
+  {u:"qiuzhian",  n:"邱志安", role:"crc",  st:"在职", joined:"2023-01-30", last:"2026-08-21 20:11"},
+  {u:"fengle",    n:"冯乐",   role:"crc",  st:"在职", joined:"2023-09-11", last:"2026-08-22 08:20"},
+  {u:"weilan",    n:"卫兰",   role:"qa",   st:"在职", joined:"2022-01-10", last:"2026-08-21 14:36"},
+  {u:"miaoqing",  n:"苗青",   role:"dm",   st:"在职", joined:"2024-02-19", last:"2026-08-22 09:10"},
+  {u:"zhanghm",   n:"张慧敏", role:"inst", st:"在职", joined:"—", last:"2026-08-21 15:44", hosp:"北京协和医院", ext:true},
+  {u:"chenguod",  n:"陈国栋", role:"pi",   st:"在职", joined:"—", last:"2026-08-20 11:26", ext:true},
+  {u:"zhouqi",    n:"周琦",   role:"crc",  st:"已停用", joined:"2022-05-06", last:"2026-06-30 17:50",
+   off:"2026-07-15", offWhy:"离职 —— 转甲方 CRA"}
+];
+const userOf = n => USERS.find(x=>x.n===n);
+const uSeq = {v:1};
+
+/* ── 会话 ──────────────────────────────────────────────────────────── */
+const SESSION = {u:null, at:null};
+const ME = ()=> SESSION.u ? USERS.find(x=>x.u===SESSION.u) : null;
+const RD = ()=>{ const m=ME(); return m? ROLE_DEF[m.role] : null; };
+
+/* 三维权限判定 */
+const canMod   = v =>{ const r=RD(); return !!r && r.mods.includes(v); };
+const canField = f =>{ const r=RD(); return !!r && !!r.fields[f]; };
+const canAct   = a =>{ const r=RD(); return !!r && !!r.acts[a]; };
+/* 字段级遮罩：无权限时返回遮罩串，而不是 null —— 让"看不到"这件事本身可见 */
+const fmask = (f,v)=> canField(f) ? v : "—";
+
+/* ── 审计轨迹：任何写操作都必须留痕，否则核查时无法自证 ──────────── */
+let TRAIL = [
+  {t:"2026-08-22 07:15", who:"吴桐", role:"crc", act:"登录", tgt:"—", before:"—", after:"—", ss:"—"},
+  {t:"2026-08-21 16:40", who:"廖梦然", role:"crc", act:"修改访视目标日", tgt:"S-0412",
+   before:"2026-08-18", after:"2026-08-25", ss:"SS-09", why:"受试者出差改期"},
+  {t:"2026-08-21 11:05", who:"林敏", role:"cra", act:"关闭监查跟进项", tgt:"IMV 2026-08-19 / SS-01",
+   before:"未关闭", after:"已关闭", ss:"SS-01"},
+  {t:"2026-08-20 09:33", who:"凌远", role:"boss", act:"调整角色权限", tgt:"cra.fields.price",
+   before:"可见", after:"不可见", ss:"—", why:"报价属商务口径，一线不参与议价"},
+  {t:"2026-08-19 15:12", who:"张慧敏", role:"inst", act:"出具质控意见", tgt:"QC-2026-014",
+   before:"—", after:"已派发整改", ss:"SS-01"},
+  {t:"2026-07-15 10:00", who:"凌远", role:"boss", act:"停用账号", tgt:"zhouqi（周琦）",
+   before:"在职", after:"已停用", ss:"—", why:"离职，中心已交接给吴桐"}
+];
+function logAct(act, tgt, before, after, extra={}){
+  const m = ME();
+  TRAIL.unshift({t:`${TODAY} ${new Date().toTimeString().slice(0,5)}`,
+    who: m? m.n : "系统", role: m? m.role : "—",
+    act, tgt, before:String(before??"—"), after:String(after??"—"),
+    ss: extra.ss || "—", why: extra.why || ""});
+  if(TRAIL.length>400) TRAIL.length=400;
+}
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   CRC 的项目生命周期数据层
+   受试者有生命周期（02d），中心也有 —— 这一层补的是后者：
+     接手 → 启动准备(SIV) → 招募入组 → 维持(伦理/安全/修订) → 关闭结题
+   此前系统只做了中间一段（逐次访视），两头是空的。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── ① 启动准备：CRC 最忙的两个月，此前系统里一片空白 ────────────── */
+/* block:true = 阻塞项，未完成不得推进到「SIV启动」 */
+const SIV_PLAN = {"SS-05":"2026-09-05","SS-13":"2026-09-01","SS-14":"2026-09-19"};
+let STARTUP = [
+  /* SS-13 广东省人民医院 —— 伦理递交阶段，SIV 排期 09-01，最紧 */
+  {ss:"SS-13", cat:"伦理与批件", item:"伦理初始审查递交（含方案 V1.2、ICF V1.1、IB V2.0）", owner:"郭晓萱", due:"2026-08-08", done:1, block:1},
+  {ss:"SS-13", cat:"伦理与批件", item:"伦理会议答辩与补充材料", owner:"郭晓萱", due:"2026-08-26", done:0, block:1},
+  {ss:"SS-13", cat:"伦理与批件", item:"伦理批件取得并归档 ISF", owner:"郭晓萱", due:"2026-08-29", done:0, block:1},
+  {ss:"SS-13", cat:"合同与预算", item:"三方协议定稿（申办方 / 机构 / 受托方）", owner:"何雨薇", due:"2026-08-25", done:0, block:1},
+  {ss:"SS-13", cat:"合同与预算", item:"受试者补偿标准报机构备案", owner:"郭晓萱", due:"2026-08-27", done:0, block:0},
+  {ss:"SS-13", cat:"研究者文件夹", item:"ISF 建夹与目录页（按申办方模板）", owner:"郭晓萱", due:"2026-08-20", done:1, block:0},
+  {ss:"SS-13", cat:"研究者文件夹", item:"全体研究者 CV、执业证、GCP 证书收集", owner:"郭晓萱", due:"2026-08-28", done:0, block:1},
+  {ss:"SS-13", cat:"人员与培训", item:"研究者授权分工表 DOA 由 PI 签署", owner:"郭晓萱", due:"2026-08-31", done:0, block:1},
+  {ss:"SS-13", cat:"人员与培训", item:"方案与 ICF 培训及签到表", owner:"何雨薇", due:"2026-09-01", done:0, block:1},
+  {ss:"SS-13", cat:"人员与培训", item:"机构人员备案与门禁办理", owner:"郭晓萱", due:"2026-08-29", done:0, block:0},
+  {ss:"SS-13", cat:"药品与物资", item:"药品接收、温控启用与药房交接", owner:"郭晓萱", due:"2026-08-31", done:0, block:1},
+  {ss:"SS-13", cat:"药品与物资", item:"ICF 空白件、访视包、采血管到位", owner:"郭晓萱", due:"2026-08-30", done:0, block:0},
+  {ss:"SS-13", cat:"检验与设备", item:"中心实验室资质与正常值范围收集", owner:"郭晓萱", due:"2026-08-26", done:1, block:0},
+  {ss:"SS-13", cat:"检验与设备", item:"离心机 / 冰箱校准证书，影像科排期对接", owner:"郭晓萱", due:"2026-08-28", done:0, block:0},
+  {ss:"SS-13", cat:"系统与账号", item:"EDC / IWRS 账号开通与权限确认", owner:"何雨薇", due:"2026-08-30", done:0, block:1},
+  {ss:"SS-13", cat:"启动会筹备", item:"SIV 议程、参会人确认、会议室预订", owner:"郭晓萱", due:"2026-08-29", done:0, block:0},
+
+  /* SS-14 江苏省人民医院 —— 合同签署阶段，SIV 排期 09-19 */
+  {ss:"SS-14", cat:"伦理与批件", item:"伦理批件取得并归档 ISF", owner:"冯乐", due:"2026-06-30", done:1, block:1},
+  {ss:"SS-14", cat:"合同与预算", item:"三方协议签署完成", owner:"何雨薇", due:"2026-08-20", done:1, block:1},
+  {ss:"SS-14", cat:"研究者文件夹", item:"ISF 建夹与全套文件归档", owner:"冯乐", due:"2026-09-05", done:0, block:0},
+  {ss:"SS-14", cat:"研究者文件夹", item:"研究者 CV / GCP 证书收集", owner:"冯乐", due:"2026-09-08", done:0, block:1},
+  {ss:"SS-14", cat:"人员与培训", item:"授权分工表 DOA 由 PI 签署", owner:"冯乐", due:"2026-09-12", done:0, block:1},
+  {ss:"SS-14", cat:"人员与培训", item:"方案培训与签到表", owner:"何雨薇", due:"2026-09-18", done:0, block:1},
+  {ss:"SS-14", cat:"药品与物资", item:"药品接收与温控启用", owner:"冯乐", due:"2026-09-15", done:0, block:1},
+  {ss:"SS-14", cat:"检验与设备", item:"中心实验室资质与正常值收集", owner:"冯乐", due:"2026-09-10", done:0, block:0},
+  {ss:"SS-14", cat:"系统与账号", item:"EDC / IWRS 账号开通", owner:"何雨薇", due:"2026-09-16", done:0, block:1},
+  {ss:"SS-14", cat:"启动会筹备", item:"SIV 议程与参会确认", owner:"冯乐", due:"2026-09-17", done:0, block:0},
+
+  /* SS-05 西安交大一附院 —— 已 SIV 但迟迟不入组，启动尾巴没收干净 */
+  {ss:"SS-05", cat:"伦理与批件", item:"伦理批件归档", owner:"唐延", due:"2025-06-20", done:1, block:1},
+  {ss:"SS-05", cat:"人员与培训", item:"授权分工表 DOA 更新（新增两名研究护士）", owner:"唐延", due:"2026-07-30", done:0, block:0},
+  {ss:"SS-05", cat:"药品与物资", item:"首批药品接收与温控启用", owner:"唐延", due:"2025-11-14", done:1, block:1},
+  {ss:"SS-05", cat:"检验与设备", item:"中心实验室室间质评证书更新", owner:"唐延", due:"2026-08-15", done:0, block:0},
+  {ss:"SS-05", cat:"启动会筹备", item:"入组启动动员会（PI 与门诊团队）", owner:"段志远", due:"2026-08-30", done:0, block:0}
+];
+const STARTUP_CATS = ["伦理与批件","合同与预算","研究者文件夹","人员与培训","药品与物资","检验与设备","系统与账号","启动会筹备"];
+function startupM(ssId){
+  const rows = STARTUP.filter(r=>r.ss===ssId);
+  if(!rows.length) return null;
+  const done = rows.filter(r=>r.done).length;
+  const blocks = rows.filter(r=>r.block && !r.done);
+  const overdue = rows.filter(r=>!r.done && days(r.due, TODAY) > 0);
+  const plan = SIV_PLAN[ssId] || null;
+  return {rows, n:rows.length, done, rate:done/rows.length, blocks, overdue,
+          plan, dToSiv: plan? days(TODAY, plan) : null};
+}
+
+/* ── ② 预筛登记：漏斗的第一格此前没有门 ──────────────────────────── */
+const PS_SRC = ["门诊筛查","住院病房","院内转诊","既往受试者库","广告与义诊","外院转诊"];
+const PS_RESULT = ["合格 · 待知情", "已签知情 · 进入筛选", "不合格 · 入排不符", "拒绝参加"];
+let PRESCREEN = [
+  {id:"PS-0412", ss:"SS-01", d:"2026-08-21", by:"吴桐", src:"门诊筛查", result:"合格 · 待知情", why:""},
+  {id:"PS-0411", ss:"SS-01", d:"2026-08-21", by:"吴桐", src:"门诊筛查", result:"不合格 · 入排不符", why:"既往接受过二线以上系统治疗"},
+  {id:"PS-0410", ss:"SS-01", d:"2026-08-20", by:"吴桐", src:"院内转诊", result:"已签知情 · 进入筛选", why:""},
+  {id:"PS-0409", ss:"SS-07", d:"2026-08-20", by:"吴桐", src:"住院病房", result:"不合格 · 入排不符", why:"PD-L1 表达 <1%"},
+  {id:"PS-0408", ss:"SS-07", d:"2026-08-19", by:"吴桐", src:"门诊筛查", result:"拒绝参加", why:"家属不同意，顾虑输注时间成本"},
+  {id:"PS-0407", ss:"SS-04", d:"2026-08-19", by:"唐延", src:"门诊筛查", result:"不合格 · 入排不符", why:"ALT 3.4×ULN"},
+  {id:"PS-0406", ss:"SS-09", d:"2026-08-18", by:"廖梦然", src:"既往受试者库", result:"已签知情 · 进入筛选", why:""},
+  {id:"PS-0405", ss:"SS-12", d:"2026-08-18", by:"廖梦然", src:"院内转诊", result:"合格 · 待知情", why:""}
+];
+let psSeq = 413;
+/* 预筛来源产出：判断"该加渠道"还是"该改入排"的依据 */
+function psBySrc(ids){
+  const l = PRESCREEN.filter(p=>!ids || ids.has(p.ss));
+  return PS_SRC.map(s=>{
+    const rows = l.filter(p=>p.src===s);
+    const icf = rows.filter(p=>p.result==="已签知情 · 进入筛选").length;
+    return {n:s, total:rows.length, icf, rate: rows.length? icf/rows.length : null};
+  }).filter(x=>x.total);
+}
+
+/* ── ③ 受试者脱落 / 退出：此前完全没有这个状态 ────────────────────
+   影响两处：① 保留率（质量）② 结算 —— 脱落受试者按已完成访视比例计费。 */
+const DROP_REASONS = ["受试者撤回知情","失访","不良事件终止治疗","研究者判断需终止","死亡","方案违背终止","其他"];
+let DROPS = [
+  {ss:"SS-01", subj:"S-0166", why:"受试者撤回知情", d:"2025-11-08", done:3,  total:12, note:"往返路程 4 小时，家属不再支持"},
+  {ss:"SS-01", subj:"S-0174", why:"不良事件终止治疗", d:"2026-03-19", done:7,  total:12, note:"3 级免疫性肝炎"},
+  {ss:"SS-02", subj:"S-0288", why:"失访", d:"2026-02-11", done:2,  total:12, note:"连续 3 次电话未接，挂号信无回应"},
+  {ss:"SS-03", subj:"S-0259", why:"死亡", d:"2026-05-02", done:9,  total:12, note:"疾病进展，与试验药物无关"},
+  {ss:"SS-04", subj:"S-0344", why:"受试者撤回知情", d:"2026-06-14", done:1,  total:12, note:"签署当日反悔"},
+  {ss:"SS-06", subj:"S-0312", why:"不良事件终止治疗", d:"2026-04-28", done:5,  total:16, note:"2 级免疫性肺炎，PI 判断不宜继续"},
+  {ss:"SS-07", subj:"S-0233", why:"失访", d:"2026-06-30", done:4,  total:16, note:"外地务工，无法按窗口返院"},
+  {ss:"SS-09", subj:"S-0401", why:"受试者撤回知情", d:"2026-01-22", done:2,  total:8,  note:"血糖控制达标后自行停药"},
+  {ss:"SS-09", subj:"S-0433", why:"失访", d:"2026-06-05", done:5,  total:8,  note:"更换联系方式未告知"},
+  {ss:"SS-10", subj:"S-0392", why:"研究者判断需终止", d:"2026-05-17", done:6,  total:8,  note:"依从性 <60%，服药记录不可靠"},
+  {ss:"SS-11", subj:"S-0421", why:"不良事件终止治疗", d:"2026-01-24", done:3,  total:8,  note:"糖尿病酮症酸中毒 SAE-0019"},
+  {ss:"SS-11", subj:"S-0447", why:"受试者撤回知情", d:"2026-07-08", done:1,  total:8,  note:"抽血次数超出预期"},
+  {ss:"SS-12", subj:"S-0461", why:"失访", d:"2026-06-21", done:4,  total:12, note:"术后返回原籍随访"},
+  {ss:"SS-15", subj:"S-0478", why:"方案违背终止", d:"2026-04-03", done:2,  total:8,  note:"入组后发现不符合入排标准第 7 条"}
+];
+const dropsOf = id => DROPS.filter(d=>d.ss===id);
+/* 脱落受试者的收入贡献：按已完成访视比例，而不是按整例 */
+const dropEarn = d => d.done / d.total;
+function retentionM(ss){
+  const dl = dropsOf(ss.id), n = dl.length;
+  return {n, active: ss.enrolled - n, rate: ss.enrolled? (ss.enrolled-n)/ss.enrolled : null,
+    lost: sum(dl, d=>(1-dropEarn(d))) * ss.unit, list:dl};
+}
+
+/* ── ④ 伦理事务：不是一次性的，是贯穿整个项目的周期性义务 ────────── */
+const ETH_KINDS = ["初始审查","年度跟踪审查","方案修订审查","SAE 快速报告","严重违背报告","结题报告"];
+let ETHICS = [
+  {id:"E-0091", ss:"SS-01", kind:"年度跟踪审查", due:"2026-08-19", sub:"—", appr:"—", st:"待递交",
+   note:"伦理批件 2026-10-18 到期，需提前 60 天递交 —— 已逾期 3 天未交，批件断档将导致中心停摆"},
+  {id:"E-0089", ss:"SS-07", kind:"方案修订审查", due:"2026-09-05", sub:"2026-08-18", appr:"—", st:"审查中",
+   note:"方案 V3.0 → V3.1：新增 C4 心肌酶检测，每例增加 2 次采血"},
+  {id:"E-0093", ss:"SS-13", kind:"初始审查", due:"2026-08-26", sub:"2026-08-08", appr:"—", st:"审查中",
+   note:"8-26 伦理会议答辩，需 PI 到会"},
+  {id:"E-0090", ss:"SS-09", kind:"年度跟踪审查", due:"2026-09-14", sub:"—", appr:"—", st:"待递交",
+   note:"批件 2026-11-13 到期"},
+  {id:"E-0087", ss:"SS-02", kind:"SAE 快速报告", due:"2026-08-25", sub:"2026-08-20", appr:"2026-08-21", st:"已备案",
+   note:"SAE-0041 3 级肝功能异常，知晓后 5 日内报伦理"},
+  {id:"E-0085", ss:"SS-12", kind:"年度跟踪审查", due:"2026-07-20", sub:"2026-07-11", appr:"2026-08-04", st:"已批准",
+   note:"批件延续至 2027-09-13"},
+  {id:"E-0082", ss:"SS-05", kind:"严重违背报告", due:"2026-08-30", sub:"—", appr:"—", st:"待递交",
+   note:"QI-2026-0139 知情同意版本错误，3 例受试者签署过期版本 —— 属严重违背，须报伦理"}
+];
+let ethSeq = 94;
+const ethState = e => e.st==="已批准"||e.st==="已备案" ? "good"
+                    : days(e.due,TODAY) > 0 ? "crit" : days(e.due,TODAY) > -14 ? "warn" : "neut";
+
+/* ── ⑤ 交接：系统此前已经提出这个问题，却没有提供机制 ────────────── */
+const HO_ITEMS = ["ISF 研究者文件夹清点与移交","在组受试者逐例交底（含联系方式与依从性）",
+  "试验用药品实盘与账实核对","未关闭质疑与质量事件清单","机构与 PI 当面引荐",
+  "EDC / IWRS 账号权限移交","受试者补偿未发放清单","样本暂存与转运待办"];
+let HANDOVER = [
+  {id:"HO-006", from:"郭晓萱", to:"冯乐", ss:["SS-13"], reason:"年假 09-02 至 09-04，期间 SIV 排期 09-01",
+   d:"2026-08-29", st:"待确认", items:HO_ITEMS.map((t,i)=>({t, done:i<2}))},
+  {id:"HO-005", from:"周琦", to:"吴桐", ss:["SS-01","SS-07"], reason:"离职（2026-07-15）",
+   d:"2026-07-10", st:"已完成", items:HO_ITEMS.map(t=>({t, done:true}))}
+];
+let hoSeq = 7;
+
+/* ── ⑥ 中心关闭闸门：推进到「中心关闭」前必须全部清零 ──────────────
+   此前 06-sites 的推进按钮只有一句 ss.st=next，没有任何前置校验。 */
+function closeGate(ss){
+  const id = ss.id, g = [];
+  const inTrial = SUBJ.filter(s=>s.ss===id && s.st!=="已出组" && s.st!=="筛败" && s.st!=="已脱落");
+  if(inTrial.length) g.push({t:`仍有 ${inTrial.length} 例受试者在组未出组`, v:"subj"});
+  const q = QUERIES.filter(x=>x.ss===id && x.st!=="已关闭");
+  if(q.length) g.push({t:`${q.length} 条数据质疑未关闭`, v:"query"});
+  const qi = ISSUES.filter(x=>x.ss===id && x.st!=="已关闭");
+  if(qi.length) g.push({t:`${qi.length} 项质量事件未关闭`, v:"qa"});
+  const ip = (typeof IP!=="undefined"? IP:[]).filter(r=>r.ss===id);
+  const unbal = ip.filter(r=>ipM(r).diff!==0);
+  if(unbal.length) g.push({t:`${unbal.length} 批药品数量不平衡`, v:"material"});
+  const undest = ip.filter(r=>r.ret > r.dest);
+  if(undest.length) g.push({t:`${undest.length} 批回收药品未完成销毁登记`, v:"material"});
+  const sp = (typeof SPEC!=="undefined"? SPEC:[]).filter(r=>r.ss===id && r.st!=="已回执");
+  if(sp.length) g.push({t:`${sp.length} 份生物样本链未闭环`, v:"material"});
+  const pay = PAY.filter(p=>p.ss===id && (p.st!=="已发放" || !p.rc));
+  if(pay.length) g.push({t:`${pay.length} 笔受试者补偿未发放或缺签收凭证`, v:"pay"});
+  const eth = ETHICS.filter(e=>e.ss===id && e.kind==="结题报告" && e.st!=="已批准");
+  if(!ETHICS.some(e=>e.ss===id && e.kind==="结题报告")) g.push({t:"未向伦理递交结题报告", v:"ethics"});
+  else if(eth.length) g.push({t:"结题报告尚未获伦理批准", v:"ethics"});
+  return g;
+}
+/* SIV 闸门：启动清单的阻塞项未清，不得推进到「SIV启动」 */
+function sivGate(ss){
+  const m = startupM(ss.id);
+  if(!m) return [];
+  return m.blocks.map(b=>({t:`启动阻塞项未完成：${b.item}`, v:"startup"}));
+}
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   经营层数据层：客户 · 投标闭环 · 合同变更 · 现金流 · 人才
+   此前系统只按「项目 / 中心」切片，且只看得见已经发生的事。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── ① 客户（申办方）：比"单中心毛利"更上位的切片 ────────────────── */
+const CLIENT_META = {
+  "华拓生物":{since:"2021", contact:"临床运营部 · 邵敏", pay:"月结 60 天", nps:8, projects:5, note:"合作最久，付款守约，但压价最狠"},
+  "安泰医药":{since:"2024", contact:"医学部 · 骆一鸣", pay:"月结 90 天", nps:6, projects:2, note:"账期长，两笔逾期均出自这里"},
+  "中康制药":{since:"2023", contact:"注册与临床 · 汪蓓", pay:"月结 60 天", nps:9, projects:3, note:"回款最快，明年有两个 III 期计划"},
+  "捷成医疗":{since:"2026", contact:"临床事务 · 傅斯年", pay:"月结 45 天", nps:7, projects:1, note:"器械新客户，首个项目"}
+};
+const SPONSORS = [...new Set(STUDIES.map(s=>s.sponsor))];
+function clientM(sp){
+  const studies = STUDIES.filter(s=>s.sponsor===sp);
+  const sids = new Set(studies.map(s=>s.id));
+  const sites = SITES.filter(s=>sids.has(s.sid));
+  const rev = sum(sites, siteRev), cost = sum(sites, s=>s.cost);
+  const ms = MILES.filter(m=>sids.has(site(m.ss).sid));
+  const paid = ms.filter(m=>m.paid), open = ms.filter(m=>!m.paid && m.inv==="已开票");
+  const dso = paid.length ? 60 : null;
+  return {sp, meta:CLIENT_META[sp]||{}, studies, sites,
+    rev, cost, gp:rev-cost, gpr: rev? (rev-cost)/rev : null,
+    contract: sum(studies, s=>s.contract),
+    enrolled: sum(sites,s=>s.enrolled), planned: sum(studies,s=>s.planned),
+    ar: sum(open,m=>m.amt), overdue: sum(open.filter(m=>m.age>60),m=>m.amt),
+    avgAge: open.length? sum(open,m=>m.age)/open.length : null, dso};
+}
+
+/* ── ② 投标与报价闭环：报出去的价，赢没赢，必须回写 ────────────────
+   否则"我们是不是系统性报高/报低"永远无法回答。 */
+let BIDS = [
+  {id:"B-2026-11", sp:"中康制药", name:"恒糖宁 IV 期上市后研究", sub:"2026-08-05", sites:24, subjects:600,
+   ours:2180, md:8420, st:"待定", win:null, by:"韩雪", note:"老客户，对方已口头示意价格可接受"},
+  {id:"B-2026-09", sp:"华拓生物", name:"艾瑞替尼 IIIb 期扩展", sub:"2026-06-18", sites:16, subjects:320,
+   ours:1960, md:7150, st:"中标", win:1880, by:"韩雪", note:"降价 4.1% 成交，仍在毛利线上"},
+  {id:"B-2026-07", sp:"惠元制药", name:"HY-207 II 期", sub:"2026-05-22", sites:8, subjects:120,
+   ours:1120, md:4100, st:"失标", win:890, by:"岑迪", note:"输给报价低 21% 的同行 —— 对方按 12 人天/例，我们按 19"},
+  {id:"B-2026-04", sp:"捷成医疗", name:"CoroFlex 确证性试验", sub:"2026-01-08", sites:10, subjects:180,
+   ours:1450, md:5600, st:"中标", win:1450, by:"韩雪", note:"原价成交，首次合作"},
+  {id:"B-2025-19", sp:"安泰医药", name:"HT-118 II 期", sub:"2025-01-14", sites:6, subjects:96,
+   ours:980, md:3450, st:"中标", win:920, by:"韩雪", note:"降价 6.1%"},
+  {id:"B-2025-16", sp:"瑞普生物", name:"RP-33 III 期", sub:"2025-10-09", sites:18, subjects:400,
+   ours:2450, md:9200, st:"失标", win:1980, by:"岑迪", note:"差 19%。复盘结论：我们把 CRC 驻场比例按 0.8 FTE 报，对方按 0.5"},
+  {id:"B-2025-12", sp:"中康制药", name:"恒糖宁 III 期", sub:"2025-02-20", sites:20, subjects:420,
+   ours:2400, md:9100, st:"中标", win:2340, by:"韩雪", note:"降价 2.5%"},
+  {id:"B-2025-08", sp:"华拓生物", name:"HT-90 生物等效性", sub:"2025-07-11", sites:2, subjects:48,
+   ours:320, md:980, st:"失标", win:245, by:"岑迪", note:"BE 试验我们没有成本优势，之后不再投"}
+];
+function bidM(){
+  const done = BIDS.filter(b=>b.st!=="待定");
+  const won = done.filter(b=>b.st==="中标");
+  /* 价格偏差：我们的报价相对成交价高多少 —— 正数=系统性报高 */
+  const gaps = done.filter(b=>b.win).map(b=>(b.ours-b.win)/b.win);
+  const lostGaps = done.filter(b=>b.st==="失标"&&b.win).map(b=>(b.ours-b.win)/b.win);
+  return {n:BIDS.length, done:done.length, won:won.length,
+    rate: done.length? won.length/done.length : null,
+    amtWon: sum(won,b=>b.win||b.ours), amtBid: sum(done,b=>b.ours),
+    bias: gaps.length? gaps.reduce((a,b)=>a+b,0)/gaps.length : null,
+    lostBias: lostGaps.length? lostGaps.reduce((a,b)=>a+b,0)/lostGaps.length : null,
+    mdPer: done.map(b=>({n:b.name, v:b.md/b.subjects, st:b.st}))};
+}
+
+/* ── ③ 合同变更：亏损第二大原因就是 scope creep 没有变更单 ────────── */
+const CHG_KINDS = ["方案修订 · 访视增加","方案修订 · 检查项增加","例数调整","中心增减","周期延长","单价调整"];
+let CHANGES = [
+  {id:"CR-014", sid:"HJ-2025-003", ss:"SS-07", kind:"方案修订 · 检查项增加", raised:"2026-08-18", by:"吴桐",
+   what:"方案 V3.0 → V3.1，C4 起每例增加心肌酶检测 2 次采血，CRC 每例多约 1.5 人天",
+   mdImpact:1.5, perSubject:true, amt:null, st:"待提出", note:"伦理已受理（E-0089），但商务侧尚未提出变更"},
+  {id:"CR-013", sid:"HJ-2024-017", ss:null, kind:"周期延长", raised:"2026-07-30", by:"韩雪",
+   what:"入组滞后，整体周期由 27 个月延长至 31 个月，4 个月的 PM 与 CRA 驻场成本未覆盖",
+   mdImpact:260, perSubject:false, amt:62.0, st:"已提交", note:"申办方以'延长系我方入组不力'为由暂未签署"},
+  {id:"CR-012", sid:"HJ-2025-011", ss:"SS-11", kind:"例数调整", raised:"2026-06-12", by:"岑迪",
+   what:"该中心筛败率 57%，合同 30 例下调至 20 例，同时上调单例单价补偿筛败成本",
+   mdImpact:-180, perSubject:false, amt:-18.5, st:"已签署", note:"已生效，单价由 3.9 调至 4.4 万"},
+  {id:"CR-011", sid:"HJ-2026-004", ss:null, kind:"中心增减", raised:"2026-05-08", by:"韩雪",
+   what:"新增 2 个中心（合同由 10 个增至 12 个）", mdImpact:420, perSubject:false, amt:132.0, st:"已签署", note:""},
+  {id:"CR-010", sid:"HJ-2024-017", ss:"SS-01", kind:"方案修订 · 访视增加", raised:"2026-03-14", by:"吴桐",
+   what:"新增 EOT 后 30 天安全随访访视 1 次", mdImpact:0.8, perSubject:true, amt:null, st:"未获批",
+   note:"申办方认为属安全性义务，不追加费用 —— 全项目 143 例，实际白做约 114 人天"}
+];
+let chgSeq = 15;
+/* 未覆盖的 scope creep：已发生工作量、但没有对应变更单金额 */
+function creepM(){
+  const open = CHANGES.filter(c=>c.st==="待提出"||c.st==="已提交"||c.st==="未获批");
+  let md = 0, rows = [];
+  open.forEach(c=>{
+    const n = c.perSubject
+      ? (c.ss ? site(c.ss).enrolled : sum(SITES.filter(s=>s.sid===c.sid),s=>s.enrolled))
+      : 1;
+    const total = c.mdImpact * n;
+    md += total;
+    rows.push({...c, n, totalMd: total, cash: total * RATE.crcDay});
+  });
+  return {md, amt: md*RATE.crcDay, rows,
+    signed: CHANGES.filter(c=>c.st==="已签署"), open};
+}
+
+/* ── ④ 现金流预测：系统此前只有后视镜 ──────────────────────────────
+   人力成本每月刚性支出，回款是里程碑制 + 账期 —— 缺口出现在哪个月？ */
+const ROLE_DAY = r => r==="CRC" ? RATE.crcDay : r==="CRA" ? RATE.craDay : RATE.craDay*1.15;
+function monthlyBurn(){
+  const heads = STAFF.filter(s=>{const u=userOf(s.n); return !u || u.st==="在职";});
+  const direct = sum(heads, s=>ROLE_DAY(s.role)*RATE.workdays);
+  return {heads:heads.length, direct, oh:direct*RATE.overhead, total:direct*(1+RATE.overhead)};
+}
+/* 中心合同额与里程碑计划：签约 10% · SIV 15% · 入组过半 25% · 入组 80% 25% · 结题 25% */
+const MS_PLAN = [["合同签署",.10],["中心启动 SIV",.15],["入组过半",.25],["入组达成 80%",.25],["中心结题",.25]];
+const siteContract = ss => ss.startup + ss.contracted*ss.unit;
+/* 按该中心的实际入组速度推预计达成月份 */
+function msForecast(ss){
+  const c = siteContract(ss), hit = new Set(MILES.filter(m=>m.ss===ss.id).map(m=>m.name));
+  const prog = ss.contracted? ss.enrolled/ss.contracted : 0;
+  const fpi = ss.fpi!=="—" ? ss.fpi : null;
+  const mo = fpi ? Math.max(1, days(fpi,TODAY)/30.4) : null;
+  const vel = mo ? ss.enrolled/mo : null;                 // 例/月
+  const out = [];
+  MS_PLAN.forEach(([name,r])=>{
+    if(hit.has(name)) return;
+    let need = null;
+    if(name==="合同签署") need = ss.st==="立项"||ss.st==="伦理递交"||ss.st==="伦理批件" ? 2 : 0;
+    else if(name==="中心启动 SIV") need = FLOW.indexOf(ss.st) >= FLOW.indexOf("SIV启动") ? 0
+      : (SIV_PLAN[ss.id] ? Math.max(0, days(TODAY, SIV_PLAN[ss.id])/30.4) : 3);
+    else if(name==="中心结题") need = vel ? (ss.contracted-ss.enrolled)/Math.max(vel,.3)/1 + 4 : 12;
+    else {
+      const target = ss.contracted * (name==="入组过半"?.5:.8);
+      if(ss.enrolled >= target) need = 0;
+      else if(!vel || vel<=0) return;
+      else need = (target-ss.enrolled)/vel;
+    }
+    if(need===null || need>10) return;
+    /* need===0 表示这个里程碑其实已经达成，却不在开票队列里 ——
+       它不是未来收入，是记录缺口。混进预测会凭空造出现金流。 */
+    out.push({ss:ss.id, name, amt:+(c*r).toFixed(1), inMo:need, gap:need===0});
+  });
+  return out;
+}
+/* 未来 6 个月：预计回款 vs 刚性支出 */
+function cashF(months=6){
+  const burn = monthlyBurn(), out = [];
+  const base = new Date(TODAY.slice(0,8)+"01");
+  const scoped = scope();
+  for(let i=1;i<=months;i++){
+    const d = new Date(base.getFullYear(), base.getMonth()+i, 1);
+    const key = `${String(d.getFullYear()).slice(2)}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    out.push({key, mo:i, inv:0, cash:0, out:burn.total, items:[]});
+  }
+  const put = (mo, amt, label, kind)=>{
+    const b = out.find(x=>x.mo===mo); if(!b) return;
+    b.cash += amt; b.items.push({label, amt, kind});
+  };
+  /* 已开票未回款：按到期日落月 */
+  MILES.filter(m=>!m.paid && m.inv==="已开票" && scoped.some(s=>s.id===m.ss)).forEach(m=>{
+    const mo = m.due==="—" ? 2 : Math.max(1, Math.ceil(days(TODAY, m.due)/30.4));
+    put(Math.min(mo,months), m.amt, `${m.id} ${site(m.ss).hosp} ${m.name}`, m.age>60?"overdue":"invoiced");
+  });
+  /* 待开票：假设 15 天内开票 + 60 天账期 */
+  MILES.filter(m=>!m.paid && m.inv==="待开票" && scoped.some(s=>s.id===m.ss)).forEach(m=>{
+    put(Math.min(3,months), m.amt, `${m.id} ${site(m.ss).hosp} ${m.name}（待开票）`, "pending");
+  });
+  /* 预计将达成的里程碑：达成月 + 2 个月账期。已达成未记录的不计入现金 */
+  const gaps = [];
+  scoped.forEach(ss=> msForecast(ss).forEach(f=>{
+    if(f.gap){ gaps.push(f); return; }
+    const mo = Math.ceil(f.inMo) + 2;
+    if(mo<=months) put(mo, f.amt, `${site(f.ss).hosp} ${f.name}（预计）`, "forecast");
+  }));
+  let cum = 0;
+  out.forEach(b=>{ b.net = b.cash - b.out; cum += b.net; b.cum = cum; });
+  /* 压力情景：逾期应收之所以逾期，恰恰是因为对方还没打算付。
+     假设它们再拖 3 个月、且预计达成的里程碑延后 1 个月，最低点会掉到哪里。 */
+  const st = out.map(b=>({key:b.key, mo:b.mo, cash:0, out:b.out}));
+  out.forEach(b=>b.items.forEach(i=>{
+    const shift = i.kind==="overdue" ? 3 : i.kind==="forecast" ? 1 : 0;
+    const t = st.find(x=>x.mo === b.mo + shift);
+    if(t) t.cash += i.amt;          // 落到区间外的视为本期收不到
+  }));
+  let sc = 0, sMin = Infinity, sMinKey = null;
+  st.forEach(b=>{ sc += b.cash - b.out; b.cum = sc;
+    if(sc < sMin){ sMin = sc; sMinKey = b.key; } });
+  return {rows:out, burn, gaps, gapAmt: sum(gaps,g=>g.amt),
+          stress:{rows:st, worst:sMin, worstKey:sMinKey, end:sc}};
+}
+
+/* ── ⑤ 人才梯队：人天就是产品，人走了产品就没了 ──────────────────── */
+const TALENT = {
+  "林敏":{mentor:"韩雪", succ:"徐倩", cert:["GCP","SDV 高级"], want:"想带团队"},
+  "赵坤":{mentor:"韩雪", succ:null, cert:["GCP"], want:"关注涨薪"},
+  "何雨薇":{mentor:"韩雪", succ:"段志远", cert:["GCP"], want:"—"},
+  "段志远":{mentor:"何雨薇", succ:null, cert:["GCP"], want:"入职 1 年，需带教"},
+  "徐倩":{mentor:"岑迪", succ:null, cert:["GCP","医学背景"], want:"—"},
+  "吴桐":{mentor:"韩雪", succ:null, cert:["GCP","肿瘤专科"], want:"两次提出中心过多"},
+  "沈亦琳":{mentor:"韩雪", succ:null, cert:["GCP"], want:"—"},
+  "郭晓萱":{mentor:"韩雪", succ:null, cert:["GCP"], want:"—"},
+  "唐延":{mentor:"吴桐", succ:null, cert:["GCP"], want:"入职 1 年"},
+  "廖梦然":{mentor:"岑迪", succ:null, cert:["GCP","内分泌专科"], want:"连续 3 周加班"},
+  "邱志安":{mentor:"岑迪", succ:null, cert:["GCP"], want:"—"},
+  "冯乐":{mentor:"韩雪", succ:null, cert:["GCP"], want:"—"},
+  "韩雪":{mentor:"凌远", succ:"林敏", cert:["GCP","PMP"], want:"—"},
+  "卫兰":{mentor:"凌远", succ:null, cert:["GCP","内审员"], want:"—"}
+};
+const HO_COST_DAY = 3.5;   // 每个中心的平均交接人天
+function talentM(s){
+  const u = userOf(s.n), t = TALENT[s.n] || {};
+  const tenure = u && u.joined!=="—" ? days(u.joined, TODAY)/365 : null;
+  /* 流失风险：高利用率 + 无继任者 + 短司龄 + 已表达诉求 */
+  let risk = 0, why = [];
+  if(s.util >= 92){ risk += 40; why.push(`利用率 ${s.util}% 持续过载`); }
+  else if(s.util >= 85){ risk += 20; why.push(`利用率 ${s.util}% 偏高`); }
+  if(s.util <= 50){ risk += 15; why.push(`利用率仅 ${s.util}%，价值感低`); }
+  if(!t.succ && s.sites.length >= 3){ risk += 25; why.push(`带 ${s.sites.length} 个中心且无继任者`); }
+  if(tenure!==null && tenure < 1.2){ risk += 15; why.push(`司龄 ${n1(tenure)} 年，尚在流失高发期`); }
+  if(t.want && t.want!=="—" && !t.want.startsWith("入职")){ risk += 20; why.push(t.want); }
+  return {tenure, ...t, risk:Math.min(risk,100), why,
+    hoDays: s.sites.length * HO_COST_DAY,
+    hoCost: s.sites.length * HO_COST_DAY * ROLE_DAY(s.role)};
+}
+</script>
+<script>
+"use strict";
 /* ════════ 工具 ════════ */
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -1233,12 +1863,18 @@ const label = ss=>`${ss.hosp}｜${S[ss.sid].short}`;
    漏掉这块，收入就是错的 —— 而以「算清单中心盈亏」为核心命题的系统，
    这个错误在源头上会让所有毛利结论失真。 */
 const SF_FEE = 0.35;
+/* 脱落扣减：入组后中途退出的受试者，按已完成访视比例计费，不是按整例。
+   与筛败费方向相反 —— 一个把收入调高，一个把收入调低，两个都不做，
+   高筛败中心被误砍，高脱落中心被误保。 */
+const dropLost = ss => (typeof DROPS==="undefined") ? 0
+  : DROPS.filter(d=>d.ss===ss.id).reduce((t,d)=>t + (1 - d.done/d.total), 0) * ss.unit;
 function siteRev(ss){
   const f = (typeof FN==="function") ? FN(ss.id) : {sf:0};
-  return (ss.startup||0) + ss.enrolled*ss.unit + (f.sf||0)*ss.unit*SF_FEE;
+  return (ss.startup||0) + ss.enrolled*ss.unit - dropLost(ss) + (f.sf||0)*ss.unit*SF_FEE;
 }
 const revParts = ss=>{ const f=(typeof FN==="function")?FN(ss.id):{sf:0};
-  return {startup:ss.startup||0, enr:ss.enrolled*ss.unit, sf:(f.sf||0)*ss.unit*SF_FEE}; };
+  return {startup:ss.startup||0, enr:ss.enrolled*ss.unit, sf:(f.sf||0)*ss.unit*SF_FEE,
+          drop:-dropLost(ss)}; };
 
 function siteM(ss){
   const rev = siteRev(ss);
@@ -1500,6 +2136,34 @@ const N = {
   material:{t:"药品与样本",ic:IC.mat}, pay:{t:"受试者补偿",ic:IC.pay},
   pi:{t:"研究者工作台",ic:IC.pi}, audit:{t:"内部稽查",ic:IC.audit}
 };
+Object.assign(N, {
+  mysite:{t:"我的中心",ic:IC.sites},        startup:{t:"中心启动清单",ic:IC.intake},
+  sched:{t:"我的日程",ic:IC.mon},           prescreen:{t:"预筛登记",ic:IC.screen},
+  ethics:{t:"伦理事务",ic:IC.reg},          handover:{t:"交接",ic:IC.team},
+  cash:{t:"现金流预测",ic:IC.price},        client:{t:"客户",ic:IC.inst},
+  bid:{t:"投标与报价闭环",ic:IC.price},     change:{t:"合同变更",ic:IC.capa},
+  people:{t:"人才梯队",ic:IC.staff},        org:{t:"组织与权限",ic:IC.reg},
+  trail:{t:"审计轨迹",ic:IC.audit},         dm:{t:"数据管理工作台",ic:IC.query}
+});
+
+/* 导航不再按角色硬编码，而是由 ROLE_DEF[role].mods 生成 ——
+   老板在「组织与权限」里勾掉一个模块，这里立刻少一项。 */
+const MOD_GROUP = {
+  crc:"我的工作", cra:"我的工作", pm:"我的工作", dm:"我的工作", inst:"机构办公室", pi:"研究者",
+  mysite:"我的工作", mysites:"我的工作", sched:"我的工作", subj:"我的工作", query:"我的工作",
+  team:"我的工作", approve:"我的工作",
+  startup:"项目周期", prescreen:"项目周期", ethics:"项目周期", handover:"项目周期",
+  isf:"现场", material:"现场", pay:"现场",
+  dash:"经营", intake:"经营", sites:"经营", enr:"经营", screen:"经营", client:"经营", cash:"经营",
+  feas:"商务", price:"商务", bid:"商务", change:"商务",
+  staff:"资源", people:"资源", time:"资源",
+  pnl:"财务", bill:"财务",
+  qa:"质量", mon:"质量", audit:"质量", capa:"质量", trail:"质量",
+  instac:"机构办公室", instqc:"机构办公室", instreg:"机构办公室",
+  org:"系统"
+};
+const GROUP_ORDER = ["我的工作","项目周期","现场","经营","商务","资源","财务","质量","机构办公室","研究者","系统"];
+
 const openQ  = who=>QUERIES.filter(q=>q.owner===who&&q.st==="待中心回复").length;
 const myQ    = ()=>QUERIES.filter(q=>q.by.startsWith(PERSONA().n)&&q.st==="待中心回复").length;
 const badQA  = ()=>ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般").length;
@@ -1510,46 +2174,38 @@ const ipBad  = ()=>IP.filter(r=>ipM(r).diff!==0).length;
 const piPend = ()=>{const ids=new Set(SITES.filter(s=>s.pi===PERSONA().n).map(s=>s.id));
   return SUBJ.filter(s=>ids.has(s.ss)&&!s.piOk&&subjDone(s)===s.tasks.length).length;};
 const auOpen = ()=>AUDIT.flatMap(a=>a.findings).filter(f=>f.st!=="已关闭").length;
+const myMods = ()=>{ const p=PERSONA();
+  return p.k==="crc" ? (staff(p.n)?.sites||[]) : [...scopeIds()]; };
 
-const NAV_BY_ROLE = {
-  boss:[
-    {g:"经营", items:["dash",["intake",()=>INTAKE.length],"sites","enr","screen"]},
-    {g:"资源", items:["staff","time"]},
-    {g:"财务", items:["pnl","bill"]},
-    {g:"质量", items:[["qa",badQA],"mon"]},
-    {g:"工具", items:["price"]}
-  ],
-  pm:[
-    {g:"团队", items:["pm","team",["approve",()=>APPROVALS.length]]},
-    {g:"项目", items:["intake","feas","sites","enr","screen","mon"]},
-    {g:"质量", items:[["qa",badQA]]},
-    {g:"财务", items:["pnl"]}
-  ],
-  cra:[
-    {g:"我的工作", items:["cra","mysites","mon",["query",()=>myQ()],"screen","feas"]},
-    {g:"现场", items:[["material",ipBad]]},
-    {g:"记录", items:["time"]},
-    {g:"质量", items:[["qa",badQA],["capa",myCapa]]}
-  ],
-  crc:[
-    {g:"我的工作", items:["crc",["subj",()=>SUBJ.filter(s=>s.crc===PERSONA().n&&winState(s).k!=="good").length],
-                          ["query",()=>openQ(PERSONA().n)],["capa",myCapa]]},
-    {g:"现场", items:["isf",["material",ipBad],["pay",myPay]]},
-    {g:"记录", items:["time"]}
-  ],
-  inst:[
-    {g:"机构办公室", items:["inst",["instac",()=>acOpen().length],
-                            ["instqc",()=>qcFindOpen().length],
-                            ["instreg",()=>regOpen().length]]}
-  ],
-  pi:[
-    {g:"研究者", items:[["pi",piPend],["qa",badQA]]}
-  ],
-  qa:[
-    {g:"质量保证", items:[["audit",auOpen],["qa",badQA],"screen","mon"]}
-  ]
+/* 徽标：只标"需要我现在动手"的数量，不标存量 */
+const BADGE = {
+  intake:   ()=>INTAKE.length,
+  approve:  ()=>APPROVALS.length,
+  qa:       badQA,
+  capa:     myCapa,
+  audit:    auOpen,
+  pi:       piPend,
+  material: ipBad,
+  pay:      myPay,
+  instac:   ()=>acOpen().length,
+  instqc:   ()=>qcFindOpen().length,
+  instreg:  ()=>regOpen().length,
+  query:    ()=>{ const p=PERSONA();
+    return p.k==="crc" ? openQ(p.n) : p.k==="dm" ? QUERIES.filter(q=>q.st==="已回复待关闭").length : myQ(); },
+  subj:     ()=>SUBJ.filter(s=>s.crc===PERSONA().n
+    && !["筛败","已出组","已脱落"].includes(s.st) && winState(s).k!=="good").length,
+  startup:  ()=>STARTUP.filter(r=>myMods().includes(r.ss) && r.block && !r.done).length,
+  ethics:   ()=>ETHICS.filter(e=>myMods().includes(e.ss) && ethState(e)==="crit").length,
+  sched:    ()=>myAgenda(14).buckets.filter(b=>b.conflict).length,
+  handover: ()=>HANDOVER.filter(h=>h.st!=="已完成"
+    && (PERSONA().k!=="crc" || h.from===PERSONA().n || h.to===PERSONA().n)).length,
+  change:   ()=>CHANGES.filter(c=>c.st==="待提出").length,
+  bid:      ()=>BIDS.filter(b=>b.st==="待定").length,
+  dm:       ()=>QUERIES.filter(q=>q.st==="已回复待关闭").length,
+  people:   ()=>STAFF.filter(x=>talentM(x).risk>=60).length,
+  cash:     ()=>cashF(6).rows.filter(r=>r.cum<0).length
 };
-const HOME = {boss:"dash", pm:"pm", cra:"cra", crc:"crc", inst:"inst", pi:"pi", qa:"audit"};
+const HOME = {boss:"dash", pm:"pm", cra:"cra", crc:"crc", inst:"inst", pi:"pi", qa:"audit", dm:"dm"};
 
 const TITLES = {
   dash:["经营驾驶舱","一页看清人效、毛利、入组与风险。每个数字后面都对应一个具体的人和一个具体的动作。"],
@@ -1584,25 +2240,56 @@ const TITLES = {
   material:["药品与样本","接收 − 发放 = 账面库存，实盘对不上就是严重发现；样本采集→离心→转运→回执，断一环即失效。"],
   pay:["受试者补偿","CRC 每周固定要花时间的事，也是稽查必查三件套：发放与访视是否对应、有无签收凭证、现金发放是否合规。"],
   pi:["研究者工作台","方案偏离要 PI 签字、SAE 由 PI 上报、授权分工表由 PI 签署 —— 研究者是法定责任人，不该只是系统里的一个字符串。"],
-  audit:["内部稽查与 CAPA 有效性","机构质控是医院查我们，QA 是我们自己查自己。QA 真正的价值不是再发现一批问题，而是验证 CAPA 到底有没有防住复发。"]
+  audit:["内部稽查与 CAPA 有效性","机构质控是医院查我们，QA 是我们自己查自己。QA 真正的价值不是再发现一批问题，而是验证 CAPA 到底有没有防住复发。"],
+  mysite:["我的中心","中心也有生命周期：立项 → 伦理 → 合同 → 启动 → 入组 → 随访 → 关闭。CRC 此前只看得到「下一个访视」，看不到自己站在这条线的哪一节。"],
+  startup:["中心启动清单","启动慢一个月，这个中心的整条收入曲线右移一个月。阻塞项未清，不得推进到 SIV —— 这是那个只有一句 ss.st = next 的按钮缺的东西。"],
+  sched:["我的日程","「我的一天」回答先做哪件，这一页回答做不做得完、撞不撞车。一个 CRC 同时带两三个中心是常态，跨院冲突不是优先级问题，是物理上做不到。"],
+  prescreen:["预筛登记","漏斗的第一格此前没有门。预筛量是判断「病源不足」还是「入排太窄」的唯一依据 —— 而这个数只能由现场一条一条录进来。"],
+  ethics:["伦理事务","伦理不是一次性动作，是贯穿全周期的周期性义务。批件断档，该中心必须停止入组与给药 —— 这比访视超窗严重得多。"],
+  handover:["交接","人会休假、会离职、会被调岗，中心不会因此停下。最容易漏也最要命的是在组受试者逐例交底 —— 那些东西不在 EDC 里，只在上一个 CRC 脑子里。"],
+  cash:["现金流预测","人力成本每月刚性支出，回款是里程碑制加账期。要回答的不是「我应收多少」，而是「哪个月我会没钱发工资」。"],
+  client:["客户","比单中心毛利更上位的切片。对一个靠客户复购活着的服务公司，「这个客户明年还续不续」按项目切、按中心切都答不了。"],
+  bid:["投标与报价闭环","报价模型算「按我们的人天该报多少」，这一页算「市场认不认」。报出去的价赢没赢不回写，前者就是自说自话。"],
+  change:["合同变更","亏损第一大原因是入组延迟，第二大就是 scope creep 没有变更单。就算最终要不到钱，也必须记下来 —— 下次报价时这就是该加进去的成本。"],
+  people:["人才梯队","卖的是人天，人走了产品就没了。系统看得到「利用率 96%」，此前看不到「这个人连续三个月 96%，快撑不住了」。"],
+  org:["组织与权限","权限是三件事同时成立：行（看得到哪些中心）、列（哪些字段可见）、动作（能做什么）。外部角色默认拒绝，靠白名单加回。"],
+  trail:["审计轨迹","核查问的是「这条记录谁在什么时候改的、改前是什么、为什么改」。答不上来，这个系统在 GCP 语境下就是不成立的。"],
+  dm:["数据管理工作台","此前 QUERIES 里「数据管理」出现 5 次，系统里却没有这个角色 —— 质疑凭空产生、凭空关闭。发起与关闭都必须有人负责。"]
 };
 
 const state = {view:"dash", persona:"boss", study:"all", enrStudy:"HJ-2024-017", dashRange:"12m",
   sortKey:"rate", sortDir:1, q:"", stFilter:new Set(), roleFilter:"all",
   sevFilter:new Set(), pnlSort:"gp", visitSel:0, tsWho:"吴桐", subjSel:null, qTab:"open"};
 
-const PERSONA = ()=>P_OF[state.persona];
+/* 身份来自会话，不是下拉框：登录那一刻，看得到什么就定了 */
+const SCOPE_DESC = {
+  all:      ()=>`全公司 ${STUDIES.length} 个项目 · ${SITES.length} 个中心`,
+  team:     m=>{const g=groupOf(m.n); return g? `${g.name} · ${g.members.length} 人 · ${g.studies.length} 个项目` : "未分组";},
+  assigned: m=>{const st=staff(m.n); return st? `${st.sites.length} 个中心 · ${new Set(st.sites.map(x=>site(x).sid)).size} 个项目` : "未派驻中心";},
+  hospital: m=>`${m.hosp||"本院"} · 承接 ${SITES.filter(s=>s.hosp===m.hosp).length} 个项目`,
+  pi:       m=>`本人担任研究者 · ${SITES.filter(s=>s.pi===m.n).length} 个中心`,
+  none:     ()=>"无数据范围"
+};
+function PERSONA(){
+  const m = ME();
+  if(!m) return {k:"boss", n:"—", title:"未登录", role:"—", scope:"—"};
+  const r = ROLE_DEF[m.role];
+  return {k:m.role, n:m.n, title:r.t, role:r.t.replace(/\s*[（(].*/,"").split(" ").pop() || r.t,
+          scope:(SCOPE_DESC[r.rows]||SCOPE_DESC.none)(m), hosp:m.hosp, u:m.u};
+}
 
-/* 数据范围由身份决定：看得到什么，取决于你是谁 */
+/* 行维度权限：ROLE_DEF[role].rows 是唯一判定处，改权限立刻改数据范围 */
 function myScope(){
-  const p = PERSONA();
-  if(p.k==="boss") return SITES;
-  if(p.k==="pm")   return SITES.filter(s=>TEAM.studies.includes(s.sid));
-  if(p.k==="inst") return SITES.filter(s=>s.hosp===p.hosp);   // 机构只看本院
-  if(p.k==="pi")   return SITES.filter(s=>s.pi===p.n);        // 研究者只看自己负责的中心
-  if(p.k==="qa")   return SITES;                              // QA 覆盖全公司，但只有质量视图
-  const me = staff(p.n);
-  return SITES.filter(s=>me.sites.includes(s.id));
+  const m = ME(); if(!m) return [];
+  const r = ROLE_DEF[m.role];
+  switch(r.rows){
+    case "all":      return SITES;
+    case "team":   { const g = groupOf(m.n); return g ? SITES.filter(s=>g.studies.includes(s.sid)) : []; }
+    case "hospital": return SITES.filter(s=>s.hosp===m.hosp);
+    case "pi":       return SITES.filter(s=>s.pi===m.n);
+    case "assigned":{ const st = staff(m.n); return st ? SITES.filter(s=>st.sites.includes(s.id)) : []; }
+    default:         return [];
+  }
 }
 function scope(){
   const base = myScope();
@@ -1611,12 +2298,24 @@ function scope(){
 function scopeIds(){ return new Set(scope().map(s=>s.id)); }
 function myTeam(){ return TEAM.members.map(staff); }
 
+const myMenu = ()=>{
+  const r = RD(); if(!r) return [];
+  const out = [];
+  GROUP_ORDER.forEach(g=>{
+    const items = r.mods.filter(v=>N[v] && (MOD_GROUP[v]||"系统")===g);
+    if(items.length) out.push({g, items});
+  });
+  const rest = r.mods.filter(v=>N[v] && !GROUP_ORDER.includes(MOD_GROUP[v]||"系统"));
+  if(rest.length) out.push({g:"其他", items:rest});
+  return out;
+};
 function renderNav(){
   const p = PERSONA();
-  $("#nav").innerHTML = NAV_BY_ROLE[p.k].map(g=>
-    `<div class="nav-group">${esc(g.g)}</div>` + g.items.map(it=>{
-      const [k,badge] = Array.isArray(it)? it : [it,null];
-      const b = badge? badge():0, d = N[k];
+  $("#nav").innerHTML = myMenu().map(g=>
+    `<div class="nav-group">${esc(g.g)}</div>` + g.items.map(k=>{
+      let b = 0;
+      try { b = BADGE[k] ? BADGE[k]() : 0; } catch(_) { b = 0; }
+      const d = N[k];
       return `<button class="nav-item" data-nav="${k}" aria-current="${state.view===k}">
         <svg class="nav-ic" viewBox="0 0 24 24">${d.ic}</svg><span>${esc(typeof d.t==="function"?d.t():d.t)}</span>
         ${b?`<span class="nav-badge">${b}</span>`:""}</button>`;
@@ -1635,10 +2334,6 @@ function renderTop(){
     `<div class="avatar">${esc(p.n.slice(0,1))}</div>
      <div><b>${esc(p.n)}</b> <span class="r">${esc(p.role)}</span><br>
      <span class="r">${esc(p.scope)}</span></div>`;
-  const rs = $("#grole");
-  if(!rs.options.length) rs.innerHTML = PERSONAS.map(x=>
-    `<option value="${x.k}">${esc(x.title)} · ${esc(x.n)}</option>`).join("");
-  rs.value = state.persona;
   const sel = $("#gstudy");
   sel.innerHTML = `<option value="all">全部项目（${studies.length}）</option>` +
     studies.map(id=>`<option value="${id}">${esc(id)} · ${esc(S[id].short)}</option>`).join("");
@@ -1648,8 +2343,19 @@ function renderTop(){
 }
 const VIEWS = {};
 function render(){
-  if(!NAV_BY_ROLE[state.persona].some(g=>g.items.some(it=>(Array.isArray(it)?it[0]:it)===state.view)))
-    state.view = HOME[state.persona];
+  if(!ME()){ showLogin(); return; }
+  state.persona = ME().role;
+  /* 模块权限在渲染入口强制一次：地址栏、旧状态、被收回的权限都拦在这里 */
+  if(!canMod(state.view) || !VIEWS[state.view]){
+    const r = RD();
+    state.view = canMod(HOME[state.persona]) ? HOME[state.persona]
+               : (r.mods.find(v=>VIEWS[v]) || null);
+    if(!state.view){
+      $("#content").innerHTML = `<div class="view-head"><h1>没有可访问的模块</h1>
+        <p>当前角色「${esc(RD().t)}」未被授予任何模块权限。请联系管理员在「组织与权限」中调整。</p></div>`;
+      renderNav(); renderTop(); return;
+    }
+  }
   renderNav(); renderTop(); clearTimers();
   const [t,sub] = titleOf(state.view);
   $("#content").innerHTML = `<div class="view-head"><h1>${esc(t)}</h1><p>${esc(sub)}</p></div><div id="vbody"></div>`;
@@ -1667,12 +2373,7 @@ document.addEventListener("click",e=>{
     go(v, k?{[k]:val}:{}); return; }
   const cl =e.target.closest("[data-close]"); if(cl){ closeLayer(); return; }
 });
-$("#grole").addEventListener("change",e=>{
-  state.persona = e.target.value; state.study="all"; state.view = HOME[state.persona];
-  state.stFilter.clear(); state.sevFilter.clear(); state.q=""; state.subjSel=null;
-  const p=PERSONA(); if(p.k==="cra"||p.k==="crc") state.tsWho=p.n;
-  render(); toast(`已切换到 ${p.title} ${p.n} 的视角`);
-});
+$("#glogout").addEventListener("click",()=>logout());
 $("#gstudy").addEventListener("change",e=>{ state.study=e.target.value;
   if(state.study!=="all") state.enrStudy=state.study; render(); });
 addEventListener("resize",()=>{ clearTimeout(window.__rz);
@@ -1917,6 +2618,9 @@ function openSite(id){
   const ms =MILES.filter(x=>x.ss===id);
   const vs =VISITS.filter(x=>x.ss===id);
   const rs = rateState(m.rate);
+  const rsC = rs.k==="good" ? "var(--ink)" : rs.c;   /* 健康即常态，常态不着色 */
+  const r = retentionM(ss), su = startupM(id);
+  const gate = next==="中心关闭" ? closeGate(ss) : next==="SIV启动" ? sivGate(ss) : [];
   openLayer($("#drawer"),`
     <div class="drawer-h">
       <div style="flex:1">
@@ -1936,6 +2640,10 @@ function openSite(id){
         ${next?`<button class="btn btn-p" id="adv">推进到「${esc(next)}」</button>`
               :`<span class="pill p-good">流程已完成</span>`}
       </div>
+      ${gate.length?`<div style="border-left:2px solid var(--crit);background:var(--surface-2);padding:9px 11px;font-size:12.5px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        <b style="color:var(--crit)">推进到「${esc(next)}」还差 ${gate.length} 项</b>：${gate.map(g=>esc(g.t)).join("；")}</div>`:""}
+      ${su&&su.blocks.length?`<div style="border-left:2px solid var(--warn);background:var(--surface-2);padding:9px 11px;font-size:12.5px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        <b style="color:var(--warn)">启动阻塞 ${su.blocks.length} 项</b>${su.plan?` · 计划 SIV ${esc(su.plan)}（剩 ${su.dToSiv} 天）`:""}</div>`:""}
       <div class="grid g2" style="gap:0;margin-bottom:26px">
         <div class="stat">
           <div class="kpi-l">入组达成</div>
@@ -1946,6 +2654,7 @@ function openSite(id){
           <div class="kpi-l">单中心毛利</div>
           <div class="num" style="font-size:20px;margin-top:3px;color:${m.gp<0?"var(--crit)":"var(--ink)"}">${m.gp>0?"+":""}${n1(m.gp)} 万</div>
           <div class="note">毛利率 ${m.gm===null?"—":pct(m.gm)}｜每例成本 ${m.cpe?n1(m.cpe)+" 万":"—"}</div>
+          <div class="note">保留率 ${r.rate===null?"—":pct(r.rate)}｜脱落 ${r.n} 例，收入调减 ${n1(r.lost)} 万</div>
         </div>
       </div>
       <div class="section-t">关键日期</div>
@@ -1983,11 +2692,20 @@ function openSite(id){
         <span class="pill p-neut">${esc(v.st)} · ${v.days} 天</span></div>`).join("")}</div>`:""}
     </div>`);
   $("#adv")?.addEventListener("click",()=>{
+    if(!canAct("advance")){ toast("当前角色无「推进中心阶段」动作权限","crit"); return; }
+    /* 闸门：推进不是改一个字符串，是断言一组前置条件已经成立 */
+    const gate = next==="SIV启动" ? sivGate(ss) : next==="中心关闭" ? closeGate(ss) : [];
+    if(gate.length){ gateModal(ss, next, gate); return; }
+    const was = ss.st;
     ss.st=next;
+    logAct("推进中心阶段", ss.hosp, was, next, {ss:ss.id});
     if(next==="入组中"&&ss.fpi==="—"){ ss.fpi=TODAY; toast(`${ss.hosp} 首例入组（FPI）日期已记录：${TODAY}`); }
     if(next==="SIV启动"&&ss.siv==="—"){ ss.siv=TODAY;
       MILES.unshift({id:"M-0"+(50+MILES.length),ss:ss.id,name:"中心启动 SIV",amt:14.0,hit:TODAY,inv:"待开票",due:"—",paid:false,age:0});
       toast(`SIV 里程碑已达成，14.0 万自动进入待开票队列`); }
+    if(next==="中心关闭")
+      MILES.unshift({id:"M-0"+(50+MILES.length),ss:ss.id,name:"中心结题",
+        amt:+(siteContract(ss)*0.25).toFixed(1),hit:TODAY,inv:"待开票",due:"—",paid:false,age:0});
     toast(`${ss.hosp} 状态推进至「${next}」`);
     closeLayer(); setTimeout(render,220);
   });
@@ -2064,6 +2782,40 @@ VIEWS.enr = box=>{
     const c=e2.target.closest("[data-ss2]"); if(c) openSite(c.dataset.ss2);
   });
 };
+</script>
+<script>
+"use strict";
+/* 闸门拦截：把"为什么不能推进"说清楚，并给出去处 —— 而不是一个禁用的按钮 */
+function gateModal(ss, next, gate){
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(ss.hosp)}</div>
+      <h3 style="font-size:15px">不能推进到「${esc(next)}」</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div style="border-left:2px solid var(--crit);background:var(--surface-2);padding:10px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.8;margin-bottom:14px">
+        <b style="color:var(--crit)">还有 ${gate.length} 项前置条件未满足</b><br>
+        ${next==="中心关闭"
+          ? "中心关闭意味着这个中心的一切都已了结、可归档、可接受核查。带着未闭环的事项关闭，等于把问题永久留在归档里。"
+          : "启动阻塞项是「没有它就不能合法开展受试者相关工作」的那些。带着缺口启动，后面每个环节都带着这个缺口往下走。"}
+      </div>
+      <div style="border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:14px">
+        ${gate.map(g=>`<div class="row" style="justify-content:space-between;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line)">
+          <span style="font-size:12.5px;color:var(--ink-2)">${esc(g.t)}</span>
+          ${g.v&&canMod(g.v)?`<button class="btn" data-gnav="${esc(g.v)}">去处理</button>`:""}
+        </div>`).join("")}
+      </div>
+      <div class="note" style="line-height:1.7;margin-bottom:12px">
+        此前这个按钮的全部逻辑是一句 <code>ss.st = next</code> —— 没有任何校验。
+        中心状态机的每一次推进都对应真实世界的一组事实，系统的职责是<b>断言这些事实成立</b>，而不是记录一个人点过按钮。
+      </div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-p" data-close>知道了</button></div>
+    </div>`);
+  $("#modal").addEventListener("click",e=>{
+    const g = e.target.closest("[data-gnav]"); if(!g) return;
+    closeLayer(); go(g.dataset.gnav);
+  }, {once:true});
+}
 </script>
 <script>
 "use strict";
@@ -2422,12 +3174,14 @@ CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
       </tr></tfoot>
     </table></div>
   </div>
-  <div class="formula" style="margin-top:12px">收入 = 启动费 + 入组例数 × 单例单价 + <b>筛败例数 × 单例单价 × ${pct(SF_FEE)}</b>
+  <div class="formula" style="margin-top:12px">收入 = 启动费 + 入组例数 × 单例单价 <b>− 脱落未完成部分</b> + <b>筛败例数 × 单例单价 × ${pct(SF_FEE)}</b>
 成本 = 工时归集（含筛选期陪同） + 差旅 + 职能分摊
+脱落扣减 = Σ（1 − 该受试者已完成访视数 ÷ 计划访视数）× 单例单价
 
-筛败费此前被整套模型漏掉。补上之后本范围收入 +${wan(sum(list,s=>revParts(s).sf))} 万，
-亏损中心从按旧口径的 ${rows.filter(s=>(s.startup||0)+s.enrolled*s.unit<s.cost).length} 个变为 ${loss.length} 个 ——
-<b>漏算筛败费会让高筛败率中心被误判为亏损，从而砍掉本来赚钱的中心。</b></div>
+两次口径修正方向相反，都必须做：
+筛败费 <b style="color:var(--good)">+${wan(sum(list,s=>revParts(s).sf))} 万</b>（漏算会误砍高筛败中心）
+脱落扣减 <b style="color:var(--crit)">${wan(sum(list,s=>revParts(s).drop))} 万</b>（漏算会误保高脱落中心）
+本范围亏损中心：旧口径 ${rows.filter(s=>(s.startup||0)+s.enrolled*s.unit<s.cost).length} 个 → 现口径 ${loss.length} 个。</div>
   <p class="note" style="margin-top:8px">金额单位：万元。点击任意行进入中心详情。</p>`;
 
   diverging($("#c-dv"), rows.map(s=>{const m=siteM(s);
@@ -2437,6 +3191,7 @@ CRA 人力 = ${n0(craMd)} 人天 × ${RATE.craDay} 万
         <div class="tip-r"><span>· 启动费</span><b>${wan(revParts(s).startup)}</b></div>
         <div class="tip-r"><span>· 入组费</span><b>${wan(revParts(s).enr)}</b></div>
         <div class="tip-r"><span>· 筛败费</span><b>${wan(revParts(s).sf)}</b></div>
+        <div class="tip-r"><span>· 脱落扣减</span><b style="color:${revParts(s).drop<0?"var(--crit)":"var(--ink-3)"}">${wan(revParts(s).drop)}</b></div>
         <div class="tip-r"><span>成本</span><b>${wan(s.cost)} 万</b></div>
         <div class="tip-r"><span>毛利率</span><b style="color:${m.gm<0?"var(--crit)":"var(--ink)"}">${m.gm===null?"—":pct(m.gm)}</b></div>
         <div class="tip-r"><span>每例成本</span><b>${m.cpe?n1(m.cpe)+" 万":"—"}</b></div>
@@ -2955,7 +3710,7 @@ CRA 人天 = SIV ${P.sites}×2 + IMV ${P.sites}×${r.nIMV}轮×1.5
    CRC 端 —— 现场协调员。手机为主、时间碎片、最怕访视超窗。
    ════════════════════════════════════════════════════════════════════ */
 
-const mySubj = ()=>SUBJ.filter(s=>s.crc===PERSONA().n && s.st!=="筛败" && s.st!=="已出组")
+const mySubj = ()=>SUBJ.filter(s=>s.crc===PERSONA().n && !["筛败","已出组","已脱落"].includes(s.st))
   .sort((a,b)=>winState(a).rem-winState(b).rem);
 const CONTACT = {"已确认":{k:"good"},"待联系":{k:"warn"},"已改期":{k:"warn"},"失联":{k:"crit"}};
 
@@ -3009,7 +3764,9 @@ function subjCard(s,{open=false}={}){
         <div class="row" style="margin-top:9px">
           <button class="btn btn-p" data-sdone="${s.id}">完成访视并记工时</button>
           ${s.edc!=="已录入"?`<button class="btn" data-edc="${s.id}">标记 EDC 已录入</button>`:""}
-          ${scr?`<button class="btn" data-sfail="${s.id}">登记筛败</button>`:""}
+          ${scr?`<button class="btn" data-sfail="${s.id}">登记筛败</button>`
+               :`<button class="btn" data-sdrop="${s.id}">登记退出 / 脱落</button>`}
+          <button class="btn" data-sae="${s.id}">上报 SAE</button>
           <button class="btn" data-goto4="${s.ss}">中心详情</button>
         </div>
       </div>
@@ -3151,6 +3908,7 @@ function wireSubj(box){
     const g=e.target.closest("[data-goto4]"); if(g){ openSite(g.dataset.goto4); return; }
     const ed=e.target.closest("[data-edc]");
     if(ed){ const s=SUBJ.find(x=>x.id===ed.dataset.edc); const lag=edcLag(s);
+      logAct("标记 EDC 已录入", s.id, "待录入", `已录入（滞后 ${lag} 天）`, {ss:s.ss});
       s.edc="已录入";
       toast(lag>5? `${s.id} EDC 已录入，滞后 ${lag} 天 —— 超出 5 个工作日及时线` : `${s.id} EDC 已录入（滞后 ${lag} 天）`,
         lag>5?"warn":""); render(); return; }
@@ -3158,11 +3916,15 @@ function wireSubj(box){
     if(ct){ const s=SUBJ.find(x=>x.id===ct.dataset.ct);
       const order=["待联系","已确认","已改期","失联"];
       s.contact=order[(order.indexOf(s.contact)+1)%order.length];
-      if(s.contact==="已改期"){ s.due=new Date(new Date(s.due).getTime()+7*864e5).toISOString().slice(0,10);
+      if(s.contact==="已改期"){ const was=s.due;
+        s.due=new Date(new Date(s.due).getTime()+7*864e5).toISOString().slice(0,10);
+        logAct("修改访视目标日", s.id, was, s.due, {ss:s.ss, why:"受试者改期"});
         toast(`${s.id} 已改期，目标日顺延至 ${s.due}，窗口已重算`,"warn"); }
       else toast(`${s.id} 联系状态：${s.contact}`);
       render(); return; }
     const sf=e.target.closest("[data-sfail]"); if(sf){ failModal(sf.dataset.sfail); return; }
+    const dp=e.target.closest("[data-sdrop]"); if(dp){ dropModal(dp.dataset.sdrop); return; }
+    const sa=e.target.closest("[data-sae]");   if(sa){ saeModal(sa.dataset.sae); return; }
     const dn=e.target.closest("[data-sdone]"); if(dn){ doneModal(dn.dataset.sdone); return; }
   });
   box.addEventListener("change",e=>{
@@ -3267,9 +4029,10 @@ function failModal(id){
 
 /* ── 数据质疑（CRC 回复 / CRA 跟进，同一页两种视角） ── */
 VIEWS.query = box=>{
-  const p=PERSONA(), isCRC=p.k==="crc";
+  const p=PERSONA(), isCRC=p.k==="crc", ids=scopeIds();
+  /* 非 CRC 视角按行权限取范围，而不是按 STAFF 表 —— DM / QA 不在派工表里 */
   const all = isCRC ? QUERIES.filter(q=>q.owner===p.n)
-                    : QUERIES.filter(q=>q.by.startsWith(p.n)||staff(p.n).sites.includes(q.ss));
+                    : QUERIES.filter(q=>q.by.startsWith(p.n)||ids.has(q.ss));
   const open=all.filter(q=>q.st==="待中心回复"), waiting=all.filter(q=>q.st!=="待中心回复");
   const shown = state.qTab==="open"? open : waiting;
   const avg = all.length? sum(all,q=>q.age)/all.length : 0;
@@ -5247,7 +6010,1834 @@ VIEWS.pay = box=>{
 </script>
 <script>
 "use strict";
-/* ════════ 启动 ════════ */
-render();
-console.info("临床中心台 SiteDesk · 演示原型｜四种身份：经营层 / PM / CRA / CRC。全部数据为硬编码，不含真实受试者信息。");
+/* ════════════════════════════════════════════════════════════════════
+   CRC 的项目生命周期视图
+   此前 CRC 只看得到「下一个访视」。中心处在哪一节、启动还差什么、
+   两家医院明天撞不撞车、受试者退出怎么登记 —— 全部没有。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 我的中心：CRC 终于看得见自己带的中心处在哪一节 ──────────────── */
+VIEWS.mysite = box=>{
+  const me = PERSONA().n, mine = staff(me)?.sites || [];
+  const list = mine.map(site).filter(Boolean);
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["我带的中心",list.length,"个","var(--ink)"],
+       ["在启动准备",list.filter(s=>FLOW.indexOf(s.st)<FLOW.indexOf("入组中")).length,"个","var(--ink)"],
+       ["在组受试者",SUBJ.filter(s=>s.crc===me&&["已入组","筛选中"].includes(s.st)).length,"例","var(--ink)"],
+       ["我登记的脱落",DROPS.filter(d=>mine.includes(d.ss)).length,"例",
+        DROPS.filter(d=>mine.includes(d.ss)).length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  ${list.map(ss=>{
+    const i = FLOW.indexOf(ss.st), m = siteM(ss), r = retentionM(ss), su = startupM(ss.id);
+    const gate = ss.st==="随访中"||ss.st==="入组完成" ? closeGate(ss) : [];
+    const inTrial = SUBJ.filter(s=>s.ss===ss.id&&["已入组","筛选中"].includes(s.st)).length;
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="card-h"><h3>${esc(ss.hosp)}</h3>
+        <span class="sub">${esc(S[ss.sid].short)} · ${esc(ss.dept)} · PI ${esc(ss.pi)}</span>
+        <span class="sp"></span><span class="pill p-neut">第 ${i+1} / ${FLOW.length} 节点</span></div>
+      <div class="card-b">
+        <div style="display:flex;gap:2px;margin-bottom:10px">${FLOW.map((f,k)=>`
+          <div style="flex:1;height:4px;background:${k<=i?"var(--accent)":"var(--line-2)"}" title="${esc(f)}"></div>`).join("")}</div>
+        <div class="row" style="gap:14px;flex-wrap:wrap;font-size:12.5px;margin-bottom:10px">
+          <span><b style="font-size:15px">${esc(ss.st)}</b></span>
+          <span class="t-sub">伦理批件 ${esc(ss.ethics)}</span>
+          <span class="t-sub">SIV ${esc(ss.siv)}</span>
+          <span class="t-sub">首例入组 ${esc(ss.fpi)}</span>
+        </div>
+        <div class="grid g4" style="gap:10px">
+          ${[["合同例数",`${ss.enrolled} / ${ss.contracted}`,pct(m.prog)+" 完成"],
+             ["在组受试者",inTrial+" 例",`筛败 ${FN(ss.id).sf} · 脱落 ${r.n}`],
+             ["受试者保留率",r.rate===null?"—":pct(r.rate),r.n?`脱落 ${r.n} 例`:"无脱落"],
+             ["启动清单",su?`${su.done} / ${su.n}`:"—",su?(su.blocks.length?`${su.blocks.length} 项阻塞`:"无阻塞"):"已完成启动"]
+           ].map(([l,v,n])=>`<div><div class="kpi-l">${esc(l)}</div>
+              <div style="font-size:17px;font-weight:600;margin:2px 0">${esc(v)}</div>
+              <div class="note">${esc(n)}</div></div>`).join("")}
+        </div>
+        ${su&&su.blocks.length?`<div style="border-left:2px solid var(--warn);background:var(--surface-2);padding:9px 11px;margin-top:11px;font-size:12.5px;line-height:1.7;color:var(--ink-2)">
+          <b style="color:var(--warn)">启动阻塞 ${su.blocks.length} 项</b>${su.plan?` · 距计划 SIV ${su.dToSiv} 天`:""}：
+          ${su.blocks.slice(0,3).map(b=>esc(b.item)).join("；")}${su.blocks.length>3?" 等":""}
+          <div style="margin-top:7px"><button class="btn" data-nav="startup">去启动清单 →</button></div></div>`:""}
+        ${gate.length?`<div style="border-left:2px solid var(--crit);background:var(--surface-2);padding:9px 11px;margin-top:11px;font-size:12.5px;line-height:1.7;color:var(--ink-2)">
+          <b style="color:var(--crit)">距离中心关闭还差 ${gate.length} 项</b>：${gate.map(g=>esc(g.t)).join("；")}</div>`:""}
+      </div></div>`;}).join("") || `<div class="empty">尚未分配中心</div>`}
+  <p class="note">中心也有生命周期。CRC 此前只看得到"下一个访视"，看不到自己站在这条线的哪一节 ——
+    于是"这个中心还差 4 例就到里程碑"这种事，只有 PM 知道。</p>`;
+};
+
+/* ── 中心启动清单：CRC 最忙的两个月，此前系统里完全空白 ──────────── */
+VIEWS.startup = box=>{
+  const p = PERSONA();
+  const mine = p.k==="crc" ? (staff(p.n)?.sites||[]) : [...scopeIds()];
+  const ids = [...new Set(STARTUP.filter(r=>mine.includes(r.ss)).map(r=>r.ss))]
+    .sort((a,b)=>(SIV_PLAN[a]||"9999").localeCompare(SIV_PLAN[b]||"9999"));
+  const all = STARTUP.filter(r=>mine.includes(r.ss));
+  const blocks = all.filter(r=>r.block&&!r.done), od = all.filter(r=>!r.done&&days(r.due,TODAY)>0);
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["在启动中心",ids.length,"个","var(--ink)"],
+       ["清单项",all.length,"项","var(--ink)"],
+       ["阻塞项未完成",blocks.length,"项",blocks.length?"var(--crit)":"var(--ink)"],
+       ["已逾期",od.length,"项",od.length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  ${ids.map(id=>{
+    const ss = site(id), m = startupM(id);
+    const urgent = m.dToSiv!==null && m.dToSiv <= 14;
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="card-h"><h3>${esc(ss.hosp)}</h3>
+        <span class="sub">${esc(S[ss.sid].short)} · 当前「${esc(ss.st)}」</span><span class="sp"></span>
+        ${m.plan?`<span class="pill ${urgent?"p-crit":"p-neut"}">计划 SIV ${esc(m.plan)} · 剩 ${m.dToSiv} 天</span>`:""}
+        <span class="pill ${m.blocks.length?"p-crit":"p-good"}">${m.done} / ${m.n}</span></div>
+      <div class="card-b" style="padding:0">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+          <div class="bartrack" style="height:5px"><div class="barfill" style="width:${m.rate*100}%;background:${m.blocks.length?"var(--warn)":"var(--good)"};height:100%"></div></div>
+        </div>
+        ${STARTUP_CATS.map(c=>{
+          const rows = m.rows.filter(r=>r.cat===c); if(!rows.length) return "";
+          return `<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+            <div class="section-t" style="margin-bottom:6px">${esc(c)}</div>
+            ${rows.map(r=>{const late = !r.done && days(r.due,TODAY)>0;
+              const k = STARTUP.indexOf(r);
+              return `<div class="row" style="justify-content:space-between;gap:10px;padding:5px 0;align-items:flex-start">
+                <label class="cbx ${r.done?"done":""}" style="flex:1;min-width:0;border:0;padding:0">
+                  <input type="checkbox" data-su="${k}" ${r.done?"checked":""}>
+                  <span>${esc(r.item)}
+                    ${r.block?`<span class="pill p-warn" style="margin-left:5px">阻塞项</span>`:""}
+                    ${late?`<span class="pill p-crit" style="margin-left:4px">逾期 ${days(r.due,TODAY)} 天</span>`:""}
+                    <div class="note">负责 ${esc(r.owner)}｜应完成 ${esc(r.due)}</div></span></label>
+              </div>`;}).join("")}</div>`;}).join("")}
+        ${m.blocks.length?`<div style="padding:11px 14px;border-left:2px solid var(--crit);background:var(--surface-2)">
+          <b style="font-size:12.5px;color:var(--crit)">${m.blocks.length} 项阻塞未完成，不得推进到「SIV启动」</b>
+          <div class="note" style="margin-top:4px;line-height:1.7">
+            阻塞项是"没有它就不能合法开展受试者相关工作"的那些：伦理批件、合同、DOA 授权分工表、方案培训、药品接收、EDC 账号。
+            系统在推进中心阶段时会拦住 —— 这正是此前那个只有一句 <code>ss.st = next</code> 的按钮缺的东西。</div></div>`
+        :`<div style="padding:11px 14px"><span class="pill p-good">阻塞项已清零，可推进 SIV</span></div>`}
+      </div></div>`;}).join("") || `<div class="empty">范围内没有处在启动准备阶段的中心</div>`}
+  <p class="note">启动慢一个月，这个中心的整条收入曲线右移一个月。此前这两个月里 CRC 干了什么，系统一无所知。</p>`;
+
+  box.addEventListener("change",e=>{
+    const c = e.target.closest("[data-su]"); if(!c) return;
+    const r = STARTUP[+c.dataset.su];
+    r.done = c.checked ? 1 : 0;
+    logAct(c.checked?"完成启动清单项":"撤销启动清单项", r.item, c.checked?"未完成":"已完成", c.checked?"已完成":"未完成", {ss:r.ss});
+    const m = startupM(r.ss);
+    toast(c.checked
+      ? (m.blocks.length? `已完成。${site(r.ss).hosp} 还剩 ${m.blocks.length} 项阻塞` : `${site(r.ss).hosp} 启动阻塞项已全部清零，可推进 SIV`)
+      : `已撤销：${r.item}`, m.blocks.length?"":"");
+    render();
+  });
+};
+
+/* ── 我的日程：一人多中心，冲突必须被看见 ────────────────────────── */
+function myAgenda(days_=14){
+  const p = PERSONA(), me = p.n, mine = staff(me)?.sites || [];
+  const ev = [];
+  SUBJ.filter(s=>s.crc===me && !["筛败","已出组","已脱落"].includes(s.st)).forEach(s=>{
+    ev.push({d:s.due, k:"访视", t:`${s.id} ${soaLabel(s.ss,s.seq)}`, ss:s.ss,
+      hosp:site(s.ss).hosp, sev:winState(s).k, sub:`窗口 ±${s.win} 天 · ${s.contact}`});
+  });
+  VISITS.filter(v=>mine.includes(v.ss)).forEach(v=>{
+    ev.push({d:v.d, k:v.kind, t:`${v.kind} 监查（${v.who}）`, ss:v.ss,
+      hosp:site(v.ss).hosp, sev:"neut", sub:`${v.days} 天 · ${v.st}`});
+  });
+  ETHICS.filter(e=>mine.includes(e.ss)&&e.st!=="已批准"&&e.st!=="已备案").forEach(e=>{
+    ev.push({d:e.due, k:"伦理", t:`${e.kind} 应递交`, ss:e.ss,
+      hosp:site(e.ss).hosp, sev:ethState(e), sub:e.id});
+  });
+  STARTUP.filter(r=>!r.done&&r.owner===me).forEach(r=>{
+    ev.push({d:r.due, k:"启动", t:r.item, ss:r.ss, hosp:site(r.ss).hosp,
+      sev: days(r.due,TODAY)>0?"crit":r.block?"warn":"neut", sub:r.block?"阻塞项":"启动清单"});
+  });
+  HANDOVER.filter(h=>(h.from===me||h.to===me)&&h.st!=="已完成").forEach(h=>{
+    ev.push({d:h.d, k:"交接", t:`${h.from} → ${h.to}`, ss:h.ss[0], hosp:h.ss.map(x=>site(x).hosp).join("、"),
+      sev:"warn", sub:h.reason});
+  });
+  const buckets = [];
+  for(let i=0;i<days_;i++){
+    const d = new Date(new Date(TODAY).getTime()+i*864e5).toISOString().slice(0,10);
+    const items = ev.filter(x=>x.d===d).sort((a,b)=>a.k.localeCompare(b.k));
+    const hosps = new Set(items.filter(x=>x.k==="访视"||x.k==="启动").map(x=>x.hosp));
+    buckets.push({d, i, items, conflict: hosps.size>1, wk:"日一二三四五六"[new Date(d).getDay()]});
+  }
+  return {buckets, overdue: ev.filter(x=>days(x.d,TODAY)>0)};
+}
+VIEWS.sched = box=>{
+  const a = myAgenda(14);
+  const conf = a.buckets.filter(b=>b.conflict);
+  const busy = a.buckets.filter(b=>b.items.length>=3);
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["未来 14 天事项",sum(a.buckets,b=>b.items.length),"件","var(--ink)"],
+       ["跨院冲突日",conf.length,"天",conf.length?"var(--crit)":"var(--ink)"],
+       ["高负荷日（≥3 件）",busy.length,"天",busy.length?"var(--warn)":"var(--ink)"],
+       ["已逾期事项",a.overdue.length,"件",a.overdue.length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  ${conf.length?`<div class="card alert alert-crit" style="margin-bottom:22px">
+    <div class="card-h"><h3>跨院冲突</h3><span class="sp"></span>
+      <span class="sub">同一天要出现在两家医院 —— 这是超窗的真正来源</span></div>
+    <div class="card-b" style="padding:0">
+      ${conf.map(b=>`<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px"><span class="mono" style="font-size:12px">${esc(b.d)}</span>
+          <span class="t-sub">周${esc(b.wk)}</span>
+          <span class="pill p-crit">${[...new Set(b.items.map(x=>x.hosp))].length} 家医院</span></div>
+        <div class="note" style="margin-top:3px;line-height:1.7">
+          ${b.items.map(x=>`${esc(x.hosp)} · ${esc(x.t)}`).join("<br>")}</div>
+        <div class="row" style="margin-top:7px">
+          <button class="btn" data-nav="subj">调整访视日期</button>
+          <button class="btn" data-nav="handover">申请交接</button></div>
+      </div>`).join("")}
+    </div></div>`:""}
+  <div class="card">
+    <div class="card-h"><h3>未来 14 天</h3><span class="sp"></span>
+      <span class="sub">访视 · 监查 · 伦理 · 启动 · 交接 —— 一条线上</span></div>
+    <div class="card-b" style="padding:0">
+      ${a.buckets.map(b=>`<div style="padding:9px 14px;border-bottom:1px solid var(--line);${b.conflict?"border-left:2px solid var(--crit)":""}">
+        <div class="row" style="gap:8px">
+          <span class="mono" style="font-size:12px;min-width:88px;color:${b.i===0?"var(--accent)":"var(--ink-2)"}">
+            ${esc(b.d)}</span>
+          <span class="t-sub" style="min-width:30px">周${esc(b.wk)}</span>
+          ${b.i===0?`<span class="pill p-neut">今天</span>`:""}
+          ${b.conflict?`<span class="pill p-crit">跨院冲突</span>`:""}
+          <span class="sp"></span>
+          ${b.items.length?`<span class="t-sub">${b.items.length} 件</span>`:`<span class="t-sub" style="color:var(--ink-3)">—</span>`}
+        </div>
+        ${b.items.map(x=>`<div class="row" style="gap:6px;margin:5px 0 0 96px">
+          <span class="dot" style="background:var(--${x.sev==="good"?"good":x.sev==="crit"?"crit":x.sev==="warn"?"warn":"ink-3"})"></span>
+          <span class="pill p-neut">${esc(x.k)}</span>
+          <b style="font-size:12.5px;font-weight:500">${esc(x.t)}</b>
+          <span class="t-sub">${esc(x.hosp)}｜${esc(x.sub)}</span></div>`).join("")}
+      </div>`).join("")}
+    </div>
+  </div>
+  <div class="formula">「我的一天」是按窗口剩余排序的优先级列表，回答"先做哪件"。
+「我的日程」是按日期铺开的时间轴，回答"做不做得完、撞不撞车"。
+
+一个 CRC 同时带 2–3 个中心是常态。两家医院的两个受试者都约在同一天上午，
+不是优先级问题 —— 是物理上做不到。这种冲突必须在排期时被看见，而不是超窗之后写方案偏离。</div>`;
+};
+
+/* ── 登记退出 / 脱落 ────────────────────────────────────────────── */
+function dropModal(id){
+  const s = SUBJ.find(x=>x.id===id), ss = site(s.ss), sc = soa(s.ss);
+  const done = s.seq, total = sc.last;
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(s.id)} · ${esc(ss.hosp)}</div>
+      <h3 style="font-size:15px">登记退出 / 脱落</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div class="field"><div class="slider-h"><label for="dp-r">退出原因</label></div>
+        <select class="sel" id="dp-r" style="width:100%">${DROP_REASONS.map(r=>`<option>${esc(r)}</option>`).join("")}</select></div>
+      <div class="field"><div class="slider-h"><label for="dp-n">具体说明（进入原因分布，是判断该中心问题的依据）</label></div>
+        <textarea class="qbox" id="dp-n" placeholder="例：受试者因往返路程 4 小时、家属不再支持而撤回知情。"></textarea></div>
+      <div class="field"><div class="slider-h"><label for="dp-d">已完成访视次数</label><b id="dp-dv">${done} / ${total}</b></div>
+        <input type="range" id="dp-d" min="0" max="${total}" step="1" value="${done}"></div>
+      <div style="border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        <b>为什么要问"已完成几次"</b>：合同按访视计价。做到第 <span id="dp-x">${done}</span> 次就停的受试者，
+        该收的是 <b id="dp-amt">${n1(done/total*ss.unit)}</b> 万，不是整例 ${n1(ss.unit)} 万。<br>
+        此前系统没有这个状态，脱落受试者会永远停在"已入组"、永远生成下一次窗口、永远刷红，
+        <b>而且按整例计收入 —— 账是错的。</b>
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="dp-go">确认登记</button></div>
+    </div>`);
+  const sync = ()=>{ const v = +$("#dp-d").value;
+    $("#dp-dv").textContent = `${v} / ${total}`; $("#dp-x").textContent = v;
+    $("#dp-amt").textContent = n1(v/total*ss.unit); };
+  $("#dp-d").addEventListener("input",sync);
+  $("#dp-go").addEventListener("click",()=>{
+    const why = $("#dp-r").value, note = $("#dp-n").value.trim(), v = +$("#dp-d").value;
+    if(note.length < 6){ toast("请写清退出的具体情况（至少 6 个字）—— 原因分布是判断中心问题的唯一依据","crit"); return; }
+    DROPS.unshift({ss:s.ss, subj:s.id, why, d:TODAY, done:v, total, note});
+    s.st = "已脱落"; s.exitWhy = why; s.exitDate = TODAY;
+    logAct("登记受试者退出", s.id, "已入组", `已脱落 · ${why}`, {ss:s.ss, why:note});
+    const lost = (1 - v/total) * ss.unit;
+    closeLayer();
+    toast(`${s.id} 已登记退出（${why}）。本中心收入相应调减 ${n1(lost)} 万，保留率已重算`,"warn");
+    setTimeout(render,220);
+  });
+}
+
+/* ── SAE 上报：CRC 是第一个知道的人，此前系统只统计不承接 ────────── */
+function saeModal(id){
+  const s = SUBJ.find(x=>x.id===id), ss = site(s.ss);
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(s.id)} · ${esc(ss.hosp)}</div>
+      <h3 style="font-size:15px">严重不良事件 SAE 上报</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div style="border-left:2px solid var(--crit);background:var(--surface-2);padding:9px 11px;font-size:12.5px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        <b style="color:var(--crit)">24 小时倒计时从"研究者知晓"开始，不是从"你有空录入"开始。</b><br>
+        知晓时间必须如实填写 —— 填晚了是编造记录，比超窗本身严重得多。
+      </div>
+      <div class="field"><div class="slider-h"><label for="sa-t">事件名称（MedDRA 首选术语）</label></div>
+        <input class="sel" id="sa-t" style="width:100%" placeholder="例：3 级免疫性肝炎"></div>
+      <div class="field"><div class="slider-h"><label for="sa-a">研究者知晓时间</label></div>
+        <input class="sel" id="sa-a" type="datetime-local" style="width:100%" value="${TODAY}T09:00"></div>
+      <div class="field"><div class="slider-h"><label for="sa-h">距现在已过</label><b id="sa-hv">0.0 小时</b></div>
+        <input type="range" id="sa-h" min="0" max="48" step="0.5" value="2"></div>
+      <div class="field"><label class="cbx"><input type="checkbox" id="sa-e" checked><span>同时生成伦理快速报告待办（知晓后 5 日内）</span></label></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="sa-go">上报申办方</button></div>
+    </div>`);
+  const hv = ()=>{ const h=+$("#sa-h").value;
+    $("#sa-hv").textContent = n1(h)+" 小时";
+    $("#sa-hv").style.color = h>SAE_SLA ? "var(--crit)" : "var(--ink)"; };
+  $("#sa-h").addEventListener("input",hv); hv();
+  $("#sa-go").addEventListener("click",()=>{
+    const term = $("#sa-t").value.trim(), h = +$("#sa-h").value;
+    if(term.length < 3){ toast("请填写事件名称","crit"); return; }
+    const nid = "SAE-00"+(42+SAE_LOG.length);
+    SAE_LOG.unshift({id:nid, ss:s.ss, subj:s.id, term,
+      aware:$("#sa-a").value.replace("T"," "), rpt:`${TODAY} ${new Date().toTimeString().slice(0,5)}`, h});
+    logAct("上报 SAE", `${nid} ${term}`, "—", `${n1(h)} 小时${h>SAE_SLA?"（超窗）":""}`, {ss:s.ss});
+    if(h > SAE_SLA)
+      ISSUES.unshift({id:"QI-2026-0"+(200+ISSUES.length), src:"中心自查", ss:s.ss, sev:"严重",
+        type:"SAE 上报超窗", found:TODAY,
+        desc:`受试者 ${s.id} 发生「${term}」，研究者知晓至上报申办方 ${n1(h)} 小时，超出 24 小时窗口。`,
+        capa:"（待提交整改措施）", own:PERSONA().n,
+        due:new Date(Date.now()+7*864e5).toISOString().slice(0,10), st:"待整改", sla:24, elapsed:h});
+    if($("#sa-e").checked)
+      ETHICS.unshift({id:"E-00"+(ethSeq++), ss:s.ss, kind:"SAE 快速报告",
+        due:new Date(Date.now()+5*864e5).toISOString().slice(0,10), sub:"—", appr:"—", st:"待递交",
+        note:`${nid} ${term}，知晓后 5 日内报伦理`});
+    closeLayer();
+    toast(h>SAE_SLA
+      ? `${nid} 已上报，但耗时 ${n1(h)} 小时已超 24 小时窗口 —— 已自动生成严重质量事件`
+      : `${nid} 已上报申办方，耗时 ${n1(h)} 小时，在 24 小时窗口内`, h>SAE_SLA?"crit":"");
+    setTimeout(render,220);
+  });
+}
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   预筛登记 · 伦理事务 · 交接
+   漏斗的第一格此前没有门；伦理只是 ISF 里一行文本；
+   系统已经提出了交接问题（A-304 的 flag），却没有提供机制。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 预筛登记：入组漏斗的入口 ────────────────────────────────────── */
+VIEWS.prescreen = box=>{
+  const p = PERSONA();
+  const mine = p.k==="crc" ? (staff(p.n)?.sites||[]) : [...scopeIds()];
+  const ids = new Set(mine);
+  const list = PRESCREEN.filter(x=>ids.has(x.ss));
+  const icf = list.filter(x=>x.result==="已签知情 · 进入筛选").length;
+  const rej = list.filter(x=>x.result==="拒绝参加").length;
+  const unfit = list.filter(x=>x.result==="不合格 · 入排不符").length;
+  const wait = list.filter(x=>x.result==="合格 · 待知情");
+  const bySrc = psBySrc(ids);
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["已登记预筛",list.length,"人","var(--ink)","本页登记的量会直接进入中心漏斗"],
+       ["转化签署知情",icf,"人",icf?"var(--good)":"var(--ink)",list.length?pct(icf/list.length)+" 转化率":"—"],
+       ["入排不符",unfit,"人",unfit?"var(--warn)":"var(--ink)","占比高 = 入排与病源不匹配"],
+       ["拒绝参加",rej,"人",rej?"var(--warn)":"var(--ink)","占比高 = 沟通或方案负担问题"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="gap:12px">
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>登记一次预筛</h3><span class="sp"></span>
+          <span class="sub">30 秒，门诊间隙就能填完</span></div>
+        <div class="card-b">
+          <div class="grid g2" style="gap:10px">
+            <div class="field"><div class="slider-h"><label for="ps-ss">中心</label></div>
+              <select class="sel" id="ps-ss" style="width:100%">${mine.map(id=>`<option value="${id}">${esc(site(id).hosp)}</option>`).join("")}</select></div>
+            <div class="field"><div class="slider-h"><label for="ps-src">来源渠道</label></div>
+              <select class="sel" id="ps-src" style="width:100%">${PS_SRC.map(x=>`<option>${esc(x)}</option>`).join("")}</select></div>
+          </div>
+          <div class="field"><div class="slider-h"><label for="ps-r">判定结果</label></div>
+            <select class="sel" id="ps-r" style="width:100%">${PS_RESULT.map(x=>`<option>${esc(x)}</option>`).join("")}</select></div>
+          <div class="field"><div class="slider-h"><label for="ps-w">不合格 / 拒绝的原因</label></div>
+            <textarea class="qbox" id="ps-w" placeholder="例：ALT 3.4×ULN，超出入排上限。合格或已签知情可留空。"></textarea></div>
+          <div class="row" style="justify-content:flex-end"><button class="btn btn-p" id="ps-go">登记</button></div>
+          <div class="note" style="margin-top:9px;line-height:1.7">
+            这一页此前<b>不存在</b>。中心的预筛量是硬编码的聚合数 —— 可它恰恰是判断
+            「病源不足」还是「入排太窄」的唯一依据。数从哪来？只能是这里，每天一条一条录。</div>
+        </div>
+      </div>
+      ${wait.length?`<div class="card">
+        <div class="card-h"><h3>合格待知情</h3><span class="sp"></span>
+          <span class="sub">这些人还没签 ICF —— 拖久了就流失了</span></div>
+        <div class="card-b" style="padding:0">
+          ${wait.map(x=>`<div style="padding:9px 14px;border-bottom:1px solid var(--line)">
+            <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(x.id)}</span>
+              <b style="font-size:12.5px;font-weight:500">${esc(site(x.ss).hosp)}</b>
+              <span class="pill p-neut">${esc(x.src)}</span>
+              <span class="pill ${days(x.d,TODAY)>7?"p-crit":"p-warn"}">已 ${days(x.d,TODAY)} 天</span>
+              <span class="sp"></span>
+              <button class="btn" data-psicf="${esc(x.id)}">已签知情</button></div>
+          </div>`).join("")}
+        </div></div>`:""}
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>渠道产出</h3><span class="sub">哪个渠道真的出人，哪个只是热闹</span></div>
+        <div class="card-b"><div id="c-ps"></div>
+          <div class="note" style="margin-top:9px;line-height:1.7">
+            条形为预筛人数，数字为<b>转化签署知情的比例</b>。
+            广告与义诊常常量最大、转化最低 —— 花的钱和出的人不是一回事。</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>登记流水</h3><span class="sp"></span><span class="sub">最近 ${Math.min(list.length,12)} 条</span></div>
+        <div class="card-b" style="padding:0">
+          ${list.slice(0,12).map(x=>{
+            const k = x.result.startsWith("已签")?"good":x.result.startsWith("合格")?"neut":"warn";
+            return `<div style="padding:8px 14px;border-bottom:1px solid var(--line)">
+              <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(x.d)}</span>
+                <span class="t-sub">${esc(site(x.ss).hosp)}</span>
+                <span class="pill p-neut">${esc(x.src)}</span>
+                <span class="sp"></span><span class="pill p-${k}">${esc(x.result)}</span></div>
+              ${x.why?`<div class="note" style="margin-top:2px">${esc(x.why)}</div>`:""}
+            </div>`;}).join("")||`<div class="empty">尚无登记</div>`}
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  /* 条形=预筛人数（中性），右侧数字=转化率（有好坏，才着色） */
+  const psMax = Math.max(...bySrc.map(x=>x.total), 1);
+  $("#c-ps").innerHTML = bySrc.map(x=>`
+    <div style="display:grid;grid-template-columns:minmax(84px,110px) 1fr auto;gap:12px;align-items:center;margin-bottom:11px">
+      <div style="font-size:12.5px;color:var(--ink-2)">${esc(x.n)}</div>
+      <div class="bartrack" style="height:12px">
+        <div class="barfill" style="width:${clamp(x.total/psMax*100,3,100)}%;background:var(--ink-2);height:100%"></div></div>
+      <div class="tnum" style="font-size:12.5px;min-width:78px;font-weight:600;color:${
+        x.rate===null?"var(--ink-3)":x.rate>=.5?"var(--good)":x.rate>=.3?"var(--ink)":"var(--warn)"}">
+        ${x.total} 人 · ${x.rate===null?"—":pct(x.rate)}</div>
+    </div>`).join("") || `<div class="empty">尚无登记</div>`;
+
+  $("#ps-go").addEventListener("click",()=>{
+    const ss = $("#ps-ss").value, src = $("#ps-src").value, r = $("#ps-r").value, w = $("#ps-w").value.trim();
+    if((r.startsWith("不合格")||r.startsWith("拒绝")) && w.length<4){
+      toast("不合格或拒绝必须写原因 —— 没有原因分布，就无法判断是入排问题还是病源问题","crit"); return; }
+    const id = "PS-0"+(psSeq++);
+    PRESCREEN.unshift({id, ss, d:TODAY, by:PERSONA().n, src, result:r, why:w});
+    const f = FUNNEL[ss]; if(f){ f.pre++; if(r==="已签知情 · 进入筛选") f.icf++; }
+    logAct("登记预筛", id, "—", `${site(ss).hosp} · ${src} · ${r}`, {ss, why:w});
+    toast(`${id} 已登记，已计入 ${site(ss).hosp} 的预筛漏斗${r==="已签知情 · 进入筛选"?"（并推进到筛选期）":""}`);
+    render();
+  });
+  box.addEventListener("click",e=>{
+    const b = e.target.closest("[data-psicf]"); if(!b) return;
+    const x = PRESCREEN.find(y=>y.id===b.dataset.psicf);
+    x.result = "已签知情 · 进入筛选";
+    const f = FUNNEL[x.ss]; if(f) f.icf++;
+    logAct("预筛转签署知情", x.id, "合格 · 待知情", "已签知情 · 进入筛选", {ss:x.ss});
+    toast(`${x.id} 已签署知情，进入筛选期`); render();
+  });
+};
+
+/* ── 伦理事务：贯穿全周期的周期性义务，不是一次性动作 ────────────── */
+VIEWS.ethics = box=>{
+  const p = PERSONA();
+  const mine = p.k==="crc" ? (staff(p.n)?.sites||[]) : [...scopeIds()];
+  const ids = new Set(mine);
+  const list = ETHICS.filter(e=>ids.has(e.ss));
+  const od = list.filter(e=>ethState(e)==="crit"), soon = list.filter(e=>ethState(e)==="warn");
+  const open = list.filter(e=>e.st==="待递交"||e.st==="审查中");
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["未了结事务",open.length,"项",open.length?"var(--warn)":"var(--ink)","递交 + 审查中"],
+       ["已逾期",od.length,"项",od.length?"var(--crit)":"var(--ink)","批件断档中心即停摆"],
+       ["14 天内到期",soon.length,"项",soon.length?"var(--warn)":"var(--ink)","年度跟踪须提前 60 天准备"],
+       ["本年度已办结",list.filter(e=>e.st==="已批准"||e.st==="已备案").length,"项","var(--ink)",""]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${od.length?`<div class="card alert alert-crit" style="margin-bottom:22px">
+    <div class="card-h"><h3>已逾期</h3><span class="sp"></span>
+      <span class="sub">伦理批件断档，该中心必须停止入组与给药</span></div>
+    <div class="card-b" style="padding:0">
+      ${od.map(e=>`<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(e.id)}</span>
+          <b style="font-size:12.5px;font-weight:500">${esc(e.kind)}</b>
+          <span class="t-sub">${esc(site(e.ss).hosp)}</span>
+          <span class="pill p-crit">逾期 ${days(e.due,TODAY)} 天</span>
+          <span class="sp"></span>
+          ${canAct("ethics")?`<button class="btn btn-p" data-esub="${esc(e.id)}">登记已递交</button>`:""}</div>
+        <div class="note" style="margin-top:3px;line-height:1.7">${esc(e.note)}</div>
+      </div>`).join("")}
+    </div></div>`:""}
+  <div class="card">
+    <div class="card-h"><h3>伦理事务台账</h3><span class="sp"></span>
+      <span class="sub">初始 · 年度跟踪 · 方案修订 · SAE 快报 · 严重违背 · 结题</span></div>
+    <div class="tw"><table style="min-width:900px">
+      <thead><tr><th>编号</th><th>中心</th><th>事务类型</th><th>应递交</th><th>实际递交</th>
+        <th>批准 / 备案</th><th>状态</th><th></th></tr></thead>
+      <tbody>${list.sort((a,b)=>a.due.localeCompare(b.due)).map(e=>{
+        const k = ethState(e);
+        return `<tr>
+          <td class="mono" style="font-size:11.5px">${esc(e.id)}</td>
+          <td style="font-size:12px">${esc(site(e.ss).hosp)}</td>
+          <td><div class="t-main">${esc(e.kind)}</div><div class="t-sub">${esc(e.note)}</div></td>
+          <td class="mono" style="font-size:11.5px;color:${k==="crit"?"var(--crit)":"var(--ink-2)"}">${esc(e.due)}</td>
+          <td class="mono" style="font-size:11.5px">${esc(e.sub)}</td>
+          <td class="mono" style="font-size:11.5px">${esc(e.appr)}</td>
+          <td><span class="pill p-${k==="good"?"good":k==="crit"?"crit":k==="warn"?"warn":"neut"}">${esc(e.st)}</span></td>
+          <td class="ta-r">${e.st==="待递交"&&canAct("ethics")?`<button class="btn" data-esub="${esc(e.id)}">登记递交</button>`
+            :e.st==="审查中"&&canAct("ethics")?`<button class="btn" data-eok="${esc(e.id)}">登记批准</button>`:""}</td>
+        </tr>`;}).join("")||`<tr><td colspan="8"><div class="empty">范围内暂无伦理事务</div></td></tr>`}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">此前伦理在系统里只有两处：中心状态机里的「伦理递交 / 伦理批件」两格，
+和 ISF 清单里的一行文本「批件 2026-10-18 到期」。
+
+但伦理不是一次性动作，是<b>贯穿全周期的周期性义务</b>：
+年度跟踪审查每年一次、须提前 60 天递交；方案每修订一次要重新审查、重签知情、重新培训；
+SAE 要在知晓后 5 日内快报；严重违背要单独报告；中心关闭前要递交结题报告。
+
+<b>批件断档 = 该中心必须停止入组与给药。</b>这是比超窗严重得多的事，此前却没有任何倒计时兜住它。</div>`;
+
+  box.addEventListener("click",e=>{
+    const s = e.target.closest("[data-esub]");
+    if(s){ const x = ETHICS.find(y=>y.id===s.dataset.esub);
+      x.sub = TODAY; x.st = "审查中";
+      logAct("递交伦理事务", `${x.id} ${x.kind}`, "待递交", "审查中", {ss:x.ss});
+      toast(`${x.id} ${x.kind} 已登记递交，转审查中`); render(); return; }
+    const k = e.target.closest("[data-eok]");
+    if(k){ const x = ETHICS.find(y=>y.id===k.dataset.eok);
+      x.appr = TODAY; x.st = x.kind==="SAE 快速报告" ? "已备案" : "已批准";
+      logAct("伦理事务办结", `${x.id} ${x.kind}`, "审查中", x.st, {ss:x.ss});
+      toast(`${x.id} ${x.kind} 已${x.st}`); render(); }
+  });
+};
+
+/* ── 交接：人会休假、会离职、会被调岗，中心不会因此停下 ──────────── */
+VIEWS.handover = box=>{
+  const p = PERSONA(), me = p.n;
+  const list = p.k==="crc" ? HANDOVER.filter(h=>h.from===me||h.to===me) : HANDOVER;
+  const open = list.filter(h=>h.st!=="已完成");
+  const peers = STAFF.filter(s=>s.role===(staff(me)?.role||"CRC") && s.n!==me);
+  const mySites = staff(me)?.sites || [];
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["进行中的交接",open.length,"笔",open.length?"var(--warn)":"var(--ink)"],
+       ["我带的中心",mySites.length,"个","var(--ink)"],
+       ["预计交接工时",n1(mySites.length*HO_COST_DAY),"人天","var(--ink)"],
+       ["历史交接",list.filter(h=>h.st==="已完成").length,"笔","var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  ${list.map(h=>{
+    const done = h.items.filter(i=>i.done).length;
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="card-h"><h3>${esc(h.from)} → ${esc(h.to)}</h3>
+        <span class="sub">${h.ss.map(x=>esc(site(x).hosp)).join(" · ")}</span><span class="sp"></span>
+        <span class="pill ${h.st==="已完成"?"p-good":"p-warn"}">${esc(h.st)}</span>
+        <span class="pill p-neut">${done} / ${h.items.length}</span></div>
+      <div class="card-b" style="padding:0">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+          <div class="note" style="line-height:1.7"><b>原因</b>：${esc(h.reason)}｜<b>交接日</b> ${esc(h.d)}</div>
+          <div class="bartrack" style="height:4px;margin-top:7px"><div class="barfill" style="width:${done/h.items.length*100}%;background:${done===h.items.length?"var(--good)":"var(--accent)"};height:100%"></div></div>
+        </div>
+        ${h.items.map((it,k)=>`<label class="cbx ${it.done?"done":""}" style="padding:8px 14px;border-bottom:1px solid var(--line)">
+          <input type="checkbox" data-ho="${esc(h.id)}:${k}" ${it.done?"checked":""} ${h.st==="已完成"?"disabled":""}>
+          <span>${esc(it.t)}</span></label>`).join("")}
+        ${h.st!=="已完成"?`<div style="padding:10px 14px">
+          <button class="btn btn-p" data-hodone="${esc(h.id)}" ${done<h.items.length?"disabled":""}>
+            ${done<h.items.length?`还差 ${h.items.length-done} 项`:"确认交接完成"}</button></div>`:""}
+      </div></div>`;}).join("")}
+  <div class="card">
+    <div class="card-h"><h3>发起交接</h3><span class="sub">休假、离职、调岗 —— 中心不会因此停下</span></div>
+    <div class="card-b">
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="ho-ss">要交接的中心</label></div>
+          <select class="sel" id="ho-ss" style="width:100%">${mySites.map(id=>`<option value="${id}">${esc(site(id).hosp)}</option>`).join("")||`<option value="">无</option>`}</select></div>
+        <div class="field"><div class="slider-h"><label for="ho-to">接手人</label></div>
+          <select class="sel" id="ho-to" style="width:100%">${peers.map(s=>`<option value="${esc(s.n)}">${esc(s.n)}（${s.role}，利用率 ${s.util}%）</option>`).join("")}</select></div>
+      </div>
+      <div class="field"><div class="slider-h"><label for="ho-why">原因</label></div>
+        <textarea class="qbox" id="ho-why" placeholder="例：09-02 至 09-04 年假，期间广东省人民医院 SIV 排期 09-01。"></textarea></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-p" id="ho-go">发起交接</button></div>
+    </div>
+  </div>
+  <div class="formula">系统此前已经<b>提出过这个问题</b>：待审批队列里郭晓萱的请假单挂着一条提示
+「期间广东省人民医院 SIV 排期 09-01，需先确认交接人」。
+
+提出了问题，却没有提供机制 —— 全库 <code>交接</code> 出现 2 次、<code>接手</code> 1 次，都是文字。
+交接清单里最容易漏、也最要命的是<b>在组受试者逐例交底</b>：
+新人不知道哪个受试者依从性差、哪个家属有顾虑、哪个只能周三来 —— 这些东西不在 EDC 里，只在上一个 CRC 脑子里。</div>`;
+
+  box.addEventListener("change",e=>{
+    const c = e.target.closest("[data-ho]"); if(!c) return;
+    const [id,k] = c.dataset.ho.split(":");
+    const h = HANDOVER.find(x=>x.id===id); h.items[+k].done = c.checked;
+    c.closest("label").classList.toggle("done", c.checked);
+  });
+  box.addEventListener("click",e=>{
+    const d = e.target.closest("[data-hodone]");
+    if(d){ const h = HANDOVER.find(x=>x.id===d.dataset.hodone);
+      h.st = "已完成";
+      logAct("完成交接", `${h.from} → ${h.to}`, "待确认", "已完成",
+        {ss:h.ss[0], why:h.reason});
+      toast(`交接完成：${h.ss.map(x=>site(x).hosp).join("、")} 已移交 ${h.to}`); render(); }
+  });
+  $("#ho-go")?.addEventListener("click",()=>{
+    const ss = $("#ho-ss").value, to = $("#ho-to").value, why = $("#ho-why").value.trim();
+    if(!ss){ toast("没有可交接的中心","crit"); return; }
+    if(why.length < 5){ toast("请写清交接原因","crit"); return; }
+    const id = "HO-00"+(hoSeq++);
+    HANDOVER.unshift({id, from:me, to, ss:[ss], reason:why, d:TODAY, st:"待确认",
+      items:HO_ITEMS.map(t=>({t, done:false}))});
+    logAct("发起交接", `${me} → ${to}`, "—", site(ss).hosp, {ss, why});
+    toast(`${id} 已发起：${site(ss).hosp} 交接给 ${to}，${HO_ITEMS.length} 项清单待逐项确认`);
+    render();
+  });
+};
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   现金流预测 —— 系统此前只有后视镜（DSO、应收账龄），没有前挡风。
+   CRO/SMO 的命门：人力成本每月刚性支出，回款是里程碑制 + 账期。
+   要回答的不是"我应收多少"，而是"哪个月我会没钱发工资"。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.cash = box=>{
+  const f = cashF(6), rows = f.rows, b = f.burn;
+  const worst = rows.reduce((a,x)=> x.cum < a.cum ? x : a, rows[0]);
+  const neg = rows.filter(r=>r.cum < 0);
+  const totIn = sum(rows,r=>r.cash), totOut = sum(rows,r=>r.out);
+  const KIND = {overdue:["逾期应收","var(--crit)"], invoiced:["已开票在途","var(--accent)"],
+                pending:["待开票","var(--warn)"], forecast:["预计达成","var(--ink-3)"]};
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["未来 6 个月预计回款",wan(totIn),"万","var(--ink)","在途应收 + 待开票 + 预计达成"],
+       ["同期刚性人力支出",wan(totOut),"万","var(--ink)",`${b.heads} 人在职 · 月均 ${wan(b.total)} 万`],
+       ["期末累计净额",wan(rows.at(-1).cum),"万",rows.at(-1).cum<0?"var(--crit)":"var(--good)",
+        rows.at(-1).cum<0?"六个月后仍为负":"六个月后转正"],
+       ["压力情景最低点",wan(f.stress.worst),"万",f.stress.worst<0?"var(--crit)":"var(--warn)",
+        `逾期再拖 3 个月 · ${esc(f.stress.worstKey)}`]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+
+  ${f.gaps.length?`<div class="card alert alert-warn" style="margin-bottom:26px">
+    <div class="card-h"><h3>已达成，却不在开票队列里</h3><span class="sp"></span>
+      <span class="sub">${f.gaps.length} 个里程碑 · 合计 ${wan(f.gapAmt)} 万</span></div>
+    <div class="card-b">
+      <div class="note" style="line-height:1.8;color:var(--ink-2);margin-bottom:10px">
+        这些里程碑按中心的实际进度<b>早已达成</b>，但里程碑台账里没有对应记录，也就没有开票、没有回款。
+        它们<b>不计入上面的预计回款</b> —— 把记录缺口算成未来现金，做出来的预测会好看，但会骗人。<br>
+        这是本页最快的现金杠杆：<b>补记录 → 开票 → ${wan(f.gapAmt)} 万在两三个月内可收</b>。
+      </div>
+      <div class="tw"><table style="min-width:640px">
+        <thead><tr><th>中心</th><th>里程碑</th><th class="ta-r">金额</th></tr></thead>
+        <tbody>${f.gaps.map(g=>`<tr>
+          <td style="font-size:12px">${esc(site(g.ss).hosp)}</td>
+          <td class="t-sub">${esc(g.name)}</td>
+          <td class="tnum">${wan(g.amt)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="row" style="margin-top:11px"><button class="btn" data-nav="bill">去里程碑台账补记录</button></div>
+    </div></div>`:""}
+  ${neg.length?`<div class="card alert alert-crit" style="margin-bottom:26px">
+    <div class="card-h"><h3>现金缺口</h3><span class="sp"></span>
+      <span class="sub">${neg.length} 个月累计净额为负 —— 最深 ${wan(worst.cum)} 万，出现在 ${esc(worst.key)}</span></div>
+    <div class="card-b">
+      <div class="note" style="line-height:1.8;color:var(--ink-2)">
+        人力成本每月 <b>${wan(b.total)} 万</b>雷打不动（${b.heads} 人 × 人天成本 × ${RATE.workdays} 天 + ${pct(RATE.overhead)} 分摊），
+        而回款要等里程碑达成、开票、再过账期。<br>
+        可动的杠杆只有三个：<b>把待开票的赶紧开出去</b>（${wan(sum(rows.flatMap(r=>r.items).filter(i=>i.kind==="pending"),i=>i.amt))} 万卡在这一步）、
+        <b>催逾期</b>（${wan(sum(rows.flatMap(r=>r.items).filter(i=>i.kind==="overdue"),i=>i.amt))} 万已超 60 天）、
+        <b>加快落后中心入组</b>（预计里程碑 ${wan(sum(rows.flatMap(r=>r.items).filter(i=>i.kind==="forecast"),i=>i.amt))} 万取决于入组速度）。
+      </div>
+      <div class="row" style="margin-top:11px">
+        <button class="btn" data-nav="bill">去里程碑与开票</button>
+        <button class="btn" data-nav="enr">看入组进度</button></div>
+    </div></div>`:""}
+
+  ${f.stress.worst<0?`<div class="card alert alert-crit" style="margin-bottom:26px">
+    <div class="card-h"><h3>压力情景：现金会断在 ${esc(f.stress.worstKey)}</h3><span class="sp"></span>
+      <span class="sub">最低点 ${wan(f.stress.worst)} 万</span></div>
+    <div class="card-b"><div class="note" style="line-height:1.8;color:var(--ink-2)">
+      基准情景假设逾期应收下个月就能收回来 —— 可它们之所以逾期，恰恰是因为对方还没打算付。<br>
+      压力情景只改两个假设：<b>逾期应收再拖 3 个月</b>、<b>预计达成的里程碑延后 1 个月</b>。
+      结果是累计净额在 ${esc(f.stress.worstKey)} 掉到 <b style="color:var(--crit)">${wan(f.stress.worst)} 万</b>。<br>
+      这就是为什么催收和补开票不是财务的杂活 —— 它们是这家公司唯一能自己控制的现金杠杆。
+    </div></div></div>`:`<div class="card" style="margin-bottom:26px">
+    <div class="card-h"><h3>压力情景</h3><span class="sp"></span>
+      <span class="sub">最低点 ${wan(f.stress.worst)} 万 · ${esc(f.stress.worstKey)}</span></div>
+    <div class="card-b"><div class="note" style="line-height:1.8;color:var(--ink-2)">
+      把两个乐观假设去掉 —— <b>逾期应收再拖 3 个月</b>、<b>预计达成的里程碑延后 1 个月</b> ——
+      累计净额最低仍有 ${wan(f.stress.worst)} 万，出现在 ${esc(f.stress.worstKey)}，期末 ${wan(f.stress.end)} 万。
+      本期现金安全，但安全的原因主要是在途应收兑现，而不是经营性流入 —— 一旦大客户账期再拉长，缓冲会很快消失。
+    </div></div></div>`}
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>每月净额</h3><span class="sub">基准情景：预计回款 − 刚性支出。负数即当月失血</span></div>
+      <div class="card-b"><div id="c-cf"></div>
+        <div class="note" style="margin-top:12px">条形为当月净额，非累计。连续负月才是真问题 —— 单月为负可以靠账上余额扛过去。</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>回款构成</h3><span class="sub">按确定性排序</span></div>
+      <div class="card-b"><div id="c-kind"></div>
+        <div class="note" style="margin-top:12px;line-height:1.7">
+          <b>逾期应收</b>最确定也最该催；<b>预计达成</b>确定性最低 ——
+          它建立在"入组按当前速度继续"这个假设上，而落后中心恰恰不会。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h3>逐月明细</h3><span class="sp"></span>
+      <span class="sub">金额单位：万元</span></div>
+    <div class="tw"><table style="min-width:900px">
+      <thead><tr><th>月份</th><th class="ta-r">预计回款</th><th class="ta-r">刚性支出</th>
+        <th class="ta-r">当月净额</th><th class="ta-r">累计净额</th><th class="ta-r">压力情景累计</th><th>主要回款来源</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td class="mono" style="font-size:12px">${esc(r.key)}</td>
+        <td class="tnum">${wan(r.cash)}</td>
+        <td class="tnum" style="color:var(--ink-3)">−${wan(r.out)}</td>
+        <td class="tnum" style="font-weight:600;color:${r.net<0?"var(--crit)":"var(--ink)"}">${r.net>0?"+":""}${wan(r.net)}</td>
+        <td class="tnum" style="font-weight:700;color:${r.cum<0?"var(--crit)":"var(--good)"}">${r.cum>0?"+":""}${wan(r.cum)}</td>
+        <td class="tnum" style="color:${f.stress.rows[r.mo-1].cum<0?"var(--crit)":"var(--ink-3)"}">${f.stress.rows[r.mo-1].cum>0?"+":""}${wan(f.stress.rows[r.mo-1].cum)}</td>
+        <td><div class="t-sub" style="line-height:1.6">${r.items.length
+          ? r.items.slice(0,3).map(i=>`<span class="pill p-${i.kind==="overdue"?"crit":i.kind==="pending"?"warn":"neut"}" style="margin:1px 3px 1px 0">${esc(i.label)} ${wan(i.amt)}</span>`).join("")
+            + (r.items.length>3?`<span class="t-sub"> 等 ${r.items.length} 笔</span>`:"")
+          : "—"}</div></td>
+      </tr>`).join("")}</tbody>
+      <tfoot><tr>
+        <td><b>合计</b></td>
+        <td class="tnum"><b>${wan(totIn)}</b></td>
+        <td class="tnum"><b>−${wan(totOut)}</b></td>
+        <td class="tnum"><b style="color:${totIn-totOut<0?"var(--crit)":"var(--ink)"}">${totIn-totOut>0?"+":""}${wan(totIn-totOut)}</b></td>
+        <td class="tnum"><b style="color:${f.stress.end<0?"var(--crit)":"var(--ink-3)"}">${f.stress.end>0?"+":""}${wan(f.stress.end)}</b></td><td></td>
+      </tr></tfoot>
+    </table></div>
+  </div>
+
+  <div class="formula">刚性支出 = Σ(在职人员 × 角色人天成本 × ${RATE.workdays} 工作日) × (1 + ${pct(RATE.overhead)} 分摊)
+预计回款 = 已开票在途（按到期日落月） + 待开票（假设 15 天内开票 + 60 天账期）
+         + 预计达成里程碑（按该中心实际入组速度外推达成月 + 2 个月账期）
+         <b>不含</b>「已达成但不在开票队列」的里程碑 —— 那是记录缺口，不是未来收入
+
+里程碑计价：合同签署 10% · 中心启动 SIV 15% · 入组过半 25% · 入组达成 80% 25% · 中心结题 25%
+中心合同额 = 启动费 + 合同例数 × 单例单价
+
+<b>这张图和「里程碑 · 开票 · 回款」的区别</b>：那一页回答"我应收多少、拖了多久"，全是已经发生的；
+这一页回答"哪个月会没钱"。原料完全相同，方向相反 —— 而经营决策只发生在后者上。</div>`;
+
+  diverging($("#c-cf"), rows.map(r=>({label:r.key, v:r.net,
+    tip:`<div class="tip-t">${esc(r.key)}</div>
+      <div class="tip-r"><span>预计回款</span><b>${wan(r.cash)} 万</b></div>
+      <div class="tip-r"><span>刚性支出</span><b>−${wan(r.out)} 万</b></div>
+      <div class="tip-r"><span>当月净额</span><b style="color:${r.net<0?"var(--crit)":"var(--ink)"}">${r.net>0?"+":""}${wan(r.net)} 万</b></div>
+      <div class="tip-r" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>累计</span><b style="color:${r.cum<0?"var(--crit)":"var(--good)"}">${r.cum>0?"+":""}${wan(r.cum)} 万</b></div>`})));
+
+  const all = rows.flatMap(r=>r.items);
+  stacked($("#c-kind"), Object.keys(KIND).map(k=>({
+    n:KIND[k][0], v:sum(all.filter(i=>i.kind===k),i=>i.amt), c:KIND[k][1]
+  })).filter(x=>x.v>0));
+};
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   客户 · 投标闭环 · 合同变更
+   系统此前按「项目 / 中心」切片，没有客户这一维；
+   报价模型是开环的（报出去赢没赢不回写）；
+   合同变更完全不管 —— 而这是 CRO/SMO 亏损的第二大原因。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 客户（申办方）：比单中心毛利更上位的切片 ────────────────────── */
+VIEWS.client = box=>{
+  const rows = SPONSORS.map(clientM).sort((a,b)=>b.rev-a.rev);
+  const tot = {rev:sum(rows,r=>r.rev), gp:sum(rows,r=>r.gp), ar:sum(rows,r=>r.ar), od:sum(rows,r=>r.overdue)};
+  const top = rows[0], conc = tot.rev? top.rev/tot.rev : 0;
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["在服务客户",rows.length,"家","var(--ink)",""],
+       ["最大客户占比",pct(conc),"",conc>0.4?"var(--crit)":conc>0.3?"var(--warn)":"var(--ink)",
+        `${top.sp} ${wan(top.rev)} 万`],
+       ["在途应收",wan(tot.ar),"万",tot.ar?"var(--ink)":"var(--ink)",""],
+       ["其中已逾期",wan(tot.od),"万",tot.od?"var(--crit)":"var(--ink)","超 60 天未回款"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${conc>0.35?`<div class="card alert alert-warn" style="margin-bottom:24px">
+    <div class="card-h"><h3>客户集中度</h3><span class="sp"></span>
+      <span class="sub">${esc(top.sp)} 占本期收入 ${pct(conc)}</span></div>
+    <div class="card-b"><div class="note" style="line-height:1.8;color:var(--ink-2)">
+      单一客户超过三分之一，议价权就不在我们这边了 —— ${esc(top.sp)}
+      ${top.meta.note?`（${esc(top.meta.note)}）`:""}。<br>
+      这个数只有按客户切片才看得见。按项目看是 4 个项目、按中心看是 15 个中心，都显得很分散。</div>
+    </div></div>`:""}
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>客户收入构成</h3><span class="sub">按收入排序</span></div>
+      <div class="card-b"><div id="c-cl"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>客户毛利率</h3><span class="sub">同样是客户，赚钱能力差很多</span></div>
+      <div class="card-b"><div id="c-clg"></div>
+        <div class="note" style="margin-top:12px">毛利率低不等于该放弃 —— 要看它带不带来续约与口碑。但必须知道。</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>客户台账</h3><span class="sp"></span>
+      <span class="sub">金额单位：万元</span></div>
+    <div class="tw"><table style="min-width:1020px">
+      <thead><tr><th>客户</th><th class="ta-r">项目</th><th class="ta-r">中心</th>
+        <th class="ta-r">入组 / 计划</th><th class="ta-r">合同额</th><th class="ta-r">已确认收入</th>
+        <th class="ta-r">毛利</th><th class="ta-r">毛利率</th><th class="ta-r">在途应收</th>
+        <th>账期</th><th>关系</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td><div class="t-main">${esc(r.sp)}</div><div class="t-sub">${esc(r.meta.since||"—")} 年起 · ${esc(r.meta.contact||"—")}</div></td>
+        <td class="tnum">${r.studies.length}</td>
+        <td class="tnum">${r.sites.length}</td>
+        <td class="tnum">${r.enrolled} / ${r.planned}</td>
+        <td class="tnum">${fmask("price", n0(r.contract))}</td>
+        <td class="tnum">${fmask("price", wan(r.rev))}</td>
+        <td class="tnum" style="font-weight:600;color:${r.gp<0?"var(--crit)":"var(--ink)"}">${fmask("margin", wan(r.gp))}</td>
+        <td class="tnum" style="color:${r.gpr<0.15?"var(--crit)":r.gpr<0.25?"var(--warn)":"var(--ink)"}">${fmask("margin", r.gpr===null?"—":pct(r.gpr))}</td>
+        <td class="tnum">${wan(r.ar)}${r.overdue>0?`<div class="t-sub" style="color:var(--crit)">逾期 ${wan(r.overdue)}</div>`:""}</td>
+        <td class="t-sub">${esc(r.meta.pay||"—")}</td>
+        <td><div class="t-sub" style="line-height:1.6;max-width:220px">${esc(r.meta.note||"—")}</div></td>
+      </tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">此前整套系统按「项目 / 中心」切片，没有客户这一维 ——
+STUDIES 上有 sponsor 字段，但从没被当作可聚合维度用过。
+
+对一个靠<b>客户复购</b>活着的服务公司，老板必须能回答：
+「这个客户今年给我多少收入、毛利率多少、几个项目在跑、应收拖了多久、明年还续不续」。
+这个问题按项目切、按中心切，都答不了。</div>`;
+
+  stacked($("#c-cl"), rows.map(r=>({n:r.sp, v:r.rev})));
+  hbars($("#c-clg"), rows.map(r=>({label:r.sp, v:(r.gpr||0)*100,
+    vColor: r.gpr<0.15?"var(--crit)":r.gpr<0.25?"var(--warn)":"var(--ink)",
+    color:"var(--ink-2)",
+    tip:`<div class="tip-t">${esc(r.sp)}</div>
+      <div class="tip-r"><span>收入</span><b>${wan(r.rev)} 万</b></div>
+      <div class="tip-r"><span>成本</span><b>${wan(r.cost)} 万</b></div>
+      <div class="tip-r"><span>毛利</span><b>${wan(r.gp)} 万</b></div>`})),
+    {max:60, fmt:v=>n1(v), unit:"%", band:[15,25]});
+};
+
+/* ── 投标与报价闭环：报出去的价，赢没赢必须回写 ────────────────── */
+VIEWS.bid = box=>{
+  const m = bidM();
+  const lost = BIDS.filter(b=>b.st==="失标"), won = BIDS.filter(b=>b.st==="中标");
+  const pend = BIDS.filter(b=>b.st==="待定");
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["报价胜率",m.rate===null?"—":pct(m.rate),"",m.rate<0.5?"var(--warn)":"var(--ink)",`${m.won} 中 / ${m.done} 已决`],
+       ["中标金额",n0(m.amtWon),"万","var(--ink)",""],
+       ["报价系统性偏差",m.bias===null?"—":(m.bias>0?"+":"")+pct(m.bias),"",
+        Math.abs(m.bias)>0.08?"var(--crit)":"var(--ink)", m.bias>0?"我们比成交价高":"我们比成交价低"],
+       ["失标平均差距",m.lostBias===null?"—":"+"+pct(m.lostBias),"",
+        m.lostBias>0.15?"var(--crit)":"var(--warn)","输掉的单，我们高出对手这么多"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${m.lostBias>0.15?`<div class="card alert alert-crit" style="margin-bottom:24px">
+    <div class="card-h"><h3>失标复盘</h3><span class="sp"></span>
+      <span class="sub">输掉的单平均高出成交价 ${pct(m.lostBias)} —— 这不是运气问题</span></div>
+    <div class="card-b" style="padding:0">
+      ${lost.map(b=>`<div style="padding:11px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(b.id)}</span>
+          <b style="font-size:12.5px;font-weight:500">${esc(b.name)}</b>
+          <span class="t-sub">${esc(b.sp)}</span>
+          <span class="pill p-crit">高 ${pct((b.ours-b.win)/b.win)}</span></div>
+        <div class="note" style="margin-top:3px;line-height:1.7">
+          我方 ${n0(b.ours)} 万（${n1(b.md/b.subjects)} 人天/例）→ 成交 ${n0(b.win)} 万。${esc(b.note)}</div>
+      </div>`).join("")}
+      <div style="padding:11px 14px;background:var(--surface-2)">
+        <div class="note" style="line-height:1.8;color:var(--ink-2)">
+          两次失标的复盘结论指向<b>同一件事</b>：我们的人天假设比同行高 ——
+          CRC 驻场 FTE 报得高、每例人天报得高。这可能意味着两件事之一：
+          <b>①</b> 我们的效率确实低于同行（那是运营问题）；
+          <b>②</b> 同行在低报，进场后靠变更单找补（那是商务打法问题）。<br>
+          区分这两者的唯一办法，是拿<b>自己的历史真实人天</b>去对照 —— 那正是「报价模型」这一页的数据。
+          <b>但只有把中标结果回写进来，这个对照才闭环。</b></div>
+      </div>
+    </div></div>`:""}
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>投标台账</h3><span class="sp"></span>
+      <span class="sub">金额单位：万元｜待定 ${pend.length} 个</span></div>
+    <div class="tw"><table style="min-width:1000px">
+      <thead><tr><th>编号</th><th>客户 / 项目</th><th class="ta-r">中心</th><th class="ta-r">例数</th>
+        <th class="ta-r">我方报价</th><th class="ta-r">人天/例</th><th class="ta-r">成交价</th>
+        <th class="ta-r">价差</th><th>结果</th><th>负责</th><th></th></tr></thead>
+      <tbody>${BIDS.map((b,k)=>{
+        const gap = b.win ? (b.ours-b.win)/b.win : null;
+        return `<tr>
+          <td class="mono" style="font-size:11.5px">${esc(b.id)}</td>
+          <td><div class="t-main">${esc(b.name)}</div><div class="t-sub">${esc(b.sp)} · 递交 ${esc(b.sub)}</div></td>
+          <td class="tnum">${b.sites}</td><td class="tnum">${b.subjects}</td>
+          <td class="tnum">${fmask("price", n0(b.ours))}</td>
+          <td class="tnum">${n1(b.md/b.subjects)}</td>
+          <td class="tnum">${b.win? fmask("price", n0(b.win)) : "—"}</td>
+          <td class="tnum" style="color:${gap===null?"var(--ink-3)":gap>0.1?"var(--crit)":gap>0?"var(--warn)":"var(--good)"}">
+            ${gap===null?"—":(gap>0?"+":"")+pct(gap)}</td>
+          <td><span class="pill ${b.st==="中标"?"p-good":b.st==="失标"?"p-crit":"p-warn"}">${esc(b.st)}</span></td>
+          <td class="t-sub">${esc(b.by)}</td>
+          <td class="ta-r">${b.st==="待定"&&canAct("bid")?`<div class="row" style="gap:4px;justify-content:flex-end">
+            <button class="btn" data-bw="${k}">中标</button><button class="btn" data-bl="${k}">失标</button></div>`:""}</td>
+        </tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>人天/例 —— 中标与失标的分界线</h3>
+      <span class="sub">条形为我方报价里的每例人天假设</span></div>
+    <div class="card-b"><div id="c-bid"></div>
+      <div class="note" style="margin-top:12px;line-height:1.7">
+        中标的单集中在低人天区间，失标的单集中在高人天区间。
+        这条线的位置就是市场对我们效率的定价 —— <b>而它只有在结果回写之后才画得出来。</b></div>
+    </div>
+  </div>
+  <div class="formula">报价模型（另一页）算的是「按我们自己的历史人天，这个项目要花多少」。
+这一页算的是「按这个价报出去，市场认不认」。
+
+前者没有后者，就是自说自话：<code>投标</code> 在系统里出现过 5 次、<code>中标</code> 0 次、<code>报价胜率</code> 0 次 ——
+报出去的价赢了还是输了，从来没有回到系统里。于是"我们是不是系统性报高"这个问题，永远无法回答。
+
+这与架构文档 §3「指标注册表」是同一个道理：<b>口径必须能被历史校准，否则它只是一个信念。</b></div>`;
+
+  hbars($("#c-bid"), m.mdPer.sort((a,b)=>a.v-b.v).map(x=>({
+    label:x.n.length>14?x.n.slice(0,13)+"…":x.n, v:x.v,
+    color: x.st==="中标"?"var(--accent)":"var(--ink-3)",
+    vColor: x.st==="中标"?"var(--good)":"var(--crit)"})),
+    {fmt:v=>n1(v), unit:" 人天/例"});
+
+  box.addEventListener("click",e=>{
+    const w = e.target.closest("[data-bw]"), l = e.target.closest("[data-bl]");
+    if(!w && !l) return;
+    const b = BIDS[+(w||l).dataset[w?"bw":"bl"]];
+    bidResult(b, w? "中标":"失标");
+  });
+};
+function bidResult(b, st){
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(b.id)} · ${esc(b.sp)}</div>
+      <h3 style="font-size:15px">回写投标结果 · ${esc(st)}</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div class="note" style="margin-bottom:11px">我方报价 <b>${n0(b.ours)} 万</b>（${n1(b.md/b.subjects)} 人天/例）</div>
+      <div class="field"><div class="slider-h"><label for="bd-w">${st==="中标"?"最终成交价":"对手成交价（如已知）"}</label><b id="bd-wv">${n0(b.ours)} 万</b></div>
+        <input type="range" id="bd-w" min="${Math.round(b.ours*0.6)}" max="${Math.round(b.ours*1.1)}" step="10" value="${b.ours}"></div>
+      <div class="field"><div class="slider-h"><label for="bd-n">复盘结论</label></div>
+        <textarea class="qbox" id="bd-n" placeholder="${st==="中标"?"例：降价 4% 成交，仍在毛利线上。":"例：输给报价低 21% 的同行，对方按 12 人天/例，我们按 19。"}"></textarea></div>
+      <div style="border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        复盘结论必须写。不写，三个月后没人记得为什么输 ——
+        <b>失标本身不值钱，失标的原因才值钱。</b>
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="bd-go">确认回写</button></div>
+    </div>`);
+  $("#bd-w").addEventListener("input",e=>$("#bd-wv").textContent = n0(+e.target.value)+" 万");
+  $("#bd-go").addEventListener("click",()=>{
+    const n = $("#bd-n").value.trim();
+    if(n.length<6){ toast("请写复盘结论 —— 失标的原因才是这条记录的价值","crit"); return; }
+    b.st = st; b.win = +$("#bd-w").value; b.note = n;
+    logAct("回写投标结果", `${b.id} ${b.name}`, "待定", `${st} · 成交 ${b.win} 万`, {why:n});
+    closeLayer();
+    const gap = (b.ours-b.win)/b.win;
+    toast(`${b.id} 已回写为${st}，价差 ${(gap>0?"+":"")+pct(gap)}，胜率与偏差已重算`);
+    setTimeout(render,220);
+  });
+}
+
+/* ── 合同变更：亏损第二大原因就是 scope creep 没有变更单 ────────── */
+VIEWS.change = box=>{
+  const c = creepM();
+  const st = k => k==="已签署"?"good" : k==="未获批"?"crit" : k==="已提交"?"warn" : "neut";
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["未覆盖工作量",n0(c.md),"人天",c.md>0?"var(--crit)":"var(--ink)","已发生但无对应变更单"],
+       ["折合金额",wan(c.amt),"万",c.md>0?"var(--crit)":"var(--ink)","按 CRC 人天成本折算"],
+       ["待提出",CHANGES.filter(x=>x.st==="待提出").length,"项",
+        CHANGES.filter(x=>x.st==="待提出").length?"var(--crit)":"var(--ink)","识别到了但还没提"],
+       ["已签署变更",c.signed.length,"项","var(--ink)",`累计 ${wan(sum(c.signed,x=>x.amt||0))} 万`]
+     ].map(([l,v,u,cl,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${cl}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${c.md>0?`<div class="card alert alert-crit" style="margin-bottom:24px">
+    <div class="card-h"><h3>白干的活</h3><span class="sp"></span>
+      <span class="sub">${n0(c.md)} 人天已经发生或即将发生，但合同里没有对应条款</span></div>
+    <div class="card-b" style="padding:0">
+      ${c.rows.map(r=>`<div style="padding:11px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(r.id)}</span>
+          <span class="pill p-neut">${esc(r.kind)}</span>
+          <b style="font-size:12.5px;font-weight:500">${esc(S[r.sid].short)}${r.ss?` · ${esc(site(r.ss).hosp)}`:""}</b>
+          <span class="pill p-${st(r.st)}">${esc(r.st)}</span>
+          <span class="sp"></span>
+          <span class="pill p-crit">${n0(r.totalMd)} 人天 ≈ ${wan(r.cash)} 万</span></div>
+        <div class="note" style="margin-top:4px;line-height:1.7">${esc(r.what)}
+          ${r.perSubject?`<br>按每例 ${n1(r.mdImpact)} 人天 × ${r.n} 例计算。`:""}
+          ${r.note?`<br><b>${esc(r.note)}</b>`:""}</div>
+        ${r.st==="待提出"&&canAct("bid")?`<div class="row" style="margin-top:7px">
+          <button class="btn btn-p" data-chg="${esc(r.id)}">提出变更申请</button></div>`:""}
+      </div>`).join("")}
+    </div></div>`:""}
+  <div class="card">
+    <div class="card-h"><h3>变更台账</h3><span class="sp"></span><span class="sub">金额单位：万元</span></div>
+    <div class="tw"><table style="min-width:980px">
+      <thead><tr><th>编号</th><th>项目 / 中心</th><th>变更类型</th><th>内容</th>
+        <th class="ta-r">人天影响</th><th class="ta-r">金额</th><th>提出</th><th>状态</th></tr></thead>
+      <tbody>${CHANGES.map(x=>`<tr>
+        <td class="mono" style="font-size:11.5px">${esc(x.id)}</td>
+        <td><div class="t-main">${esc(S[x.sid].short)}</div><div class="t-sub">${x.ss?esc(site(x.ss).hosp):"全项目"}</div></td>
+        <td class="t-sub">${esc(x.kind)}</td>
+        <td><div class="t-sub" style="line-height:1.6;max-width:320px">${esc(x.what)}</div></td>
+        <td class="tnum">${x.perSubject?`${n1(x.mdImpact)}/例`:n0(x.mdImpact)}</td>
+        <td class="tnum" style="color:${x.amt===null?"var(--crit)":"var(--ink)"}">${x.amt===null?"未计价":fmask("price", wan(x.amt))}</td>
+        <td class="t-sub">${esc(x.raised)}<br>${esc(x.by)}</td>
+        <td><span class="pill p-${st(x.st)}">${esc(x.st)}</span></td>
+      </tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">CRO/SMO 亏损第一大原因是入组延迟，<b>第二大就是 scope creep 没有变更单</b>。
+
+链条是这样断的：申办方修订方案 → 每例多 2 次采血 → CRC 每例多 1.5 人天 →
+143 例就是 214 人天 → 按 ${n1(RATE.crcDay*10)} 万/10 人天算，${wan(214*RATE.crcDay)} 万。
+<b>而这笔钱是否追加，取决于有没有人在方案修订当天就提出变更申请。</b>
+
+系统此前完全不管这件事（全库 <code>方案修订</code> 出现 2 次，无工作流）。
+更隐蔽的是 CR-010 那种：申办方以"属安全性义务"为由不追加费用 ——
+就算最终要不到钱，也必须<b>把它记下来</b>，因为下次报价时这就是应该加进去的成本。</div>`;
+
+  box.addEventListener("click",e=>{
+    const b = e.target.closest("[data-chg]"); if(!b) return;
+    const x = CHANGES.find(y=>y.id===b.dataset.chg);
+    x.st = "已提交"; x.amt = +(creepM().rows.find(r=>r.id===x.id)?.cash || 0).toFixed(1);
+    logAct("提出合同变更", `${x.id} ${x.kind}`, "待提出", `已提交 · ${x.amt} 万`, {ss:x.ss||"—"});
+    toast(`${x.id} 已提出变更申请，计价 ${wan(x.amt)} 万，等待申办方签署`);
+    render();
+  });
+};
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   人才梯队 —— 卖的是人天，人走了产品就没了。
+   系统此前看得到"利用率 96%"，看不到"这个人连续三个月 96%，快撑不住了"。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.people = box=>{
+  const rows = STAFF.map(s=>({s, t:talentM(s), g:groupOf(s.n)}))
+    .sort((a,b)=>b.t.risk-a.t.risk);
+  const high = rows.filter(r=>r.t.risk>=60), mid = rows.filter(r=>r.t.risk>=35&&r.t.risk<60);
+  const noSucc = rows.filter(r=>!r.t.succ && r.s.sites.length>=3);
+  const gcpSoon = STAFF.filter(s=>days(TODAY,s.gcp)<180);
+  const exposure = sum(high, r=>r.t.hoCost);
+  const junior = rows.filter(r=>r.t.tenure!==null && r.t.tenure<1.5);
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["高流失风险",high.length,"人",high.length?"var(--crit)":"var(--ink)","风险分 ≥ 60"],
+       ["关键岗位无继任",noSucc.length,"人",noSucc.length?"var(--crit)":"var(--ink)","带 3 个以上中心且无备份"],
+       ["高风险人员交接成本",wan(exposure),"万",exposure?"var(--warn)":"var(--ink)","一旦离职的直接损失"],
+       ["GCP 证书 180 天内到期",gcpSoon.length,"人",gcpSoon.length?"var(--warn)":"var(--ink)","过期即不得开展工作"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${high.length?`<div class="card alert alert-crit" style="margin-bottom:24px">
+    <div class="card-h"><h3>该谈话的人</h3><span class="sp"></span>
+      <span class="sub">风险分不是算命，是把已经写在系统里的信号加起来</span></div>
+    <div class="card-b" style="padding:0">
+      ${high.map(r=>`<div style="padding:12px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px">
+          <span class="avatar" style="width:22px;height:22px;font-size:11px">${esc(r.s.n.slice(0,1))}</span>
+          <b style="font-size:13px">${esc(r.s.n)}</b>
+          <span class="pill p-neut">${esc(r.s.role)} · ${esc(r.s.lvl)}</span>
+          ${r.g?`<span class="t-sub">${esc(r.g.name)}</span>`:""}
+          <span class="sp"></span>
+          <span class="pill p-crit">风险 ${r.t.risk}</span></div>
+        <div class="note" style="margin-top:5px;line-height:1.8">
+          ${r.t.why.map(w=>`· ${esc(w)}`).join("<br>")}
+          <br><b>一旦离职</b>：${r.s.sites.length} 个中心需交接，约 ${n1(r.t.hoDays)} 人天、${wan(r.t.hoCost)} 万，
+          ${r.t.succ?`继任者 ${esc(r.t.succ)}`:`<span style="color:var(--crit)">且无指定继任者</span>`}。</div>
+        <div class="row" style="margin-top:7px">
+          <button class="btn" data-tsucc="${esc(r.s.n)}">指定继任者</button>
+          <button class="btn" data-nav="staff">调整派工</button></div>
+      </div>`).join("")}
+    </div></div>`:""}
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>司龄分布</h3><span class="sub">1.5 年内是流失高发期</span></div>
+      <div class="card-b"><div id="c-ten"></div>
+        <div class="note" style="margin-top:12px">
+          ${junior.length} 人司龄不足 1.5 年（占 ${pct(junior.length/rows.length)}）。
+          新人多不是问题，<b>新人多且带教断档才是</b> —— 看下面这张表的"带教"列。</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>负载与风险</h3><span class="sub">条形为利用率，数字为风险分</span></div>
+      <div class="card-b"><div id="c-risk"></div>
+        <div class="note" style="margin-top:12px">
+          刻度线在 60% 与 88%。<b>两端都危险</b>：长期 90%+ 会走，长期 50% 以下会觉得自己没价值，也会走。</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>人员台账</h3><span class="sp"></span>
+      <span class="sub">按流失风险排序</span></div>
+    <div class="tw"><table style="min-width:1060px">
+      <thead><tr><th>姓名</th><th>角色</th><th>分组</th><th class="ta-r">司龄</th>
+        <th class="ta-r">利用率</th><th class="ta-r">带中心</th><th>带教</th><th>继任者</th>
+        <th>GCP 到期</th><th class="ta-r">交接成本</th><th class="ta-r">风险</th></tr></thead>
+      <tbody>${rows.map(r=>{
+        const gcpD = days(TODAY, r.s.gcp), us = utilState(r.s.util);
+        return `<tr>
+          <td><div class="t-main">${esc(r.s.n)}</div><div class="t-sub">${esc(r.s.lvl)} · ${esc(r.s.city)}</div></td>
+          <td class="t-sub">${esc(r.s.role)}</td>
+          <td class="t-sub">${r.g?esc(r.g.name):"—"}</td>
+          <td class="tnum">${r.t.tenure===null?"—":n1(r.t.tenure)+" 年"}</td>
+          <td class="tnum" style="color:${us.k==="good"?"var(--ink)":us.c}">${r.s.util}%</td>
+          <td class="tnum">${r.s.sites.length}</td>
+          <td class="t-sub">${esc(r.t.mentor||"—")}</td>
+          <td>${r.t.succ?`<span class="pill p-good">${esc(r.t.succ)}</span>`
+            :r.s.sites.length>=3?`<span class="pill p-crit">无</span>`:`<span class="t-sub">—</span>`}</td>
+          <td class="mono" style="font-size:11.5px;color:${gcpD<180?"var(--warn)":"var(--ink-2)"}">${esc(r.s.gcp)}</td>
+          <td class="tnum">${fmask("staff", wan(r.t.hoCost))}</td>
+          <td class="tnum" style="font-weight:700;color:${r.t.risk>=60?"var(--crit)":r.t.risk>=35?"var(--warn)":"var(--ink)"}">${r.t.risk}</td>
+        </tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">流失风险分 = 利用率信号 + 无继任者且负载重 + 司龄不足 + 已表达的诉求
+利用率 ≥92% 记 40 分｜≥85% 记 20 分｜≤50% 记 15 分
+带 3 个以上中心且无继任者 记 25 分｜司龄 &lt;1.2 年 记 15 分｜已明确表达诉求 记 20 分
+
+交接成本 = 带中心数 × ${HO_COST_DAY} 人天 × 角色人天成本
+
+<b>这些信号本来就全在系统里</b>：利用率在派工模块、司龄在账号表、"连续三周加班"写在 PM 的审批提示里、
+"两次提出中心过多"是 CRC 说过的话。此前它们散落在四个地方，谁也没把它们加起来。
+
+一个带 3 个中心的资深 CRC 离职，损失不是招聘成本 ——
+是 3 个中心的关系重建、在组受试者的依从性断层、和客户对我们稳定性的信任。</div>`;
+
+  const tenBuckets = [["<1 年",0,1],["1–2 年",1,2],["2–4 年",2,4],["≥4 年",4,99]]
+    .map(([n,a,b])=>({n, v:rows.filter(r=>r.t.tenure!==null&&r.t.tenure>=a&&r.t.tenure<b).length}))
+    .filter(x=>x.v);
+  stacked($("#c-ten"), tenBuckets, {fmt:v=>v+" 人"});
+  hbars($("#c-risk"), rows.slice(0,10).map(r=>({label:r.s.n, v:r.s.util,
+    color:"var(--ink-2)",
+    vColor: r.t.risk>=60?"var(--crit)":r.t.risk>=35?"var(--warn)":"var(--ink)",
+    tip:`<div class="tip-t">${esc(r.s.n)}</div>
+      <div class="tip-r"><span>利用率</span><b>${r.s.util}%</b></div>
+      <div class="tip-r"><span>带中心</span><b>${r.s.sites.length} 个</b></div>
+      <div class="tip-r"><span>风险分</span><b>${r.t.risk}</b></div>`})),
+    {max:100, fmt:v=>String(v), unit:"%", band:[60,88]});
+
+  box.addEventListener("click",e=>{
+    const b = e.target.closest("[data-tsucc]"); if(!b) return;
+    const n = b.dataset.tsucc, s = staff(n);
+    const peers = STAFF.filter(x=>x.role===s.role && x.n!==n).sort((a,b2)=>a.util-b2.util);
+    openLayer($("#modal"),`
+      <div class="drawer-h"><h3 style="flex:1;font-size:15px">为 ${esc(n)} 指定继任者</h3>
+        <button class="x" data-close aria-label="关闭">✕</button></div>
+      <div style="padding:16px 18px 18px">
+        <div class="note" style="margin-bottom:11px">${esc(n)} 目前带 ${s.sites.length} 个中心：
+          ${s.sites.map(x=>esc(site(x).hosp)).join("、")}</div>
+        <div class="field"><div class="slider-h"><label for="tc-p">继任者（按当前负载从低到高）</label></div>
+          <select class="sel" id="tc-p" style="width:100%">${peers.map(x=>
+            `<option value="${esc(x.n)}">${esc(x.n)}（${x.lvl}，利用率 ${x.util}%，带 ${x.sites.length} 个中心）</option>`).join("")}</select></div>
+        <div style="border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+          指定继任者不是走形式：继任者需要<b>提前跟一次现场</b>，才可能真的接得住。
+          否则交接清单上那句"在组受试者逐例交底"就只是一行字。</div>
+        <div class="row" style="justify-content:flex-end">
+          <button class="btn" data-close>取消</button>
+          <button class="btn btn-p" id="tc-go">确认</button></div>
+      </div>`);
+    $("#tc-go").addEventListener("click",()=>{
+      const to = $("#tc-p").value;
+      TALENT[n] = {...(TALENT[n]||{}), succ:to};
+      logAct("指定继任者", n, TALENT[n].succ||"无", to);
+      closeLayer();
+      toast(`已为 ${n} 指定继任者 ${to}，流失风险分下调`);
+      setTimeout(render,220);
+    });
+  });
+};
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   组织与权限 —— 老板端
+   增减人员、分组、以及三维权限（行范围 × 字段 × 动作）的实际编辑。
+   权限改完立即生效：导航、数据范围、字段遮罩同时变。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.org = box=>{
+  if(!canAct("manage")){ box.innerHTML = `<div class="empty">当前身份无权管理组织与权限</div>`; return; }
+  const tab = state.orgTab || "user";
+  const active = USERS.filter(u=>u.st==="在职"), off = USERS.filter(u=>u.st!=="在职");
+  const ext = USERS.filter(u=>u.ext);
+  const unassigned = active.filter(u=>!u.ext && !groupOf(u.n));
+
+  const head = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["在职账号",active.length,"个","var(--ink)",`其中外部 ${ext.filter(u=>u.st==="在职").length} 个`],
+       ["分组",GROUPS.length,"个","var(--ink)",`未分组 ${unassigned.length} 人`],
+       ["角色",Object.keys(ROLE_DEF).length,"种","var(--ink)",`外部角色 ${Object.values(ROLE_DEF).filter(r=>r.ext).length} 种`],
+       ["已停用",off.length,"个",off.length?"var(--warn)":"var(--ink)","保留账号但不可登录"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="seg" id="ot" style="margin-bottom:14px">
+    <button data-ot="user" aria-pressed="${tab==="user"}">人员账号 ${USERS.length}</button>
+    <button data-ot="group" aria-pressed="${tab==="group"}">分组 ${GROUPS.length}</button>
+    <button data-ot="perm" aria-pressed="${tab==="perm"}">角色权限 ${Object.keys(ROLE_DEF).length}</button>
+  </div>`;
+
+  /* ── 人员账号 ── */
+  const userTab = ()=>`
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>新增人员</h3><span class="sp"></span>
+      <span class="sub">新账号立即可登录，权限由角色决定</span></div>
+    <div class="card-b">
+      <div class="grid g4" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="ou-n">姓名</label></div>
+          <input class="sel" id="ou-n" style="width:100%" placeholder="例：周敏"></div>
+        <div class="field"><div class="slider-h"><label for="ou-u">登录账号</label></div>
+          <input class="sel" id="ou-u" style="width:100%" placeholder="例：zhoumin"></div>
+        <div class="field"><div class="slider-h"><label for="ou-r">角色</label></div>
+          <select class="sel" id="ou-r" style="width:100%">${Object.entries(ROLE_DEF).map(([k,r])=>
+            `<option value="${k}">${esc(r.t)}</option>`).join("")}</select></div>
+        <div class="field"><div class="slider-h"><label for="ou-g">分组</label></div>
+          <select class="sel" id="ou-g" style="width:100%"><option value="">不分组</option>
+            ${GROUPS.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join("")}</select></div>
+      </div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-p" id="ou-go">创建账号</button></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>账号台账</h3><span class="sp"></span>
+      <span class="sub">停用不删除 —— 审计轨迹必须能追溯到人</span></div>
+    <div class="tw"><table style="min-width:1000px">
+      <thead><tr><th>姓名</th><th>登录账号</th><th>角色</th><th>分组</th>
+        <th>行范围</th><th class="ta-r">带中心</th><th>入职</th><th>最近登录</th><th>状态</th><th></th></tr></thead>
+      <tbody>${USERS.map((u,k)=>{
+        const r = ROLE_DEF[u.role], g = groupOf(u.n), s = staff(u.n);
+        return `<tr style="${u.st!=="在职"?"opacity:.5":""}">
+          <td><div class="t-main">${esc(u.n)}${u.ext?` <span class="pill p-warn">外部</span>`:""}</div>
+            ${u.offWhy?`<div class="t-sub">${esc(u.offWhy)}</div>`:""}</td>
+          <td class="mono" style="font-size:11.5px">${esc(u.u)}</td>
+          <td><span class="pill p-neut">${esc(r?r.t:u.role)}</span></td>
+          <td class="t-sub">${g?esc(g.name):(u.ext?esc(u.hosp||"外部机构"):"—")}</td>
+          <td class="t-sub">${esc(r?ROW_RULE[r.rows]:"—")}</td>
+          <td class="tnum">${s?s.sites.length:"—"}</td>
+          <td class="mono" style="font-size:11px">${esc(u.joined)}</td>
+          <td class="mono" style="font-size:11px;color:var(--ink-3)">${esc(u.last)}</td>
+          <td><span class="pill ${u.st==="在职"?"p-good":"p-neut"}">${esc(u.st)}</span></td>
+          <td class="ta-r"><div class="row" style="gap:4px;justify-content:flex-end">
+            <button class="btn" data-urole="${k}">改角色</button>
+            ${u.u===SESSION.u?`<span class="t-sub">当前登录</span>`
+              :u.st==="在职"?`<button class="btn" data-uoff="${k}">停用</button>`
+              :`<button class="btn" data-uon="${k}">启用</button>`}</div></td>
+        </tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>`;
+
+  /* ── 分组 ── */
+  const groupTab = ()=>`
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>新建分组</h3><span class="sp"></span>
+      <span class="sub">分组决定 PM 的行范围：只看得到本组承接的项目</span></div>
+    <div class="card-b">
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><div class="slider-h"><label for="og-n">组名</label></div>
+          <input class="sel" id="og-n" style="width:100%" placeholder="例：华中组"></div>
+        <div class="field"><div class="slider-h"><label for="og-l">组长</label></div>
+          <select class="sel" id="og-l" style="width:100%">${USERS.filter(u=>u.st==="在职"&&!u.ext).map(u=>
+            `<option value="${esc(u.n)}">${esc(u.n)}（${esc(ROLE_DEF[u.role].t)}）</option>`).join("")}</select></div>
+      </div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-p" id="og-go">创建</button></div>
+    </div>
+  </div>
+  ${GROUPS.map((g,gi)=>{
+    const ms = g.members.map(staff).filter(Boolean);
+    const load = ms.length? sum(ms,m=>m.util)/ms.length : 0;
+    const sitesN = new Set(ms.flatMap(m=>m.sites)).size;
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="card-h"><h3>${esc(g.name)}</h3>
+        <span class="sub">组长 ${esc(g.lead)} · ${g.members.length} 人 · ${sitesN} 个中心</span>
+        <span class="sp"></span>
+        <span class="pill ${load>88?"p-crit":load>80?"p-warn":"p-neut"}">平均利用率 ${Math.round(load)}%</span></div>
+      <div class="card-b">
+        <div class="note" style="margin-bottom:9px">承接项目：${g.studies.length
+          ? g.studies.map(s=>esc(S[s].short)).join("、") : "—（职能组不承接项目）"}</div>
+        <div class="row" style="gap:5px;flex-wrap:wrap;margin-bottom:10px">
+          ${g.members.map(n=>{const s=staff(n), u=userOf(n);
+            return `<span class="ct ct-${s&&utilState(s.util).k==="good"?"good":"warn"}" style="cursor:default">
+              ${esc(n)}${s?` · ${s.role} ${s.util}%`:""}${u&&u.st!=="在职"?" · 已停用":""}</span>`;}).join("")
+            || `<span class="t-sub">暂无成员</span>`}
+        </div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <select class="sel" data-gadd="${gi}">
+            <option value="">— 添加成员 —</option>
+            ${USERS.filter(u=>u.st==="在职"&&!u.ext&&!g.members.includes(u.n)&&u.n!==g.lead).map(u=>
+              `<option value="${esc(u.n)}">${esc(u.n)}（${esc(ROLE_DEF[u.role].t)}${groupOf(u.n)?` · 现属 ${esc(groupOf(u.n).name)}`:""}）</option>`).join("")}
+          </select>
+          <select class="sel" data-gdel="${gi}">
+            <option value="">— 移出成员 —</option>
+            ${g.members.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join("")}
+          </select>
+          <select class="sel" data-gstudy="${gi}">
+            <option value="">— 增减承接项目 —</option>
+            ${STUDIES.map(s=>`<option value="${esc(s.id)}">${g.studies.includes(s.id)?"移除":"加入"}：${esc(s.short)}</option>`).join("")}
+          </select>
+        </div>
+      </div></div>`;}).join("")}
+  <div class="formula">分组不是通讯录，是<b>权限的行维度</b>。
+PM 的行范围规则是 <code>team</code>：他看得到的中心 = 本组承接项目下的全部中心。
+把一个项目从 A 组划到 B 组，A 组组长立刻看不到它 —— 这就是权限，不是显示偏好。
+
+${unassigned.length?`<b style="color:var(--warn)">当前有 ${unassigned.length} 人未分组</b>：${unassigned.map(u=>esc(u.n)).join("、")}。
+未分组人员的 PM 看不到他们的工时与负载。`:"当前所有内部人员均已分组。"}</div>`;
+
+  /* ── 角色权限：三维矩阵 ── */
+  const permTab = ()=>`
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>行范围 · 字段 · 动作</h3><span class="sp"></span>
+      <span class="sub">改完立即生效 —— 导航、数据范围、字段遮罩同时变</span></div>
+    <div class="tw"><table style="min-width:1080px">
+      <thead><tr><th>角色</th><th>行范围（看得到哪些中心）</th>
+        ${Object.entries(FIELDS).map(([k,v])=>`<th class="ta-c" style="text-align:center">${esc(v)}</th>`).join("")}
+        <th class="ta-r">可访问模块</th></tr></thead>
+      <tbody>${Object.entries(ROLE_DEF).map(([k,r])=>`<tr>
+        <td><div class="t-main">${esc(r.t)}</div>
+          <div class="t-sub">${esc(k)}${r.ext?" · 外部":""}</div></td>
+        <td><select class="sel" data-prow="${k}" style="min-width:150px">
+          ${Object.entries(ROW_RULE).map(([rk,rv])=>
+            `<option value="${rk}" ${r.rows===rk?"selected":""}>${esc(rv)}</option>`).join("")}</select></td>
+        ${Object.keys(FIELDS).map(f=>`<td style="text-align:center">
+          <input type="checkbox" data-pf="${k}:${f}" ${r.fields[f]?"checked":""}
+            ${r.ext&&f!=="subj"?'title="外部角色默认拒绝"':""}></td>`).join("")}
+        <td class="ta-r"><button class="btn" data-pmod="${k}">${r.mods.length} 个模块</button></td>
+      </tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>动作权限</h3><span class="sub">能看到不等于能操作</span></div>
+    <div class="tw"><table style="min-width:1000px">
+      <thead><tr><th>角色</th>${Object.entries(ACTS).map(([k,v])=>
+        `<th style="text-align:center">${esc(v)}</th>`).join("")}</tr></thead>
+      <tbody>${Object.entries(ROLE_DEF).map(([k,r])=>`<tr>
+        <td><div class="t-main">${esc(r.t)}</div></td>
+        ${Object.keys(ACTS).map(a=>`<td style="text-align:center">
+          <input type="checkbox" data-pa="${k}:${a}" ${r.acts[a]?"checked":""}></td>`).join("")}
+      </tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">权限是三件事同时成立，缺一个都会出事：
+
+<b>行</b>：你能看到哪些中心。CRA 只看被指派的、PM 看本组的、机构办只看本院的。
+<b>列</b>：同一行里哪些字段对你可见。CRA 看得到中心，但看不到这个中心的成本与毛利。
+<b>动作</b>：你能对它做什么。QA 看得到全部质量事件，但只有 QA 能关闭；CRC 看得到，只能整改。
+
+<b>外部角色默认拒绝</b>：机构办和研究者的字段权限初始全关，靠白名单一项项加回来 ——
+而不是"先给全部、再关掉敏感的"。这两种做法在正常情况下结果一样，
+在<b>新增一个字段</b>的时候结果完全不同：前者新字段默认不可见，后者新字段默认泄漏。
+
+把「报价与合同金额」勾给 CRA 试试 —— 客户台账那一页的金额列会立刻从 — 变成数字。</div>`;
+
+  box.innerHTML = head + (tab==="user"? userTab() : tab==="group"? groupTab() : permTab());
+
+  /* ── 交互 ── */
+  box.addEventListener("click",e=>{
+    const t = e.target.closest("[data-ot]");
+    if(t){ state.orgTab = t.dataset.ot; render(); return; }
+
+    const off = e.target.closest("[data-uoff]");
+    if(off){ const u = USERS[+off.dataset.uoff];
+      const s = staff(u.n);
+      if(s && s.sites.length){
+        toast(`${u.n} 还带着 ${s.sites.length} 个中心，请先发起交接再停用`,"crit");
+        return; }
+      u.st = "已停用"; u.off = TODAY;
+      logAct("停用账号", `${u.u}（${u.n}）`, "在职", "已停用");
+      toast(`${u.n} 的账号已停用，历史记录与审计轨迹保留`,"warn"); render(); return; }
+
+    const on = e.target.closest("[data-uon]");
+    if(on){ const u = USERS[+on.dataset.uon]; u.st = "在职";
+      logAct("启用账号", `${u.u}（${u.n}）`, "已停用", "在职");
+      toast(`${u.n} 的账号已启用`); render(); return; }
+
+    const ur = e.target.closest("[data-urole]");
+    if(ur){ roleModal(USERS[+ur.dataset.urole]); return; }
+
+    const pm = e.target.closest("[data-pmod]");
+    if(pm){ modModal(pm.dataset.pmod); return; }
+  });
+
+  box.addEventListener("change",e=>{
+    const pr = e.target.closest("[data-prow]");
+    if(pr){ const r = ROLE_DEF[pr.dataset.prow], was = r.rows;
+      r.rows = pr.value;
+      logAct("调整角色行范围", `${pr.dataset.prow}.rows`, ROW_RULE[was], ROW_RULE[r.rows]);
+      toast(`${r.t} 的行范围已改为「${ROW_RULE[r.rows]}」`,"warn"); render(); return; }
+
+    const pf = e.target.closest("[data-pf]");
+    if(pf){ const [k,f] = pf.dataset.pf.split(":"), r = ROLE_DEF[k];
+      r.fields[f] = pf.checked ? 1 : 0;
+      logAct("调整字段权限", `${k}.fields.${f}`, pf.checked?"不可见":"可见", pf.checked?"可见":"不可见");
+      toast(`${r.t}：「${FIELDS[f]}」${pf.checked?"已开放":"已关闭"}`,"warn"); render(); return; }
+
+    const pa = e.target.closest("[data-pa]");
+    if(pa){ const [k,a] = pa.dataset.pa.split(":"), r = ROLE_DEF[k];
+      r.acts[a] = pa.checked ? 1 : 0;
+      logAct("调整动作权限", `${k}.acts.${a}`, pa.checked?"不可用":"可用", pa.checked?"可用":"不可用");
+      toast(`${r.t}：「${ACTS[a]}」${pa.checked?"已授予":"已收回"}`,"warn"); render(); return; }
+
+    const ga = e.target.closest("[data-gadd]");
+    if(ga && ga.value){ const g = GROUPS[+ga.dataset.gadd], n = ga.value;
+      GROUPS.forEach(x=>{ x.members = x.members.filter(m=>m!==n); });
+      g.members.push(n);
+      logAct("调整分组", n, "—", g.name);
+      toast(`${n} 已加入 ${g.name}`); render(); return; }
+
+    const gd = e.target.closest("[data-gdel]");
+    if(gd && gd.value){ const g = GROUPS[+gd.dataset.gdel], n = gd.value;
+      g.members = g.members.filter(m=>m!==n);
+      logAct("移出分组", n, g.name, "未分组");
+      toast(`${n} 已移出 ${g.name}`,"warn"); render(); return; }
+
+    const gs = e.target.closest("[data-gstudy]");
+    if(gs && gs.value){ const g = GROUPS[+gs.dataset.gstudy], sid = gs.value;
+      if(g.studies.includes(sid)){ g.studies = g.studies.filter(x=>x!==sid);
+        logAct("分组移除项目", g.name, S[sid].short, "—");
+        toast(`${S[sid].short} 已移出 ${g.name} —— 该组 PM 立刻看不到它了`,"warn"); }
+      else { GROUPS.forEach(x=>{ if(x!==g) x.studies = x.studies.filter(y=>y!==sid); });
+        g.studies.push(sid);
+        logAct("分组承接项目", g.name, "—", S[sid].short);
+        toast(`${S[sid].short} 已划归 ${g.name}`); }
+      if(g.lead) TEAM.studies = GROUPS.find(x=>x.lead===TEAM.pm)?.studies || TEAM.studies;
+      render(); return; }
+  });
+
+  $("#ou-go")?.addEventListener("click",()=>{
+    const n = $("#ou-n").value.trim(), u = $("#ou-u").value.trim().toLowerCase();
+    const role = $("#ou-r").value, gid = $("#ou-g").value;
+    if(n.length<2){ toast("请填写姓名","crit"); return; }
+    if(!/^[a-z][a-z0-9]{2,}$/.test(u)){ toast("登录账号需为 3 位以上小写字母或数字，且以字母开头","crit"); return; }
+    if(USERS.some(x=>x.u===u)){ toast(`账号 ${u} 已存在`,"crit"); return; }
+    if(USERS.some(x=>x.n===n)){ toast(`已存在名为 ${n} 的人员`,"crit"); return; }
+    USERS.push({u, n, role, st:"在职", joined:TODAY, last:"—"});
+    if(!["boss","inst","pi"].includes(role))
+      STAFF.push({n, role:role.toUpperCase()==="DM"?"DM":ROLE_DEF[role].t.split(" ").pop().replace(/[（(].*/,"")||role.toUpperCase(),
+        lvl:"初级", city:"—", gcp:"2028-12-31", util:0, sites:[]});
+    if(gid){ const g = GROUPS.find(x=>x.id===gid); if(g) g.members.push(n); }
+    logAct("新增账号", `${u}（${n}）`, "—", `${ROLE_DEF[role].t}${gid?` · ${GROUPS.find(x=>x.id===gid).name}`:""}`);
+    toast(`账号 ${u} 已创建，${n} 现在可以用密码 demo 登录`);
+    render();
+  });
+
+  $("#og-go")?.addEventListener("click",()=>{
+    const n = $("#og-n").value.trim(), l = $("#og-l").value;
+    if(n.length<2){ toast("请填写组名","crit"); return; }
+    if(GROUPS.some(g=>g.name===n)){ toast("该组名已存在","crit"); return; }
+    const id = "G-"+String(GROUPS.length+1).padStart(2,"0");
+    GROUPS.push({id, name:n, lead:l, members:[], studies:[]});
+    logAct("新建分组", n, "—", `组长 ${l}`);
+    toast(`分组「${n}」已创建，组长 ${l}`); render();
+  });
+};
+
+/* 改角色 */
+function roleModal(u){
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(u.u)}</div>
+      <h3 style="font-size:15px">${esc(u.n)} · 变更角色</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div class="field"><div class="slider-h"><label for="rm-r">角色</label></div>
+        <select class="sel" id="rm-r" style="width:100%">${Object.entries(ROLE_DEF).map(([k,r])=>
+          `<option value="${k}" ${u.role===k?"selected":""}>${esc(r.t)}</option>`).join("")}</select></div>
+      <div id="rm-p" style="border:1px solid var(--line);background:var(--surface-2);padding:10px 12px;border-radius:8px;font-size:12px;color:var(--ink-2);line-height:1.8;margin-bottom:12px"></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="rm-go">确认变更</button></div>
+    </div>`);
+  const prev = ()=>{ const r = ROLE_DEF[$("#rm-r").value];
+    $("#rm-p").innerHTML = `<b>行范围</b>：${esc(ROW_RULE[r.rows])}<br>
+      <b>可见字段</b>：${Object.keys(FIELDS).filter(f=>r.fields[f]).map(f=>esc(FIELDS[f])).join("、")||"<span style='color:var(--crit)'>全部遮蔽</span>"}<br>
+      <b>可用动作</b>：${Object.keys(ACTS).filter(a=>r.acts[a]).map(a=>esc(ACTS[a])).join("、")||"仅查看"}<br>
+      <b>可访问模块</b>：${r.mods.length} 个`; };
+  $("#rm-r").addEventListener("change",prev); prev();
+  $("#rm-go").addEventListener("click",()=>{
+    const to = $("#rm-r").value, was = u.role;
+    if(to===was){ closeLayer(); return; }
+    u.role = to;
+    logAct("变更角色", `${u.u}（${u.n}）`, ROLE_DEF[was].t, ROLE_DEF[to].t);
+    closeLayer();
+    toast(`${u.n} 的角色已由「${ROLE_DEF[was].t}」变更为「${ROLE_DEF[to].t}」`,"warn");
+    setTimeout(render,220);
+  });
+}
+/* 改可访问模块 */
+function modModal(k){
+  const r = ROLE_DEF[k];
+  const all = Object.keys(N);
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(k)}</div>
+      <h3 style="font-size:15px">${esc(r.t)} · 可访问模块</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:14px 18px 18px;max-height:60vh;overflow:auto">
+      ${all.map(v=>`<label class="cbx ${r.mods.includes(v)?"done":""}" style="border-bottom:1px solid var(--line)">
+        <input type="checkbox" data-mm="${v}" ${r.mods.includes(v)?"checked":""}>
+        <span>${esc(typeof N[v].t==="function"?N[v].t():N[v].t)}
+          <span class="t-sub" style="margin-left:6px">${esc(v)}</span></span></label>`).join("")}
+    </div>
+    <div style="padding:12px 18px;border-top:1px solid var(--line)">
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="mm-go">保存</button></div>
+    </div>`);
+  $("#mm-go").addEventListener("click",()=>{
+    const was = r.mods.length;
+    r.mods = [...$("#modal").querySelectorAll("[data-mm]")].filter(x=>x.checked).map(x=>x.dataset.mm);
+    logAct("调整可访问模块", `${k}.mods`, `${was} 个`, `${r.mods.length} 个`);
+    closeLayer();
+    toast(`${r.t} 的可访问模块已由 ${was} 个改为 ${r.mods.length} 个`,"warn");
+    setTimeout(render,220);
+  });
+}
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   审计轨迹 —— GCP 语境下的底线，不是功能。
+   核查时问的是"这条记录谁在什么时候改的、改前是什么、为什么改"。
+   答不上来，这个系统在合规上就是不成立的。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.trail = box=>{
+  const q = (state.trailQ||"").trim();
+  const f = state.trailF || "all";
+  let list = TRAIL;
+  if(f==="write") list = list.filter(t=>t.before!=="—" && t.after!=="—");
+  if(f==="perm")  list = list.filter(t=>/权限|角色|账号|分组|模块/.test(t.act));
+  if(f==="mine")  list = list.filter(t=>t.who===(ME()?.n));
+  if(q) list = list.filter(t=>[t.who,t.act,t.tgt,t.ss,t.why,t.before,t.after]
+    .some(x=>String(x).toLowerCase().includes(q.toLowerCase())));
+
+  const byAct = [...new Set(TRAIL.map(t=>t.act))]
+    .map(a=>({n:a, v:TRAIL.filter(t=>t.act===a).length}))
+    .sort((a,b)=>b.v-a.v).slice(0,6);
+  const noWhy = TRAIL.filter(t=>t.before!=="—" && t.after!=="—" && !t.why);
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["轨迹条数",TRAIL.length,"条","var(--ink)","本次会话内的全部写操作"],
+       ["涉及人员",new Set(TRAIL.map(t=>t.who)).size,"人","var(--ink)",""],
+       ["权限类变更",TRAIL.filter(t=>/权限|角色|账号|分组|模块/.test(t.act)).length,"条",
+        "var(--ink)","核查必查：谁给谁开了什么"],
+       ["未填写变更原因",noWhy.length,"条",noWhy.length?"var(--warn)":"var(--ink)","关键字段改动应留原因"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>高频操作</h3><span class="sub">哪类改动最多，哪类就最该被抽查</span></div>
+    <div class="card-b"><div id="c-tr"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-h">
+      <div class="seg" id="tf">
+        <button data-tf="all" aria-pressed="${f==="all"}">全部 ${TRAIL.length}</button>
+        <button data-tf="write" aria-pressed="${f==="write"}">值变更</button>
+        <button data-tf="perm" aria-pressed="${f==="perm"}">权限类</button>
+        <button data-tf="mine" aria-pressed="${f==="mine"}">我的操作</button>
+      </div>
+      <span class="sp"></span>
+      <input class="sel" id="tq" placeholder="搜索人 / 动作 / 对象" value="${esc(q)}" style="min-width:200px">
+    </div>
+    <div class="tw"><table style="min-width:1040px">
+      <thead><tr><th>时间</th><th>操作人</th><th>动作</th><th>对象</th>
+        <th>改前</th><th>改后</th><th>中心</th><th>原因</th></tr></thead>
+      <tbody>${list.map(t=>`<tr>
+        <td class="mono" style="font-size:11.5px;white-space:nowrap">${esc(t.t)}</td>
+        <td><div class="t-main">${esc(t.who)}</div><div class="t-sub">${esc(ROLE_DEF[t.role]?ROLE_DEF[t.role].t:t.role)}</div></td>
+        <td><span class="pill ${/权限|角色|账号|分组|模块/.test(t.act)?"p-warn":"p-neut"}">${esc(t.act)}</span></td>
+        <td style="font-size:12px">${esc(t.tgt)}</td>
+        <td class="t-sub" style="max-width:150px">${esc(t.before)}</td>
+        <td style="font-size:12px;font-weight:500;max-width:180px">${esc(t.after)}</td>
+        <td class="t-sub">${t.ss==="—"?"—":esc(site(t.ss)?site(t.ss).hosp:t.ss)}</td>
+        <td class="t-sub" style="max-width:220px;line-height:1.6">${t.why?esc(t.why):`<span style="color:var(--ink-3)">—</span>`}</td>
+      </tr>`).join("")||`<tr><td colspan="8"><div class="empty">没有匹配的记录</div></td></tr>`}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">轨迹是<b>只追加</b>的：不能改、不能删，只能往上叠。
+架构文档 §4 里的 <code>audit_log</code> 表就是这个东西 —— 那里有 DDL，这里是它长出来的样子。
+
+每条必须回答四件事：<b>谁</b>（who + 当时的角色）、<b>什么时候</b>、<b>改了什么</b>（对象 + 改前 → 改后）、<b>为什么</b>。
+第四件最容易被省掉，也最要命：核查员看到"访视目标日从 08-18 改成 08-25"，
+真正要问的从来不是"改了吗"，而是<b>"为什么改"</b> —— 是受试者确实改期，还是为了让超窗看起来没发生。
+
+这一页此前<b>完全不存在</b>：原型里改任何东西都不留痕。
+在 GCP 语境下这不是缺个功能，是整个系统不成立 —— 所以它该进 M1，不是往后排。</div>`;
+
+  hbars($("#c-tr"), byAct.map(x=>({label:x.n, v:x.v,
+    color:/权限|角色|账号|分组|模块/.test(x.n)?"var(--warn)":"var(--ink-2)"})),
+    {fmt:v=>String(v), unit:" 次"});
+
+  box.addEventListener("click",e=>{
+    const t = e.target.closest("[data-tf]");
+    if(t){ state.trailF = t.dataset.tf; render(); }
+  });
+  const qi = $("#tq");
+  qi?.addEventListener("input",e=>{ state.trailQ = e.target.value;
+    clearTimeout(window.__tq); window.__tq = setTimeout(()=>{ render(); $("#tq")?.focus(); },260); });
+};
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   数据管理 DM 工作台
+   此前 QUERIES 里 by:"数据管理" 出现了 5 次，却没有这个角色 ——
+   质疑凭空产生、凭空关闭。发起与关闭都必须有人负责。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.dm = box=>{
+  const open = QUERIES.filter(q=>q.st==="待中心回复");
+  const repl = QUERIES.filter(q=>q.st==="已回复待关闭");
+  const closed = QUERIES.filter(q=>q.st==="已关闭");
+  const over7 = open.filter(q=>q.age>7);
+  const bySite = [...new Set(QUERIES.map(q=>q.ss))].map(id=>{
+    const l = QUERIES.filter(q=>q.ss===id);
+    const ss = site(id);
+    return {id, hosp:ss.hosp, n:l.length,
+      per: ss.enrolled? l.length/ss.enrolled : 0,
+      avg: l.length? sum(l,q=>q.age)/l.length : 0,
+      open: l.filter(q=>q.st==="待中心回复").length};
+  }).sort((a,b)=>b.per-a.per);
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["待中心回复",open.length,"条",open.length?"var(--warn)":"var(--ink)",""],
+       ["挂起超 7 天",over7.length,"条",over7.length?"var(--crit)":"var(--ink)","该打电话了"],
+       ["已回复待我关闭",repl.length,"条",repl.length?"var(--accent)":"var(--ink)","回复合格才能关"],
+       ["平均挂起",n1(QUERIES.length?sum(QUERIES,q=>q.age)/QUERIES.length:0),"天",
+        "var(--ink)","目标 ≤ 5 天"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>发起数据质疑</h3><span class="sp"></span>
+        <span class="sub">质疑不该凭空出现 —— 发起人要留名</span></div>
+      <div class="card-b">
+        <div class="grid g2" style="gap:10px">
+          <div class="field"><div class="slider-h"><label for="dq-s">受试者</label></div>
+            <select class="sel" id="dq-s" style="width:100%">${
+              SUBJ.filter(s=>s.st!=="筛败").map(s=>
+                `<option value="${esc(s.id)}">${esc(s.id)} · ${esc(site(s.ss).hosp)}</option>`).join("")}</select></div>
+          <div class="field"><div class="slider-h"><label for="dq-f">表单</label></div>
+            <select class="sel" id="dq-f" style="width:100%">${
+              ["合并用药 CM","不良事件 AE","实验室检查 LB","生命体征 VS","访视日期 SV",
+               "疗效评估 RS","用药依从性 EX","既往病史 MH"].map(x=>`<option>${esc(x)}</option>`).join("")}</select></div>
+        </div>
+        <div class="field"><div class="slider-h"><label for="dq-fd">字段</label></div>
+          <input class="sel" id="dq-fd" style="width:100%" placeholder="例：起始日期"></div>
+        <div class="field"><div class="slider-h"><label for="dq-t">质疑内容</label></div>
+          <textarea class="qbox" id="dq-t" placeholder="例：CM 起始日期早于知情同意签署日期，请核实源数据。"></textarea></div>
+        <div class="row" style="justify-content:flex-end">
+          <button class="btn btn-p" id="dq-go">发起质疑</button></div>
+        <div class="note" style="margin-top:9px;line-height:1.7">
+          CRA 在监查中也会发起质疑（<code>raiseQ</code> 动作权限），
+          此前系统里 CRA 只能"看到"质疑、不能"提出"质疑 —— 而 SDV 的产出恰恰就是质疑。</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>每例质疑数</h3><span class="sub">高不一定是中心差，也可能是方案本身难填</span></div>
+      <div class="card-b"><div id="c-dq"></div>
+        <div class="note" style="margin-top:12px;line-height:1.7">
+          质疑密度高的中心有两种：<b>录入质量差</b>（培训问题）
+          与 <b>受试者情况复杂</b>（合并用药多、AE 多）。区分它们要看质疑集中在哪几个表单。</div>
+      </div>
+    </div>
+  </div>
+  ${repl.length?`<div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>待关闭</h3><span class="sp"></span>
+      <span class="sub">中心已回复 —— 回复是否解决了问题，由 DM 判定</span></div>
+    <div class="card-b" style="padding:0">
+      ${repl.map(q=>`<div style="padding:12px 16px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px">
+          <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(q.id)}</span>
+          <span class="subjid">${esc(q.subj)}</span>
+          <span class="pill p-neut">${esc(q.form)}</span>
+          <span class="t-sub">${esc(site(q.ss).hosp)}</span>
+          <span class="sp"></span>
+          <span class="pill ${q.age>7?"p-crit":"p-warn"}">挂起 ${q.age} 天</span></div>
+        <div style="font-size:12.5px;margin-top:5px;color:var(--ink-2);line-height:1.6">${esc(q.txt)}</div>
+        <div class="note" style="margin-top:3px">责任 CRC ${esc(q.owner)}｜字段「${esc(q.field)}」</div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn btn-p" data-qc="${esc(q.id)}">回复合格，关闭</button>
+          <button class="btn" data-qre="${esc(q.id)}">回复不充分，退回</button></div>
+      </div>`).join("")}
+    </div></div>`:""}
+  <div class="card">
+    <div class="card-h"><h3>中心质疑分布</h3><span class="sp"></span>
+      <span class="sub">已关闭 ${closed.length} 条</span></div>
+    <div class="tw"><table style="min-width:820px">
+      <thead><tr><th>中心</th><th class="ta-r">质疑总数</th><th class="ta-r">入组例数</th>
+        <th class="ta-r">每例质疑</th><th class="ta-r">待回复</th><th class="ta-r">平均挂起</th><th></th></tr></thead>
+      <tbody>${bySite.map(r=>`<tr>
+        <td style="font-size:12px">${esc(r.hosp)}</td>
+        <td class="tnum">${r.n}</td>
+        <td class="tnum">${site(r.id).enrolled}</td>
+        <td class="tnum" style="font-weight:600;color:${r.per>0.4?"var(--crit)":r.per>0.2?"var(--warn)":"var(--ink)"}">${n1(r.per)}</td>
+        <td class="tnum" style="color:${r.open?"var(--warn)":"var(--ink)"}">${r.open}</td>
+        <td class="tnum" style="color:${r.avg>7?"var(--crit)":"var(--ink)"}">${n1(r.avg)} 天</td>
+        <td class="ta-r"><button class="btn" data-goto5="${esc(r.id)}">中心详情</button></td>
+      </tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">此前 QUERIES 数组里 <code>by:"数据管理"</code> 出现 5 次，
+但系统里<b>没有数据管理这个角色</b> —— 质疑凭空产生、凭空关闭，没有人对它负责。
+
+现在补齐了闭环的两端：<b>发起</b>（DM 与 CRA 都可以，受 <code>raiseQ</code> 动作权限约束）、
+<b>关闭</b>（只有 DM 可以 —— CRC 回复了不等于问题解决了）。
+
+这也回答了当初那个提问："质量事件应该有一个角色对项目进行反馈"。
+机构办是外部的质量反馈闭环，DM 是内部的数据质量闭环，两条线不能混。</div>`;
+
+  hbars($("#c-dq"), bySite.slice(0,8).map(r=>({label:r.hosp.replace(/(大学|医学院|附属|中国医学科学院)/g,""), v:r.per,
+    color:"var(--ink-2)",
+    vColor: r.per>0.4?"var(--crit)":r.per>0.2?"var(--warn)":"var(--ink)"})),
+    {fmt:v=>n1(v), unit:" 条/例", band:[0.2,0.4]});
+
+  box.addEventListener("click",e=>{
+    const g = e.target.closest("[data-goto5]"); if(g){ openSite(g.dataset.goto5); return; }
+    const c = e.target.closest("[data-qc]");
+    if(c){ const q = QUERIES.find(x=>x.id===c.dataset.qc);
+      q.st = "已关闭";
+      logAct("关闭数据质疑", q.id, "已回复待关闭", "已关闭", {ss:q.ss});
+      toast(`${q.id} 已关闭，挂起 ${q.age} 天`); render(); return; }
+    const r = e.target.closest("[data-qre]");
+    if(r){ const q = QUERIES.find(x=>x.id===r.dataset.qre);
+      q.st = "待中心回复"; q.age += 1;
+      logAct("退回数据质疑", q.id, "已回复待关闭", "待中心回复", {ss:q.ss, why:"回复未提供源数据依据"});
+      toast(`${q.id} 已退回 ${q.owner} —— 回复未提供源数据依据`,"warn"); render(); }
+  });
+
+  $("#dq-go")?.addEventListener("click",()=>{
+    if(!canAct("raiseQ")){ toast("当前角色无「发起数据质疑」动作权限","crit"); return; }
+    const sid = $("#dq-s").value, form = $("#dq-f").value;
+    const field = $("#dq-fd").value.trim(), txt = $("#dq-t").value.trim();
+    if(field.length<2){ toast("请填写字段名","crit"); return; }
+    if(txt.length<10){ toast("质疑内容需写清疑点与要求核实的方向（至少 10 个字）","crit"); return; }
+    const s = SUBJ.find(x=>x.id===sid);
+    const id = "Q-"+(1191+QUERIES.length);
+    const me = ME();
+    QUERIES.unshift({id, ss:s.ss, subj:s.id, form, field, txt,
+      by: me.role==="dm" ? "数据管理" : `${me.n}（${ROLE_DEF[me.role].t.split(" ").pop()}）`,
+      owner: s.crc, age:0, st:"待中心回复"});
+    logAct("发起数据质疑", `${id} ${s.id} ${form}`, "—", field, {ss:s.ss, why:txt.slice(0,40)});
+    toast(`${id} 已发起，指派给 ${s.crc}`);
+    render();
+  });
+};
+</script>
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   登录与会话
+   演示原型：密码统一 demo，不发起任何网络请求，不存任何真实凭据。
+   真实系统的对应设计见架构文档 §4（三维权限、服务端强制、RLS）与 §11。
+   ════════════════════════════════════════════════════════════════════ */
+const DEMO_USERS = ["lingyuan","hanxue","cendi","linmin","wutong","liaomeng","miaoqing","weilan","zhanghm","chenguod"];
+const DEMO_PW = "demo";
+
+function showLogin(){
+  const box = $("#login");
+  $("#li-list").innerHTML = DEMO_USERS.map(u=>{
+    const x = USERS.find(y=>y.u===u); if(!x) return "";
+    const r = ROLE_DEF[x.role];
+    const g = groupOf(x.n);
+    return `<button class="login-u" data-li="${esc(u)}">
+      <span class="avatar" style="width:22px;height:22px;font-size:10px">${esc(x.n.slice(0,1))}</span>
+      <b>${esc(x.n)}</b>
+      <span class="lu-r">${esc(r.t)}${g?` · ${esc(g.name)}`:x.ext?` · ${esc(x.hosp||"外部")}`:""}</span>
+      <span class="lu-u">${esc(u)}</span></button>`;
+  }).join("");
+  $("#li-err").hidden = true;
+  $("#li-p").value = "";
+  box.hidden = false;
+  setTimeout(()=>$("#li-u")?.focus(), 30);
+}
+
+function loginErr(msg){
+  const e = $("#li-err"); e.textContent = msg; e.hidden = false;
+}
+
+function doLogin(u, pw){
+  const x = USERS.find(y=>y.u === String(u).trim().toLowerCase());
+  if(!x){ loginErr("账号不存在。演示账号见下方列表。"); return false; }
+  if(pw !== DEMO_PW){ loginErr("密码不正确。本演示原型的密码统一为 demo。"); return false; }
+  if(x.st !== "在职"){
+    loginErr(`账号「${x.n}」已停用${x.offWhy?`（${x.offWhy}）`:""}，不可登录。停用不删除 —— 审计轨迹必须能追溯到人。`);
+    return false; }
+  SESSION.u = x.u; SESSION.at = TODAY;
+  x.last = `${TODAY} ${new Date().toTimeString().slice(0,5)}`;
+  state.persona = x.role;
+  state.study = "all";
+  state.view = HOME[x.role] || ROLE_DEF[x.role].mods[0];
+  state.stFilter.clear(); state.sevFilter.clear();
+  state.q = ""; state.subjSel = null; state.qTab = "open";
+  state.orgTab = "user"; state.trailF = "all"; state.trailQ = "";
+  if(staff(x.n)) state.tsWho = x.n;
+  $("#login").hidden = true;
+  logAct("登录", `${x.u}（${x.n}）`, "—", ROLE_DEF[x.role].t);
+  render();
+  const r = ROLE_DEF[x.role];
+  toast(`${x.n} · ${r.t}｜数据范围：${PERSONA().scope}`);
+  return true;
+}
+
+function logout(){
+  const m = ME();
+  if(m) logAct("退出登录", `${m.u}（${m.n}）`, "—", "—");
+  SESSION.u = null; SESSION.at = null;
+  showLogin();
+}
+
+$("#li-go").addEventListener("click",()=>doLogin($("#li-u").value, $("#li-p").value));
+$("#login").addEventListener("keydown",e=>{
+  if(e.key === "Enter"){ e.preventDefault(); doLogin($("#li-u").value, $("#li-p").value); }
+});
+$("#login").addEventListener("click",e=>{
+  const b = e.target.closest("[data-li]"); if(!b) return;
+  $("#li-u").value = b.dataset.li; $("#li-p").value = DEMO_PW;
+  doLogin(b.dataset.li, DEMO_PW);
+});
+</script>
+<script>
+"use strict";
+/* ════════ 启动：先登录，再渲染 ════════ */
+showLogin();
+console.info("临床中心台 SiteDesk · 演示原型｜八种身份，权限由登录账号决定（行 × 字段 × 动作）。"
+  + "演示密码 demo。全部数据为硬编码虚构数据，不含真实受试者信息。");
 </script>

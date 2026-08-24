@@ -50,6 +50,34 @@ const N = {
   material:{t:"药品与样本",ic:IC.mat}, pay:{t:"受试者补偿",ic:IC.pay},
   pi:{t:"研究者工作台",ic:IC.pi}, audit:{t:"内部稽查",ic:IC.audit}
 };
+Object.assign(N, {
+  mysite:{t:"我的中心",ic:IC.sites},        startup:{t:"中心启动清单",ic:IC.intake},
+  sched:{t:"我的日程",ic:IC.mon},           prescreen:{t:"预筛登记",ic:IC.screen},
+  ethics:{t:"伦理事务",ic:IC.reg},          handover:{t:"交接",ic:IC.team},
+  cash:{t:"现金流预测",ic:IC.price},        client:{t:"客户",ic:IC.inst},
+  bid:{t:"投标与报价闭环",ic:IC.price},     change:{t:"合同变更",ic:IC.capa},
+  people:{t:"人才梯队",ic:IC.staff},        org:{t:"组织与权限",ic:IC.reg},
+  trail:{t:"审计轨迹",ic:IC.audit},         dm:{t:"数据管理工作台",ic:IC.query}
+});
+
+/* 导航不再按角色硬编码，而是由 ROLE_DEF[role].mods 生成 ——
+   老板在「组织与权限」里勾掉一个模块，这里立刻少一项。 */
+const MOD_GROUP = {
+  crc:"我的工作", cra:"我的工作", pm:"我的工作", dm:"我的工作", inst:"机构办公室", pi:"研究者",
+  mysite:"我的工作", mysites:"我的工作", sched:"我的工作", subj:"我的工作", query:"我的工作",
+  team:"我的工作", approve:"我的工作",
+  startup:"项目周期", prescreen:"项目周期", ethics:"项目周期", handover:"项目周期",
+  isf:"现场", material:"现场", pay:"现场",
+  dash:"经营", intake:"经营", sites:"经营", enr:"经营", screen:"经营", client:"经营", cash:"经营",
+  feas:"商务", price:"商务", bid:"商务", change:"商务",
+  staff:"资源", people:"资源", time:"资源",
+  pnl:"财务", bill:"财务",
+  qa:"质量", mon:"质量", audit:"质量", capa:"质量", trail:"质量",
+  instac:"机构办公室", instqc:"机构办公室", instreg:"机构办公室",
+  org:"系统"
+};
+const GROUP_ORDER = ["我的工作","项目周期","现场","经营","商务","资源","财务","质量","机构办公室","研究者","系统"];
+
 const openQ  = who=>QUERIES.filter(q=>q.owner===who&&q.st==="待中心回复").length;
 const myQ    = ()=>QUERIES.filter(q=>q.by.startsWith(PERSONA().n)&&q.st==="待中心回复").length;
 const badQA  = ()=>ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般").length;
@@ -60,46 +88,38 @@ const ipBad  = ()=>IP.filter(r=>ipM(r).diff!==0).length;
 const piPend = ()=>{const ids=new Set(SITES.filter(s=>s.pi===PERSONA().n).map(s=>s.id));
   return SUBJ.filter(s=>ids.has(s.ss)&&!s.piOk&&subjDone(s)===s.tasks.length).length;};
 const auOpen = ()=>AUDIT.flatMap(a=>a.findings).filter(f=>f.st!=="已关闭").length;
+const myMods = ()=>{ const p=PERSONA();
+  return p.k==="crc" ? (staff(p.n)?.sites||[]) : [...scopeIds()]; };
 
-const NAV_BY_ROLE = {
-  boss:[
-    {g:"经营", items:["dash",["intake",()=>INTAKE.length],"sites","enr","screen"]},
-    {g:"资源", items:["staff","time"]},
-    {g:"财务", items:["pnl","bill"]},
-    {g:"质量", items:[["qa",badQA],"mon"]},
-    {g:"工具", items:["price"]}
-  ],
-  pm:[
-    {g:"团队", items:["pm","team",["approve",()=>APPROVALS.length]]},
-    {g:"项目", items:["intake","feas","sites","enr","screen","mon"]},
-    {g:"质量", items:[["qa",badQA]]},
-    {g:"财务", items:["pnl"]}
-  ],
-  cra:[
-    {g:"我的工作", items:["cra","mysites","mon",["query",()=>myQ()],"screen","feas"]},
-    {g:"现场", items:[["material",ipBad]]},
-    {g:"记录", items:["time"]},
-    {g:"质量", items:[["qa",badQA],["capa",myCapa]]}
-  ],
-  crc:[
-    {g:"我的工作", items:["crc",["subj",()=>SUBJ.filter(s=>s.crc===PERSONA().n&&winState(s).k!=="good").length],
-                          ["query",()=>openQ(PERSONA().n)],["capa",myCapa]]},
-    {g:"现场", items:["isf",["material",ipBad],["pay",myPay]]},
-    {g:"记录", items:["time"]}
-  ],
-  inst:[
-    {g:"机构办公室", items:["inst",["instac",()=>acOpen().length],
-                            ["instqc",()=>qcFindOpen().length],
-                            ["instreg",()=>regOpen().length]]}
-  ],
-  pi:[
-    {g:"研究者", items:[["pi",piPend],["qa",badQA]]}
-  ],
-  qa:[
-    {g:"质量保证", items:[["audit",auOpen],["qa",badQA],"screen","mon"]}
-  ]
+/* 徽标：只标"需要我现在动手"的数量，不标存量 */
+const BADGE = {
+  intake:   ()=>INTAKE.length,
+  approve:  ()=>APPROVALS.length,
+  qa:       badQA,
+  capa:     myCapa,
+  audit:    auOpen,
+  pi:       piPend,
+  material: ipBad,
+  pay:      myPay,
+  instac:   ()=>acOpen().length,
+  instqc:   ()=>qcFindOpen().length,
+  instreg:  ()=>regOpen().length,
+  query:    ()=>{ const p=PERSONA();
+    return p.k==="crc" ? openQ(p.n) : p.k==="dm" ? QUERIES.filter(q=>q.st==="已回复待关闭").length : myQ(); },
+  subj:     ()=>SUBJ.filter(s=>s.crc===PERSONA().n
+    && !["筛败","已出组","已脱落"].includes(s.st) && winState(s).k!=="good").length,
+  startup:  ()=>STARTUP.filter(r=>myMods().includes(r.ss) && r.block && !r.done).length,
+  ethics:   ()=>ETHICS.filter(e=>myMods().includes(e.ss) && ethState(e)==="crit").length,
+  sched:    ()=>myAgenda(14).buckets.filter(b=>b.conflict).length,
+  handover: ()=>HANDOVER.filter(h=>h.st!=="已完成"
+    && (PERSONA().k!=="crc" || h.from===PERSONA().n || h.to===PERSONA().n)).length,
+  change:   ()=>CHANGES.filter(c=>c.st==="待提出").length,
+  bid:      ()=>BIDS.filter(b=>b.st==="待定").length,
+  dm:       ()=>QUERIES.filter(q=>q.st==="已回复待关闭").length,
+  people:   ()=>STAFF.filter(x=>talentM(x).risk>=60).length,
+  cash:     ()=>cashF(6).rows.filter(r=>r.cum<0).length
 };
-const HOME = {boss:"dash", pm:"pm", cra:"cra", crc:"crc", inst:"inst", pi:"pi", qa:"audit"};
+const HOME = {boss:"dash", pm:"pm", cra:"cra", crc:"crc", inst:"inst", pi:"pi", qa:"audit", dm:"dm"};
 
 const TITLES = {
   dash:["经营驾驶舱","一页看清人效、毛利、入组与风险。每个数字后面都对应一个具体的人和一个具体的动作。"],
@@ -134,25 +154,56 @@ const TITLES = {
   material:["药品与样本","接收 − 发放 = 账面库存，实盘对不上就是严重发现；样本采集→离心→转运→回执，断一环即失效。"],
   pay:["受试者补偿","CRC 每周固定要花时间的事，也是稽查必查三件套：发放与访视是否对应、有无签收凭证、现金发放是否合规。"],
   pi:["研究者工作台","方案偏离要 PI 签字、SAE 由 PI 上报、授权分工表由 PI 签署 —— 研究者是法定责任人，不该只是系统里的一个字符串。"],
-  audit:["内部稽查与 CAPA 有效性","机构质控是医院查我们，QA 是我们自己查自己。QA 真正的价值不是再发现一批问题，而是验证 CAPA 到底有没有防住复发。"]
+  audit:["内部稽查与 CAPA 有效性","机构质控是医院查我们，QA 是我们自己查自己。QA 真正的价值不是再发现一批问题，而是验证 CAPA 到底有没有防住复发。"],
+  mysite:["我的中心","中心也有生命周期：立项 → 伦理 → 合同 → 启动 → 入组 → 随访 → 关闭。CRC 此前只看得到「下一个访视」，看不到自己站在这条线的哪一节。"],
+  startup:["中心启动清单","启动慢一个月，这个中心的整条收入曲线右移一个月。阻塞项未清，不得推进到 SIV —— 这是那个只有一句 ss.st = next 的按钮缺的东西。"],
+  sched:["我的日程","「我的一天」回答先做哪件，这一页回答做不做得完、撞不撞车。一个 CRC 同时带两三个中心是常态，跨院冲突不是优先级问题，是物理上做不到。"],
+  prescreen:["预筛登记","漏斗的第一格此前没有门。预筛量是判断「病源不足」还是「入排太窄」的唯一依据 —— 而这个数只能由现场一条一条录进来。"],
+  ethics:["伦理事务","伦理不是一次性动作，是贯穿全周期的周期性义务。批件断档，该中心必须停止入组与给药 —— 这比访视超窗严重得多。"],
+  handover:["交接","人会休假、会离职、会被调岗，中心不会因此停下。最容易漏也最要命的是在组受试者逐例交底 —— 那些东西不在 EDC 里，只在上一个 CRC 脑子里。"],
+  cash:["现金流预测","人力成本每月刚性支出，回款是里程碑制加账期。要回答的不是「我应收多少」，而是「哪个月我会没钱发工资」。"],
+  client:["客户","比单中心毛利更上位的切片。对一个靠客户复购活着的服务公司，「这个客户明年还续不续」按项目切、按中心切都答不了。"],
+  bid:["投标与报价闭环","报价模型算「按我们的人天该报多少」，这一页算「市场认不认」。报出去的价赢没赢不回写，前者就是自说自话。"],
+  change:["合同变更","亏损第一大原因是入组延迟，第二大就是 scope creep 没有变更单。就算最终要不到钱，也必须记下来 —— 下次报价时这就是该加进去的成本。"],
+  people:["人才梯队","卖的是人天，人走了产品就没了。系统看得到「利用率 96%」，此前看不到「这个人连续三个月 96%，快撑不住了」。"],
+  org:["组织与权限","权限是三件事同时成立：行（看得到哪些中心）、列（哪些字段可见）、动作（能做什么）。外部角色默认拒绝，靠白名单加回。"],
+  trail:["审计轨迹","核查问的是「这条记录谁在什么时候改的、改前是什么、为什么改」。答不上来，这个系统在 GCP 语境下就是不成立的。"],
+  dm:["数据管理工作台","此前 QUERIES 里「数据管理」出现 5 次，系统里却没有这个角色 —— 质疑凭空产生、凭空关闭。发起与关闭都必须有人负责。"]
 };
 
 const state = {view:"dash", persona:"boss", study:"all", enrStudy:"HJ-2024-017", dashRange:"12m",
   sortKey:"rate", sortDir:1, q:"", stFilter:new Set(), roleFilter:"all",
   sevFilter:new Set(), pnlSort:"gp", visitSel:0, tsWho:"吴桐", subjSel:null, qTab:"open"};
 
-const PERSONA = ()=>P_OF[state.persona];
+/* 身份来自会话，不是下拉框：登录那一刻，看得到什么就定了 */
+const SCOPE_DESC = {
+  all:      ()=>`全公司 ${STUDIES.length} 个项目 · ${SITES.length} 个中心`,
+  team:     m=>{const g=groupOf(m.n); return g? `${g.name} · ${g.members.length} 人 · ${g.studies.length} 个项目` : "未分组";},
+  assigned: m=>{const st=staff(m.n); return st? `${st.sites.length} 个中心 · ${new Set(st.sites.map(x=>site(x).sid)).size} 个项目` : "未派驻中心";},
+  hospital: m=>`${m.hosp||"本院"} · 承接 ${SITES.filter(s=>s.hosp===m.hosp).length} 个项目`,
+  pi:       m=>`本人担任研究者 · ${SITES.filter(s=>s.pi===m.n).length} 个中心`,
+  none:     ()=>"无数据范围"
+};
+function PERSONA(){
+  const m = ME();
+  if(!m) return {k:"boss", n:"—", title:"未登录", role:"—", scope:"—"};
+  const r = ROLE_DEF[m.role];
+  return {k:m.role, n:m.n, title:r.t, role:r.t.replace(/\s*[（(].*/,"").split(" ").pop() || r.t,
+          scope:(SCOPE_DESC[r.rows]||SCOPE_DESC.none)(m), hosp:m.hosp, u:m.u};
+}
 
-/* 数据范围由身份决定：看得到什么，取决于你是谁 */
+/* 行维度权限：ROLE_DEF[role].rows 是唯一判定处，改权限立刻改数据范围 */
 function myScope(){
-  const p = PERSONA();
-  if(p.k==="boss") return SITES;
-  if(p.k==="pm")   return SITES.filter(s=>TEAM.studies.includes(s.sid));
-  if(p.k==="inst") return SITES.filter(s=>s.hosp===p.hosp);   // 机构只看本院
-  if(p.k==="pi")   return SITES.filter(s=>s.pi===p.n);        // 研究者只看自己负责的中心
-  if(p.k==="qa")   return SITES;                              // QA 覆盖全公司，但只有质量视图
-  const me = staff(p.n);
-  return SITES.filter(s=>me.sites.includes(s.id));
+  const m = ME(); if(!m) return [];
+  const r = ROLE_DEF[m.role];
+  switch(r.rows){
+    case "all":      return SITES;
+    case "team":   { const g = groupOf(m.n); return g ? SITES.filter(s=>g.studies.includes(s.sid)) : []; }
+    case "hospital": return SITES.filter(s=>s.hosp===m.hosp);
+    case "pi":       return SITES.filter(s=>s.pi===m.n);
+    case "assigned":{ const st = staff(m.n); return st ? SITES.filter(s=>st.sites.includes(s.id)) : []; }
+    default:         return [];
+  }
 }
 function scope(){
   const base = myScope();
@@ -161,12 +212,24 @@ function scope(){
 function scopeIds(){ return new Set(scope().map(s=>s.id)); }
 function myTeam(){ return TEAM.members.map(staff); }
 
+const myMenu = ()=>{
+  const r = RD(); if(!r) return [];
+  const out = [];
+  GROUP_ORDER.forEach(g=>{
+    const items = r.mods.filter(v=>N[v] && (MOD_GROUP[v]||"系统")===g);
+    if(items.length) out.push({g, items});
+  });
+  const rest = r.mods.filter(v=>N[v] && !GROUP_ORDER.includes(MOD_GROUP[v]||"系统"));
+  if(rest.length) out.push({g:"其他", items:rest});
+  return out;
+};
 function renderNav(){
   const p = PERSONA();
-  $("#nav").innerHTML = NAV_BY_ROLE[p.k].map(g=>
-    `<div class="nav-group">${esc(g.g)}</div>` + g.items.map(it=>{
-      const [k,badge] = Array.isArray(it)? it : [it,null];
-      const b = badge? badge():0, d = N[k];
+  $("#nav").innerHTML = myMenu().map(g=>
+    `<div class="nav-group">${esc(g.g)}</div>` + g.items.map(k=>{
+      let b = 0;
+      try { b = BADGE[k] ? BADGE[k]() : 0; } catch(_) { b = 0; }
+      const d = N[k];
       return `<button class="nav-item" data-nav="${k}" aria-current="${state.view===k}">
         <svg class="nav-ic" viewBox="0 0 24 24">${d.ic}</svg><span>${esc(typeof d.t==="function"?d.t():d.t)}</span>
         ${b?`<span class="nav-badge">${b}</span>`:""}</button>`;
@@ -185,10 +248,6 @@ function renderTop(){
     `<div class="avatar">${esc(p.n.slice(0,1))}</div>
      <div><b>${esc(p.n)}</b> <span class="r">${esc(p.role)}</span><br>
      <span class="r">${esc(p.scope)}</span></div>`;
-  const rs = $("#grole");
-  if(!rs.options.length) rs.innerHTML = PERSONAS.map(x=>
-    `<option value="${x.k}">${esc(x.title)} · ${esc(x.n)}</option>`).join("");
-  rs.value = state.persona;
   const sel = $("#gstudy");
   sel.innerHTML = `<option value="all">全部项目（${studies.length}）</option>` +
     studies.map(id=>`<option value="${id}">${esc(id)} · ${esc(S[id].short)}</option>`).join("");
@@ -198,8 +257,19 @@ function renderTop(){
 }
 const VIEWS = {};
 function render(){
-  if(!NAV_BY_ROLE[state.persona].some(g=>g.items.some(it=>(Array.isArray(it)?it[0]:it)===state.view)))
-    state.view = HOME[state.persona];
+  if(!ME()){ showLogin(); return; }
+  state.persona = ME().role;
+  /* 模块权限在渲染入口强制一次：地址栏、旧状态、被收回的权限都拦在这里 */
+  if(!canMod(state.view) || !VIEWS[state.view]){
+    const r = RD();
+    state.view = canMod(HOME[state.persona]) ? HOME[state.persona]
+               : (r.mods.find(v=>VIEWS[v]) || null);
+    if(!state.view){
+      $("#content").innerHTML = `<div class="view-head"><h1>没有可访问的模块</h1>
+        <p>当前角色「${esc(RD().t)}」未被授予任何模块权限。请联系管理员在「组织与权限」中调整。</p></div>`;
+      renderNav(); renderTop(); return;
+    }
+  }
   renderNav(); renderTop(); clearTimers();
   const [t,sub] = titleOf(state.view);
   $("#content").innerHTML = `<div class="view-head"><h1>${esc(t)}</h1><p>${esc(sub)}</p></div><div id="vbody"></div>`;
@@ -217,12 +287,7 @@ document.addEventListener("click",e=>{
     go(v, k?{[k]:val}:{}); return; }
   const cl =e.target.closest("[data-close]"); if(cl){ closeLayer(); return; }
 });
-$("#grole").addEventListener("change",e=>{
-  state.persona = e.target.value; state.study="all"; state.view = HOME[state.persona];
-  state.stFilter.clear(); state.sevFilter.clear(); state.q=""; state.subjSel=null;
-  const p=PERSONA(); if(p.k==="cra"||p.k==="crc") state.tsWho=p.n;
-  render(); toast(`已切换到 ${p.title} ${p.n} 的视角`);
-});
+$("#glogout").addEventListener("click",()=>logout());
 $("#gstudy").addEventListener("change",e=>{ state.study=e.target.value;
   if(state.study!=="all") state.enrStudy=state.study; render(); });
 addEventListener("resize",()=>{ clearTimeout(window.__rz);
