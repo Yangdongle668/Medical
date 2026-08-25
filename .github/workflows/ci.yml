@@ -33,6 +33,8 @@ jobs:
       - run: npm run test -w @sitedesk/contracts
       # 计算引擎是纯函数，不需要数据库 —— 与契约同一个 job，失败得更早
       - run: npm run test -w @sitedesk/calc
+      # 设计令牌的对比度实测：明暗双模式逐对量，不靠肉眼
+      - run: npm run test -w @sitedesk/ui
 
   database:
     name: 数据库与后端 —— 迁移 · RLS · 等价性 · 权限矩阵
@@ -68,3 +70,31 @@ jobs:
       - run: npm run test -w db
       - run: npm run test -w @sitedesk/policy
       - run: npm run test -w @sitedesk/api
+
+  web:
+    name: 前端 —— 构建 · 三个断点零横向溢出 · mock 走通业务流
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+      - run: npm ci
+
+      # 生产包里不能带上 MSW —— 开关写成方括号访问就会静默失效，
+      # 所以这里量的是产物本身，不是相信那行代码
+      - name: 生产构建不含 mock
+        run: |
+          npm run build -w @sitedesk/web
+          if grep -rlq "msw" apps/web/dist/assets/*.js; then
+            echo "::error::生产构建里出现了 MSW —— 检查 main.tsx 的构建期开关"
+            exit 1
+          fi
+
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e -w @sitedesk/web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-trace
+          path: apps/web/test-results/
+          retention-days: 7

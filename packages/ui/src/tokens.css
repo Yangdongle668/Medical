@@ -1,0 +1,58 @@
+/* ══════════════════════════════════════════════════════════════════
+   INSTRUMENT —— 设计令牌
+
+   **逐字取自 prototype/parts/01-head.html。** 原型是需求基线，
+   令牌也是：改一个色值，就等于改了当初谈定的那份界面。
+   变更走 test/contrast.test.ts 的实测，不靠肉眼。
+
+   一句话概括这套语言：暖中性 × 冷强调色，温差是全部诀窍。
+   强调色只在「活着」的地方出现 —— 满屏强调等于没有强调。
+
+   语义色刻意低饱和，**绝不做红绿灯**：一个中心同时红着三项，
+   看板就变成了背景噪音，而真正要紧的那一项反而看不见了。
+   ══════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* 平面 */
+  --ground:#F7F6F3; --surface:#FFFFFF; --surface-2:#F2F1ED; --surface-3:#E9E7E2;
+  /* 墨 */
+  --ink:#111112; --ink-2:#4A4A4D; --ink-3:#74747A;
+  /* 线 */
+  --line:#EAE8E3; --line-2:#DCD9D3;
+  /* 强调（指示灯） */
+  --accent:#1A56DB; --accent-ink:#FFFFFF; --accent-soft:#EFF3FD; --accent-line:#C6D6F7;
+  /* 语义 —— 低饱和，绝不做红绿灯 */
+  --good:#16794C; --good-soft:#EDF5F1; --warn:#8A5B00; --warn-soft:#F8F3E9;
+  --crit:#B3261E; --crit-soft:#FBEFEE;
+  /* 数据序列：计划=中性参考，实际=强调色 */
+  --plan:#87878D;
+  --s1:#16357C; --s2:#2451C0; --s3:#4571DC; --s4:#6D90E3; --s5:#93AEEA;
+  /* 高度：只给悬浮物 */
+  --pop:0 1px 2px rgba(17,17,18,.04), 0 12px 32px -8px rgba(17,17,18,.14);
+  --ease:cubic-bezier(.2,0,0,1); --t:140ms;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --ground:#08080A; --surface:#101012; --surface-2:#191A1C; --surface-3:#232426;
+  --ink:#F4F3F1; --ink-2:#A8A8AD; --ink-3:#8B8B93;
+  --line:#212123; --line-2:#2E2F32;
+  --accent:#5A8CF5; --accent-ink:#08080A; --accent-soft:#111C33; --accent-line:#25375C;
+  --good:#4EA97A; --good-soft:#0E1D16; --warn:#CFA24F; --warn-soft:#1F1A0F;
+  --crit:#E4695C; --crit-soft:#23120F;
+  --plan:#8A8A92;
+  --s1:#A9C2FF; --s2:#7FA3F5; --s3:#5A85E8; --s4:#3E66C9; --s5:#33549F;
+  --pop:0 1px 2px rgba(0,0,0,.5), 0 16px 40px -10px rgba(0,0,0,.7);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --ground:#08080A; --surface:#101012; --surface-2:#191A1C; --surface-3:#232426;
+  --ink:#F4F3F1; --ink-2:#A8A8AD; --ink-3:#8B8B93;
+  --line:#212123; --line-2:#2E2F32;
+  --accent:#5A8CF5; --accent-ink:#08080A; --accent-soft:#111C33; --accent-line:#25375C;
+  --good:#4EA97A; --good-soft:#0E1D16; --warn:#CFA24F; --warn-soft:#1F1A0F;
+  --crit:#E4695C; --crit-soft:#23120F;
+  --plan:#8A8A92;
+  --s1:#A9C2FF; --s2:#7FA3F5; --s3:#5A85E8; --s4:#3E66C9; --s5:#33549F;
+  --pop:0 1px 2px rgba(0,0,0,.5), 0 16px 40px -10px rgba(0,0,0,.7);
+  color-scheme:dark;
+}

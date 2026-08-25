@@ -13,6 +13,8 @@
 - [`packages/contracts/`](packages/contracts/README.md) — 契约唯一定义源：zod → OpenAPI，五条不可协商的约定，破坏性变更门禁
 - [`packages/policy/`](packages/policy/) — 权限判定纯函数；与数据库实现由 300 组用例穷举比对
 - [`packages/calc/`](packages/calc/README.md) — 计算引擎：I8' 收入口径、费率卡成本、毛利（纯函数，带口径版本号）
+- [`packages/ui/`](packages/ui/) — 设计令牌「INSTRUMENT」：逐字取自原型，明暗双模式对比度实测
+- [`apps/web/`](apps/web/README.md) — React + Vite 前端：client 由契约派生，MSW 两层 mock，三个断点零横向溢出
 - [`apps/api/`](apps/api/README.md) — NestJS 后端：认证、三维权限强制、审计、幂等、状态机闸门
 - [可交互原型 `prototype/index.html`](prototype/README.md) — 单文件网页原型：**登录 + 八种身份**
   （经营层 / PM / CRA / CRC / DM / QA / 机构办 / 研究者）、合计 45 个模块，全部为硬编码演示数据。

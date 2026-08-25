@@ -1,0 +1,139 @@
+@import "@sitedesk/ui/tokens.css";
+
+/* ══════════════════════════════════════════════════════════════════
+   外壳。令牌来自 packages/ui，这里只管布局。
+
+   横向滚动条在 390px 上等于「这个页面没做手机」，而 CRC 一半时间
+   是在医院走廊上用手机看的。防线有两道，量过之后才知道哪道真在受力：
+
+   ① **`.table-wrap { overflow-x: auto }` 是承重的那道。**
+      去掉它，390px 上立刻溢出 185px（e2e/layout.spec.ts 实测）。
+      宽表格应该在自己的容器里滚，而不是把整页拖着一起滚。
+   ② `minmax(0, 1fr)` 是第二道。1fr 的最小尺寸是 auto，理论上会被
+      长内容撑开；有了 ① 之后它并不吃力 —— 但留着，因为下一个宽组件
+      未必记得给自己加滚动容器。
+
+   **两道都留，但别搞错哪道在受力。**
+   ══════════════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0; background: var(--surface); color: var(--ink);
+  font-family: "DM Sans", "PingFang SC", "Source Han Sans SC", "Microsoft YaHei",
+    -apple-system, system-ui, sans-serif;
+  font-size: 13.5px; line-height: 1.55; letter-spacing: -.006em;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.02em; text-wrap: balance; }
+button { font: inherit; color: inherit; letter-spacing: inherit; cursor: pointer; }
+a { color: var(--accent); text-underline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.num, .mono { font-variant-numeric: tabular-nums; }
+.mono { font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* ── 外壳布局 ─────────────────────────────────────────────────── */
+.app { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100%; }
+.rail {
+  background: var(--ground); border-right: 1px solid var(--line);
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  display: flex; flex-direction: column; padding: 18px 12px;
+}
+.rail h1 { font-size: 14px; padding: 0 10px 14px; letter-spacing: -.01em; }
+.rail nav { display: flex; flex-direction: column; gap: 2px; }
+.rail a {
+  display: block; padding: 7px 10px; border-radius: 6px;
+  color: var(--ink-2); text-decoration: none; transition: background 140ms;
+}
+.rail a:hover { background: var(--surface-2); color: var(--ink); }
+.rail a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.rail .who {
+  margin-top: auto; padding: 10px; border-top: 1px solid var(--line);
+  color: var(--ink-3); font-size: 12px;
+}
+.main { min-width: 0; padding: 22px clamp(14px, 3vw, 32px) 64px; }
+.page-head { margin-bottom: 18px; }
+.page-head h2 { font-size: 19px; }
+.page-head p { margin: 4px 0 0; color: var(--ink-3); }
+
+/* ── 手机：导航收到顶部，横向滚动只发生在它自己身上 ─────────── */
+@media (max-width: 720px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .rail {
+    position: static; height: auto; flex-direction: row; align-items: center;
+    gap: 6px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line);
+    padding: 10px 12px;
+  }
+  .rail h1 { padding: 0 8px 0 0; white-space: nowrap; }
+  .rail nav { flex-direction: row; gap: 4px; }
+  .rail a { white-space: nowrap; }
+  .rail .who { display: none; }
+}
+
+/* ── 组件 ─────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 10px; padding: 14px 16px;
+}
+.stack { display: grid; gap: 10px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.spread { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; }
+.muted { color: var(--ink-3); }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 500;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.chip.good { background: var(--good-soft); color: var(--good); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.crit { background: var(--crit-soft); color: var(--crit); }
+.chip.flat { background: var(--surface-2); color: var(--ink-2); }
+
+.btn {
+  border: 1px solid var(--line-2); background: var(--surface); color: var(--ink);
+  border-radius: 7px; padding: 7px 13px; font-weight: 500;
+  transition: background 140ms, border-color 140ms;
+}
+.btn:hover:not(:disabled) { background: var(--surface-2); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+/* 表格：**滚动发生在容器内部**，页面本身永不横向滚动 */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { color: var(--ink-3); font-weight: 500; font-size: 12px; background: var(--ground); }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--surface-2); }
+
+.tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tasks li {
+  display: flex; gap: 10px; align-items: center;
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px;
+}
+.tasks li.done { background: var(--good-soft); border-color: transparent; }
+.tasks li span { min-width: 0; overflow-wrap: anywhere; }
+
+.effects { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.effects li {
+  border-left: 2px solid var(--accent); background: var(--accent-soft);
+  padding: 9px 12px; border-radius: 0 8px 8px 0;
+}
+.effects li .t { font-size: 11px; color: var(--accent); font-weight: 600; letter-spacing: .02em; }
+.effects li.pending { border-left-color: var(--warn); background: var(--warn-soft); }
+.effects li.pending .t { color: var(--warn); }
+
+.problem {
+  border: 1px solid var(--crit-line, var(--line-2)); background: var(--crit-soft);
+  color: var(--crit); border-radius: 8px; padding: 11px 13px;
+}
+.problem ul { margin: 6px 0 0; padding-left: 18px; }
+
+label.field { display: grid; gap: 5px; }
+label.field > span { color: var(--ink-3); font-size: 12px; }
+input, textarea, select {
+  font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-2); border-radius: 7px; padding: 7px 10px;
+  width: 100%; max-width: 100%;
+}

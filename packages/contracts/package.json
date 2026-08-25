@@ -5,7 +5,8 @@
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./mocks/examples.json": "./mocks/examples.json"
   },
   "scripts": {
     "openapi": "tsx scripts/gen-openapi.ts",

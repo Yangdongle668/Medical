@@ -44,6 +44,18 @@ const RULES = [
     scope: "packages/calc",
     forbid: [/^node:/, /^pg$/, /^fs$/, /^express$/, /^@nestjs\//, /^\.\.\/\.\.\/apps\//],
     why: "计算引擎必须是纯函数 —— 前后端共用同一份口径，且能被穷举测试"
+  },
+  {
+    scope: "apps/web/src",
+    forbid: [/^pg$/, /^@nestjs\//, /@sitedesk\/api/, /^\.\.\/\.\.\/api\//],
+    why: "前端不得依赖后端实现 —— 它只认契约（@sitedesk/contracts）。" +
+         "一旦引用了后端的类型或工具，前后端就没法再各自独立部署"
+  },
+  {
+    scope: "apps/web/src/features",
+    forbid: [/\/mocks\//],
+    why: "业务代码不得 import mock —— mock 只在入口按构建期开关加载。" +
+         "特性代码里一旦引用，msw 就会跟着上生产，而没有任何警告"
   }
 ];
 
