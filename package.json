@@ -25,6 +25,7 @@
     "web:dev": "npm run dev -w @sitedesk/web",
     "web:e2e": "npm run e2e -w @sitedesk/web",
     "web:build": "npm run build -w @sitedesk/web",
-    "web:integration": "npm run integration -w @sitedesk/web"
+    "web:integration": "npm run integration -w @sitedesk/web",
+    "perf:plans": "node db/scripts/check-plans.mjs"
   }
 }
