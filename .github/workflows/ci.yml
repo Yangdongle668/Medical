@@ -35,12 +35,20 @@ jobs:
       # HEAD 里的 openapi.yaml 就是本 PR 提议的那一份 ——
       # 用它当基线等于拿文件跟自己比，门禁会一直绿着而什么也没验。
       # （脚本在 CI 下已拒绝回退到 HEAD，这里是它的另一半。）
+      #
+      # 基线走**环境变量**，不走命令行参数。第一版写的是
+      #   npm run contracts:check -- --baseline-ref "$BASE"
+      # 结果 npm 把 `--baseline-ref` 这个名字自己吃掉了，只透传了值：
+      #   > tsx scripts/check-breaking.ts 2586482…
+      # 脚本看到一个没有名字的裸参数，判定"没给基线"，按规矩停下。
+      # 根脚本外面还套了一层 `npm run … -w`，参数每过一层都可能被重新解析；
+      # 环境变量不经过任何一层的参数解析。
       - name: 破坏性变更门禁
         run: |
           BASE="${{ github.event.pull_request.base.sha }}"
           [ -n "$BASE" ] || BASE="$(git rev-parse HEAD^)"   # push 到 main：与上一次提交比
           echo "基线 = $BASE"
-          npm run contracts:check -- --baseline-ref "$BASE"
+          SITEDESK_BASELINE_REF="$BASE" npm run contracts:check
       - run: npm run test -w @sitedesk/contracts
       # 计算引擎是纯函数，不需要数据库 —— 与契约同一个 job，失败得更早
       - run: npm run test -w @sitedesk/calc
