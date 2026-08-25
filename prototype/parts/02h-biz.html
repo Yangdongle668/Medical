@@ -1,0 +1,220 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   经营层数据层：客户 · 投标闭环 · 合同变更 · 现金流 · 人才
+   此前系统只按「项目 / 中心」切片，且只看得见已经发生的事。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── ① 客户（申办方）：比"单中心毛利"更上位的切片 ────────────────── */
+const CLIENT_META = {
+  "华拓生物":{since:"2021", contact:"临床运营部 · 邵敏", pay:"月结 60 天", nps:8, projects:5, note:"合作最久，付款守约，但压价最狠"},
+  "安泰医药":{since:"2024", contact:"医学部 · 骆一鸣", pay:"月结 90 天", nps:6, projects:2, note:"账期长，两笔逾期均出自这里"},
+  "中康制药":{since:"2023", contact:"注册与临床 · 汪蓓", pay:"月结 60 天", nps:9, projects:3, note:"回款最快，明年有两个 III 期计划"},
+  "捷成医疗":{since:"2026", contact:"临床事务 · 傅斯年", pay:"月结 45 天", nps:7, projects:1, note:"器械新客户，首个项目"}
+};
+const SPONSORS = [...new Set(STUDIES.map(s=>s.sponsor))];
+function clientM(sp){
+  const studies = STUDIES.filter(s=>s.sponsor===sp);
+  const sids = new Set(studies.map(s=>s.id));
+  const sites = SITES.filter(s=>sids.has(s.sid));
+  const rev = sum(sites, siteRev), cost = sum(sites, s=>s.cost);
+  const ms = MILES.filter(m=>sids.has(site(m.ss).sid));
+  const paid = ms.filter(m=>m.paid), open = ms.filter(m=>!m.paid && m.inv==="已开票");
+  const dso = paid.length ? 60 : null;
+  return {sp, meta:CLIENT_META[sp]||{}, studies, sites,
+    rev, cost, gp:rev-cost, gpr: rev? (rev-cost)/rev : null,
+    contract: sum(studies, s=>s.contract),
+    enrolled: sum(sites,s=>s.enrolled), planned: sum(studies,s=>s.planned),
+    ar: sum(open,m=>m.amt), overdue: sum(open.filter(m=>m.age>60),m=>m.amt),
+    avgAge: open.length? sum(open,m=>m.age)/open.length : null, dso};
+}
+
+/* ── ② 投标与报价闭环：报出去的价，赢没赢，必须回写 ────────────────
+   否则"我们是不是系统性报高/报低"永远无法回答。 */
+let BIDS = [
+  {id:"B-2026-11", sp:"中康制药", name:"恒糖宁 IV 期上市后研究", sub:"2026-08-05", sites:24, subjects:600,
+   ours:2180, md:8420, st:"待定", win:null, by:"韩雪", note:"老客户，对方已口头示意价格可接受"},
+  {id:"B-2026-09", sp:"华拓生物", name:"艾瑞替尼 IIIb 期扩展", sub:"2026-06-18", sites:16, subjects:320,
+   ours:1960, md:7150, st:"中标", win:1880, by:"韩雪", note:"降价 4.1% 成交，仍在毛利线上"},
+  {id:"B-2026-07", sp:"惠元制药", name:"HY-207 II 期", sub:"2026-05-22", sites:8, subjects:120,
+   ours:1120, md:4100, st:"失标", win:890, by:"岑迪", note:"输给报价低 21% 的同行 —— 对方按 12 人天/例，我们按 19"},
+  {id:"B-2026-04", sp:"捷成医疗", name:"CoroFlex 确证性试验", sub:"2026-01-08", sites:10, subjects:180,
+   ours:1450, md:5600, st:"中标", win:1450, by:"韩雪", note:"原价成交，首次合作"},
+  {id:"B-2025-19", sp:"安泰医药", name:"HT-118 II 期", sub:"2025-01-14", sites:6, subjects:96,
+   ours:980, md:3450, st:"中标", win:920, by:"韩雪", note:"降价 6.1%"},
+  {id:"B-2025-16", sp:"瑞普生物", name:"RP-33 III 期", sub:"2025-10-09", sites:18, subjects:400,
+   ours:2450, md:9200, st:"失标", win:1980, by:"岑迪", note:"差 19%。复盘结论：我们把 CRC 驻场比例按 0.8 FTE 报，对方按 0.5"},
+  {id:"B-2025-12", sp:"中康制药", name:"恒糖宁 III 期", sub:"2025-02-20", sites:20, subjects:420,
+   ours:2400, md:9100, st:"中标", win:2340, by:"韩雪", note:"降价 2.5%"},
+  {id:"B-2025-08", sp:"华拓生物", name:"HT-90 生物等效性", sub:"2025-07-11", sites:2, subjects:48,
+   ours:320, md:980, st:"失标", win:245, by:"岑迪", note:"BE 试验我们没有成本优势，之后不再投"}
+];
+function bidM(){
+  const done = BIDS.filter(b=>b.st!=="待定");
+  const won = done.filter(b=>b.st==="中标");
+  /* 价格偏差：我们的报价相对成交价高多少 —— 正数=系统性报高 */
+  const gaps = done.filter(b=>b.win).map(b=>(b.ours-b.win)/b.win);
+  const lostGaps = done.filter(b=>b.st==="失标"&&b.win).map(b=>(b.ours-b.win)/b.win);
+  return {n:BIDS.length, done:done.length, won:won.length,
+    rate: done.length? won.length/done.length : null,
+    amtWon: sum(won,b=>b.win||b.ours), amtBid: sum(done,b=>b.ours),
+    bias: gaps.length? gaps.reduce((a,b)=>a+b,0)/gaps.length : null,
+    lostBias: lostGaps.length? lostGaps.reduce((a,b)=>a+b,0)/lostGaps.length : null,
+    mdPer: done.map(b=>({n:b.name, v:b.md/b.subjects, st:b.st}))};
+}
+
+/* ── ③ 合同变更：亏损第二大原因就是 scope creep 没有变更单 ────────── */
+const CHG_KINDS = ["方案修订 · 访视增加","方案修订 · 检查项增加","例数调整","中心增减","周期延长","单价调整"];
+let CHANGES = [
+  {id:"CR-014", sid:"HJ-2025-003", ss:"SS-07", kind:"方案修订 · 检查项增加", raised:"2026-08-18", by:"吴桐",
+   what:"方案 V3.0 → V3.1，C4 起每例增加心肌酶检测 2 次采血，CRC 每例多约 1.5 人天",
+   mdImpact:1.5, perSubject:true, amt:null, st:"待提出", note:"伦理已受理（E-0089），但商务侧尚未提出变更"},
+  {id:"CR-013", sid:"HJ-2024-017", ss:null, kind:"周期延长", raised:"2026-07-30", by:"韩雪",
+   what:"入组滞后，整体周期由 27 个月延长至 31 个月，4 个月的 PM 与 CRA 驻场成本未覆盖",
+   mdImpact:260, perSubject:false, amt:62.0, st:"已提交", note:"申办方以'延长系我方入组不力'为由暂未签署"},
+  {id:"CR-012", sid:"HJ-2025-011", ss:"SS-11", kind:"例数调整", raised:"2026-06-12", by:"岑迪",
+   what:"该中心筛败率 57%，合同 30 例下调至 20 例，同时上调单例单价补偿筛败成本",
+   mdImpact:-180, perSubject:false, amt:-18.5, st:"已签署", note:"已生效，单价由 3.9 调至 4.4 万"},
+  {id:"CR-011", sid:"HJ-2026-004", ss:null, kind:"中心增减", raised:"2026-05-08", by:"韩雪",
+   what:"新增 2 个中心（合同由 10 个增至 12 个）", mdImpact:420, perSubject:false, amt:132.0, st:"已签署", note:""},
+  {id:"CR-010", sid:"HJ-2024-017", ss:"SS-01", kind:"方案修订 · 访视增加", raised:"2026-03-14", by:"吴桐",
+   what:"新增 EOT 后 30 天安全随访访视 1 次", mdImpact:0.8, perSubject:true, amt:null, st:"未获批",
+   note:"申办方认为属安全性义务，不追加费用 —— 全项目 143 例，实际白做约 114 人天"}
+];
+let chgSeq = 15;
+/* 未覆盖的 scope creep：已发生工作量、但没有对应变更单金额 */
+function creepM(){
+  const open = CHANGES.filter(c=>c.st==="待提出"||c.st==="已提交"||c.st==="未获批");
+  let md = 0, rows = [];
+  open.forEach(c=>{
+    const n = c.perSubject
+      ? (c.ss ? site(c.ss).enrolled : sum(SITES.filter(s=>s.sid===c.sid),s=>s.enrolled))
+      : 1;
+    const total = c.mdImpact * n;
+    md += total;
+    rows.push({...c, n, totalMd: total, cash: total * RATE.crcDay});
+  });
+  return {md, amt: md*RATE.crcDay, rows,
+    signed: CHANGES.filter(c=>c.st==="已签署"), open};
+}
+
+/* ── ④ 现金流预测：系统此前只有后视镜 ──────────────────────────────
+   人力成本每月刚性支出，回款是里程碑制 + 账期 —— 缺口出现在哪个月？ */
+const ROLE_DAY = r => r==="CRC" ? RATE.crcDay : r==="CRA" ? RATE.craDay : RATE.craDay*1.15;
+function monthlyBurn(){
+  const heads = STAFF.filter(s=>{const u=userOf(s.n); return !u || u.st==="在职";});
+  const direct = sum(heads, s=>ROLE_DAY(s.role)*RATE.workdays);
+  return {heads:heads.length, direct, oh:direct*RATE.overhead, total:direct*(1+RATE.overhead)};
+}
+/* 中心合同额与里程碑计划：签约 10% · SIV 15% · 入组过半 25% · 入组 80% 25% · 结题 25% */
+const MS_PLAN = [["合同签署",.10],["中心启动 SIV",.15],["入组过半",.25],["入组达成 80%",.25],["中心结题",.25]];
+const siteContract = ss => ss.startup + ss.contracted*ss.unit;
+/* 按该中心的实际入组速度推预计达成月份 */
+function msForecast(ss){
+  const c = siteContract(ss), hit = new Set(MILES.filter(m=>m.ss===ss.id).map(m=>m.name));
+  const prog = ss.contracted? ss.enrolled/ss.contracted : 0;
+  const fpi = ss.fpi!=="—" ? ss.fpi : null;
+  const mo = fpi ? Math.max(1, days(fpi,TODAY)/30.4) : null;
+  const vel = mo ? ss.enrolled/mo : null;                 // 例/月
+  const out = [];
+  MS_PLAN.forEach(([name,r])=>{
+    if(hit.has(name)) return;
+    let need = null;
+    if(name==="合同签署") need = ss.st==="立项"||ss.st==="伦理递交"||ss.st==="伦理批件" ? 2 : 0;
+    else if(name==="中心启动 SIV") need = FLOW.indexOf(ss.st) >= FLOW.indexOf("SIV启动") ? 0
+      : (SIV_PLAN[ss.id] ? Math.max(0, days(TODAY, SIV_PLAN[ss.id])/30.4) : 3);
+    else if(name==="中心结题") need = vel ? (ss.contracted-ss.enrolled)/Math.max(vel,.3)/1 + 4 : 12;
+    else {
+      const target = ss.contracted * (name==="入组过半"?.5:.8);
+      if(ss.enrolled >= target) need = 0;
+      else if(!vel || vel<=0) return;
+      else need = (target-ss.enrolled)/vel;
+    }
+    if(need===null || need>10) return;
+    /* need===0 表示这个里程碑其实已经达成，却不在开票队列里 ——
+       它不是未来收入，是记录缺口。混进预测会凭空造出现金流。 */
+    out.push({ss:ss.id, name, amt:+(c*r).toFixed(1), inMo:need, gap:need===0});
+  });
+  return out;
+}
+/* 未来 6 个月：预计回款 vs 刚性支出 */
+function cashF(months=6){
+  const burn = monthlyBurn(), out = [];
+  const base = new Date(TODAY.slice(0,8)+"01");
+  const scoped = scope();
+  for(let i=1;i<=months;i++){
+    const d = new Date(base.getFullYear(), base.getMonth()+i, 1);
+    const key = `${String(d.getFullYear()).slice(2)}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    out.push({key, mo:i, inv:0, cash:0, out:burn.total, items:[]});
+  }
+  const put = (mo, amt, label, kind)=>{
+    const b = out.find(x=>x.mo===mo); if(!b) return;
+    b.cash += amt; b.items.push({label, amt, kind});
+  };
+  /* 已开票未回款：按到期日落月 */
+  MILES.filter(m=>!m.paid && m.inv==="已开票" && scoped.some(s=>s.id===m.ss)).forEach(m=>{
+    const mo = m.due==="—" ? 2 : Math.max(1, Math.ceil(days(TODAY, m.due)/30.4));
+    put(Math.min(mo,months), m.amt, `${m.id} ${site(m.ss).hosp} ${m.name}`, m.age>60?"overdue":"invoiced");
+  });
+  /* 待开票：假设 15 天内开票 + 60 天账期 */
+  MILES.filter(m=>!m.paid && m.inv==="待开票" && scoped.some(s=>s.id===m.ss)).forEach(m=>{
+    put(Math.min(3,months), m.amt, `${m.id} ${site(m.ss).hosp} ${m.name}（待开票）`, "pending");
+  });
+  /* 预计将达成的里程碑：达成月 + 2 个月账期。已达成未记录的不计入现金 */
+  const gaps = [];
+  scoped.forEach(ss=> msForecast(ss).forEach(f=>{
+    if(f.gap){ gaps.push(f); return; }
+    const mo = Math.ceil(f.inMo) + 2;
+    if(mo<=months) put(mo, f.amt, `${site(f.ss).hosp} ${f.name}（预计）`, "forecast");
+  }));
+  let cum = 0;
+  out.forEach(b=>{ b.net = b.cash - b.out; cum += b.net; b.cum = cum; });
+  /* 压力情景：逾期应收之所以逾期，恰恰是因为对方还没打算付。
+     假设它们再拖 3 个月、且预计达成的里程碑延后 1 个月，最低点会掉到哪里。 */
+  const st = out.map(b=>({key:b.key, mo:b.mo, cash:0, out:b.out}));
+  out.forEach(b=>b.items.forEach(i=>{
+    const shift = i.kind==="overdue" ? 3 : i.kind==="forecast" ? 1 : 0;
+    const t = st.find(x=>x.mo === b.mo + shift);
+    if(t) t.cash += i.amt;          // 落到区间外的视为本期收不到
+  }));
+  let sc = 0, sMin = Infinity, sMinKey = null;
+  st.forEach(b=>{ sc += b.cash - b.out; b.cum = sc;
+    if(sc < sMin){ sMin = sc; sMinKey = b.key; } });
+  return {rows:out, burn, gaps, gapAmt: sum(gaps,g=>g.amt),
+          stress:{rows:st, worst:sMin, worstKey:sMinKey, end:sc}};
+}
+
+/* ── ⑤ 人才梯队：人天就是产品，人走了产品就没了 ──────────────────── */
+const TALENT = {
+  "林敏":{mentor:"韩雪", succ:"徐倩", cert:["GCP","SDV 高级"], want:"想带团队"},
+  "赵坤":{mentor:"韩雪", succ:null, cert:["GCP"], want:"关注涨薪"},
+  "何雨薇":{mentor:"韩雪", succ:"段志远", cert:["GCP"], want:"—"},
+  "段志远":{mentor:"何雨薇", succ:null, cert:["GCP"], want:"入职 1 年，需带教"},
+  "徐倩":{mentor:"岑迪", succ:null, cert:["GCP","医学背景"], want:"—"},
+  "吴桐":{mentor:"韩雪", succ:null, cert:["GCP","肿瘤专科"], want:"两次提出中心过多"},
+  "沈亦琳":{mentor:"韩雪", succ:null, cert:["GCP"], want:"—"},
+  "郭晓萱":{mentor:"韩雪", succ:null, cert:["GCP"], want:"—"},
+  "唐延":{mentor:"吴桐", succ:null, cert:["GCP"], want:"入职 1 年"},
+  "廖梦然":{mentor:"岑迪", succ:null, cert:["GCP","内分泌专科"], want:"连续 3 周加班"},
+  "邱志安":{mentor:"岑迪", succ:null, cert:["GCP"], want:"—"},
+  "冯乐":{mentor:"韩雪", succ:null, cert:["GCP"], want:"—"},
+  "韩雪":{mentor:"凌远", succ:"林敏", cert:["GCP","PMP"], want:"—"},
+  "卫兰":{mentor:"凌远", succ:null, cert:["GCP","内审员"], want:"—"}
+};
+const HO_COST_DAY = 3.5;   // 每个中心的平均交接人天
+function talentM(s){
+  const u = userOf(s.n), t = TALENT[s.n] || {};
+  const tenure = u && u.joined!=="—" ? days(u.joined, TODAY)/365 : null;
+  /* 流失风险：高利用率 + 无继任者 + 短司龄 + 已表达诉求 */
+  let risk = 0, why = [];
+  if(s.util >= 92){ risk += 40; why.push(`利用率 ${s.util}% 持续过载`); }
+  else if(s.util >= 85){ risk += 20; why.push(`利用率 ${s.util}% 偏高`); }
+  if(s.util <= 50){ risk += 15; why.push(`利用率仅 ${s.util}%，价值感低`); }
+  if(!t.succ && s.sites.length >= 3){ risk += 25; why.push(`带 ${s.sites.length} 个中心且无继任者`); }
+  if(tenure!==null && tenure < 1.2){ risk += 15; why.push(`司龄 ${n1(tenure)} 年，尚在流失高发期`); }
+  if(t.want && t.want!=="—" && !t.want.startsWith("入职")){ risk += 20; why.push(t.want); }
+  return {tenure, ...t, risk:Math.min(risk,100), why,
+    hoDays: s.sites.length * HO_COST_DAY,
+    hoCost: s.sites.length * HO_COST_DAY * ROLE_DAY(s.role)};
+}
+</script>

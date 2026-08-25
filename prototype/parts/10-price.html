@@ -1,0 +1,190 @@
+<script>
+"use strict";
+/* ════════════════ 10 · 报价模型 ════════════════
+   人天口径与「工时与差旅」「成本与毛利」完全一致 —— 报价不是拍脑袋，
+   是把自己历史真实消耗的人天，按新项目的参数重新展开一次。          */
+const PRICE = {sites:12, pts:20, months:20, visits:11, cx:1.2, imv:1.5, fte:0.55, target:0.30, sfr:0.35};
+const SCR_MD = 1.6;   // 每例筛败消耗的 CRC 人天：知情、入排核对、筛选期检查陪同
+
+function calcPrice(p){
+  const total = p.sites * p.pts;                                  // 总入组例数
+  const sfr   = p.sfr ?? 0;
+  const scr   = sfr<1 ? total/(1-sfr) : total;                    // 需筛选例数
+  const fail  = Math.round(scr - total);                          // 筛败例数
+  // CRC 人天
+  const crcSetup = p.sites * 12;                                  // 每中心启动+关闭固定
+  const crcBase  = p.sites * p.months * RATE.workdays * p.fte;    // 驻场基线
+  const crcVisit = total * p.visits * 0.5 * p.cx;                 // 入组受试者访视陪同
+  const crcScr   = fail * SCR_MD * p.cx;                          // 筛败受试者的筛选期工作量
+  const crcMd = crcSetup + crcBase + crcVisit + crcScr;
+  // CRA 人天
+  const nIMV = Math.round(p.months / p.imv);
+  const craSiv = p.sites * 2, craImv = p.sites * nIMV * 1.5, craCov = p.sites * 1.5;
+  const craReport = (craSiv + craImv + craCov) * 0.6;             // 远程跟进与报告
+  const craMd = craSiv + craImv + craCov + craReport;
+  // 费用
+  const trips  = p.sites * (nIMV + 2);
+  const crcCost = crcMd * RATE.crcDay, craCost = craMd * RATE.craDay;
+  const travel  = trips * RATE.travel;
+  const oh      = (crcCost + craCost) * RATE.overhead;
+  const cost    = crcCost + craCost + travel + oh;
+  const quote   = cost / (1 - p.target);
+  /* 单价由「入组 + 筛败折算」共同摊：筛败按入组单价的 SF_FEE 计价 */
+  const billUnits = total + fail*SF_FEE;
+  const unit    = billUnits>0 ? quote/billUnits : 0;
+  return {total, scr:Math.round(scr), fail, crcMd, craMd, crcScr, nIMV, trips,
+          crcCost, craCost, travel, oh, cost, quote, unit, billUnits,
+          sfRev: fail*SF_FEE*unit, mdPerPt:(crcMd+craMd)/total};
+}
+/* 历史实际：从真实数据反推（这是护城河的来源）
+   对标基准只取入组完成度 ≥ 80% 的中心 —— 启动成本已充分摊薄，
+   人天/例与每例成本才具备可比性；未摊薄的中心仅列出参考。      */
+function historic(){
+  return SITES.filter(s=>s.enrolled>=8).map(s=>{const m=siteM(s);
+    return {n:s.hosp, ph:S[s.sid].phase, unit:s.unit, cost:m.cpe, md:m.mdPerPt,
+            gm:m.gm, prog:m.prog, base:m.prog>=0.8};});
+}
+const baseline = ()=>{ const b=historic().filter(h=>h.base);
+  return {md:sum(b,h=>h.md)/b.length, cost:sum(b,h=>h.cost)/b.length,
+          unit:sum(b,h=>h.unit)/b.length, n:b.length}; };
+
+VIEWS.price = box=>{
+  const P={...PRICE, ...(state.price||{})};
+  const F = [
+    {k:"sites", t:"参研中心数", min:2, max:40, step:1, u:" 个"},
+    {k:"pts",   t:"每中心入组例数", min:5, max:60, step:1, u:" 例"},
+    {k:"months",t:"入组期（月）", min:6, max:36, step:1, u:" 个月"},
+    {k:"visits",t:"每例访视次数", min:3, max:20, step:1, u:" 次"},
+    {k:"cx",    t:"方案复杂度系数", min:0.8, max:2, step:.05, u:"×", note:"肿瘤/罕见病 1.3–1.8；慢病 1.0"},
+    {k:"imv",   t:"监查间隔（月）", min:0.5, max:4, step:.5, u:" 个月/次"},
+    {k:"fte",   t:"CRC 驻场 FTE", min:.1, max:1, step:.05, u:"", fmt:v=>pct(v)},
+    {k:"sfr",   t:"预期筛败率", min:0, max:.7, step:.01, u:"", fmt:v=>pct(v),
+     note:"肿瘤 II/III 期常见 45%–60%；慢病 20%–35%。漏掉这一项会同时低估成本和收入"},
+    {k:"target",t:"目标毛利率", min:.1, max:.5, step:.01, u:"", fmt:v=>pct(v)}
+  ];
+  box.innerHTML=`
+  <div class="grid g12" style="gap:14px">
+    <div class="card">
+      <div class="card-h"><h3>项目参数</h3><span class="sp"></span><button class="btn" id="p-rst">重置</button></div>
+      <div class="card-b">
+        ${F.map(f=>`<div class="field">
+          <div class="slider-h"><label for="f-${f.k}">${esc(f.t)}</label><b id="v-${f.k}"></b></div>
+          <input type="range" id="f-${f.k}" data-k="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${P[f.k]}">
+          ${f.note?`<div class="note">${esc(f.note)}</div>`:""}
+        </div>`).join("")}
+      </div>
+    </div>
+    <div class="stack">
+      <div class="grid g4" style="gap:10px">
+        ${["建议报价总额","单例报价","预估总成本","人天/例"].map((l,i)=>`
+          <div class="stat${i===0?" stat-hi":""}">
+            <div class="kpi-l">${esc(l)}</div>
+            <div class="num" id="o-${i}" style="font-size:${i===0?"26":"23"}px;margin-top:3px;${i===0?"color:var(--accent)":""}">—</div>
+            <div class="note" id="n-${i}"></div></div>`).join("")}
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>成本构成推演</h3><span class="sub">改动左侧任一参数即时重算</span></div>
+        <div class="card-b"><div id="p-stack"></div>
+          <div class="hr"></div>
+          <div class="grid g2" style="gap:14px">
+            <div><div class="section-t">CRC 人天分解</div><div id="p-crc"></div></div>
+            <div><div class="section-t">CRA 人天分解</div><div id="p-cra"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>与历史实际对标</h3><span class="sub">这才是报价模型的护城河</span></div>
+        <div class="card-b">
+          <div class="note" style="margin-bottom:10px">下表是本公司已入组中心的<b>真实</b>单例成本与人天消耗。对手报价靠经验，你靠自己三年的成本数据库 —— 别人买不到，也抄不走。<br>
+            对标基准只取<b>入组完成度 ≥ 80%</b> 的中心（下表加粗行，共 ${baseline().n} 个）：启动成本已充分摊薄，人天/例才具可比性；其余行仅作参考。</div>
+          <div class="tw"><table style="min-width:660px">
+            <thead><tr><th>中心</th><th>期别</th><th class="ta-r">完成度</th><th class="ta-r">实际单价</th><th class="ta-r">实际每例成本</th><th class="ta-r">实际人天/例</th><th class="ta-r">实际毛利率</th></tr></thead>
+            <tbody>${historic().map(h=>`<tr style="${h.base?"font-weight:500":"opacity:.62"}">
+              <td style="font-size:12px">${esc(h.n)}${h.base?` <span class="pill p-acc">基准</span>`:""}</td><td class="t-sub">${esc(h.ph)}</td>
+              <td class="tnum">${pct(h.prog)}</td>
+              <td class="tnum">${n1(h.unit)} 万</td><td class="tnum">${n1(h.cost)} 万</td>
+              <td class="tnum">${n1(h.md)}</td>
+              <td class="tnum" style="color:${h.gm<0?"var(--crit)":h.gm<.2?"var(--warn)":"var(--ink)"}">${pct(h.gm)}</td></tr>`).join("")}</tbody>
+          </table></div>
+          <div id="p-bench" style="margin-top:12px"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>计算口径</h3><span class="sub">全部公式可追溯，无黑箱</span></div>
+        <div class="card-b"><div class="formula" id="p-form"></div></div>
+      </div>
+    </div>
+  </div>`;
+
+  const upd=()=>{
+    const r=calcPrice(P);
+    F.forEach(f=>$("#v-"+f.k).textContent = (f.fmt?f.fmt(P[f.k]):P[f.k])+(f.u||""));
+    $("#o-0").innerHTML=`${n1(r.quote)}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">万元</small>`;
+    $("#n-0").textContent=`目标毛利率 ${pct(P.target)} · 共 ${r.total} 例`;
+    $("#o-1").innerHTML=`${n1(r.unit)}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">万/例</small>`;
+    $("#n-1").innerHTML=`需筛 ${r.scr} → 入组 ${r.total} · 筛败 ${r.fail}<br>
+      <span class="t-mut">若合同不含筛败费，单价须报 ${n1(r.quote/r.total)} 万</span>`;
+    $("#o-2").innerHTML=`${n1(r.cost)}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">万元</small>`;
+    $("#n-2").textContent=`CRC ${n0(r.crcMd)} + CRA ${n0(r.craMd)} 人天`;
+    $("#o-3").textContent=n1(r.mdPerPt);
+    const bl=baseline();
+    $("#n-3").innerHTML=`基准均值 ${n1(bl.md)} · <span style="color:${r.mdPerPt<bl.md*0.85?"var(--crit)":r.mdPerPt>bl.md*1.2?"var(--warn)":"var(--ink)"}">${
+      r.mdPerPt<bl.md*0.85?"低于历史，报价偏乐观":r.mdPerPt>bl.md*1.2?"高于历史，易失标":"与历史相符"}</span>`;
+
+    stacked($("#p-stack"),[
+      {n:"CRC 人力",v:r.crcCost},{n:"CRA 人力",v:r.craCost},
+      {n:"差旅",v:r.travel},{n:"职能分摊",v:r.oh},
+      {n:"目标毛利",v:r.quote-r.cost}],{h:30});
+    hbars($("#p-crc"),[
+      {label:"启动与关闭",v:P.sites*12},
+      {label:"驻场基线",v:P.sites*P.months*RATE.workdays*P.fte},
+      {label:"入组访视陪同",v:r.total*P.visits*0.5*P.cx},
+      {label:`筛败筛选期 ×${r.fail}`,v:r.crcScr,color:"var(--s3)"}],{fmt:n0,unit:" 人天",h:12,gap:10});
+    hbars($("#p-cra"),[
+      {label:"SIV 启动",v:P.sites*2},
+      {label:`IMV ×${r.nIMV} 轮`,v:P.sites*r.nIMV*1.5},
+      {label:"COV 关闭",v:P.sites*1.5},
+      {label:"报告与远程",v:(P.sites*2+P.sites*r.nIMV*1.5+P.sites*1.5)*0.6}],{fmt:n0,unit:" 人天",h:12,gap:10});
+
+    const myCost=r.cost/r.total, dev=(myCost-bl.cost)/bl.cost, ok=Math.abs(dev)<0.2;
+    $("#p-bench").innerHTML=`<div style="border-left:2px solid var(--${ok?"good":"warn"});background:var(--${ok?"good":"warn"}-soft);padding:9px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.65">
+      本次测算每例成本 <b class="mono">${n1(myCost)} 万</b>，基准中心实际均值 <b class="mono">${n1(bl.cost)} 万</b>，偏离 <b class="mono">${dev>0?"+":""}${pct(dev)}</b>；
+      建议单价 <b class="mono">${n1(r.unit)} 万</b>，历史成交均价 <b class="mono">${n1(bl.unit)} 万</b>。
+      ${ok?"与历史经验一致，报价可信。":dev>0?"高于历史水平，检查是否高估了访视次数或驻场 FTE，否则容易在投标中失标。":"低于历史水平，警惕报低了硬做 —— 这是亏损单最常见的来源。"}</div>`;
+
+    $("#p-form").textContent =
+`总例数 = ${P.sites} 中心 × ${P.pts} 例 = ${r.total} 例
+
+需筛例数 = ${r.total} ÷ (1 − 筛败率 ${pct(P.sfr)}) = ${r.scr} 例，其中筛败 ${r.fail} 例
+
+CRC 人天 = 启动关闭 ${P.sites}×12
+         + 驻场 ${P.sites}×${P.months}月×${RATE.workdays}天×${pct(P.fte)}
+         + 入组访视 ${r.total}例×${P.visits}次×0.5×${P.cx}
+         + 筛败筛选期 ${r.fail}例×${SCR_MD}×${P.cx}
+         = ${n0(r.crcMd)} 人天
+
+CRA 人天 = SIV ${P.sites}×2 + IMV ${P.sites}×${r.nIMV}轮×1.5
+         + COV ${P.sites}×1.5 + 报告×0.6
+         = ${n0(r.craMd)} 人天
+
+成本 = ${n0(r.crcMd)}×${RATE.crcDay} + ${n0(r.craMd)}×${RATE.craDay}
+     + 差旅 ${r.trips}次×${RATE.travel} + 分摊×${pct(RATE.overhead)}
+     = ${n1(r.cost)} 万
+
+报价 = 成本 ÷ (1 − ${pct(P.target)}) = ${n1(r.quote)} 万
+计价单位 = 入组 ${r.total} + 筛败 ${r.fail}×${pct(SF_FEE)} = ${n1(r.billUnits)}
+单例入组价 = ${n1(r.quote)} ÷ ${n1(r.billUnits)} = ${n1(r.unit)} 万
+筛败单价 = ${n1(r.unit)}×${pct(SF_FEE)} = ${n1(r.unit*SF_FEE)} 万
+
+谈判用：合同含筛败费 → 入组单价 ${n1(r.unit)} 万
+        合同不含筛败费 → 入组单价必须 ${n1(r.quote/r.total)} 万（+${pct(r.quote/r.total/r.unit-1)}）
+        —— 同样的总价，两种拆法。申办方砍筛败费时，这就是把单价顶回去的依据。`;
+  };
+  upd();
+  box.addEventListener("input",e=>{ const i=e.target.closest("[data-k]"); if(!i)return;
+    P[i.dataset.k]=+i.value; state.price={...P}; upd(); });
+  $("#p-rst").addEventListener("click",()=>{ state.price=null; render();
+    toast("参数已重置为默认方案"); });
+};
+
+</script>

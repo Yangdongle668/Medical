@@ -1,0 +1,22 @@
+{
+  "name": "@sitedesk/db",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "migrate": "node-pg-migrate --migrations-dir migrations --migration-filename-format utc --migrations-table schema_migration",
+    "migrate:up": "npm run migrate -- up",
+    "migrate:down": "npm run migrate -- down",
+    "reset": "node ../db/scripts/reset.mjs",
+    "seed": "node ../db/scripts/seed.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "node-pg-migrate": "^9.0.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.0.0",
+    "@sitedesk/contracts": "*"
+  }
+}

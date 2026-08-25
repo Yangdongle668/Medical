@@ -1,0 +1,179 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   CRC 的项目生命周期数据层
+   受试者有生命周期（02d），中心也有 —— 这一层补的是后者：
+     接手 → 启动准备(SIV) → 招募入组 → 维持(伦理/安全/修订) → 关闭结题
+   此前系统只做了中间一段（逐次访视），两头是空的。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── ① 启动准备：CRC 最忙的两个月，此前系统里一片空白 ────────────── */
+/* block:true = 阻塞项，未完成不得推进到「SIV启动」 */
+const SIV_PLAN = {"SS-05":"2026-09-05","SS-13":"2026-09-01","SS-14":"2026-09-19"};
+let STARTUP = [
+  /* SS-13 广东省人民医院 —— 伦理递交阶段，SIV 排期 09-01，最紧 */
+  {ss:"SS-13", cat:"伦理与批件", item:"伦理初始审查递交（含方案 V1.2、ICF V1.1、IB V2.0）", owner:"郭晓萱", due:"2026-08-08", done:1, block:1},
+  {ss:"SS-13", cat:"伦理与批件", item:"伦理会议答辩与补充材料", owner:"郭晓萱", due:"2026-08-26", done:0, block:1},
+  {ss:"SS-13", cat:"伦理与批件", item:"伦理批件取得并归档 ISF", owner:"郭晓萱", due:"2026-08-29", done:0, block:1},
+  {ss:"SS-13", cat:"合同与预算", item:"三方协议定稿（申办方 / 机构 / 受托方）", owner:"何雨薇", due:"2026-08-25", done:0, block:1},
+  {ss:"SS-13", cat:"合同与预算", item:"受试者补偿标准报机构备案", owner:"郭晓萱", due:"2026-08-27", done:0, block:0},
+  {ss:"SS-13", cat:"研究者文件夹", item:"ISF 建夹与目录页（按申办方模板）", owner:"郭晓萱", due:"2026-08-20", done:1, block:0},
+  {ss:"SS-13", cat:"研究者文件夹", item:"全体研究者 CV、执业证、GCP 证书收集", owner:"郭晓萱", due:"2026-08-28", done:0, block:1},
+  {ss:"SS-13", cat:"人员与培训", item:"研究者授权分工表 DOA 由 PI 签署", owner:"郭晓萱", due:"2026-08-31", done:0, block:1},
+  {ss:"SS-13", cat:"人员与培训", item:"方案与 ICF 培训及签到表", owner:"何雨薇", due:"2026-09-01", done:0, block:1},
+  {ss:"SS-13", cat:"人员与培训", item:"机构人员备案与门禁办理", owner:"郭晓萱", due:"2026-08-29", done:0, block:0},
+  {ss:"SS-13", cat:"药品与物资", item:"药品接收、温控启用与药房交接", owner:"郭晓萱", due:"2026-08-31", done:0, block:1},
+  {ss:"SS-13", cat:"药品与物资", item:"ICF 空白件、访视包、采血管到位", owner:"郭晓萱", due:"2026-08-30", done:0, block:0},
+  {ss:"SS-13", cat:"检验与设备", item:"中心实验室资质与正常值范围收集", owner:"郭晓萱", due:"2026-08-26", done:1, block:0},
+  {ss:"SS-13", cat:"检验与设备", item:"离心机 / 冰箱校准证书，影像科排期对接", owner:"郭晓萱", due:"2026-08-28", done:0, block:0},
+  {ss:"SS-13", cat:"系统与账号", item:"EDC / IWRS 账号开通与权限确认", owner:"何雨薇", due:"2026-08-30", done:0, block:1},
+  {ss:"SS-13", cat:"启动会筹备", item:"SIV 议程、参会人确认、会议室预订", owner:"郭晓萱", due:"2026-08-29", done:0, block:0},
+
+  /* SS-14 江苏省人民医院 —— 合同签署阶段，SIV 排期 09-19 */
+  {ss:"SS-14", cat:"伦理与批件", item:"伦理批件取得并归档 ISF", owner:"冯乐", due:"2026-06-30", done:1, block:1},
+  {ss:"SS-14", cat:"合同与预算", item:"三方协议签署完成", owner:"何雨薇", due:"2026-08-20", done:1, block:1},
+  {ss:"SS-14", cat:"研究者文件夹", item:"ISF 建夹与全套文件归档", owner:"冯乐", due:"2026-09-05", done:0, block:0},
+  {ss:"SS-14", cat:"研究者文件夹", item:"研究者 CV / GCP 证书收集", owner:"冯乐", due:"2026-09-08", done:0, block:1},
+  {ss:"SS-14", cat:"人员与培训", item:"授权分工表 DOA 由 PI 签署", owner:"冯乐", due:"2026-09-12", done:0, block:1},
+  {ss:"SS-14", cat:"人员与培训", item:"方案培训与签到表", owner:"何雨薇", due:"2026-09-18", done:0, block:1},
+  {ss:"SS-14", cat:"药品与物资", item:"药品接收与温控启用", owner:"冯乐", due:"2026-09-15", done:0, block:1},
+  {ss:"SS-14", cat:"检验与设备", item:"中心实验室资质与正常值收集", owner:"冯乐", due:"2026-09-10", done:0, block:0},
+  {ss:"SS-14", cat:"系统与账号", item:"EDC / IWRS 账号开通", owner:"何雨薇", due:"2026-09-16", done:0, block:1},
+  {ss:"SS-14", cat:"启动会筹备", item:"SIV 议程与参会确认", owner:"冯乐", due:"2026-09-17", done:0, block:0},
+
+  /* SS-05 西安交大一附院 —— 已 SIV 但迟迟不入组，启动尾巴没收干净 */
+  {ss:"SS-05", cat:"伦理与批件", item:"伦理批件归档", owner:"唐延", due:"2025-06-20", done:1, block:1},
+  {ss:"SS-05", cat:"人员与培训", item:"授权分工表 DOA 更新（新增两名研究护士）", owner:"唐延", due:"2026-07-30", done:0, block:0},
+  {ss:"SS-05", cat:"药品与物资", item:"首批药品接收与温控启用", owner:"唐延", due:"2025-11-14", done:1, block:1},
+  {ss:"SS-05", cat:"检验与设备", item:"中心实验室室间质评证书更新", owner:"唐延", due:"2026-08-15", done:0, block:0},
+  {ss:"SS-05", cat:"启动会筹备", item:"入组启动动员会（PI 与门诊团队）", owner:"段志远", due:"2026-08-30", done:0, block:0}
+];
+const STARTUP_CATS = ["伦理与批件","合同与预算","研究者文件夹","人员与培训","药品与物资","检验与设备","系统与账号","启动会筹备"];
+function startupM(ssId){
+  const rows = STARTUP.filter(r=>r.ss===ssId);
+  if(!rows.length) return null;
+  const done = rows.filter(r=>r.done).length;
+  const blocks = rows.filter(r=>r.block && !r.done);
+  const overdue = rows.filter(r=>!r.done && days(r.due, TODAY) > 0);
+  const plan = SIV_PLAN[ssId] || null;
+  return {rows, n:rows.length, done, rate:done/rows.length, blocks, overdue,
+          plan, dToSiv: plan? days(TODAY, plan) : null};
+}
+
+/* ── ② 预筛登记：漏斗的第一格此前没有门 ──────────────────────────── */
+const PS_SRC = ["门诊筛查","住院病房","院内转诊","既往受试者库","广告与义诊","外院转诊"];
+const PS_RESULT = ["合格 · 待知情", "已签知情 · 进入筛选", "不合格 · 入排不符", "拒绝参加"];
+let PRESCREEN = [
+  {id:"PS-0412", ss:"SS-01", d:"2026-08-21", by:"吴桐", src:"门诊筛查", result:"合格 · 待知情", why:""},
+  {id:"PS-0411", ss:"SS-01", d:"2026-08-21", by:"吴桐", src:"门诊筛查", result:"不合格 · 入排不符", why:"既往接受过二线以上系统治疗"},
+  {id:"PS-0410", ss:"SS-01", d:"2026-08-20", by:"吴桐", src:"院内转诊", result:"已签知情 · 进入筛选", why:""},
+  {id:"PS-0409", ss:"SS-07", d:"2026-08-20", by:"吴桐", src:"住院病房", result:"不合格 · 入排不符", why:"PD-L1 表达 <1%"},
+  {id:"PS-0408", ss:"SS-07", d:"2026-08-19", by:"吴桐", src:"门诊筛查", result:"拒绝参加", why:"家属不同意，顾虑输注时间成本"},
+  {id:"PS-0407", ss:"SS-04", d:"2026-08-19", by:"唐延", src:"门诊筛查", result:"不合格 · 入排不符", why:"ALT 3.4×ULN"},
+  {id:"PS-0406", ss:"SS-09", d:"2026-08-18", by:"廖梦然", src:"既往受试者库", result:"已签知情 · 进入筛选", why:""},
+  {id:"PS-0405", ss:"SS-12", d:"2026-08-18", by:"廖梦然", src:"院内转诊", result:"合格 · 待知情", why:""}
+];
+let psSeq = 413;
+/* 预筛来源产出：判断"该加渠道"还是"该改入排"的依据 */
+function psBySrc(ids){
+  const l = PRESCREEN.filter(p=>!ids || ids.has(p.ss));
+  return PS_SRC.map(s=>{
+    const rows = l.filter(p=>p.src===s);
+    const icf = rows.filter(p=>p.result==="已签知情 · 进入筛选").length;
+    return {n:s, total:rows.length, icf, rate: rows.length? icf/rows.length : null};
+  }).filter(x=>x.total);
+}
+
+/* ── ③ 受试者脱落 / 退出：此前完全没有这个状态 ────────────────────
+   影响两处：① 保留率（质量）② 结算 —— 脱落受试者按已完成访视比例计费。 */
+const DROP_REASONS = ["受试者撤回知情","失访","不良事件终止治疗","研究者判断需终止","死亡","方案违背终止","其他"];
+let DROPS = [
+  {ss:"SS-01", subj:"S-0166", why:"受试者撤回知情", d:"2025-11-08", done:3,  total:12, note:"往返路程 4 小时，家属不再支持"},
+  {ss:"SS-01", subj:"S-0174", why:"不良事件终止治疗", d:"2026-03-19", done:7,  total:12, note:"3 级免疫性肝炎"},
+  {ss:"SS-02", subj:"S-0288", why:"失访", d:"2026-02-11", done:2,  total:12, note:"连续 3 次电话未接，挂号信无回应"},
+  {ss:"SS-03", subj:"S-0259", why:"死亡", d:"2026-05-02", done:9,  total:12, note:"疾病进展，与试验药物无关"},
+  {ss:"SS-04", subj:"S-0344", why:"受试者撤回知情", d:"2026-06-14", done:1,  total:12, note:"签署当日反悔"},
+  {ss:"SS-06", subj:"S-0312", why:"不良事件终止治疗", d:"2026-04-28", done:5,  total:16, note:"2 级免疫性肺炎，PI 判断不宜继续"},
+  {ss:"SS-07", subj:"S-0233", why:"失访", d:"2026-06-30", done:4,  total:16, note:"外地务工，无法按窗口返院"},
+  {ss:"SS-09", subj:"S-0401", why:"受试者撤回知情", d:"2026-01-22", done:2,  total:8,  note:"血糖控制达标后自行停药"},
+  {ss:"SS-09", subj:"S-0433", why:"失访", d:"2026-06-05", done:5,  total:8,  note:"更换联系方式未告知"},
+  {ss:"SS-10", subj:"S-0392", why:"研究者判断需终止", d:"2026-05-17", done:6,  total:8,  note:"依从性 <60%，服药记录不可靠"},
+  {ss:"SS-11", subj:"S-0421", why:"不良事件终止治疗", d:"2026-01-24", done:3,  total:8,  note:"糖尿病酮症酸中毒 SAE-0019"},
+  {ss:"SS-11", subj:"S-0447", why:"受试者撤回知情", d:"2026-07-08", done:1,  total:8,  note:"抽血次数超出预期"},
+  {ss:"SS-12", subj:"S-0461", why:"失访", d:"2026-06-21", done:4,  total:12, note:"术后返回原籍随访"},
+  {ss:"SS-15", subj:"S-0478", why:"方案违背终止", d:"2026-04-03", done:2,  total:8,  note:"入组后发现不符合入排标准第 7 条"}
+];
+const dropsOf = id => DROPS.filter(d=>d.ss===id);
+/* 脱落受试者的收入贡献：按已完成访视比例，而不是按整例 */
+const dropEarn = d => d.done / d.total;
+function retentionM(ss){
+  const dl = dropsOf(ss.id), n = dl.length;
+  return {n, active: ss.enrolled - n, rate: ss.enrolled? (ss.enrolled-n)/ss.enrolled : null,
+    lost: sum(dl, d=>(1-dropEarn(d))) * ss.unit, list:dl};
+}
+
+/* ── ④ 伦理事务：不是一次性的，是贯穿整个项目的周期性义务 ────────── */
+const ETH_KINDS = ["初始审查","年度跟踪审查","方案修订审查","SAE 快速报告","严重违背报告","结题报告"];
+let ETHICS = [
+  {id:"E-0091", ss:"SS-01", kind:"年度跟踪审查", due:"2026-08-19", sub:"—", appr:"—", st:"待递交",
+   note:"伦理批件 2026-10-18 到期，需提前 60 天递交 —— 已逾期 3 天未交，批件断档将导致中心停摆"},
+  {id:"E-0089", ss:"SS-07", kind:"方案修订审查", due:"2026-09-05", sub:"2026-08-18", appr:"—", st:"审查中",
+   note:"方案 V3.0 → V3.1：新增 C4 心肌酶检测，每例增加 2 次采血"},
+  {id:"E-0093", ss:"SS-13", kind:"初始审查", due:"2026-08-26", sub:"2026-08-08", appr:"—", st:"审查中",
+   note:"8-26 伦理会议答辩，需 PI 到会"},
+  {id:"E-0090", ss:"SS-09", kind:"年度跟踪审查", due:"2026-09-14", sub:"—", appr:"—", st:"待递交",
+   note:"批件 2026-11-13 到期"},
+  {id:"E-0087", ss:"SS-02", kind:"SAE 快速报告", due:"2026-08-25", sub:"2026-08-20", appr:"2026-08-21", st:"已备案",
+   note:"SAE-0041 3 级肝功能异常，知晓后 5 日内报伦理"},
+  {id:"E-0085", ss:"SS-12", kind:"年度跟踪审查", due:"2026-07-20", sub:"2026-07-11", appr:"2026-08-04", st:"已批准",
+   note:"批件延续至 2027-09-13"},
+  {id:"E-0082", ss:"SS-05", kind:"严重违背报告", due:"2026-08-30", sub:"—", appr:"—", st:"待递交",
+   note:"QI-2026-0139 知情同意版本错误，3 例受试者签署过期版本 —— 属严重违背，须报伦理"}
+];
+let ethSeq = 94;
+const ethState = e => e.st==="已批准"||e.st==="已备案" ? "good"
+                    : days(e.due,TODAY) > 0 ? "crit" : days(e.due,TODAY) > -14 ? "warn" : "neut";
+
+/* ── ⑤ 交接：系统此前已经提出这个问题，却没有提供机制 ────────────── */
+const HO_ITEMS = ["ISF 研究者文件夹清点与移交","在组受试者逐例交底（含联系方式与依从性）",
+  "试验用药品实盘与账实核对","未关闭质疑与质量事件清单","机构与 PI 当面引荐",
+  "EDC / IWRS 账号权限移交","受试者补偿未发放清单","样本暂存与转运待办"];
+let HANDOVER = [
+  {id:"HO-006", from:"郭晓萱", to:"冯乐", ss:["SS-13"], reason:"年假 09-02 至 09-04，期间 SIV 排期 09-01",
+   d:"2026-08-29", st:"待确认", items:HO_ITEMS.map((t,i)=>({t, done:i<2}))},
+  {id:"HO-005", from:"周琦", to:"吴桐", ss:["SS-01","SS-07"], reason:"离职（2026-07-15）",
+   d:"2026-07-10", st:"已完成", items:HO_ITEMS.map(t=>({t, done:true}))}
+];
+let hoSeq = 7;
+
+/* ── ⑥ 中心关闭闸门：推进到「中心关闭」前必须全部清零 ──────────────
+   此前 06-sites 的推进按钮只有一句 ss.st=next，没有任何前置校验。 */
+function closeGate(ss){
+  const id = ss.id, g = [];
+  const inTrial = SUBJ.filter(s=>s.ss===id && s.st!=="已出组" && s.st!=="筛败" && s.st!=="已脱落");
+  if(inTrial.length) g.push({t:`仍有 ${inTrial.length} 例受试者在组未出组`, v:"subj"});
+  const q = QUERIES.filter(x=>x.ss===id && x.st!=="已关闭");
+  if(q.length) g.push({t:`${q.length} 条数据质疑未关闭`, v:"query"});
+  const qi = ISSUES.filter(x=>x.ss===id && x.st!=="已关闭");
+  if(qi.length) g.push({t:`${qi.length} 项质量事件未关闭`, v:"qa"});
+  const ip = (typeof IP!=="undefined"? IP:[]).filter(r=>r.ss===id);
+  const unbal = ip.filter(r=>ipM(r).diff!==0);
+  if(unbal.length) g.push({t:`${unbal.length} 批药品数量不平衡`, v:"material"});
+  const undest = ip.filter(r=>r.ret > r.dest);
+  if(undest.length) g.push({t:`${undest.length} 批回收药品未完成销毁登记`, v:"material"});
+  const sp = (typeof SPEC!=="undefined"? SPEC:[]).filter(r=>r.ss===id && r.st!=="已回执");
+  if(sp.length) g.push({t:`${sp.length} 份生物样本链未闭环`, v:"material"});
+  const pay = PAY.filter(p=>p.ss===id && (p.st!=="已发放" || !p.rc));
+  if(pay.length) g.push({t:`${pay.length} 笔受试者补偿未发放或缺签收凭证`, v:"pay"});
+  const eth = ETHICS.filter(e=>e.ss===id && e.kind==="结题报告" && e.st!=="已批准");
+  if(!ETHICS.some(e=>e.ss===id && e.kind==="结题报告")) g.push({t:"未向伦理递交结题报告", v:"ethics"});
+  else if(eth.length) g.push({t:"结题报告尚未获伦理批准", v:"ethics"});
+  return g;
+}
+/* SIV 闸门：启动清单的阻塞项未清，不得推进到「SIV启动」 */
+function sivGate(ss){
+  const m = startupM(ss.id);
+  if(!m) return [];
+  return m.blocks.map(b=>({t:`启动阻塞项未完成：${b.item}`, v:"startup"}));
+}
+</script>

@@ -1,0 +1,52 @@
+# @sitedesk/web — 前端
+
+React + Vite。Phase 5 全程走 MSW mock，Phase 6 才接真实接口 ——
+这正是「前后端并行」的意思：前端不等后端，但也不自己编一套数据结构。
+
+```bash
+npm run web:dev          # 开发（自动挂 MSW）
+npm run web:build        # 生产构建（**不含** MSW）
+npm run web:e2e          # 带 mock 构建 + Playwright
+```
+
+## client 由契约派生，不是由 openapi.yaml 生成
+
+Phase 0 的目录规划写的是「由 openapi.yaml 生成的 client」。这里少走一步：
+`openapi.yaml` 本身就是由契约注册表生成的，直接读注册表等于读同一个源，
+还省掉一个代码生成器和它的漂移风险。
+
+于是有一件事变成编译期保证：**契约里没有的端点，前端调不出来。**
+`operationId` 打错一个字母，`tsc` 立刻报错，而不是运行时 404。
+
+## MSW 是两层
+
+| 层 | 内容 | 为什么 |
+|---|---|---|
+| 场景层 `mocks/scenario.ts` | CRC 那条业务流，**有状态、前后连贯** | 契约示例各自随机，拼不成一条流程：勾掉的任务下一次请求又是未勾的 |
+| 兜底层 `mocks/handlers.ts` | 其余端点回 `examples.json` | 白拿的覆盖面，且跟着契约走 —— 新增端点立刻有 mock，不需要有人记得来补 |
+
+**路径必须转成正则再交给 MSW。** path-to-regexp 会把 `:done` 当成路径参数，
+于是 `/v1/subject-visits/{id}/tasks/{seq}:done` 这类 L2 命令路径匹配不上，
+请求悄悄落到兜底层、返回一份静态示例 ——
+症状是「点了勾没反应」，而控制台一条错误都没有。见 `pathToRegExp()`。
+
+## 两条构建期纪律
+
+1. **mock 开关必须用点号访问**：`import.meta.env.VITE_USE_MOCKS` 会被静态替换，
+   整个分支随之成为死代码被摇掉。写成 `import.meta.env["VITE_USE_MOCKS"]` 就不会 ——
+   于是 MSW 的 480 kB 跟着上生产，而没有任何构建警告。CI 直接 grep 产物来兜底。
+2. **业务代码不得 import mock**（`arch:check` 强制）。
+
+## 横向溢出：两道防线，别搞错哪道在受力
+
+横向滚动条在 390px 上等于「这个页面没做手机」，而 CRC 一半时间是在
+医院走廊上用手机看的。
+
+- **`.table-wrap { overflow-x: auto }` 是承重的那道。** 去掉它，390px 上
+  立刻溢出 185px（实测）。宽表格应该在自己的容器里滚，而不是把整页拖着滚。
+- `minmax(0, 1fr)` 是第二道。有了第一道之后它并不吃力，但留着 ——
+  下一个宽组件未必记得给自己加滚动容器。
+
+`e2e/layout.spec.ts` 在 390 / 834 / 1500 三个宽度 × 三个路由上量
+`documentElement.scrollWidth`，溢出时**指出是哪个元素撑开的** ——
+只报「溢出了 12px」没法修。

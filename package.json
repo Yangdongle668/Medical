@@ -1,0 +1,30 @@
+{
+  "name": "sitedesk",
+  "private": true,
+  "version": "0.1.0",
+  "description": "临床中心台 SiteDesk — CRO/SMO 运营管理系统",
+  "workspaces": [
+    "db",
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:up": "npm run migrate:up -w db",
+    "db:down": "npm run migrate:down -w db",
+    "db:reset": "npm run reset -w db",
+    "db:seed": "npm run seed -w db",
+    "contracts:build": "npm run build -w @sitedesk/contracts",
+    "contracts:check": "npm run check:breaking -w @sitedesk/contracts",
+    "arch:check": "node tools/arch-check.mjs",
+    "typecheck": "npm run typecheck -w @sitedesk/contracts && npm run typecheck -w @sitedesk/calc && npm run typecheck -w @sitedesk/ui && npm run typecheck -w @sitedesk/policy && npm run typecheck -w @sitedesk/api && npm run typecheck -w @sitedesk/web",
+    "test": "npm run test -w db && npm run test -w @sitedesk/contracts && npm run test -w @sitedesk/calc && npm run test -w @sitedesk/ui && npm run test -w @sitedesk/policy && npm run test -w @sitedesk/api",
+    "api:dev": "npm run serve -w @sitedesk/api",
+    "web:dev": "npm run dev -w @sitedesk/web",
+    "web:e2e": "npm run e2e -w @sitedesk/web",
+    "web:build": "npm run build -w @sitedesk/web",
+    "web:integration": "npm run integration -w @sitedesk/web"
+  }
+}

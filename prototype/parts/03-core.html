@@ -1,0 +1,242 @@
+<script>
+"use strict";
+/* ════════ 工具 ════════ */
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const n1 = v=>v.toFixed(1), n0 = v=>Math.round(v).toLocaleString("zh-CN");
+const pct = v=>(v*100).toFixed(1)+"%";
+const wan = v=>v.toFixed(1);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const sum = (a,f)=>a.reduce((t,x)=>t+f(x),0);
+const days = (a,b)=>Math.round((new Date(b)-new Date(a))/864e5);
+const site = id=>SITES.find(s=>s.id===id);
+const staff = n=>STAFF.find(s=>s.n===n);
+const label = ss=>`${ss.hosp}｜${S[ss.sid].short}`;
+
+/* ════════ 派生指标（所有看板数字都由这里算出，口径唯一） ════════ */
+
+/* 筛败费：合同里筛败例数单独计价，通常为入组单价的 30%–40%。
+   漏掉这块，收入就是错的 —— 而以「算清单中心盈亏」为核心命题的系统，
+   这个错误在源头上会让所有毛利结论失真。 */
+const SF_FEE = 0.35;
+/* 脱落扣减：入组后中途退出的受试者，按已完成访视比例计费，不是按整例。
+   与筛败费方向相反 —— 一个把收入调高，一个把收入调低，两个都不做，
+   高筛败中心被误砍，高脱落中心被误保。 */
+const dropLost = ss => (typeof DROPS==="undefined") ? 0
+  : DROPS.filter(d=>d.ss===ss.id).reduce((t,d)=>t + (1 - d.done/d.total), 0) * ss.unit;
+function siteRev(ss){
+  const f = (typeof FN==="function") ? FN(ss.id) : {sf:0};
+  return (ss.startup||0) + ss.enrolled*ss.unit - dropLost(ss) + (f.sf||0)*ss.unit*SF_FEE;
+}
+const revParts = ss=>{ const f=(typeof FN==="function")?FN(ss.id):{sf:0};
+  return {startup:ss.startup||0, enr:ss.enrolled*ss.unit, sf:(f.sf||0)*ss.unit*SF_FEE,
+          drop:-dropLost(ss)}; };
+
+function siteM(ss){
+  const rev = siteRev(ss);
+  const gp = rev - ss.cost;                              // 毛利（万元）
+  const gm = rev > 0 ? gp/rev : null;                    // 毛利率
+  const rate = ss.planToDate>0 ? ss.enrolled/ss.planToDate : null;  // 入组达成率
+  const cpe = ss.enrolled>0 ? ss.cost/ss.enrolled : null;           // 每例入组成本
+  const prog = ss.enrolled/ss.contracted;                // 合同完成度
+  return {rev, gp, gm, rate, cpe, prog, mdPerPt: ss.enrolled>0 ? ss.md/ss.enrolled : null};
+}
+/* scope() / scopeIds() 定义在 04-nav：数据范围由登录身份决定 */
+
+function rollup(list){
+  const rev = sum(list,s=>siteRev(s)), cost = sum(list,s=>s.cost);
+  const enr = sum(list,s=>s.enrolled), plan = sum(list,s=>s.planToDate);
+  const ids = new Set(list.map(s=>s.id));
+  const people = STAFF.filter(p=>p.role!=="PM"&&p.role!=="QA"&&p.sites.some(x=>ids.has(x)));
+  const util = people.length? sum(people,p=>p.util)/people.length : 0;
+  const open = ISSUES.filter(i=>i.st!=="已关闭" && ids.has(i.ss));
+  const ar   = MILES.filter(m=>!m.paid && m.inv==="已开票" && ids.has(m.ss));
+  const unbilled = MILES.filter(m=>m.inv==="待开票" && ids.has(m.ss));
+  return {
+    rev, cost, gp:rev-cost, gm: rev? (rev-cost)/rev : 0,
+    enr, plan, rate: plan? enr/plan : 0,
+    cpe: enr? cost/enr : 0, util, people:people.length,
+    open, crit: open.filter(i=>i.sev!=="一般").length,
+    arAmt: sum(ar,m=>m.amt), arOver: sum(ar.filter(m=>m.age>60),m=>m.amt),
+    unbilledAmt: sum(unbilled,m=>m.amt), unbilled:unbilled.length,
+    dso: ar.length? Math.round(sum(ar,m=>m.age)/ar.length)+62 : 0,
+    active: list.filter(s=>s.st==="入组中").length, total:list.length
+  };
+}
+/* 利用率 → 状态（这是 state，不是 magnitude：闲置与超载都不好） */
+function utilState(u){
+  if(u < 60) return {k:"warn", t:"产能闲置", c:"var(--warn)"};
+  if(u > 88) return {k:"crit", t:"超载",     c:"var(--crit)"};
+  return {k:"good", t:"健康",  c:"var(--good)"};
+}
+function rateState(r){
+  if(r===null) return {k:"neut",t:"未启动",c:"var(--ink-3)"};
+  if(r < 0.7)  return {k:"crit",t:"严重落后",c:"var(--crit)"};
+  if(r < 0.9)  return {k:"warn",t:"落后",    c:"var(--warn)"};
+  return {k:"good",t:"达成",c:"var(--good)"};
+}
+const SEV = {"重大":{k:"crit",c:"var(--crit)"},"严重":{k:"crit",c:"var(--crit)"},"一般":{k:"warn",c:"var(--warn)"}};
+
+/* ════════ 反馈原语 ════════ */
+function toast(msg, kind=""){
+  const d=document.createElement("div");
+  d.className="toast "+kind; d.innerHTML=`<i></i><span>${esc(msg)}</span>`;
+  $("#toasts").appendChild(d);
+  setTimeout(()=>{d.style.transition="opacity .3s";d.style.opacity="0";setTimeout(()=>d.remove(),320);},2600);
+}
+const TIP=$("#tip");
+function showTip(html,x,y){
+  TIP.innerHTML=html; TIP.classList.add("on");
+  const r=TIP.getBoundingClientRect();
+  TIP.style.left = clamp(x+14, 8, innerWidth-r.width-8)+"px";
+  TIP.style.top  = clamp(y-r.height-12, 8, innerHeight-r.height-8)+"px";
+}
+const hideTip=()=>TIP.classList.remove("on");
+
+/* ════════ 抽屉 / 弹窗 ════════ */
+let overlayEsc=null;
+function openLayer(node, html){
+  node.innerHTML=html; node.hidden=false; $("#scrim").hidden=false;
+  requestAnimationFrame(()=>{node.classList.add("on");$("#scrim").classList.add("on");});
+  overlayEsc = e=>{ if(e.key==="Escape") closeLayer(); };
+  document.addEventListener("keydown",overlayEsc);
+  const f=node.querySelector("button,[href],input,select"); if(f) f.focus();
+}
+function closeLayer(){
+  for(const n of [$("#drawer"),$("#modal")]){
+    if(n.hidden) continue;
+    n.classList.remove("on");
+    setTimeout(()=>{n.hidden=true;n.innerHTML="";},200);
+  }
+  $("#scrim").classList.remove("on");
+  setTimeout(()=>{$("#scrim").hidden=true;},200);
+  if(overlayEsc){document.removeEventListener("keydown",overlayEsc);overlayEsc=null;}
+}
+$("#scrim").addEventListener("click",closeLayer);
+
+/* ════════════════════════════════════════════════════════════════════
+   图表原语 —— 细笔画、4px 数据端圆角、2px 线宽、填充间留 2px 表面缝隙、
+   ≥2 系列必有图例、只做选择性直标（绝不每点标数）、网格与轴线退居后景。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* 折线：计划 vs 实际，带十字准星 + 跟随提示 */
+function lineChart(box,{x,series,yMax,yFmt=n0,h=200}){
+  const W=box.clientWidth||640, P={t:12,r:14,b:26,l:44}, H=h;
+  const iw=W-P.l-P.r, ih=H-P.t-P.b;
+  const max = yMax || Math.max(...series.flatMap(s=>s.values))*1.12;
+  const px=i=> P.l + (x.length>1 ? i*iw/(x.length-1) : iw/2);
+  const py=v=> P.t + ih - (v/max)*ih;
+  const ticks=4, gl=[], ax=[];
+  for(let i=0;i<=ticks;i++){
+    const v=max*i/ticks, y=py(v);
+    gl.push(`<line class="gridline" x1="${P.l}" y1="${y.toFixed(1)}" x2="${W-P.r}" y2="${y.toFixed(1)}"/>`);
+    ax.push(`<text class="axis-t" x="${P.l-7}" y="${(y+3.5).toFixed(1)}" text-anchor="end">${yFmt(v)}</text>`);
+  }
+  const step = x.length>8 ? 2 : 1;
+  const xl = x.map((t,i)=> i%step===0||i===x.length-1
+    ? `<text class="axis-t" x="${px(i).toFixed(1)}" y="${H-8}" text-anchor="middle">${esc(t)}</text>`:"").join("");
+  const paths = series.map(s=>{
+    const d = s.values.map((v,i)=>`${i?"L":"M"}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(" ");
+    const area = s.fill ? `<path d="${d} L${px(x.length-1).toFixed(1)},${P.t+ih} L${px(0).toFixed(1)},${P.t+ih} Z" fill="${s.color}" opacity=".055"/>`:"";
+    return area + `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"${s.dash?' stroke-dasharray="2 4" stroke-linecap="round"':""}/>`;
+  }).join("");
+  /* 选择性直标：只标终点 */
+  const ends = series.map(s=>{
+    const i=x.length-1, cx=px(i), cy=py(s.values[i]);
+    return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.5" fill="${s.color}" stroke="var(--surface)" stroke-width="2.5"/>`;
+  }).join("");
+  box.innerHTML =
+   `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="计划与实际入组累计曲线">
+      ${gl.join("")}${ax.join("")}${xl}
+      <g id="cross" style="display:none"><line class="gridline" stroke="var(--ink-3)" stroke-dasharray="3 3" y1="${P.t}" y2="${P.t+ih}"/></g>
+      ${paths}${ends}
+      <rect x="${P.l}" y="${P.t}" width="${iw}" height="${ih}" fill="transparent" id="hit" style="cursor:crosshair"/>
+    </svg>`;
+  const svg=box.querySelector("svg"), cross=box.querySelector("#cross"), cl=cross.querySelector("line");
+  const dots=[];
+  series.forEach(s=>{ const c=document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("r","4"); c.setAttribute("fill",s.color);
+    c.setAttribute("stroke","var(--surface)"); c.setAttribute("stroke-width","2.5");
+    cross.appendChild(c); dots.push(c); });
+  const hit=box.querySelector("#hit");
+  hit.addEventListener("pointermove",e=>{
+    const r=svg.getBoundingClientRect(), sx=(e.clientX-r.left)*W/r.width;
+    let i=Math.round((sx-P.l)/(iw/(x.length-1||1))); i=clamp(i,0,x.length-1);
+    cross.style.display=""; cl.setAttribute("x1",px(i)); cl.setAttribute("x2",px(i));
+    dots.forEach((c,k)=>{c.setAttribute("cx",px(i));c.setAttribute("cy",py(series[k].values[i]));});
+    const rows=series.map(s=>`<div class="tip-r"><span><i style="display:inline-block;width:12px;height:2px;border-radius:2px;background:${s.color};vertical-align:middle;margin-right:7px;opacity:.9"></i>${esc(s.name)}</span><b>${yFmt(s.values[i])}</b></div>`).join("");
+    const diff = series.length===2 ? (()=>{const d=series[1].values[i]-series[0].values[i];
+      return `<div class="tip-r" style="border-top:1px solid var(--line);margin-top:4px;padding-top:4px"><span>差额</span><b style="color:${d<0?"var(--crit)":"var(--ink)"}">${d>0?"+":""}${n0(d)}</b></div>`;})():"";
+    showTip(`<div class="tip-t">${esc(x[i])}</div>${rows}${diff}`,e.clientX,e.clientY);
+  });
+  hit.addEventListener("pointerleave",()=>{cross.style.display="none";hideTip();});
+}
+
+/* 迷你走势线（KPI 磁贴内） */
+function spark(vals,color,w=76,h=22){
+  const mn=Math.min(...vals), mx=Math.max(...vals), r=(mx-mn)||1;
+  const p=vals.map((v,i)=>`${i?"L":"M"}${(i*w/(vals.length-1)).toFixed(1)},${(h-2-((v-mn)/r)*(h-4)).toFixed(1)}`).join(" ");
+  const lx=w, ly=(h-2-((vals.at(-1)-mn)/r)*(h-4)).toFixed(1);
+  return `<svg width="${w}" height="${h}" aria-hidden="true" style="overflow:visible">
+    <path d="${p}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" opacity=".75"/>
+    <circle cx="${lx}" cy="${ly}" r="2.6" fill="${color}"/></svg>`;
+}
+
+/* 横向条：基线锚定，只有数据端 4px 圆角 */
+function hbars(box, rows, {max, fmt=n1, unit="", h=12, gap=11, band=null}={}){
+  const M = max || Math.max(...rows.map(r=>Math.abs(r.v)))*1.05 || 1;
+  box.innerHTML = rows.map(r=>{
+    const w = clamp(Math.abs(r.v)/M*100, 2, 100);
+    return `<div class="hb" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(96px,158px) 1fr auto;gap:14px;align-items:center;margin-bottom:${gap}px;cursor:default">
+      <div style="font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
+      <div class="bartrack" style="height:${h}px"><div class="barfill" style="width:${w}%;background:${r.color||"var(--accent)"};height:100%;position:relative"></div>${r.marker!=null?`<div style="position:absolute;left:${clamp(r.marker/M*100,0,100)}%;top:0;bottom:0;width:1.5px;background:var(--ink);opacity:.45"></div>`:""}${band?band.map(t=>`<div style="position:absolute;left:${clamp(t/M*100,0,100)}%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>`).join(""):""}</div>
+      <div class="tnum" style="font-size:12.5px;min-width:58px;font-weight:600;color:${r.vColor||"var(--ink)"}">${fmt(r.v)}${unit}</div>
+    </div>`;
+  }).join("");
+  box.querySelectorAll(".hb").forEach(el=>{
+    const t=el.dataset.tip; if(!t) return;
+    el.addEventListener("pointermove",e=>showTip(t,e.clientX,e.clientY));
+    el.addEventListener("pointerleave",hideTip);
+  });
+}
+
+/* 堆叠条：段间留 2px 表面缝隙 */
+function stacked(box, segs, {h=26, fmt=v=>wan(v)+" 万"}={}){
+  if(!segs.length){ box.innerHTML=`<div class="empty" style="padding:16px">暂无数据</div>`; return; }
+  const tot=sum(segs,s=>s.v)||1;
+  /* 未指定颜色时按占比排名分配单色序列：深浅必须与量级一致 */
+  const rank=[...segs].sort((a,b)=>b.v-a.v).map(x=>x.n);
+  segs=segs.map(x=>({...x, c: x.c || `var(--s${Math.min(rank.indexOf(x.n)+1,5)})`}));
+  box.innerHTML=`<div style="display:flex;height:${h}px;gap:2px;border-radius:6px;overflow:hidden">${
+    segs.map(s=>`<div class="sg" data-n="${esc(s.n)}" data-v="${fmt(s.v)}" data-p="${pct(s.v/tot)}"
+      style="width:${(s.v/tot*100).toFixed(2)}%;background:${s.c};min-width:2px"></div>`).join("")}</div>
+    <div class="legend" style="margin-top:14px;gap:20px">${segs.map(s=>
+      `<span><i style="background:${s.c};height:8px;width:8px;border-radius:2px"></i>${esc(s.n)} <b style="font-weight:600;font-variant-numeric:tabular-nums;margin-left:2px">${fmt(s.v)}</b> <span class="t-mut" style="font-variant-numeric:tabular-nums">${pct(s.v/tot)}</span></span>`).join("")}</div>`;
+  box.querySelectorAll(".sg").forEach(el=>{
+    el.addEventListener("pointermove",e=>showTip(
+      `<div class="tip-t">${esc(el.dataset.n)}</div><div class="tip-r"><span>金额</span><b>${el.dataset.v}</b></div><div class="tip-r"><span>占比</span><b>${el.dataset.p}</b></div>`,e.clientX,e.clientY));
+    el.addEventListener("pointerleave",hideTip);
+  });
+}
+
+/* 双向条：零轴居中，正负两色 + 中性零点（极性编码） */
+function diverging(box, rows, {fmt=v=>(v>0?"+":"")+n1(v), unit="万"}={}){
+  const M=Math.max(...rows.map(r=>Math.abs(r.v)))*1.08||1;
+  box.innerHTML = rows.map(r=>{
+    const w=Math.abs(r.v)/M*50, pos=r.v>=0;
+    return `<div class="dv" data-tip="${esc(r.tip||"")}" style="display:grid;grid-template-columns:minmax(102px,180px) 1fr 74px;gap:14px;align-items:center;margin-bottom:10px">
+      <div style="font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.label)}">${esc(r.label)}</div>
+      <div style="position:relative;height:11px;background:var(--surface-2);border-radius:99px">
+        <div style="position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--line-2)"></div>
+        <div style="position:absolute;top:0;bottom:0;${pos?`left:50%;border-radius:0 99px 99px 0`:`right:50%;border-radius:99px 0 0 99px`};width:${w}%;background:${pos?"var(--ink-2)":"var(--crit)"}"></div>
+      </div>
+      <div class="tnum" style="font-size:12.5px;color:${pos?"var(--ink)":"var(--crit)"};font-weight:600">${fmt(r.v)}${unit}</div>
+    </div>`;
+  }).join("");
+  box.querySelectorAll(".dv").forEach(el=>{
+    const t=el.dataset.tip; if(!t) return;
+    el.addEventListener("pointermove",e=>showTip(t,e.clientX,e.clientY));
+    el.addEventListener("pointerleave",hideTip);
+  });
+}
+</script>

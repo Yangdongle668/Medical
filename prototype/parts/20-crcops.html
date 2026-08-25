@@ -1,0 +1,158 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   药品与样本 · 受试者补偿
+   这两块是 CRC 每周实际花时间最多、也是稽查最爱查的地方，
+   此前整套系统只在质控检查项里放了两行文本。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 试验用药品数量平衡 + 生物样本链 ── */
+VIEWS.material = box=>{
+  const mine = PERSONA().k==="crc" ? staff(PERSONA().n).sites : [...scopeIds()];
+  const ip = IP.filter(r=>mine.includes(r.ss));
+  const sp = SPEC.filter(r=>mine.includes(r.ss));
+  const bad = ip.filter(r=>ipM(r).diff!==0);
+  const expSoon = ip.filter(r=>ipM(r).expLeft<60);
+  const spBad = sp.filter(r=>r.st!=="已回执");
+
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:12px">
+    ${[["数量不平衡",bad.length,"批",bad.length?"var(--crit)":"var(--ink)"],
+       ["效期 60 天内",expSoon.length,"批",expSoon.length?"var(--warn)":"var(--ink)"],
+       ["温度越限",sum(ip,r=>r.exc),"次",sum(ip,r=>r.exc)?"var(--warn)":"var(--ink)"],
+       ["样本链未闭环",spBad.length,"份",spBad.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>试验用药品数量平衡</h3><span class="sp"></span>
+      <span class="sub">接收 − 发放 = 账面库存；实盘对不上就是严重发现</span></div>
+    <div class="tw"><table style="min-width:880px">
+      <thead><tr><th>中心 / 批号</th><th class="ta-r">接收</th><th class="ta-r">发放</th>
+        <th class="ta-r">账面库存</th><th class="ta-r">实盘</th><th class="ta-r">差异</th>
+        <th class="ta-r">回收</th><th class="ta-r">已销毁</th><th>效期</th><th>温控</th><th></th></tr></thead>
+      <tbody>${ip.map((r,k)=>{const m=ipM(r);
+        return `<tr>
+          <td><div class="t-main">${esc(site(r.ss).hosp)}</div><div class="t-sub">批号 ${esc(r.batch)}</div></td>
+          <td class="tnum">${r.recv}</td><td class="tnum">${r.disp}</td>
+          <td class="tnum">${m.book}</td><td class="tnum">${r.count}</td>
+          <td class="tnum" style="font-weight:700;color:${m.diff===0?"var(--good)":"var(--crit)"}">${m.diff>0?"+":""}${m.diff}</td>
+          <td class="tnum">${r.ret}</td><td class="tnum">${r.dest}</td>
+          <td><span class="pill ${m.expLeft<60?"p-crit":m.expLeft<120?"p-warn":"p-neut"}">${esc(r.exp)}</span>
+            <div class="t-sub">剩 ${m.expLeft} 天</div></td>
+          <td>${r.exc?`<span class="pill p-warn">越限 ${r.exc} 次</span>`:`<span class="pill p-good">正常</span>`}</td>
+          <td class="ta-r">${m.diff!==0?`<button class="btn" data-ipfix="${k}">上报差异</button>`
+            :r.ret>r.dest?`<button class="btn" data-ipdest="${k}">登记销毁</button>`:""}</td>
+        </tr>`;}).join("")||`<tr><td colspan="11"><div class="empty">范围内暂无药品记录</div></td></tr>`}</tbody>
+    </table></div>
+  </div>
+  ${bad.length?`<div class="card" style="margin-bottom:12px;border-left:2px solid var(--crit)">
+    <div class="card-b">
+      <b style="font-size:13px;color:var(--crit)">数量不平衡是稽查与核查的必查项</b>
+      <div class="note" style="margin-top:5px;line-height:1.7;color:var(--ink-2)">
+        ${bad.map(r=>`${esc(site(r.ss).hosp)} 批号 ${esc(r.batch)}：账面 ${ipM(r).book} 盒，实盘 ${r.count} 盒，差 ${ipM(r).diff} 盒。`).join("<br>")}<br>
+        药品去向无法解释，等同于无法证明受试者用的是试验药 —— 严重时该中心的疗效数据会被整体剔除。
+        必须当天查清并书面上报申办方，不能等下次监查。</div>
+    </div></div>`:""}
+
+  <div class="card">
+    <div class="card-h"><h3>生物样本链</h3><span class="sp"></span>
+      <span class="sub">采集 → 离心 → 暂存 → 转运 → 回执，断一环即失效</span></div>
+    <div class="tw"><table style="min-width:820px">
+      <thead><tr><th>中心</th><th>受试者</th><th>样本</th><th>采集</th><th>离心</th><th>暂存</th><th>转运</th><th>回执</th><th>状态</th></tr></thead>
+      <tbody>${sp.map(r=>{
+        const bad = r.st!=="已回执";
+        return `<tr><td style="font-size:12px">${esc(site(r.ss).hosp)}</td>
+          <td><span class="subjid">${esc(r.subj)}</span></td>
+          <td class="t-sub">${esc(r.type)}</td>
+          <td class="mono" style="font-size:11px">${esc(r.coll)}</td>
+          <td class="mono" style="font-size:11px;${r.spin==="—"?"color:var(--crit)":""}">${esc(r.spin)}</td>
+          <td class="t-sub">${esc(r.store)}</td>
+          <td class="mono" style="font-size:11px">${esc(r.ship)}</td>
+          <td class="mono" style="font-size:11px">${esc(r.ack)}</td>
+          <td><span class="pill ${bad?(r.st==="待转运"?"p-warn":"p-crit"):"p-good"}">${esc(r.st)}</span></td></tr>`;}).join("")
+        ||`<tr><td colspan="9"><div class="empty">范围内暂无样本记录</div></td></tr>`}</tbody>
+    </table></div>
+    <div class="card-b">
+      <div class="note" style="line-height:1.7">
+        「离心超时」与「回执逾期」是两类最常见也最容易被忽略的样本问题：前者让样本本身失效，
+        后者意味着<b>样本可能根本没到中心实验室</b>，而中心还在按计划采下一次。
+        这两项都不会自己报警 —— 除非系统盯着时间戳。</div>
+    </div>
+  </div>`;
+
+  box.addEventListener("click",e=>{
+    const f=e.target.closest("[data-ipfix]");
+    if(f){ const r=ip[+f.dataset.ipfix], m=ipM(r);
+      ISSUES.unshift({id:"QI-2026-0"+(190+ISSUES.length), src:"中心自查", ss:r.ss, sev:"严重",
+        type:"药品数量不平衡", found:TODAY,
+        desc:`批号 ${r.batch}：账面库存 ${m.book} 盒，实盘 ${r.count} 盒，差异 ${m.diff} 盒，去向待查清。`,
+        capa:"（待提交整改措施）", own:site(r.ss).crc[0],
+        due:new Date(Date.now()+5*864e5).toISOString().slice(0,10), st:"待整改", sla:null});
+      toast(`已上报药品数量差异并生成严重质量事件，同步通知 CRA 与申办方`,"crit"); render(); return; }
+    const d=e.target.closest("[data-ipdest]");
+    if(d){ const r=ip[+d.dataset.ipdest]; r.dest=r.ret;
+      toast(`${site(r.ss).hosp} 批号 ${r.batch}：${r.ret} 盒回收药品已登记销毁`); render(); }
+  });
+};
+
+/* ── 受试者补偿：CRC 每周的固定动作，也是财务合规重点 ── */
+VIEWS.pay = box=>{
+  const mine = PERSONA().k==="crc" ? staff(PERSONA().n).sites : [...scopeIds()];
+  const list = PAY.filter(p=>mine.includes(p.ss));
+  const pend = list.filter(p=>p.st!=="已发放");
+  const cash = list.filter(p=>p.way==="现金");
+  const noRc = list.filter(p=>!p.rc);
+  const tot  = sum(list,p=>p.traffic+p.meal);
+
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:12px">
+    ${[["累计补偿",n0(tot),"元","var(--ink)"],
+       ["待发放 / 待签收",pend.length,"笔",pend.length?"var(--warn)":"var(--ink)"],
+       ["无签收凭证",noRc.length,"笔",noRc.length?"var(--crit)":"var(--ink)"],
+       ["现金发放",cash.length,"笔",cash.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>补偿发放台账</h3><span class="sp"></span>
+      <span class="sub">发放记录必须与访视记录一一对应</span></div>
+    <div class="tw"><table style="min-width:820px">
+      <thead><tr><th>受试者</th><th>中心</th><th>对应访视</th><th class="ta-r">交通费</th><th class="ta-r">营养费</th>
+        <th class="ta-r">合计</th><th>发放日</th><th>方式</th><th>签收</th><th>状态</th><th></th></tr></thead>
+      <tbody>${list.map((p,k)=>`<tr>
+        <td><span class="subjid">${esc(p.subj)}</span></td>
+        <td style="font-size:12px">${esc(site(p.ss).hosp)}</td>
+        <td class="t-sub">${esc(p.visit)}</td>
+        <td class="tnum">${p.traffic}</td><td class="tnum">${p.meal}</td>
+        <td class="tnum" style="font-weight:600">${p.traffic+p.meal}</td>
+        <td class="mono" style="font-size:11.5px">${esc(p.d)}</td>
+        <td><span class="pill ${p.way==="现金"?"p-warn":"p-neut"}">${esc(p.way)}</span></td>
+        <td>${p.rc?`<span class="pill p-good">已签收</span>`:`<span class="pill p-crit">缺凭证</span>`}</td>
+        <td><span class="pill ${p.st==="已发放"?"p-good":"p-warn"}">${esc(p.st)}</span></td>
+        <td class="ta-r">${p.st!=="已发放"?`<button class="btn" data-payok="${k}">登记发放并签收</button>`:""}</td>
+      </tr>`).join("")||`<tr><td colspan="11"><div class="empty">范围内暂无补偿记录</div></td></tr>`}</tbody>
+    </table></div>
+  </div>
+  <div class="card"><div class="card-b">
+    <div class="section-t">为什么这一页必须存在</div>
+    <div class="note" style="line-height:1.8">
+      受试者补偿是 CRC 每周固定要花时间的事，也是<b>稽查与核查必查项</b>，查三件：<br>
+      ① <b>发放记录与访视记录是否一一对应</b> —— 有访视无发放，或有发放无访视，都要解释；<br>
+      ② <b>是否有受试者签收凭证</b> —— 缺凭证等同于无法证明补偿真实发放；<br>
+      ③ <b>现金发放是否合规</b> —— 现金无流水，是财务与伦理双重风险，能转账就不该给现金。<br>
+      此前整套系统里这块是空白，而它每周消耗的 CRC 工时并不比数据录入少 ——
+      <b>系统不管的工作不会消失，只会变成没人记录的加班。</b></div>
+  </div></div>`;
+
+  box.addEventListener("click",e=>{
+    const b=e.target.closest("[data-payok]"); if(!b) return;
+    const p=list[+b.dataset.payok];
+    p.st="已发放"; p.rc=true; if(p.d==="—") p.d=TODAY;
+    toast(`${p.subj} ${p.visit} 补偿 ${p.traffic+p.meal} 元已发放并取得签收凭证`); render();
+  });
+};
+</script>

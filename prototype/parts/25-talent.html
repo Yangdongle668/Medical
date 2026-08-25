@@ -1,0 +1,144 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   人才梯队 —— 卖的是人天，人走了产品就没了。
+   系统此前看得到"利用率 96%"，看不到"这个人连续三个月 96%，快撑不住了"。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.people = box=>{
+  const rows = STAFF.map(s=>({s, t:talentM(s), g:groupOf(s.n)}))
+    .sort((a,b)=>b.t.risk-a.t.risk);
+  const high = rows.filter(r=>r.t.risk>=60), mid = rows.filter(r=>r.t.risk>=35&&r.t.risk<60);
+  const noSucc = rows.filter(r=>!r.t.succ && r.s.sites.length>=3);
+  const gcpSoon = STAFF.filter(s=>days(TODAY,s.gcp)<180);
+  const exposure = sum(high, r=>r.t.hoCost);
+  const junior = rows.filter(r=>r.t.tenure!==null && r.t.tenure<1.5);
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["高流失风险",high.length,"人",high.length?"var(--crit)":"var(--ink)","风险分 ≥ 60"],
+       ["关键岗位无继任",noSucc.length,"人",noSucc.length?"var(--crit)":"var(--ink)","带 3 个以上中心且无备份"],
+       ["高风险人员交接成本",wan(exposure),"万",exposure?"var(--warn)":"var(--ink)","一旦离职的直接损失"],
+       ["GCP 证书 180 天内到期",gcpSoon.length,"人",gcpSoon.length?"var(--warn)":"var(--ink)","过期即不得开展工作"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${high.length?`<div class="card alert alert-crit" style="margin-bottom:24px">
+    <div class="card-h"><h3>该谈话的人</h3><span class="sp"></span>
+      <span class="sub">风险分不是算命，是把已经写在系统里的信号加起来</span></div>
+    <div class="card-b" style="padding:0">
+      ${high.map(r=>`<div style="padding:12px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px">
+          <span class="avatar" style="width:22px;height:22px;font-size:11px">${esc(r.s.n.slice(0,1))}</span>
+          <b style="font-size:13px">${esc(r.s.n)}</b>
+          <span class="pill p-neut">${esc(r.s.role)} · ${esc(r.s.lvl)}</span>
+          ${r.g?`<span class="t-sub">${esc(r.g.name)}</span>`:""}
+          <span class="sp"></span>
+          <span class="pill p-crit">风险 ${r.t.risk}</span></div>
+        <div class="note" style="margin-top:5px;line-height:1.8">
+          ${r.t.why.map(w=>`· ${esc(w)}`).join("<br>")}
+          <br><b>一旦离职</b>：${r.s.sites.length} 个中心需交接，约 ${n1(r.t.hoDays)} 人天、${wan(r.t.hoCost)} 万，
+          ${r.t.succ?`继任者 ${esc(r.t.succ)}`:`<span style="color:var(--crit)">且无指定继任者</span>`}。</div>
+        <div class="row" style="margin-top:7px">
+          <button class="btn" data-tsucc="${esc(r.s.n)}">指定继任者</button>
+          <button class="btn" data-nav="staff">调整派工</button></div>
+      </div>`).join("")}
+    </div></div>`:""}
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>司龄分布</h3><span class="sub">1.5 年内是流失高发期</span></div>
+      <div class="card-b"><div id="c-ten"></div>
+        <div class="note" style="margin-top:12px">
+          ${junior.length} 人司龄不足 1.5 年（占 ${pct(junior.length/rows.length)}）。
+          新人多不是问题，<b>新人多且带教断档才是</b> —— 看下面这张表的"带教"列。</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>负载与风险</h3><span class="sub">条形为利用率，数字为风险分</span></div>
+      <div class="card-b"><div id="c-risk"></div>
+        <div class="note" style="margin-top:12px">
+          刻度线在 60% 与 88%。<b>两端都危险</b>：长期 90%+ 会走，长期 50% 以下会觉得自己没价值，也会走。</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>人员台账</h3><span class="sp"></span>
+      <span class="sub">按流失风险排序</span></div>
+    <div class="tw"><table style="min-width:1060px">
+      <thead><tr><th>姓名</th><th>角色</th><th>分组</th><th class="ta-r">司龄</th>
+        <th class="ta-r">利用率</th><th class="ta-r">带中心</th><th>带教</th><th>继任者</th>
+        <th>GCP 到期</th><th class="ta-r">交接成本</th><th class="ta-r">风险</th></tr></thead>
+      <tbody>${rows.map(r=>{
+        const gcpD = days(TODAY, r.s.gcp), us = utilState(r.s.util);
+        return `<tr>
+          <td><div class="t-main">${esc(r.s.n)}</div><div class="t-sub">${esc(r.s.lvl)} · ${esc(r.s.city)}</div></td>
+          <td class="t-sub">${esc(r.s.role)}</td>
+          <td class="t-sub">${r.g?esc(r.g.name):"—"}</td>
+          <td class="tnum">${r.t.tenure===null?"—":n1(r.t.tenure)+" 年"}</td>
+          <td class="tnum" style="color:${us.k==="good"?"var(--ink)":us.c}">${r.s.util}%</td>
+          <td class="tnum">${r.s.sites.length}</td>
+          <td class="t-sub">${esc(r.t.mentor||"—")}</td>
+          <td>${r.t.succ?`<span class="pill p-good">${esc(r.t.succ)}</span>`
+            :r.s.sites.length>=3?`<span class="pill p-crit">无</span>`:`<span class="t-sub">—</span>`}</td>
+          <td class="mono" style="font-size:11.5px;color:${gcpD<180?"var(--warn)":"var(--ink-2)"}">${esc(r.s.gcp)}</td>
+          <td class="tnum">${fmask("staff", wan(r.t.hoCost))}</td>
+          <td class="tnum" style="font-weight:700;color:${r.t.risk>=60?"var(--crit)":r.t.risk>=35?"var(--warn)":"var(--ink)"}">${r.t.risk}</td>
+        </tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">流失风险分 = 利用率信号 + 无继任者且负载重 + 司龄不足 + 已表达的诉求
+利用率 ≥92% 记 40 分｜≥85% 记 20 分｜≤50% 记 15 分
+带 3 个以上中心且无继任者 记 25 分｜司龄 &lt;1.2 年 记 15 分｜已明确表达诉求 记 20 分
+
+交接成本 = 带中心数 × ${HO_COST_DAY} 人天 × 角色人天成本
+
+<b>这些信号本来就全在系统里</b>：利用率在派工模块、司龄在账号表、"连续三周加班"写在 PM 的审批提示里、
+"两次提出中心过多"是 CRC 说过的话。此前它们散落在四个地方，谁也没把它们加起来。
+
+一个带 3 个中心的资深 CRC 离职，损失不是招聘成本 ——
+是 3 个中心的关系重建、在组受试者的依从性断层、和客户对我们稳定性的信任。</div>`;
+
+  const tenBuckets = [["<1 年",0,1],["1–2 年",1,2],["2–4 年",2,4],["≥4 年",4,99]]
+    .map(([n,a,b])=>({n, v:rows.filter(r=>r.t.tenure!==null&&r.t.tenure>=a&&r.t.tenure<b).length}))
+    .filter(x=>x.v);
+  stacked($("#c-ten"), tenBuckets, {fmt:v=>v+" 人"});
+  hbars($("#c-risk"), rows.slice(0,10).map(r=>({label:r.s.n, v:r.s.util,
+    color:"var(--ink-2)",
+    vColor: r.t.risk>=60?"var(--crit)":r.t.risk>=35?"var(--warn)":"var(--ink)",
+    tip:`<div class="tip-t">${esc(r.s.n)}</div>
+      <div class="tip-r"><span>利用率</span><b>${r.s.util}%</b></div>
+      <div class="tip-r"><span>带中心</span><b>${r.s.sites.length} 个</b></div>
+      <div class="tip-r"><span>风险分</span><b>${r.t.risk}</b></div>`})),
+    {max:100, fmt:v=>String(v), unit:"%", band:[60,88]});
+
+  box.addEventListener("click",e=>{
+    const b = e.target.closest("[data-tsucc]"); if(!b) return;
+    const n = b.dataset.tsucc, s = staff(n);
+    const peers = STAFF.filter(x=>x.role===s.role && x.n!==n).sort((a,b2)=>a.util-b2.util);
+    openLayer($("#modal"),`
+      <div class="drawer-h"><h3 style="flex:1;font-size:15px">为 ${esc(n)} 指定继任者</h3>
+        <button class="x" data-close aria-label="关闭">✕</button></div>
+      <div style="padding:16px 18px 18px">
+        <div class="note" style="margin-bottom:11px">${esc(n)} 目前带 ${s.sites.length} 个中心：
+          ${s.sites.map(x=>esc(site(x).hosp)).join("、")}</div>
+        <div class="field"><div class="slider-h"><label for="tc-p">继任者（按当前负载从低到高）</label></div>
+          <select class="sel" id="tc-p" style="width:100%">${peers.map(x=>
+            `<option value="${esc(x.n)}">${esc(x.n)}（${x.lvl}，利用率 ${x.util}%，带 ${x.sites.length} 个中心）</option>`).join("")}</select></div>
+        <div style="border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+          指定继任者不是走形式：继任者需要<b>提前跟一次现场</b>，才可能真的接得住。
+          否则交接清单上那句"在组受试者逐例交底"就只是一行字。</div>
+        <div class="row" style="justify-content:flex-end">
+          <button class="btn" data-close>取消</button>
+          <button class="btn btn-p" id="tc-go">确认</button></div>
+      </div>`);
+    $("#tc-go").addEventListener("click",()=>{
+      const to = $("#tc-p").value;
+      TALENT[n] = {...(TALENT[n]||{}), succ:to};
+      logAct("指定继任者", n, TALENT[n].succ||"无", to);
+      closeLayer();
+      toast(`已为 ${n} 指定继任者 ${to}，流失风险分下调`);
+      setTimeout(render,220);
+    });
+  });
+};
+</script>

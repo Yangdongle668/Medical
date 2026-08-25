@@ -1,0 +1,142 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   组织 · 账号 · 权限 · 审计轨迹
+   —— 把架构文档 §4「行 × 列 × 动作」三维权限落成可操作的对象。
+   权限不是"能不能看到这个菜单"，而是三件事同时成立：
+     行：你能看到哪些中心的数据（scope）
+     列：同一行里哪些字段对你可见（成本、毛利、报价、受试者标识）
+     动作：你能对它做什么（审批、关闭、发起、改权限）
+   外部角色（机构办 / 研究者）默认拒绝，字段靠白名单加回。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 角色定义：可被老板在「组织与权限」里改，改完立即生效 ────────── */
+const ROW_RULE = {
+  all:      "全部中心",
+  team:     "本组承接的项目",
+  assigned: "被指派的中心",
+  hospital: "本院承接的项目",
+  pi:       "本人担任研究者的中心",
+  none:     "无"
+};
+/* 敏感字段：默认对外部角色全部关闭，靠白名单加回 */
+const FIELDS = {
+  cost:   "成本与人天",
+  margin: "毛利与利润率",
+  price:  "报价与合同金额",
+  subj:   "受试者筛选号",
+  staff:  "员工薪资口径"
+};
+const ACTS = {
+  approve:  "审批工时 / 差旅 / 偏离",
+  closeQA:  "关闭质量事件",
+  raiseQ:   "发起数据质疑",
+  advance:  "推进中心阶段",
+  manage:   "管理人员与权限",
+  bid:      "维护报价与投标",
+  ethics:   "递交伦理事务"
+};
+
+let ROLE_DEF = {
+  boss: {t:"经营层", ext:false, rows:"all",
+    mods:["dash","intake","sites","enr","screen","client","cash","bid","change","staff","people","time","pnl","bill","qa","mon","price","org","trail"],
+    fields:{cost:1,margin:1,price:1,subj:0,staff:1}, acts:{approve:1,closeQA:0,raiseQ:0,advance:1,manage:1,bid:1,ethics:0}},
+  pm:   {t:"项目总监 PM", ext:false, rows:"team",
+    mods:["pm","team","approve","intake","feas","sites","enr","screen","mon","change","qa","pnl","trail"],
+    fields:{cost:1,margin:1,price:1,subj:1,staff:0}, acts:{approve:1,closeQA:0,raiseQ:1,advance:1,manage:0,bid:1,ethics:1}},
+  cra:  {t:"临床监查员 CRA", ext:false, rows:"assigned",
+    mods:["cra","mysites","mon","query","screen","feas","material","time","qa","capa","trail"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:0,raiseQ:1,advance:0,manage:0,bid:0,ethics:0}},
+  crc:  {t:"临床协调员 CRC", ext:false, rows:"assigned",
+    mods:["crc","mysite","startup","sched","subj","prescreen","ethics","query","capa","isf","material","pay","handover","time"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:0,raiseQ:0,advance:0,manage:0,bid:0,ethics:1}},
+  dm:   {t:"数据管理 DM", ext:false, rows:"all",
+    mods:["dm","query","screen","trail"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:0,raiseQ:1,advance:0,manage:0,bid:0,ethics:0}},
+  qa:   {t:"质量保证 QA", ext:false, rows:"all",
+    mods:["audit","qa","screen","mon","trail"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:1,raiseQ:1,advance:0,manage:0,bid:0,ethics:0}},
+  inst: {t:"机构办（外部）", ext:true, rows:"hospital",
+    mods:["inst","instac","instqc","instreg"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:1,raiseQ:0,advance:0,manage:0,bid:0,ethics:0}},
+  pi:   {t:"研究者 PI（外部）", ext:true, rows:"pi",
+    mods:["pi","qa"],
+    fields:{cost:0,margin:0,price:0,subj:1,staff:0}, acts:{approve:0,closeQA:0,raiseQ:0,advance:0,manage:0,bid:0,ethics:0}}
+};
+
+/* ── 分组：老板可增删改，组决定 PM 的行范围 ──────────────────────── */
+let GROUPS = [
+  {id:"G-01", name:"华东华南组", lead:"韩雪",
+   members:["林敏","赵坤","何雨薇","吴桐","沈亦琳","郭晓萱","冯乐"],
+   studies:["HJ-2024-017","HJ-2025-003"]},
+  {id:"G-02", name:"华北西南组", lead:"岑迪",
+   members:["段志远","徐倩","唐延","廖梦然","邱志安"],
+   studies:["HJ-2025-011","HJ-2026-004"]},
+  {id:"G-00", name:"职能与质量", lead:"凌远",
+   members:["卫兰","苗青"], studies:[]}
+];
+const groupOf = n => GROUPS.find(g=>g.members.includes(n)||g.lead===n) || null;
+
+/* ── 账号：一个人一个账号，账号绑定角色与分组 ──────────────────────
+   演示原型：密码统一为 demo，不做任何网络请求，不存任何真实凭据。 */
+let USERS = [
+  {u:"lingyuan",  n:"凌远",   role:"boss", st:"在职", joined:"2019-04-01", last:"2026-08-22 08:12"},
+  {u:"hanxue",    n:"韩雪",   role:"pm",   st:"在职", joined:"2021-06-15", last:"2026-08-22 07:50"},
+  {u:"cendi",     n:"岑迪",   role:"pm",   st:"在职", joined:"2022-03-07", last:"2026-08-21 18:30"},
+  {u:"linmin",    n:"林敏",   role:"cra",  st:"在职", joined:"2022-09-05", last:"2026-08-22 07:31"},
+  {u:"zhaokun",   n:"赵坤",   role:"cra",  st:"在职", joined:"2023-02-13", last:"2026-08-21 21:04"},
+  {u:"heyuwei",   n:"何雨薇", role:"cra",  st:"在职", joined:"2023-07-24", last:"2026-08-22 09:02"},
+  {u:"duanzhiyu", n:"段志远", role:"cra",  st:"在职", joined:"2025-03-10", last:"2026-08-20 17:45"},
+  {u:"xuqian",    n:"徐倩",   role:"cra",  st:"在职", joined:"2023-05-08", last:"2026-08-22 08:40"},
+  {u:"wutong",    n:"吴桐",   role:"crc",  st:"在职", joined:"2021-11-02", last:"2026-08-22 07:15"},
+  {u:"shenyilin", n:"沈亦琳", role:"crc",  st:"在职", joined:"2023-04-17", last:"2026-08-21 19:22"},
+  {u:"guoxiaoxu", n:"郭晓萱", role:"crc",  st:"在职", joined:"2023-08-21", last:"2026-08-21 16:08"},
+  {u:"tangyan",   n:"唐延",   role:"crc",  st:"在职", joined:"2025-06-09", last:"2026-08-22 08:55"},
+  {u:"liaomeng",  n:"廖梦然", role:"crc",  st:"在职", joined:"2021-03-15", last:"2026-08-22 07:02"},
+  {u:"qiuzhian",  n:"邱志安", role:"crc",  st:"在职", joined:"2023-01-30", last:"2026-08-21 20:11"},
+  {u:"fengle",    n:"冯乐",   role:"crc",  st:"在职", joined:"2023-09-11", last:"2026-08-22 08:20"},
+  {u:"weilan",    n:"卫兰",   role:"qa",   st:"在职", joined:"2022-01-10", last:"2026-08-21 14:36"},
+  {u:"miaoqing",  n:"苗青",   role:"dm",   st:"在职", joined:"2024-02-19", last:"2026-08-22 09:10"},
+  {u:"zhanghm",   n:"张慧敏", role:"inst", st:"在职", joined:"—", last:"2026-08-21 15:44", hosp:"北京协和医院", ext:true},
+  {u:"chenguod",  n:"陈国栋", role:"pi",   st:"在职", joined:"—", last:"2026-08-20 11:26", ext:true},
+  {u:"zhouqi",    n:"周琦",   role:"crc",  st:"已停用", joined:"2022-05-06", last:"2026-06-30 17:50",
+   off:"2026-07-15", offWhy:"离职 —— 转甲方 CRA"}
+];
+const userOf = n => USERS.find(x=>x.n===n);
+const uSeq = {v:1};
+
+/* ── 会话 ──────────────────────────────────────────────────────────── */
+const SESSION = {u:null, at:null};
+const ME = ()=> SESSION.u ? USERS.find(x=>x.u===SESSION.u) : null;
+const RD = ()=>{ const m=ME(); return m? ROLE_DEF[m.role] : null; };
+
+/* 三维权限判定 */
+const canMod   = v =>{ const r=RD(); return !!r && r.mods.includes(v); };
+const canField = f =>{ const r=RD(); return !!r && !!r.fields[f]; };
+const canAct   = a =>{ const r=RD(); return !!r && !!r.acts[a]; };
+/* 字段级遮罩：无权限时返回遮罩串，而不是 null —— 让"看不到"这件事本身可见 */
+const fmask = (f,v)=> canField(f) ? v : "—";
+
+/* ── 审计轨迹：任何写操作都必须留痕，否则核查时无法自证 ──────────── */
+let TRAIL = [
+  {t:"2026-08-22 07:15", who:"吴桐", role:"crc", act:"登录", tgt:"—", before:"—", after:"—", ss:"—"},
+  {t:"2026-08-21 16:40", who:"廖梦然", role:"crc", act:"修改访视目标日", tgt:"S-0412",
+   before:"2026-08-18", after:"2026-08-25", ss:"SS-09", why:"受试者出差改期"},
+  {t:"2026-08-21 11:05", who:"林敏", role:"cra", act:"关闭监查跟进项", tgt:"IMV 2026-08-19 / SS-01",
+   before:"未关闭", after:"已关闭", ss:"SS-01"},
+  {t:"2026-08-20 09:33", who:"凌远", role:"boss", act:"调整角色权限", tgt:"cra.fields.price",
+   before:"可见", after:"不可见", ss:"—", why:"报价属商务口径，一线不参与议价"},
+  {t:"2026-08-19 15:12", who:"张慧敏", role:"inst", act:"出具质控意见", tgt:"QC-2026-014",
+   before:"—", after:"已派发整改", ss:"SS-01"},
+  {t:"2026-07-15 10:00", who:"凌远", role:"boss", act:"停用账号", tgt:"zhouqi（周琦）",
+   before:"在职", after:"已停用", ss:"—", why:"离职，中心已交接给吴桐"}
+];
+function logAct(act, tgt, before, after, extra={}){
+  const m = ME();
+  TRAIL.unshift({t:`${TODAY} ${new Date().toTimeString().slice(0,5)}`,
+    who: m? m.n : "系统", role: m? m.role : "—",
+    act, tgt, before:String(before??"—"), after:String(after??"—"),
+    ss: extra.ss || "—", why: extra.why || ""});
+  if(TRAIL.length>400) TRAIL.length=400;
+}
+</script>

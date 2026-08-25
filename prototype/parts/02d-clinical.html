@@ -1,0 +1,179 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   临床作业数据层
+   受试者是有生命周期的对象，不是一次性待办：
+   预筛 → 签署 ICF → 筛选期 → 入组 / 筛败 → 逐次访视 → 出组
+   ════════════════════════════════════════════════════════════════════ */
+
+/* 访视计划表 SOA（Schedule of Assessments）：完成一次访视自动生成下一次 */
+const SOA = {
+  "HJ-2024-017":{cycle:21, win:3, last:12,
+    label:i=> i===0?"筛选期访视" : i>12?"EOT 治疗结束访视" : `C${i}D1 第 ${i} 周期给药`,
+    tasks:i=> i===0
+      ? ["知情同意签署（核对现行版本 V3.0）","入排标准逐条核对并由 PI 签字","基线增强 CT / MRI 影像","血常规 + 生化 + 凝血 + 肿瘤标志物","既往抗肿瘤治疗史与合并用药采集"]
+      : ["生命体征与体格检查","血常规 + 生化采血（空腹）","ECOG 体能评分记录","研究药物发放与既往剩余回收清点","合并用药与不良事件问询"]},
+  "HJ-2025-003":{cycle:21, win:2, last:16,
+    label:i=> i===0?"筛选期访视" : i%4===0?`C${i}D1 给药 + 肿瘤评估` : `C${i}D1 第 ${i} 周期给药`,
+    tasks:i=> i===0
+      ? ["知情同意签署（核对现行版本 V4.1）","入排标准核对，PD-L1 表达检测结果确认","基线胸腹部 CT 与颅脑 MRI","血常规 + 生化 + 甲功 + 心肌酶"]
+      : ["生命体征与体格检查","采血与样本离心送检（2 小时内）","免疫相关不良事件专项问询","研究药物配制核对与输注陪同"]},
+  "HJ-2025-011":{cycle:84, win:7, last:8,
+    label:i=> i===0?"筛选期访视" : i===8?"末次随访 / 出组" : `M${i*3} 第 ${i*3} 个月随访`,
+    tasks:i=> i===0
+      ? ["知情同意签署","入排标准核对：HbA1c 7.0–10.0%","空腹血糖 + HbA1c + 肝肾功","既往降糖方案与合并用药采集"]
+      : ["HbA1c 采血","血糖日志回收与核对","研究药物计数与依从性计算","低血糖事件专项问询"]},
+  "HJ-2026-004":{cycle:30, win:5, last:12,
+    label:i=> i===0?"筛选期访视" : i===1?"手术 / 器械植入" : `术后第 ${i-1} 个月随访`,
+    tasks:i=> i===0
+      ? ["知情同意签署","入排标准核对：冠脉造影狭窄程度确认","心电图 + 心肌酶 + 肾功"]
+      : ["心电图","支架内血栓与再狭窄事件问询","双联抗血小板用药依从性核对"]},
+  _default:{cycle:28, win:3, last:10,
+    label:i=> i===0?"筛选期访视":`第 ${i} 次访视`,
+    tasks:i=> i===0?["知情同意签署","入排标准核对"]:["生命体征","采血","药物发放"]}
+};
+const soa = ss => SOA[site(ss).sid] || SOA._default;
+const soaLabel = (ss,i) => soa(ss).label(i);
+const soaTasks = (ss,i) => soa(ss).tasks(i).map(t=>[t,0]);
+
+/* ── 受试者 ────────────────────────────────────────────────────────
+   st：预筛 / 筛选中 / 已入组 / 筛败 / 已脱落 / 已出组
+   「已脱落」= 入组后中途退出（撤回知情 / 失访 / AE 终止 / 研究者判断 / 死亡 / 方案违背）。
+   缺这个状态会同时错两件事：受试者永远刷红超窗，且按整例计收入。
+   见 02g-life 的 DROPS 与 03-core 的 dropLost()。
+   只存筛选号与随机号。见 §2.3 数据红线与 §8 关于准标识符的补充约束。 */
+let SUBJ = [
+  {id:"S-0203", ss:"SS-01", st:"已入组", rnd:"R-018", seq:8, due:"2026-08-18", win:3, crc:"吴桐",
+   icf:"2025-02-11", contact:"待联系", edc:"待录入", lastVisit:"2026-07-28", piOk:false,
+   pendPi:{visit:"C7D1 第 7 周期给药", date:"2026-07-28", tasks:["生命体征与体格检查","血常规 + 生化采血（空腹）","ECOG 体能评分记录","研究药物发放与既往剩余回收清点","合并用药与不良事件问询"]},
+   tasks:[["生命体征与体格检查",1],["血常规 + 生化采血（空腹）",1],["ECOG 体能评分记录",1],
+          ["研究药物发放与既往剩余回收清点",0],["合并用药与不良事件问询",0]]},
+  {id:"S-0217", ss:"SS-01", st:"已入组", rnd:"R-024", seq:6, due:"2026-08-21", win:2, crc:"吴桐",
+   icf:"2025-05-06", contact:"已确认", edc:"待录入", lastVisit:"2026-07-31", piOk:false,
+   tasks:[["生命体征与体格检查",1],["血常规 + 生化采血（空腹）",1],["3 级肝功能异常 AE 随访",1],
+          ["研究药物发放与既往剩余回收清点",0],["SAE 上报后续资料补充",0]]},
+  {id:"S-0240", ss:"SS-01", st:"已入组", rnd:"R-026", seq:1, due:"2026-08-24", win:1, crc:"吴桐",
+   icf:"2026-08-10", contact:"已确认", edc:"已录入", lastVisit:"2026-08-10", piOk:false,
+   pendPi:{visit:"筛选期访视", date:"2026-08-10", tasks:["知情同意签署（核对现行版本 V3.0）","入排标准逐条核对并由 PI 签字","基线增强 CT / MRI 影像","血常规 + 生化 + 凝血 + 肿瘤标志物","既往抗肿瘤治疗史与合并用药采集"]},
+   tasks:[["生命体征与体格检查",0],["血常规 + 生化采血（空腹）",0],["ECOG 体能评分记录",0],
+          ["研究药物发放与既往剩余回收清点",0],["合并用药与不良事件问询",0]]},
+  {id:"S-0231", ss:"SS-01", st:"筛选中", rnd:"—", seq:0, due:"2026-08-26", win:3, crc:"吴桐",
+   icf:"2026-08-15", contact:"已改期", edc:"待录入", lastVisit:"2026-08-15", piOk:false,
+   tasks:[["知情同意签署（核对现行版本 V3.0）",1],["入排标准逐条核对并由 PI 签字",0],
+          ["基线增强 CT / MRI 影像",0],["血常规 + 生化 + 凝血 + 肿瘤标志物",0],
+          ["既往抗肿瘤治疗史与合并用药采集",0]]},
+  /* 与 S-0240（北京协和，同为 08-24）构成跨院冲突 —— 超窗多半就是这么来的 */
+  {id:"S-0224", ss:"SS-07", st:"已入组", rnd:"R-009", seq:3, due:"2026-08-24", win:2, crc:"吴桐",
+   icf:"2026-06-02", contact:"待联系", edc:"待录入", lastVisit:"2026-08-02", piOk:false,
+   tasks:[["生命体征与体格检查",1],["采血与样本离心送检（2 小时内）",0],
+          ["免疫相关不良事件专项问询",0],["研究药物配制核对与输注陪同",0]]},
+  {id:"S-0198", ss:"SS-07", st:"已入组", rnd:"R-005", seq:12, due:"2026-08-25", win:3, crc:"吴桐",
+   icf:"2025-08-14", contact:"已确认", edc:"已录入", lastVisit:"2026-08-04", piOk:true,
+   tasks:[["生命体征与体格检查",0],["采血与样本离心送检（2 小时内）",0],
+          ["免疫相关不良事件专项问询",0],["研究药物配制核对与输注陪同",0]]},
+  {id:"S-0189", ss:"SS-07", st:"已入组", rnd:"R-003", seq:16, due:"2026-08-27", win:3, crc:"吴桐",
+   icf:"2025-07-09", contact:"待联系", edc:"待录入", lastVisit:"2026-08-06", piOk:false,
+   tasks:[["生命体征与体格检查",0],["采血与样本离心送检（2 小时内）",0],
+          ["免疫相关不良事件专项问询",0],["研究药物配制核对与输注陪同",0]]},
+  {id:"S-0331", ss:"SS-04", st:"已入组", rnd:"R-006", seq:4, due:"2026-08-10", win:3, crc:"唐延",
+   icf:"2026-01-19", contact:"失联", edc:"待录入", lastVisit:"2026-07-20", piOk:false,
+   tasks:[["生命体征与体格检查",1],["血常规 + 生化采血（空腹）",1],
+          ["方案偏离表 PI 签字",0],["伦理上报",0]]},
+  {id:"S-0412", ss:"SS-09", st:"已入组", rnd:"R-022", seq:2, due:"2026-08-25", win:7, crc:"廖梦然",
+   icf:"2026-02-14", contact:"已确认", edc:"已录入", lastVisit:"2026-05-26", piOk:true,
+   tasks:[["HbA1c 采血",0],["血糖日志回收与核对",0],
+          ["研究药物计数与依从性计算",0],["低血糖事件专项问询",0]]},
+  {id:"S-0455", ss:"SS-12", st:"已入组", rnd:"R-031", seq:2, due:"2026-08-23", win:5, crc:"廖梦然",
+   icf:"2026-06-18", contact:"已确认", edc:"待录入", lastVisit:"2026-07-24", piOk:false,
+   tasks:[["心电图",1],["支架内血栓与再狭窄事件问询",0],["双联抗血小板用药依从性核对",0]]}
+];
+let subjSeq = 500;
+
+function winState(s){
+  const last = new Date(new Date(s.due).getTime() + s.win*864e5).toISOString().slice(0,10);
+  const first= new Date(new Date(s.due).getTime() - s.win*864e5).toISOString().slice(0,10);
+  const rem  = days(TODAY, last);
+  if(rem < 0)  return {k:"crit", t:"已超窗", rem, first, last, dev:true};
+  if(rem <= 1) return {k:"crit", t:"今明到期", rem, first, last};
+  if(rem <= 3) return {k:"warn", t:"窗口临期", rem, first, last};
+  return {k:"good", t:"窗口内", rem, first, last};
+}
+const subjDone = s=>s.tasks.filter(t=>t[1]).length;
+/* EDC 录入滞后：访视完成后 5 个工作日内录入才算及时 */
+const edcLag  = s=> s.edc==="已录入" ? 0 : days(s.lastVisit, TODAY);
+const edcLate = s=> s.edc!=="已录入" && edcLag(s) > 5;
+
+/* ── 筛选漏斗：入组数只是漏斗最后一格 ──────────────────────────────
+   pre 预筛 → icf 签署知情（= 进入筛选期）→ 入组 / 筛败 / 在筛
+   筛败率 = sf / icf。行业经验 30%–50%，肿瘤常见 50%+。            */
+const SF_REASONS = ["实验室指标不符","既往治疗史不符","影像学不符合","合并疾病或用药禁忌","受试者撤回知情","其他"];
+const FUNNEL = {
+  "SS-01":{pre:68, icf:41, sf:13, sfr:[6,3,2,1,1,0]},
+  "SS-02":{pre:55, icf:34, sf:13, sfr:[5,3,2,2,1,0]},
+  "SS-03":{pre:52, icf:31, sf:9,  sfr:[4,2,1,1,1,0]},
+  "SS-04":{pre:19, icf:13, sf:4,  sfr:[2,1,0,1,0,0]},   // 筛败率正常，问题在预筛量
+  "SS-05":{pre:6,  icf:2,  sf:2,  sfr:[1,0,0,0,1,0]},   // 几乎没启动
+  "SS-06":{pre:40, icf:24, sf:9,  sfr:[3,3,1,1,1,0]},
+  "SS-07":{pre:33, icf:20, sf:8,  sfr:[3,2,1,1,1,0]},
+  "SS-08":{pre:12, icf:7,  sf:3,  sfr:[1,1,0,1,0,0]},
+  "SS-09":{pre:66, icf:42, sf:10, sfr:[6,0,0,2,2,0]},
+  "SS-10":{pre:60, icf:38, sf:10, sfr:[5,0,0,3,2,0]},
+  "SS-11":{pre:71, icf:46, sf:26, sfr:[19,0,0,4,3,0]},  // 筛败率 57%：入排窗太窄
+  "SS-12":{pre:68, icf:43, sf:9,  sfr:[3,1,2,2,1,0]},
+  "SS-13":{pre:0,  icf:0,  sf:0,  sfr:[0,0,0,0,0,0]},
+  "SS-14":{pre:0,  icf:0,  sf:0,  sfr:[0,0,0,0,0,0]},
+  "SS-15":{pre:48, icf:30, sf:7,  sfr:[4,0,0,2,1,0]}
+};
+const FN = id => FUNNEL[id] || {pre:0,icf:0,sf:0,sfr:[0,0,0,0,0,0]};
+function funnelM(ss){
+  const f=FN(ss.id), inScr=Math.max(0, f.icf - ss.enrolled - f.sf);
+  return {
+    pre:f.pre, icf:f.icf, sf:f.sf, enr:ss.enrolled, inScr, sfr:f.sfr,
+    sfRate: f.icf ? f.sf/f.icf : null,          // 筛败率
+    icfRate: f.pre ? f.icf/f.pre : null,        // 预筛转化率
+    yield: f.pre ? ss.enrolled/f.pre : null     // 预筛→入组总转化率
+  };
+}
+/* 落后中心的根因判定：三种失败模式，指向完全不同的行动 */
+function enrollDiag(ss){
+  const m=siteM(ss), f=funnelM(ss);
+  if(m.rate===null || m.rate>=0.9) return null;
+  if(f.pre>0 && f.icf/Math.max(f.pre,1)>=0.5 && f.sfRate>0.5)
+    return {k:"筛败率过高", c:"var(--crit)",
+      d:`筛败 ${f.sf}/${f.icf}（${pct(f.sfRate)}），远高于同项目其他中心`,
+      a:"入排标准与该中心病源不匹配 → 与申办方谈方案修订，或降低该中心的合同例数"};
+  if(f.pre>0 && f.pre < ss.contracted*1.8)
+    return {k:"预筛量不足", c:"var(--warn)",
+      d:`累计预筛仅 ${f.pre} 人，合同 ${ss.contracted} 例，按当前筛败率至少需预筛 ${Math.ceil(ss.contracted/Math.max(f.yield||0.3,0.15))} 人`,
+      a:"病源本身不够 → 这是可行性调查该拦下的中心；现阶段只能加招募渠道或减例数"};
+  if(f.pre<=6)
+    return {k:"中心未真正启动", c:"var(--crit)",
+      d:`启动至今预筛 ${f.pre} 人、签署知情 ${f.icf} 人，实质未开展`,
+      a:"PI 参与度问题 → 需 PM 出面沟通，否则应考虑关闭该中心止损"};
+  return {k:"入组节奏偏慢", c:"var(--warn)",
+    d:`漏斗各环节正常但整体偏慢`, a:"加密监查并与 PI 确认月入组承诺量"};
+}
+
+/* ── SAE 上报日志：及时率必须由这里算出来，不能写死 ────────────────── */
+const SAE_LOG = [
+  {id:"SAE-0041", ss:"SS-02", subj:"S-0217", term:"3 级肝功能异常", aware:"2026-08-18 09:20", rpt:"2026-08-19 11:50", h:26.5},
+  {id:"SAE-0038", ss:"SS-01", subj:"S-0203", term:"2 级免疫性肺炎", aware:"2026-07-02 14:10", rpt:"2026-07-03 08:40", h:18.5},
+  {id:"SAE-0035", ss:"SS-09", subj:"S-0412", term:"重度低血糖", aware:"2026-06-19 21:05", rpt:"2026-06-20 09:15", h:12.2},
+  {id:"SAE-0033", ss:"SS-12", subj:"S-0455", term:"术后穿刺点血肿", aware:"2026-05-28 10:30", rpt:"2026-05-28 19:00", h:8.5},
+  {id:"SAE-0029", ss:"SS-06", subj:"S-0301", term:"3 级免疫性肠炎", aware:"2026-04-11 16:45", rpt:"2026-04-12 10:20", h:17.6},
+  {id:"SAE-0026", ss:"SS-10", subj:"S-0388", term:"急性肾损伤", aware:"2026-03-07 08:00", rpt:"2026-03-08 07:30", h:23.5},
+  {id:"SAE-0022", ss:"SS-03", subj:"S-0266", term:"上消化道出血", aware:"2026-02-14 19:20", rpt:"2026-02-15 15:40", h:20.3},
+  {id:"SAE-0019", ss:"SS-11", subj:"S-0421", term:"糖尿病酮症酸中毒", aware:"2026-01-23 11:00", rpt:"2026-01-24 06:50", h:19.8}
+];
+const SAE_SLA = 24;
+const saeStats = ids=>{
+  const l = SAE_LOG.filter(x=>!ids || ids.has(x.ss));
+  const ok = l.filter(x=>x.h<=SAE_SLA).length;
+  return {n:l.length, ok, rate: l.length? ok/l.length : null, list:l};
+};
+const queryStats = ids=>{
+  const l = QUERIES.filter(q=>!ids || ids.has(q.ss));
+  return {n:l.length, avg: l.length? sum(l,q=>q.age)/l.length : null,
+          over7: l.filter(q=>q.st==="待中心回复"&&q.age>7).length};
+};
+</script>

@@ -1,0 +1,224 @@
+<script>
+"use strict";
+/* ════════════════ 8 · 质量事件与 CAPA ════════════════ */
+VIEWS.qa = box=>{
+  const ids=scopeIds();
+  let list=ISSUES.filter(i=>ids.has(i.ss));
+  if(state.sevFilter.size) list=list.filter(i=>state.sevFilter.has(i.sev));
+  const openN=ISSUES.filter(i=>ids.has(i.ss)&&i.st!=="已关闭");
+  const sae=ISSUES.find(i=>i.sla&&i.st!=="已关闭"&&ids.has(i.ss));
+  const overdue=openN.filter(i=>days(TODAY,i.due)<0);
+
+  const SA=saeStats(ids), QS=queryStats(ids);
+
+  box.innerHTML=`
+  <div class="grid g4" style="margin-bottom:12px">
+    ${[["未关闭事件",openN.length,"项",`重大/严重 ${openN.filter(i=>i.sev!=="一般").length} 项`,openN.filter(i=>i.sev!=="一般").length?"var(--crit)":"var(--ink)"],
+       ["SAE 24h 上报及时率",SA.rate===null?"—":n1(SA.rate*100),"%",`${SA.ok} / ${SA.n} 例在 ${SAE_SLA} 小时内上报`,SA.rate===1?"var(--good)":"var(--crit)"],
+       ["Query 平均挂起",QS.avg===null?"—":n1(QS.avg),"天",`${QS.n} 条 · 超 7 天 ${QS.over7} 条`,QS.avg>7?"var(--crit)":QS.avg>5?"var(--warn)":"var(--ink)"],
+       ["CAPA 逾期",overdue.length,"项",overdue.length?"已超整改到期日":"全部在期内",overdue.length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,n,c])=>`<div class="stat">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+
+  ${sae?`<div class="card alert alert-crit" style="margin-bottom:28px">
+    <div class="card-h">
+      <span class="dot" style="background:var(--crit)"></span>
+      <h3>SAE 上报时限监控 · ${esc(sae.id)}</h3><span class="sp"></span>
+      <span class="pill p-crit">已超窗</span></div>
+    <div class="card-b">
+      <div class="grid g3" style="gap:14px;align-items:center">
+        <div><div class="kpi-l">监管时限</div><div class="num" style="font-size:26px;margin-top:3px">${sae.sla}<small style="font-size:12px;color:var(--ink-3)"> 小时</small></div>
+          <div class="note">研究者知晓起算</div></div>
+        <div><div class="kpi-l">实际上报耗时</div><div class="num" style="font-size:26px;margin-top:3px;color:var(--crit)">${sae.elapsed}<small style="font-size:12px;color:var(--ink-3)"> 小时</small></div>
+          <div class="note">超出 ${n1(sae.elapsed-sae.sla)} 小时</div></div>
+        <div><div class="kpi-l">CAPA 剩余时间</div>
+          <div class="num" id="cd" style="font-size:26px;margin-top:3px;color:var(--warn)">—</div>
+          <div class="note">整改到期 ${esc(sae.due)}</div></div>
+      </div>
+      <div class="bartrack" style="height:8px;margin-top:14px;position:relative">
+        <div class="barfill" style="width:${clamp(sae.sla/sae.elapsed*100,0,100)}%;background:var(--good);height:100%"></div>
+        <div style="position:absolute;left:${clamp(sae.sla/sae.elapsed*100,0,100)}%;right:0;top:0;bottom:0;background:var(--crit)"></div>
+      </div>
+      <div class="note" style="margin-top:6px">绿色 = 窗口内，红色 = 超窗部分。SAE 24 小时上报及时率必须 100% —— 这是红线，不是 KPI。</div>
+    </div></div>`:""}
+
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>SAE 上报时限台账</h3><span class="sp"></span>
+      <span class="sub">及时率由这张表算出，不是写死的数</span></div>
+    <div class="tw"><table style="min-width:680px">
+      <thead><tr><th>编号</th><th>中心</th><th>受试者</th><th>事件名称</th><th>研究者知晓</th><th>上报申办方</th><th class="ta-r">耗时</th><th>判定</th></tr></thead>
+      <tbody>${SA.list.map(x=>{const ok=x.h<=SAE_SLA;
+        return `<tr><td class="mono" style="font-size:11.5px">${esc(x.id)}</td>
+          <td style="font-size:12px">${esc(site(x.ss).hosp)}</td>
+          <td><span class="subjid">${esc(x.subj)}</span></td>
+          <td class="t-sub">${esc(x.term)}</td>
+          <td class="mono" style="font-size:11px">${esc(x.aware)}</td>
+          <td class="mono" style="font-size:11px">${esc(x.rpt)}</td>
+          <td class="tnum" style="color:${ok?"var(--good)":"var(--crit)"};font-weight:600">${n1(x.h)} h</td>
+          <td><span class="pill ${ok?"p-good":"p-crit"}">${ok?"窗口内":"超窗"}</span></td></tr>`;}).join("")
+        ||`<tr><td colspan="8"><div class="empty">范围内无 SAE 记录</div></td></tr>`}</tbody>
+    </table></div>
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>问题发现来源</h3><span class="sp"></span>
+      <span class="sub">分布本身就是质量指标</span></div>
+    <div class="card-b">
+      <div id="c-src2"></div>
+      <div class="note" style="margin-top:11px;border-top:1px solid var(--line);padding-top:9px">
+        前置发现（中心自查、机构质控、内部监查）占比越高，说明防线在起作用。
+        如果问题主要由<b>申办方稽查或药监核查</b>发现，代价就不再是整改，而是数据被剔除、项目延期、供应商名录降级。</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h" style="flex-wrap:wrap"><h3>事件台账</h3>
+      <div class="row" style="gap:5px">${["重大","严重","一般"].map(s=>
+        `<button class="chip" data-sev="${s}" aria-pressed="${state.sevFilter.has(s)}">${s}</button>`).join("")}</div>
+      <span class="sp"></span><span class="sub">${list.length} 项</span></div>
+    <div class="card-b" style="padding:0">
+      ${list.length? list.map(i=>{
+        const s=site(i.ss), sv=SEV[i.sev], od=i.st!=="已关闭"&&days(TODAY,i.due)<0;
+        return `<div style="border-bottom:1px solid var(--line);position:relative">
+          <span class="stripe" style="background:${i.st==="已关闭"?"var(--line-2)":sv.c}"></span>
+          <button data-iss="${i.id}" style="width:100%;text-align:left;border:0;background:none;padding:12px 16px 12px 18px;cursor:pointer">
+            <div class="row" style="gap:7px">
+              <span class="pill p-${i.st==="已关闭"?"neut":sv.k}">${esc(i.sev)}</span>
+              <b style="font-size:13px;font-weight:600">${esc(i.type)}</b>
+              <span class="t-sub">${esc(i.id)}</span>
+              <span class="pill p-neut">来源 ${esc(i.src||"—")}</span>
+              <span class="sp"></span>
+              <span class="pill ${i.st==="已关闭"?"p-good":od?"p-crit":"p-neut"}">${esc(i.st)}${od?" · 已逾期":""}</span>
+            </div>
+            <div class="note" style="margin-top:4px;color:var(--ink-2)">${esc(i.desc)}</div>
+            <div class="note" style="margin-top:4px">${esc(s.hosp)} · ${esc(S[s.sid].short)}｜发现 ${esc(i.found)}｜责任人 ${esc(i.own)}｜CAPA 到期 ${esc(i.due)}</div>
+          </button>
+          <div id="d-${i.id}" hidden style="padding:0 16px 14px 18px">
+            <div class="section-t">CAPA 纠正与预防措施</div>
+            <div style="font-size:12.5px;line-height:1.7;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);padding:10px 12px;border-radius:8px">${esc(i.capa)}</div>
+            ${i.st!=="已关闭"?`<div class="row" style="margin-top:10px">
+              <button class="btn btn-p" data-close-iss="${i.id}">验证通过并关闭</button>
+              <button class="btn" data-goto3="${i.ss}">查看中心</button></div>`
+              :`<div class="pill p-good" style="margin-top:10px">该事件已验证关闭</div>`}
+          </div>
+        </div>`;}).join("") : `<div class="empty">当前筛选下无事件</div>`}
+    </div>
+  </div>`;
+
+  const bySrc={}; ISSUES.filter(i=>ids.has(i.ss)).forEach(i=>bySrc[i.src]=(bySrc[i.src]||0)+1);
+  const ORD=["中心自查","机构质控","内部监查","申办方稽查","药监核查"];
+  const COL={"机构质控":"var(--s1)","中心自查":"var(--s3)","内部监查":"var(--s2)",
+             "申办方稽查":"var(--s4)","药监核查":"var(--s5)"};
+  stacked($("#c-src2"), ORD.filter(k=>bySrc[k]).map(k=>({n:k,v:bySrc[k],c:COL[k]})),{h:28,fmt:v=>v+" 项"});
+
+  if(sae){ const tick=()=>{ const el=$("#cd"); if(!el) return;
+      const ms=new Date(sae.due+"T18:00:00")-new Date(TODAY+"T"+new Date().toTimeString().slice(0,8));
+      const h=Math.max(0,Math.floor(ms/36e5)), m=Math.max(0,Math.floor(ms%36e5/6e4)), s2=Math.max(0,Math.floor(ms%6e4/1000));
+      el.textContent=`${h}:${String(m).padStart(2,"0")}:${String(s2).padStart(2,"0")}`; };
+    tick(); timers.push(setInterval(tick,1000)); }
+
+  box.addEventListener("click",e=>{
+    const c=e.target.closest("[data-sev]");
+    if(c){const v=c.dataset.sev; state.sevFilter.has(v)?state.sevFilter.delete(v):state.sevFilter.add(v); render(); return;}
+    const cl=e.target.closest("[data-close-iss]");
+    if(cl){const i=ISSUES.find(x=>x.id===cl.dataset.closeIss); i.st="已关闭";
+      toast(`${i.id} 已验证关闭，未关闭事件减至 ${ISSUES.filter(x=>x.st!=="已关闭").length} 项`); render(); return;}
+    const g=e.target.closest("[data-goto3]"); if(g){openSite(g.dataset.goto3);return;}
+    const b=e.target.closest("[data-iss]");
+    if(b){const d=$("#d-"+b.dataset.iss); if(d) d.hidden=!d.hidden;}
+  });
+};
+
+/* ════════════════ 9 · 监查访视 ════════════════ */
+VIEWS.mon = box=>{
+  const ids=scopeIds();
+  const vs=VISITS.filter(v=>ids.has(v.ss));
+  const sel=vs[clamp(state.visitSel,0,vs.length-1)];
+  const totItems=sum(vs,v=>v.items.length), doneItems=sum(vs,v=>v.items.filter(i=>i.done).length);
+  const byKind=["SIV","IMV","COV"].map((k,i)=>({n:k,v:vs.filter(v=>v.kind===k).length,c:`var(--s${i+1})`}));
+
+  box.innerHTML=`
+  <div class="grid g4" style="margin-bottom:12px">
+    ${[["未来 4 周访视",vs.length,"次",`共 ${sum(vs,v=>v.days)} 人天`],
+       ["MVR 跟进项",`${doneItems} / ${totItems}`,"",`完成率 ${totItems?pct(doneItems/totItems):"—"}`],
+       ["待确认排期",vs.filter(v=>v.st==="待确认").length,"次","需与中心确认时间"],
+       ["预估差旅",n1(vs.length*RATE.travel),"万",`${RATE.travel} 万/次 × ${vs.length} 次`]
+     ].map(([l,v,u,n])=>`<div class="stat">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:23px;margin-top:3px">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="grid g12" style="gap:12px">
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>访视排期</h3><span class="sp"></span><span class="sub">SIV 启动 · IMV 例行 · COV 关闭</span></div>
+        <div class="card-b" style="padding:0">
+          ${vs.map((v,i)=>{const s=site(v.ss), act=v===sel;
+            const done=v.items.filter(x=>x.done).length;
+            return `<button data-v="${i}" style="width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:${act?"var(--accent-soft)":"none"};padding:11px 14px;cursor:pointer;position:relative">
+              ${act?`<span class="stripe" style="background:var(--accent)"></span>`:""}
+              <div class="row" style="gap:7px">
+                <span class="mono" style="font-size:11.5px;color:var(--ink-3)">${esc(v.d)}</span>
+                <span class="pill p-acc">${esc(v.kind)}</span>
+                <span class="sp"></span>
+                <span class="pill ${v.st==="待确认"?"p-warn":"p-neut"}">${esc(v.st)}</span></div>
+              <div style="font-size:12.5px;font-weight:500;margin-top:4px">${esc(s.hosp)}</div>
+              <div class="note">${esc(v.who)} · ${v.days} 天 · 跟进项 ${done}/${v.items.length}</div>
+              <div class="bartrack" style="height:3px;margin-top:6px"><div class="barfill" style="width:${done/v.items.length*100}%;background:${done===v.items.length?"var(--good)":"var(--accent)"};height:100%"></div></div>
+            </button>`;}).join("") || `<div class="empty">当前项目范围内无排期</div>`}
+        </div>
+      </div>
+      <div class="card"><div class="card-h"><h3>访视类型构成</h3></div>
+        <div class="card-b"><div id="c-vk"></div></div></div>
+    </div>
+    ${sel?`<div class="card">
+      <div class="card-h"><h3>监查报告跟进项（MVR Follow-up）</h3><span class="sp"></span>
+        <span class="pill p-neut">${esc(sel.d)} · ${esc(sel.kind)} · ${esc(sel.who)}</span></div>
+      <div class="card-b">
+        <div class="row" style="justify-content:space-between;margin-bottom:12px">
+          <div><div style="font-size:14px;font-weight:600">${esc(site(sel.ss).hosp)}</div>
+            <div class="note">${esc(S[site(sel.ss).sid].short)} · ${esc(site(sel.ss).city)} · PI ${esc(site(sel.ss).pi)}</div></div>
+          <div class="ta-r"><div class="num" style="font-size:22px" id="mv-n">${sel.items.filter(i=>i.done).length} / ${sel.items.length}</div>
+            <div class="note">已关闭</div></div>
+        </div>
+        <div class="bartrack" style="height:6px;margin-bottom:14px"><div class="barfill" id="mv-b" style="width:${sel.items.filter(i=>i.done).length/sel.items.length*100}%;background:var(--accent);height:100%"></div></div>
+        <div id="mv-list">${sel.items.map((it,k)=>`
+          <label class="cbx ${it.done?"done":""}" style="border-bottom:1px solid var(--line)">
+            <input type="checkbox" data-mv="${k}" ${it.done?"checked":""}><span>${esc(it.t)}</span></label>`).join("")}</div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn btn-p" id="mv-submit">提交 MVR</button>
+          <button class="btn" data-goto3b="${sel.ss}">查看中心</button>
+          <span class="sp"></span>
+          <span class="note">跟进项全部关闭后才可提交监查报告</span></div>
+        <div class="formula" style="margin-top:14px">
+监查频率来自风险分级，不是一刀切：
+质量稳定中心 → 降低 SDV 抽样比例、延长 IMV 间隔
+入组停滞 / 有未关闭严重事件 → 加密监查
+        </div>
+      </div>
+    </div>`:`<div class="card"><div class="empty">选择左侧一次访视查看跟进项</div></div>`}
+  </div>`;
+
+  stacked($("#c-vk"), byKind.filter(b=>b.v), {h:24, fmt:v=>v+" 次"});
+
+  box.addEventListener("click",e=>{
+    const v=e.target.closest("[data-v]"); if(v){state.visitSel=+v.dataset.v;render();return;}
+    const g=e.target.closest("[data-goto3b]"); if(g){openSite(g.dataset.goto3b);return;}
+    if(e.target.closest("#mv-submit")){
+      const left=sel.items.filter(i=>!i.done).length;
+      if(left) toast(`还有 ${left} 项跟进项未关闭，MVR 无法提交`,"crit");
+      else { sel.st="已提交"; toast(`${site(sel.ss).hosp} ${sel.kind} 监查报告已提交`); render(); }
+    }
+  });
+  box.addEventListener("change",e=>{
+    const c=e.target.closest("[data-mv]"); if(!c)return;
+    sel.items[+c.dataset.mv].done=c.checked;
+    c.closest("label").classList.toggle("done",c.checked);
+    const d=sel.items.filter(i=>i.done).length;
+    $("#mv-n").textContent=`${d} / ${sel.items.length}`;
+    $("#mv-b").style.width=d/sel.items.length*100+"%";
+    $("#mv-b").style.background = d===sel.items.length?"var(--good)":"var(--accent)";
+  });
+};
+</script>

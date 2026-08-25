@@ -1,0 +1,311 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   CRC 的项目生命周期视图
+   此前 CRC 只看得到「下一个访视」。中心处在哪一节、启动还差什么、
+   两家医院明天撞不撞车、受试者退出怎么登记 —— 全部没有。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 我的中心：CRC 终于看得见自己带的中心处在哪一节 ──────────────── */
+VIEWS.mysite = box=>{
+  const me = PERSONA().n, mine = staff(me)?.sites || [];
+  const list = mine.map(site).filter(Boolean);
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["我带的中心",list.length,"个","var(--ink)"],
+       ["在启动准备",list.filter(s=>FLOW.indexOf(s.st)<FLOW.indexOf("入组中")).length,"个","var(--ink)"],
+       ["在组受试者",SUBJ.filter(s=>s.crc===me&&["已入组","筛选中"].includes(s.st)).length,"例","var(--ink)"],
+       ["我登记的脱落",DROPS.filter(d=>mine.includes(d.ss)).length,"例",
+        DROPS.filter(d=>mine.includes(d.ss)).length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  ${list.map(ss=>{
+    const i = FLOW.indexOf(ss.st), m = siteM(ss), r = retentionM(ss), su = startupM(ss.id);
+    const gate = ss.st==="随访中"||ss.st==="入组完成" ? closeGate(ss) : [];
+    const inTrial = SUBJ.filter(s=>s.ss===ss.id&&["已入组","筛选中"].includes(s.st)).length;
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="card-h"><h3>${esc(ss.hosp)}</h3>
+        <span class="sub">${esc(S[ss.sid].short)} · ${esc(ss.dept)} · PI ${esc(ss.pi)}</span>
+        <span class="sp"></span><span class="pill p-neut">第 ${i+1} / ${FLOW.length} 节点</span></div>
+      <div class="card-b">
+        <div style="display:flex;gap:2px;margin-bottom:10px">${FLOW.map((f,k)=>`
+          <div style="flex:1;height:4px;background:${k<=i?"var(--accent)":"var(--line-2)"}" title="${esc(f)}"></div>`).join("")}</div>
+        <div class="row" style="gap:14px;flex-wrap:wrap;font-size:12.5px;margin-bottom:10px">
+          <span><b style="font-size:15px">${esc(ss.st)}</b></span>
+          <span class="t-sub">伦理批件 ${esc(ss.ethics)}</span>
+          <span class="t-sub">SIV ${esc(ss.siv)}</span>
+          <span class="t-sub">首例入组 ${esc(ss.fpi)}</span>
+        </div>
+        <div class="grid g4" style="gap:10px">
+          ${[["合同例数",`${ss.enrolled} / ${ss.contracted}`,pct(m.prog)+" 完成"],
+             ["在组受试者",inTrial+" 例",`筛败 ${FN(ss.id).sf} · 脱落 ${r.n}`],
+             ["受试者保留率",r.rate===null?"—":pct(r.rate),r.n?`脱落 ${r.n} 例`:"无脱落"],
+             ["启动清单",su?`${su.done} / ${su.n}`:"—",su?(su.blocks.length?`${su.blocks.length} 项阻塞`:"无阻塞"):"已完成启动"]
+           ].map(([l,v,n])=>`<div><div class="kpi-l">${esc(l)}</div>
+              <div style="font-size:17px;font-weight:600;margin:2px 0">${esc(v)}</div>
+              <div class="note">${esc(n)}</div></div>`).join("")}
+        </div>
+        ${su&&su.blocks.length?`<div style="border-left:2px solid var(--warn);background:var(--surface-2);padding:9px 11px;margin-top:11px;font-size:12.5px;line-height:1.7;color:var(--ink-2)">
+          <b style="color:var(--warn)">启动阻塞 ${su.blocks.length} 项</b>${su.plan?` · 距计划 SIV ${su.dToSiv} 天`:""}：
+          ${su.blocks.slice(0,3).map(b=>esc(b.item)).join("；")}${su.blocks.length>3?" 等":""}
+          <div style="margin-top:7px"><button class="btn" data-nav="startup">去启动清单 →</button></div></div>`:""}
+        ${gate.length?`<div style="border-left:2px solid var(--crit);background:var(--surface-2);padding:9px 11px;margin-top:11px;font-size:12.5px;line-height:1.7;color:var(--ink-2)">
+          <b style="color:var(--crit)">距离中心关闭还差 ${gate.length} 项</b>：${gate.map(g=>esc(g.t)).join("；")}</div>`:""}
+      </div></div>`;}).join("") || `<div class="empty">尚未分配中心</div>`}
+  <p class="note">中心也有生命周期。CRC 此前只看得到"下一个访视"，看不到自己站在这条线的哪一节 ——
+    于是"这个中心还差 4 例就到里程碑"这种事，只有 PM 知道。</p>`;
+};
+
+/* ── 中心启动清单：CRC 最忙的两个月，此前系统里完全空白 ──────────── */
+VIEWS.startup = box=>{
+  const p = PERSONA();
+  const mine = p.k==="crc" ? (staff(p.n)?.sites||[]) : [...scopeIds()];
+  const ids = [...new Set(STARTUP.filter(r=>mine.includes(r.ss)).map(r=>r.ss))]
+    .sort((a,b)=>(SIV_PLAN[a]||"9999").localeCompare(SIV_PLAN[b]||"9999"));
+  const all = STARTUP.filter(r=>mine.includes(r.ss));
+  const blocks = all.filter(r=>r.block&&!r.done), od = all.filter(r=>!r.done&&days(r.due,TODAY)>0);
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["在启动中心",ids.length,"个","var(--ink)"],
+       ["清单项",all.length,"项","var(--ink)"],
+       ["阻塞项未完成",blocks.length,"项",blocks.length?"var(--crit)":"var(--ink)"],
+       ["已逾期",od.length,"项",od.length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  ${ids.map(id=>{
+    const ss = site(id), m = startupM(id);
+    const urgent = m.dToSiv!==null && m.dToSiv <= 14;
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="card-h"><h3>${esc(ss.hosp)}</h3>
+        <span class="sub">${esc(S[ss.sid].short)} · 当前「${esc(ss.st)}」</span><span class="sp"></span>
+        ${m.plan?`<span class="pill ${urgent?"p-crit":"p-neut"}">计划 SIV ${esc(m.plan)} · 剩 ${m.dToSiv} 天</span>`:""}
+        <span class="pill ${m.blocks.length?"p-crit":"p-good"}">${m.done} / ${m.n}</span></div>
+      <div class="card-b" style="padding:0">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+          <div class="bartrack" style="height:5px"><div class="barfill" style="width:${m.rate*100}%;background:${m.blocks.length?"var(--warn)":"var(--good)"};height:100%"></div></div>
+        </div>
+        ${STARTUP_CATS.map(c=>{
+          const rows = m.rows.filter(r=>r.cat===c); if(!rows.length) return "";
+          return `<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+            <div class="section-t" style="margin-bottom:6px">${esc(c)}</div>
+            ${rows.map(r=>{const late = !r.done && days(r.due,TODAY)>0;
+              const k = STARTUP.indexOf(r);
+              return `<div class="row" style="justify-content:space-between;gap:10px;padding:5px 0;align-items:flex-start">
+                <label class="cbx ${r.done?"done":""}" style="flex:1;min-width:0;border:0;padding:0">
+                  <input type="checkbox" data-su="${k}" ${r.done?"checked":""}>
+                  <span>${esc(r.item)}
+                    ${r.block?`<span class="pill p-warn" style="margin-left:5px">阻塞项</span>`:""}
+                    ${late?`<span class="pill p-crit" style="margin-left:4px">逾期 ${days(r.due,TODAY)} 天</span>`:""}
+                    <div class="note">负责 ${esc(r.owner)}｜应完成 ${esc(r.due)}</div></span></label>
+              </div>`;}).join("")}</div>`;}).join("")}
+        ${m.blocks.length?`<div style="padding:11px 14px;border-left:2px solid var(--crit);background:var(--surface-2)">
+          <b style="font-size:12.5px;color:var(--crit)">${m.blocks.length} 项阻塞未完成，不得推进到「SIV启动」</b>
+          <div class="note" style="margin-top:4px;line-height:1.7">
+            阻塞项是"没有它就不能合法开展受试者相关工作"的那些：伦理批件、合同、DOA 授权分工表、方案培训、药品接收、EDC 账号。
+            系统在推进中心阶段时会拦住 —— 这正是此前那个只有一句 <code>ss.st = next</code> 的按钮缺的东西。</div></div>`
+        :`<div style="padding:11px 14px"><span class="pill p-good">阻塞项已清零，可推进 SIV</span></div>`}
+      </div></div>`;}).join("") || `<div class="empty">范围内没有处在启动准备阶段的中心</div>`}
+  <p class="note">启动慢一个月，这个中心的整条收入曲线右移一个月。此前这两个月里 CRC 干了什么，系统一无所知。</p>`;
+
+  box.addEventListener("change",e=>{
+    const c = e.target.closest("[data-su]"); if(!c) return;
+    const r = STARTUP[+c.dataset.su];
+    r.done = c.checked ? 1 : 0;
+    logAct(c.checked?"完成启动清单项":"撤销启动清单项", r.item, c.checked?"未完成":"已完成", c.checked?"已完成":"未完成", {ss:r.ss});
+    const m = startupM(r.ss);
+    toast(c.checked
+      ? (m.blocks.length? `已完成。${site(r.ss).hosp} 还剩 ${m.blocks.length} 项阻塞` : `${site(r.ss).hosp} 启动阻塞项已全部清零，可推进 SIV`)
+      : `已撤销：${r.item}`, m.blocks.length?"":"");
+    render();
+  });
+};
+
+/* ── 我的日程：一人多中心，冲突必须被看见 ────────────────────────── */
+function myAgenda(days_=14){
+  const p = PERSONA(), me = p.n, mine = staff(me)?.sites || [];
+  const ev = [];
+  SUBJ.filter(s=>s.crc===me && !["筛败","已出组","已脱落"].includes(s.st)).forEach(s=>{
+    ev.push({d:s.due, k:"访视", t:`${s.id} ${soaLabel(s.ss,s.seq)}`, ss:s.ss,
+      hosp:site(s.ss).hosp, sev:winState(s).k, sub:`窗口 ±${s.win} 天 · ${s.contact}`});
+  });
+  VISITS.filter(v=>mine.includes(v.ss)).forEach(v=>{
+    ev.push({d:v.d, k:v.kind, t:`${v.kind} 监查（${v.who}）`, ss:v.ss,
+      hosp:site(v.ss).hosp, sev:"neut", sub:`${v.days} 天 · ${v.st}`});
+  });
+  ETHICS.filter(e=>mine.includes(e.ss)&&e.st!=="已批准"&&e.st!=="已备案").forEach(e=>{
+    ev.push({d:e.due, k:"伦理", t:`${e.kind} 应递交`, ss:e.ss,
+      hosp:site(e.ss).hosp, sev:ethState(e), sub:e.id});
+  });
+  STARTUP.filter(r=>!r.done&&r.owner===me).forEach(r=>{
+    ev.push({d:r.due, k:"启动", t:r.item, ss:r.ss, hosp:site(r.ss).hosp,
+      sev: days(r.due,TODAY)>0?"crit":r.block?"warn":"neut", sub:r.block?"阻塞项":"启动清单"});
+  });
+  HANDOVER.filter(h=>(h.from===me||h.to===me)&&h.st!=="已完成").forEach(h=>{
+    ev.push({d:h.d, k:"交接", t:`${h.from} → ${h.to}`, ss:h.ss[0], hosp:h.ss.map(x=>site(x).hosp).join("、"),
+      sev:"warn", sub:h.reason});
+  });
+  const buckets = [];
+  for(let i=0;i<days_;i++){
+    const d = new Date(new Date(TODAY).getTime()+i*864e5).toISOString().slice(0,10);
+    const items = ev.filter(x=>x.d===d).sort((a,b)=>a.k.localeCompare(b.k));
+    const hosps = new Set(items.filter(x=>x.k==="访视"||x.k==="启动").map(x=>x.hosp));
+    buckets.push({d, i, items, conflict: hosps.size>1, wk:"日一二三四五六"[new Date(d).getDay()]});
+  }
+  return {buckets, overdue: ev.filter(x=>days(x.d,TODAY)>0)};
+}
+VIEWS.sched = box=>{
+  const a = myAgenda(14);
+  const conf = a.buckets.filter(b=>b.conflict);
+  const busy = a.buckets.filter(b=>b.items.length>=3);
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["未来 14 天事项",sum(a.buckets,b=>b.items.length),"件","var(--ink)"],
+       ["跨院冲突日",conf.length,"天",conf.length?"var(--crit)":"var(--ink)"],
+       ["高负荷日（≥3 件）",busy.length,"天",busy.length?"var(--warn)":"var(--ink)"],
+       ["已逾期事项",a.overdue.length,"件",a.overdue.length?"var(--crit)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  ${conf.length?`<div class="card alert alert-crit" style="margin-bottom:22px">
+    <div class="card-h"><h3>跨院冲突</h3><span class="sp"></span>
+      <span class="sub">同一天要出现在两家医院 —— 这是超窗的真正来源</span></div>
+    <div class="card-b" style="padding:0">
+      ${conf.map(b=>`<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px"><span class="mono" style="font-size:12px">${esc(b.d)}</span>
+          <span class="t-sub">周${esc(b.wk)}</span>
+          <span class="pill p-crit">${[...new Set(b.items.map(x=>x.hosp))].length} 家医院</span></div>
+        <div class="note" style="margin-top:3px;line-height:1.7">
+          ${b.items.map(x=>`${esc(x.hosp)} · ${esc(x.t)}`).join("<br>")}</div>
+        <div class="row" style="margin-top:7px">
+          <button class="btn" data-nav="subj">调整访视日期</button>
+          <button class="btn" data-nav="handover">申请交接</button></div>
+      </div>`).join("")}
+    </div></div>`:""}
+  <div class="card">
+    <div class="card-h"><h3>未来 14 天</h3><span class="sp"></span>
+      <span class="sub">访视 · 监查 · 伦理 · 启动 · 交接 —— 一条线上</span></div>
+    <div class="card-b" style="padding:0">
+      ${a.buckets.map(b=>`<div style="padding:9px 14px;border-bottom:1px solid var(--line);${b.conflict?"border-left:2px solid var(--crit)":""}">
+        <div class="row" style="gap:8px">
+          <span class="mono" style="font-size:12px;min-width:88px;color:${b.i===0?"var(--accent)":"var(--ink-2)"}">
+            ${esc(b.d)}</span>
+          <span class="t-sub" style="min-width:30px">周${esc(b.wk)}</span>
+          ${b.i===0?`<span class="pill p-neut">今天</span>`:""}
+          ${b.conflict?`<span class="pill p-crit">跨院冲突</span>`:""}
+          <span class="sp"></span>
+          ${b.items.length?`<span class="t-sub">${b.items.length} 件</span>`:`<span class="t-sub" style="color:var(--ink-3)">—</span>`}
+        </div>
+        ${b.items.map(x=>`<div class="row" style="gap:6px;margin:5px 0 0 96px">
+          <span class="dot" style="background:var(--${x.sev==="good"?"good":x.sev==="crit"?"crit":x.sev==="warn"?"warn":"ink-3"})"></span>
+          <span class="pill p-neut">${esc(x.k)}</span>
+          <b style="font-size:12.5px;font-weight:500">${esc(x.t)}</b>
+          <span class="t-sub">${esc(x.hosp)}｜${esc(x.sub)}</span></div>`).join("")}
+      </div>`).join("")}
+    </div>
+  </div>
+  <div class="formula">「我的一天」是按窗口剩余排序的优先级列表，回答"先做哪件"。
+「我的日程」是按日期铺开的时间轴，回答"做不做得完、撞不撞车"。
+
+一个 CRC 同时带 2–3 个中心是常态。两家医院的两个受试者都约在同一天上午，
+不是优先级问题 —— 是物理上做不到。这种冲突必须在排期时被看见，而不是超窗之后写方案偏离。</div>`;
+};
+
+/* ── 登记退出 / 脱落 ────────────────────────────────────────────── */
+function dropModal(id){
+  const s = SUBJ.find(x=>x.id===id), ss = site(s.ss), sc = soa(s.ss);
+  const done = s.seq, total = sc.last;
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(s.id)} · ${esc(ss.hosp)}</div>
+      <h3 style="font-size:15px">登记退出 / 脱落</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div class="field"><div class="slider-h"><label for="dp-r">退出原因</label></div>
+        <select class="sel" id="dp-r" style="width:100%">${DROP_REASONS.map(r=>`<option>${esc(r)}</option>`).join("")}</select></div>
+      <div class="field"><div class="slider-h"><label for="dp-n">具体说明（进入原因分布，是判断该中心问题的依据）</label></div>
+        <textarea class="qbox" id="dp-n" placeholder="例：受试者因往返路程 4 小时、家属不再支持而撤回知情。"></textarea></div>
+      <div class="field"><div class="slider-h"><label for="dp-d">已完成访视次数</label><b id="dp-dv">${done} / ${total}</b></div>
+        <input type="range" id="dp-d" min="0" max="${total}" step="1" value="${done}"></div>
+      <div style="border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        <b>为什么要问"已完成几次"</b>：合同按访视计价。做到第 <span id="dp-x">${done}</span> 次就停的受试者，
+        该收的是 <b id="dp-amt">${n1(done/total*ss.unit)}</b> 万，不是整例 ${n1(ss.unit)} 万。<br>
+        此前系统没有这个状态，脱落受试者会永远停在"已入组"、永远生成下一次窗口、永远刷红，
+        <b>而且按整例计收入 —— 账是错的。</b>
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="dp-go">确认登记</button></div>
+    </div>`);
+  const sync = ()=>{ const v = +$("#dp-d").value;
+    $("#dp-dv").textContent = `${v} / ${total}`; $("#dp-x").textContent = v;
+    $("#dp-amt").textContent = n1(v/total*ss.unit); };
+  $("#dp-d").addEventListener("input",sync);
+  $("#dp-go").addEventListener("click",()=>{
+    const why = $("#dp-r").value, note = $("#dp-n").value.trim(), v = +$("#dp-d").value;
+    if(note.length < 6){ toast("请写清退出的具体情况（至少 6 个字）—— 原因分布是判断中心问题的唯一依据","crit"); return; }
+    DROPS.unshift({ss:s.ss, subj:s.id, why, d:TODAY, done:v, total, note});
+    s.st = "已脱落"; s.exitWhy = why; s.exitDate = TODAY;
+    logAct("登记受试者退出", s.id, "已入组", `已脱落 · ${why}`, {ss:s.ss, why:note});
+    const lost = (1 - v/total) * ss.unit;
+    closeLayer();
+    toast(`${s.id} 已登记退出（${why}）。本中心收入相应调减 ${n1(lost)} 万，保留率已重算`,"warn");
+    setTimeout(render,220);
+  });
+}
+
+/* ── SAE 上报：CRC 是第一个知道的人，此前系统只统计不承接 ────────── */
+function saeModal(id){
+  const s = SUBJ.find(x=>x.id===id), ss = site(s.ss);
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(s.id)} · ${esc(ss.hosp)}</div>
+      <h3 style="font-size:15px">严重不良事件 SAE 上报</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div style="border-left:2px solid var(--crit);background:var(--surface-2);padding:9px 11px;font-size:12.5px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        <b style="color:var(--crit)">24 小时倒计时从"研究者知晓"开始，不是从"你有空录入"开始。</b><br>
+        知晓时间必须如实填写 —— 填晚了是编造记录，比超窗本身严重得多。
+      </div>
+      <div class="field"><div class="slider-h"><label for="sa-t">事件名称（MedDRA 首选术语）</label></div>
+        <input class="sel" id="sa-t" style="width:100%" placeholder="例：3 级免疫性肝炎"></div>
+      <div class="field"><div class="slider-h"><label for="sa-a">研究者知晓时间</label></div>
+        <input class="sel" id="sa-a" type="datetime-local" style="width:100%" value="${TODAY}T09:00"></div>
+      <div class="field"><div class="slider-h"><label for="sa-h">距现在已过</label><b id="sa-hv">0.0 小时</b></div>
+        <input type="range" id="sa-h" min="0" max="48" step="0.5" value="2"></div>
+      <div class="field"><label class="cbx"><input type="checkbox" id="sa-e" checked><span>同时生成伦理快速报告待办（知晓后 5 日内）</span></label></div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="sa-go">上报申办方</button></div>
+    </div>`);
+  const hv = ()=>{ const h=+$("#sa-h").value;
+    $("#sa-hv").textContent = n1(h)+" 小时";
+    $("#sa-hv").style.color = h>SAE_SLA ? "var(--crit)" : "var(--ink)"; };
+  $("#sa-h").addEventListener("input",hv); hv();
+  $("#sa-go").addEventListener("click",()=>{
+    const term = $("#sa-t").value.trim(), h = +$("#sa-h").value;
+    if(term.length < 3){ toast("请填写事件名称","crit"); return; }
+    const nid = "SAE-00"+(42+SAE_LOG.length);
+    SAE_LOG.unshift({id:nid, ss:s.ss, subj:s.id, term,
+      aware:$("#sa-a").value.replace("T"," "), rpt:`${TODAY} ${new Date().toTimeString().slice(0,5)}`, h});
+    logAct("上报 SAE", `${nid} ${term}`, "—", `${n1(h)} 小时${h>SAE_SLA?"（超窗）":""}`, {ss:s.ss});
+    if(h > SAE_SLA)
+      ISSUES.unshift({id:"QI-2026-0"+(200+ISSUES.length), src:"中心自查", ss:s.ss, sev:"严重",
+        type:"SAE 上报超窗", found:TODAY,
+        desc:`受试者 ${s.id} 发生「${term}」，研究者知晓至上报申办方 ${n1(h)} 小时，超出 24 小时窗口。`,
+        capa:"（待提交整改措施）", own:PERSONA().n,
+        due:new Date(Date.now()+7*864e5).toISOString().slice(0,10), st:"待整改", sla:24, elapsed:h});
+    if($("#sa-e").checked)
+      ETHICS.unshift({id:"E-00"+(ethSeq++), ss:s.ss, kind:"SAE 快速报告",
+        due:new Date(Date.now()+5*864e5).toISOString().slice(0,10), sub:"—", appr:"—", st:"待递交",
+        note:`${nid} ${term}，知晓后 5 日内报伦理`});
+    closeLayer();
+    toast(h>SAE_SLA
+      ? `${nid} 已上报，但耗时 ${n1(h)} 小时已超 24 小时窗口 —— 已自动生成严重质量事件`
+      : `${nid} 已上报申办方，耗时 ${n1(h)} 小时，在 24 小时窗口内`, h>SAE_SLA?"crit":"");
+    setTimeout(render,220);
+  });
+}
+</script>

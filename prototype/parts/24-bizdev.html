@@ -1,0 +1,285 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   客户 · 投标闭环 · 合同变更
+   系统此前按「项目 / 中心」切片，没有客户这一维；
+   报价模型是开环的（报出去赢没赢不回写）；
+   合同变更完全不管 —— 而这是 CRO/SMO 亏损的第二大原因。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 客户（申办方）：比单中心毛利更上位的切片 ────────────────────── */
+VIEWS.client = box=>{
+  const rows = SPONSORS.map(clientM).sort((a,b)=>b.rev-a.rev);
+  const tot = {rev:sum(rows,r=>r.rev), gp:sum(rows,r=>r.gp), ar:sum(rows,r=>r.ar), od:sum(rows,r=>r.overdue)};
+  const top = rows[0], conc = tot.rev? top.rev/tot.rev : 0;
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["在服务客户",rows.length,"家","var(--ink)",""],
+       ["最大客户占比",pct(conc),"",conc>0.4?"var(--crit)":conc>0.3?"var(--warn)":"var(--ink)",
+        `${top.sp} ${wan(top.rev)} 万`],
+       ["在途应收",wan(tot.ar),"万",tot.ar?"var(--ink)":"var(--ink)",""],
+       ["其中已逾期",wan(tot.od),"万",tot.od?"var(--crit)":"var(--ink)","超 60 天未回款"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${conc>0.35?`<div class="card alert alert-warn" style="margin-bottom:24px">
+    <div class="card-h"><h3>客户集中度</h3><span class="sp"></span>
+      <span class="sub">${esc(top.sp)} 占本期收入 ${pct(conc)}</span></div>
+    <div class="card-b"><div class="note" style="line-height:1.8;color:var(--ink-2)">
+      单一客户超过三分之一，议价权就不在我们这边了 —— ${esc(top.sp)}
+      ${top.meta.note?`（${esc(top.meta.note)}）`:""}。<br>
+      这个数只有按客户切片才看得见。按项目看是 4 个项目、按中心看是 15 个中心，都显得很分散。</div>
+    </div></div>`:""}
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>客户收入构成</h3><span class="sub">按收入排序</span></div>
+      <div class="card-b"><div id="c-cl"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>客户毛利率</h3><span class="sub">同样是客户，赚钱能力差很多</span></div>
+      <div class="card-b"><div id="c-clg"></div>
+        <div class="note" style="margin-top:12px">毛利率低不等于该放弃 —— 要看它带不带来续约与口碑。但必须知道。</div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>客户台账</h3><span class="sp"></span>
+      <span class="sub">金额单位：万元</span></div>
+    <div class="tw"><table style="min-width:1020px">
+      <thead><tr><th>客户</th><th class="ta-r">项目</th><th class="ta-r">中心</th>
+        <th class="ta-r">入组 / 计划</th><th class="ta-r">合同额</th><th class="ta-r">已确认收入</th>
+        <th class="ta-r">毛利</th><th class="ta-r">毛利率</th><th class="ta-r">在途应收</th>
+        <th>账期</th><th>关系</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td><div class="t-main">${esc(r.sp)}</div><div class="t-sub">${esc(r.meta.since||"—")} 年起 · ${esc(r.meta.contact||"—")}</div></td>
+        <td class="tnum">${r.studies.length}</td>
+        <td class="tnum">${r.sites.length}</td>
+        <td class="tnum">${r.enrolled} / ${r.planned}</td>
+        <td class="tnum">${fmask("price", n0(r.contract))}</td>
+        <td class="tnum">${fmask("price", wan(r.rev))}</td>
+        <td class="tnum" style="font-weight:600;color:${r.gp<0?"var(--crit)":"var(--ink)"}">${fmask("margin", wan(r.gp))}</td>
+        <td class="tnum" style="color:${r.gpr<0.15?"var(--crit)":r.gpr<0.25?"var(--warn)":"var(--ink)"}">${fmask("margin", r.gpr===null?"—":pct(r.gpr))}</td>
+        <td class="tnum">${wan(r.ar)}${r.overdue>0?`<div class="t-sub" style="color:var(--crit)">逾期 ${wan(r.overdue)}</div>`:""}</td>
+        <td class="t-sub">${esc(r.meta.pay||"—")}</td>
+        <td><div class="t-sub" style="line-height:1.6;max-width:220px">${esc(r.meta.note||"—")}</div></td>
+      </tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">此前整套系统按「项目 / 中心」切片，没有客户这一维 ——
+STUDIES 上有 sponsor 字段，但从没被当作可聚合维度用过。
+
+对一个靠<b>客户复购</b>活着的服务公司，老板必须能回答：
+「这个客户今年给我多少收入、毛利率多少、几个项目在跑、应收拖了多久、明年还续不续」。
+这个问题按项目切、按中心切，都答不了。</div>`;
+
+  stacked($("#c-cl"), rows.map(r=>({n:r.sp, v:r.rev})));
+  hbars($("#c-clg"), rows.map(r=>({label:r.sp, v:(r.gpr||0)*100,
+    vColor: r.gpr<0.15?"var(--crit)":r.gpr<0.25?"var(--warn)":"var(--ink)",
+    color:"var(--ink-2)",
+    tip:`<div class="tip-t">${esc(r.sp)}</div>
+      <div class="tip-r"><span>收入</span><b>${wan(r.rev)} 万</b></div>
+      <div class="tip-r"><span>成本</span><b>${wan(r.cost)} 万</b></div>
+      <div class="tip-r"><span>毛利</span><b>${wan(r.gp)} 万</b></div>`})),
+    {max:60, fmt:v=>n1(v), unit:"%", band:[15,25]});
+};
+
+/* ── 投标与报价闭环：报出去的价，赢没赢必须回写 ────────────────── */
+VIEWS.bid = box=>{
+  const m = bidM();
+  const lost = BIDS.filter(b=>b.st==="失标"), won = BIDS.filter(b=>b.st==="中标");
+  const pend = BIDS.filter(b=>b.st==="待定");
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["报价胜率",m.rate===null?"—":pct(m.rate),"",m.rate<0.5?"var(--warn)":"var(--ink)",`${m.won} 中 / ${m.done} 已决`],
+       ["中标金额",n0(m.amtWon),"万","var(--ink)",""],
+       ["报价系统性偏差",m.bias===null?"—":(m.bias>0?"+":"")+pct(m.bias),"",
+        Math.abs(m.bias)>0.08?"var(--crit)":"var(--ink)", m.bias>0?"我们比成交价高":"我们比成交价低"],
+       ["失标平均差距",m.lostBias===null?"—":"+"+pct(m.lostBias),"",
+        m.lostBias>0.15?"var(--crit)":"var(--warn)","输掉的单，我们高出对手这么多"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${m.lostBias>0.15?`<div class="card alert alert-crit" style="margin-bottom:24px">
+    <div class="card-h"><h3>失标复盘</h3><span class="sp"></span>
+      <span class="sub">输掉的单平均高出成交价 ${pct(m.lostBias)} —— 这不是运气问题</span></div>
+    <div class="card-b" style="padding:0">
+      ${lost.map(b=>`<div style="padding:11px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(b.id)}</span>
+          <b style="font-size:12.5px;font-weight:500">${esc(b.name)}</b>
+          <span class="t-sub">${esc(b.sp)}</span>
+          <span class="pill p-crit">高 ${pct((b.ours-b.win)/b.win)}</span></div>
+        <div class="note" style="margin-top:3px;line-height:1.7">
+          我方 ${n0(b.ours)} 万（${n1(b.md/b.subjects)} 人天/例）→ 成交 ${n0(b.win)} 万。${esc(b.note)}</div>
+      </div>`).join("")}
+      <div style="padding:11px 14px;background:var(--surface-2)">
+        <div class="note" style="line-height:1.8;color:var(--ink-2)">
+          两次失标的复盘结论指向<b>同一件事</b>：我们的人天假设比同行高 ——
+          CRC 驻场 FTE 报得高、每例人天报得高。这可能意味着两件事之一：
+          <b>①</b> 我们的效率确实低于同行（那是运营问题）；
+          <b>②</b> 同行在低报，进场后靠变更单找补（那是商务打法问题）。<br>
+          区分这两者的唯一办法，是拿<b>自己的历史真实人天</b>去对照 —— 那正是「报价模型」这一页的数据。
+          <b>但只有把中标结果回写进来，这个对照才闭环。</b></div>
+      </div>
+    </div></div>`:""}
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>投标台账</h3><span class="sp"></span>
+      <span class="sub">金额单位：万元｜待定 ${pend.length} 个</span></div>
+    <div class="tw"><table style="min-width:1000px">
+      <thead><tr><th>编号</th><th>客户 / 项目</th><th class="ta-r">中心</th><th class="ta-r">例数</th>
+        <th class="ta-r">我方报价</th><th class="ta-r">人天/例</th><th class="ta-r">成交价</th>
+        <th class="ta-r">价差</th><th>结果</th><th>负责</th><th></th></tr></thead>
+      <tbody>${BIDS.map((b,k)=>{
+        const gap = b.win ? (b.ours-b.win)/b.win : null;
+        return `<tr>
+          <td class="mono" style="font-size:11.5px">${esc(b.id)}</td>
+          <td><div class="t-main">${esc(b.name)}</div><div class="t-sub">${esc(b.sp)} · 递交 ${esc(b.sub)}</div></td>
+          <td class="tnum">${b.sites}</td><td class="tnum">${b.subjects}</td>
+          <td class="tnum">${fmask("price", n0(b.ours))}</td>
+          <td class="tnum">${n1(b.md/b.subjects)}</td>
+          <td class="tnum">${b.win? fmask("price", n0(b.win)) : "—"}</td>
+          <td class="tnum" style="color:${gap===null?"var(--ink-3)":gap>0.1?"var(--crit)":gap>0?"var(--warn)":"var(--good)"}">
+            ${gap===null?"—":(gap>0?"+":"")+pct(gap)}</td>
+          <td><span class="pill ${b.st==="中标"?"p-good":b.st==="失标"?"p-crit":"p-warn"}">${esc(b.st)}</span></td>
+          <td class="t-sub">${esc(b.by)}</td>
+          <td class="ta-r">${b.st==="待定"&&canAct("bid")?`<div class="row" style="gap:4px;justify-content:flex-end">
+            <button class="btn" data-bw="${k}">中标</button><button class="btn" data-bl="${k}">失标</button></div>`:""}</td>
+        </tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>人天/例 —— 中标与失标的分界线</h3>
+      <span class="sub">条形为我方报价里的每例人天假设</span></div>
+    <div class="card-b"><div id="c-bid"></div>
+      <div class="note" style="margin-top:12px;line-height:1.7">
+        中标的单集中在低人天区间，失标的单集中在高人天区间。
+        这条线的位置就是市场对我们效率的定价 —— <b>而它只有在结果回写之后才画得出来。</b></div>
+    </div>
+  </div>
+  <div class="formula">报价模型（另一页）算的是「按我们自己的历史人天，这个项目要花多少」。
+这一页算的是「按这个价报出去，市场认不认」。
+
+前者没有后者，就是自说自话：<code>投标</code> 在系统里出现过 5 次、<code>中标</code> 0 次、<code>报价胜率</code> 0 次 ——
+报出去的价赢了还是输了，从来没有回到系统里。于是"我们是不是系统性报高"这个问题，永远无法回答。
+
+这与架构文档 §3「指标注册表」是同一个道理：<b>口径必须能被历史校准，否则它只是一个信念。</b></div>`;
+
+  hbars($("#c-bid"), m.mdPer.sort((a,b)=>a.v-b.v).map(x=>({
+    label:x.n.length>14?x.n.slice(0,13)+"…":x.n, v:x.v,
+    color: x.st==="中标"?"var(--accent)":"var(--ink-3)",
+    vColor: x.st==="中标"?"var(--good)":"var(--crit)"})),
+    {fmt:v=>n1(v), unit:" 人天/例"});
+
+  box.addEventListener("click",e=>{
+    const w = e.target.closest("[data-bw]"), l = e.target.closest("[data-bl]");
+    if(!w && !l) return;
+    const b = BIDS[+(w||l).dataset[w?"bw":"bl"]];
+    bidResult(b, w? "中标":"失标");
+  });
+};
+function bidResult(b, st){
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(b.id)} · ${esc(b.sp)}</div>
+      <h3 style="font-size:15px">回写投标结果 · ${esc(st)}</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div class="note" style="margin-bottom:11px">我方报价 <b>${n0(b.ours)} 万</b>（${n1(b.md/b.subjects)} 人天/例）</div>
+      <div class="field"><div class="slider-h"><label for="bd-w">${st==="中标"?"最终成交价":"对手成交价（如已知）"}</label><b id="bd-wv">${n0(b.ours)} 万</b></div>
+        <input type="range" id="bd-w" min="${Math.round(b.ours*0.6)}" max="${Math.round(b.ours*1.1)}" step="10" value="${b.ours}"></div>
+      <div class="field"><div class="slider-h"><label for="bd-n">复盘结论</label></div>
+        <textarea class="qbox" id="bd-n" placeholder="${st==="中标"?"例：降价 4% 成交，仍在毛利线上。":"例：输给报价低 21% 的同行，对方按 12 人天/例，我们按 19。"}"></textarea></div>
+      <div style="border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        复盘结论必须写。不写，三个月后没人记得为什么输 ——
+        <b>失标本身不值钱，失标的原因才值钱。</b>
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="bd-go">确认回写</button></div>
+    </div>`);
+  $("#bd-w").addEventListener("input",e=>$("#bd-wv").textContent = n0(+e.target.value)+" 万");
+  $("#bd-go").addEventListener("click",()=>{
+    const n = $("#bd-n").value.trim();
+    if(n.length<6){ toast("请写复盘结论 —— 失标的原因才是这条记录的价值","crit"); return; }
+    b.st = st; b.win = +$("#bd-w").value; b.note = n;
+    logAct("回写投标结果", `${b.id} ${b.name}`, "待定", `${st} · 成交 ${b.win} 万`, {why:n});
+    closeLayer();
+    const gap = (b.ours-b.win)/b.win;
+    toast(`${b.id} 已回写为${st}，价差 ${(gap>0?"+":"")+pct(gap)}，胜率与偏差已重算`);
+    setTimeout(render,220);
+  });
+}
+
+/* ── 合同变更：亏损第二大原因就是 scope creep 没有变更单 ────────── */
+VIEWS.change = box=>{
+  const c = creepM();
+  const st = k => k==="已签署"?"good" : k==="未获批"?"crit" : k==="已提交"?"warn" : "neut";
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["未覆盖工作量",n0(c.md),"人天",c.md>0?"var(--crit)":"var(--ink)","已发生但无对应变更单"],
+       ["折合金额",wan(c.amt),"万",c.md>0?"var(--crit)":"var(--ink)","按 CRC 人天成本折算"],
+       ["待提出",CHANGES.filter(x=>x.st==="待提出").length,"项",
+        CHANGES.filter(x=>x.st==="待提出").length?"var(--crit)":"var(--ink)","识别到了但还没提"],
+       ["已签署变更",c.signed.length,"项","var(--ink)",`累计 ${wan(sum(c.signed,x=>x.amt||0))} 万`]
+     ].map(([l,v,u,cl,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${cl}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${c.md>0?`<div class="card alert alert-crit" style="margin-bottom:24px">
+    <div class="card-h"><h3>白干的活</h3><span class="sp"></span>
+      <span class="sub">${n0(c.md)} 人天已经发生或即将发生，但合同里没有对应条款</span></div>
+    <div class="card-b" style="padding:0">
+      ${c.rows.map(r=>`<div style="padding:11px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(r.id)}</span>
+          <span class="pill p-neut">${esc(r.kind)}</span>
+          <b style="font-size:12.5px;font-weight:500">${esc(S[r.sid].short)}${r.ss?` · ${esc(site(r.ss).hosp)}`:""}</b>
+          <span class="pill p-${st(r.st)}">${esc(r.st)}</span>
+          <span class="sp"></span>
+          <span class="pill p-crit">${n0(r.totalMd)} 人天 ≈ ${wan(r.cash)} 万</span></div>
+        <div class="note" style="margin-top:4px;line-height:1.7">${esc(r.what)}
+          ${r.perSubject?`<br>按每例 ${n1(r.mdImpact)} 人天 × ${r.n} 例计算。`:""}
+          ${r.note?`<br><b>${esc(r.note)}</b>`:""}</div>
+        ${r.st==="待提出"&&canAct("bid")?`<div class="row" style="margin-top:7px">
+          <button class="btn btn-p" data-chg="${esc(r.id)}">提出变更申请</button></div>`:""}
+      </div>`).join("")}
+    </div></div>`:""}
+  <div class="card">
+    <div class="card-h"><h3>变更台账</h3><span class="sp"></span><span class="sub">金额单位：万元</span></div>
+    <div class="tw"><table style="min-width:980px">
+      <thead><tr><th>编号</th><th>项目 / 中心</th><th>变更类型</th><th>内容</th>
+        <th class="ta-r">人天影响</th><th class="ta-r">金额</th><th>提出</th><th>状态</th></tr></thead>
+      <tbody>${CHANGES.map(x=>`<tr>
+        <td class="mono" style="font-size:11.5px">${esc(x.id)}</td>
+        <td><div class="t-main">${esc(S[x.sid].short)}</div><div class="t-sub">${x.ss?esc(site(x.ss).hosp):"全项目"}</div></td>
+        <td class="t-sub">${esc(x.kind)}</td>
+        <td><div class="t-sub" style="line-height:1.6;max-width:320px">${esc(x.what)}</div></td>
+        <td class="tnum">${x.perSubject?`${n1(x.mdImpact)}/例`:n0(x.mdImpact)}</td>
+        <td class="tnum" style="color:${x.amt===null?"var(--crit)":"var(--ink)"}">${x.amt===null?"未计价":fmask("price", wan(x.amt))}</td>
+        <td class="t-sub">${esc(x.raised)}<br>${esc(x.by)}</td>
+        <td><span class="pill p-${st(x.st)}">${esc(x.st)}</span></td>
+      </tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">CRO/SMO 亏损第一大原因是入组延迟，<b>第二大就是 scope creep 没有变更单</b>。
+
+链条是这样断的：申办方修订方案 → 每例多 2 次采血 → CRC 每例多 1.5 人天 →
+143 例就是 214 人天 → 按 ${n1(RATE.crcDay*10)} 万/10 人天算，${wan(214*RATE.crcDay)} 万。
+<b>而这笔钱是否追加，取决于有没有人在方案修订当天就提出变更申请。</b>
+
+系统此前完全不管这件事（全库 <code>方案修订</code> 出现 2 次，无工作流）。
+更隐蔽的是 CR-010 那种：申办方以"属安全性义务"为由不追加费用 ——
+就算最终要不到钱，也必须<b>把它记下来</b>，因为下次报价时这就是应该加进去的成本。</div>`;
+
+  box.addEventListener("click",e=>{
+    const b = e.target.closest("[data-chg]"); if(!b) return;
+    const x = CHANGES.find(y=>y.id===b.dataset.chg);
+    x.st = "已提交"; x.amt = +(creepM().rows.find(r=>r.id===x.id)?.cash || 0).toFixed(1);
+    logAct("提出合同变更", `${x.id} ${x.kind}`, "待提出", `已提交 · ${x.amt} 万`, {ss:x.ss||"—"});
+    toast(`${x.id} 已提出变更申请，计价 ${wan(x.amt)} 万，等待申办方签署`);
+    render();
+  });
+};
+</script>

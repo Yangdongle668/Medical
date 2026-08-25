@@ -1,0 +1,429 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   CRC 端 —— 现场协调员。手机为主、时间碎片、最怕访视超窗。
+   ════════════════════════════════════════════════════════════════════ */
+
+const mySubj = ()=>SUBJ.filter(s=>s.crc===PERSONA().n && !["筛败","已出组","已脱落"].includes(s.st))
+  .sort((a,b)=>winState(a).rem-winState(b).rem);
+const CONTACT = {"已确认":{k:"good"},"待联系":{k:"warn"},"已改期":{k:"warn"},"失联":{k:"crit"}};
+
+/* 窗口条：把 [目标日−窗口, 目标日+窗口] 画出来并标出今天 —— 不靠人记 */
+function winBar(s){
+  const w=winState(s), pad=3, span=s.win*2+pad*2;
+  const l=(pad/span*100), width=((s.win*2)/span*100);
+  const off=days(new Date(new Date(s.due).getTime()-(s.win+pad)*864e5).toISOString().slice(0,10),TODAY);
+  const now=clamp(off/span*100,0,100);
+  return `<div class="winbar" title="窗口 ${w.first} ～ ${w.last}">
+    <div class="ok" style="left:${l}%;width:${width}%"></div>
+    <div class="now" style="left:${now}%"></div>
+    <div class="lbl">${esc(w.first)} ～ ${esc(w.last)}</div></div>`;
+}
+function subjCard(s,{open=false}={}){
+  const w=winState(s), ss=site(s.ss), d=subjDone(s), cs=CONTACT[s.contact]||{k:"neut"};
+  const lag=edcLag(s), late=edcLate(s), scr=s.st==="筛选中";
+  return `<div class="tcard ${w.k==="good"?"":w.k}" data-sc="${s.id}">
+    <div class="tcard-h">
+      <div style="flex:1;min-width:0">
+        <div class="row" style="gap:6px">
+          <span class="subjid">${esc(s.id)}</span>
+          ${scr?`<span class="pill p-warn">筛选期</span>`:`<span class="pill p-neut">随机号 ${esc(s.rnd)}</span>`}
+          <span class="pill p-${w.k}">${esc(w.t)}</span>
+          ${w.dev?`<span class="pill p-crit">已构成方案偏离</span>`:""}
+        </div>
+        <div style="font-size:13px;font-weight:600;margin-top:5px">${esc(soaLabel(s.ss,s.seq))}</div>
+        <div class="note">${esc(ss.hosp)} · ${esc(S[ss.sid].short)}｜目标日 ${esc(s.due)} ± ${s.win} 天</div>
+        <div class="row" style="gap:5px;margin-top:6px">
+          <button class="ct ct-${cs.k}" data-ct="${s.id}">联系 · ${esc(s.contact)}</button>
+          <span class="pill ${s.edc==="已录入"?"p-good":late?"p-crit":"p-warn"}">EDC ${esc(s.edc)}${
+            s.edc!=="已录入"&&lag>0?` · 滞后 ${lag} 天`:""}</span>
+          ${s.piOk?`<span class="pill p-good">研究者已确认</span>`:""}
+        </div>
+      </div>
+      <div class="ta-r" style="flex:none">
+        <div class="cd" style="font-size:19px;color:var(--${w.k==="good"?"good":w.k})">${w.rem<0?w.rem:"+"+w.rem}<span style="font-size:10px;font-weight:400"> 天</span></div>
+        <div class="note">${w.rem<0?"已超窗":"窗口剩余"}</div>
+      </div>
+    </div>
+    <div style="padding:0 12px 10px 14px">
+      ${winBar(s)}
+      <div class="row" style="justify-content:space-between;margin-top:8px">
+        <span class="note">访视任务 ${d} / ${s.tasks.length}</span>
+        <button class="btn" data-sx="${s.id}">${open?"收起":"展开任务"}</button>
+      </div>
+      <div class="bartrack" style="height:4px;margin-top:5px"><div class="barfill" style="width:${d/s.tasks.length*100}%;background:${d===s.tasks.length?"var(--good)":"var(--accent)"};height:100%"></div></div>
+      <div id="sx-${s.id}" ${open?"":"hidden"} style="margin-top:8px">
+        ${s.tasks.map((t,k)=>`<label class="cbx ${t[1]?"done":""}" style="border-bottom:1px solid var(--line)">
+          <input type="checkbox" data-st="${s.id}:${k}" ${t[1]?"checked":""}><span>${esc(t[0])}</span></label>`).join("")}
+        <div class="row" style="margin-top:9px">
+          <button class="btn btn-p" data-sdone="${s.id}">完成访视并记工时</button>
+          ${s.edc!=="已录入"?`<button class="btn" data-edc="${s.id}">标记 EDC 已录入</button>`:""}
+          ${scr?`<button class="btn" data-sfail="${s.id}">登记筛败</button>`
+               :`<button class="btn" data-sdrop="${s.id}">登记退出 / 脱落</button>`}
+          <button class="btn" data-sae="${s.id}">上报 SAE</button>
+          <button class="btn" data-goto4="${s.ss}">中心详情</button>
+        </div>
+      </div>
+    </div></div>`;
+}
+
+/* ── CRC 我的一天 ── */
+VIEWS.crc = box=>{
+  const me=PERSONA().n, list=mySubj();
+  const alert=list.filter(s=>winState(s).k!=="good");
+  const qs=QUERIES.filter(q=>q.owner===me&&q.st==="待中心回复");
+  const myTs=TIMESHEET.filter(t=>t.who===me);
+  const h=sum(myTs,t=>t.h), bill=sum(myTs.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h);
+  const isf=ISF.filter(i=>staff(me).sites.includes(i.ss)&&i.st!=="good");
+  const edcQ=list.filter(s=>s.edc!=="已录入");
+  const edcLateN=list.filter(edcLate);
+  const contactQ=list.filter(s=>s.contact==="待联系"||s.contact==="失联");
+  const payQ=PAY.filter(p=>staff(me).sites.includes(p.ss)&&p.st!=="已发放");
+  const p=staff(me), us=utilState(p.util);
+
+  box.innerHTML=`
+  <div class="mini" style="margin-bottom:14px">
+    ${[["窗口告警",alert.length,"例",alert.length?"var(--crit)":"var(--ink)"],
+       ["EDC 待录入",edcQ.length,"例",edcLateN.length?"var(--crit)":edcQ.length?"var(--warn)":"var(--ink)"],
+       ["待联系受试者",contactQ.length,"人",contactQ.length?"var(--warn)":"var(--ink)"],
+       ["待我回复质疑",qs.length,"条",qs.length?"var(--warn)":"var(--ink)"],
+       ["待发放补偿",payQ.length,"笔",payQ.length?"var(--warn)":"var(--ink)"],
+       ["我的利用率",p.util+"%","",us.k==="good"?"var(--ink)":us.c]
+     ].map(([l,v,u,c])=>`<div><div class="kpi-l">${esc(l)}</div>
+        <div class="v" style="color:${c}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  ${edcLateN.length?`<div class="card alert alert-crit" style="margin-bottom:28px">
+    <div class="card-h"><h3>EDC 录入滞后</h3><span class="sp"></span>
+      <span class="sub">访视后 5 个工作日内录入才算及时 —— 质疑都是录入之后才产生的</span></div>
+    <div class="card-b" style="padding:0">
+      ${edcLateN.map(s=>`<div style="padding:9px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px"><span class="subjid">${esc(s.id)}</span>
+          <b style="font-size:12.5px;font-weight:500">${esc(soaLabel(s.ss,s.seq))}</b>
+          <span class="pill p-crit">滞后 ${edcLag(s)} 天</span>
+          <span class="sp"></span>
+          <button class="btn" data-edc="${s.id}">标记已录入</button></div>
+        <div class="note" style="margin-top:2px">${esc(site(s.ss).hosp)}｜访视完成于 ${esc(s.lastVisit)}</div>
+      </div>`).join("")}
+    </div></div>`:""}
+  <div class="grid g21" style="gap:12px">
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>现在最该做的</h3><span class="sub">按窗口剩余时间排序，不按录入顺序</span>
+          <span class="sp"></span><button class="btn" data-nav="subj">全部 ${list.length} 例 →</button></div>
+        <div class="card-b"><div class="stack" style="gap:9px">
+          ${list.slice(0,3).map(s=>subjCard(s,{open:winState(s).k==="crit"})).join("")||`<div class="empty">今日无待办访视</div>`}
+        </div></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>待我回复的数据质疑</h3><span class="sp"></span>
+          <button class="btn" data-nav="query">全部 →</button></div>
+        <div class="card-b" style="padding:0">
+          ${qs.slice(0,3).map(q=>`<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+            <div class="row" style="gap:6px"><span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(q.id)}</span>
+              <span class="subjid">${esc(q.subj)}</span>
+              <span class="pill ${q.age>7?"p-crit":"p-warn"}">已挂起 ${q.age} 天</span></div>
+            <div style="font-size:12.5px;margin-top:4px;color:var(--ink-2)">${esc(q.txt)}</div>
+          </div>`).join("")||`<div class="empty">没有待回复的质疑</div>`}
+        </div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <div class="card-h"><h3>受试者联系</h3><span class="sub">访视超窗多半是约不上人，不是忘了</span></div>
+        <div class="card-b" style="padding:0">
+          ${list.map(s=>{const cs=CONTACT[s.contact]||{k:"neut"};
+            return `<div style="padding:8px 14px;border-bottom:1px solid var(--line)">
+              <div class="row" style="justify-content:space-between;gap:8px">
+                <div style="min-width:0"><span class="subjid">${esc(s.id)}</span>
+                  <span class="t-sub"> ${esc(soaLabel(s.ss,s.seq))}</span></div>
+                <button class="ct ct-${cs.k}" data-ct="${s.id}">${esc(s.contact)}</button></div>
+            </div>`;}).join("")}
+          <div class="note" style="padding:10px 14px;line-height:1.6">点击可切换状态：待联系 → 已确认 → 已改期 → 失联。
+            改期会自动把目标日顺延一周并重算窗口。</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>现场清单异常</h3><span class="sp"></span>
+          <button class="btn" data-nav="isf">全部 →</button></div>
+        <div class="card-b" style="padding:0">
+          ${isf.slice(0,4).map(i=>`<div style="padding:9px 14px 9px 16px;border-bottom:1px solid var(--line);position:relative">
+            <span class="stripe" style="background:var(--${i.st})"></span>
+            <div class="row" style="gap:6px"><span class="pill p-${i.st}">${i.st==="crit"?"缺失/过期":"临期"}</span>
+              <b style="font-size:12.5px;font-weight:500">${esc(i.item)}</b></div>
+            <div class="note" style="margin-top:2px">${esc(i.note)}</div>
+          </div>`).join("")||`<div class="empty">清单齐备</div>`}
+        </div>
+      </div>
+    </div>
+  </div>`;
+  wireSubj(box);
+};
+
+/* ── 受试者访视窗口（完整列表） ── */
+VIEWS.subj = box=>{
+  const list=mySubj();
+  const failed=SUBJ.filter(s=>s.crc===PERSONA().n&&s.st==="筛败");
+  const g={crit:list.filter(s=>winState(s).k==="crit"),
+           warn:list.filter(s=>winState(s).k==="warn"),
+           good:list.filter(s=>winState(s).k==="good")};
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["已超窗 / 今明到期",g.crit.length,"例","var(--crit)","超窗即方案偏离，必须当天处理"],
+       ["窗口临期",g.warn.length,"例","var(--warn)","3 天内必须完成"],
+       ["窗口内",g.good.length,"例","var(--good)","按计划推进"],
+       ["我登记的筛败",failed.length,"例","var(--ink-3)","筛败也是工作量，且合同单独计价"]
+     ].map(([l,v,u,c,n])=>`<div class="stat">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  ${["crit","warn","good"].map(k=>g[k].length?`
+    <div class="section-t">${k==="crit"?"立即处理":k==="warn"?"三天内":"窗口内"}（${g[k].length}）</div>
+    <div class="grid g2" style="gap:10px;margin-bottom:16px">${g[k].map(s=>subjCard(s,{open:k==="crit"})).join("")}</div>`:"").join("")}
+  ${failed.length?`<div class="section-t">已登记筛败（${failed.length}）</div>
+    <div class="card" style="margin-bottom:14px"><div class="card-b" style="padding:0">
+      ${failed.map(s=>`<div style="padding:9px 14px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px"><span class="subjid">${esc(s.id)}</span>
+          <span class="pill p-neut">${esc(s.sfWhy||"未填写原因")}</span>
+          <span class="t-sub">${esc(site(s.ss).hosp)}</span></div></div>`).join("")}
+    </div></div>`:""}
+  <div class="formula">窗口状态由日期算出，不是人工标注：
+剩余 = (目标日 + 窗口天数) − 今天｜&lt;0 已超窗（自动生成方案偏离）｜≤1 今明到期｜≤3 临期
+
+完成访视 = 勾完全部任务 → 记工时（关联到本次访视）→ 转研究者确认 → 自动生成下一次访视窗口
+受试者不会因为做完一次访视就从系统里消失 —— 他有生命周期，直到出组。</div>`;
+  wireSubj(box);
+};
+
+function wireSubj(box){
+  box.addEventListener("click",e=>{
+    const x=e.target.closest("[data-sx]");
+    if(x){ const d=$("#sx-"+x.dataset.sx); if(d){ d.hidden=!d.hidden; x.textContent=d.hidden?"展开任务":"收起"; } return; }
+    const g=e.target.closest("[data-goto4]"); if(g){ openSite(g.dataset.goto4); return; }
+    const ed=e.target.closest("[data-edc]");
+    if(ed){ const s=SUBJ.find(x=>x.id===ed.dataset.edc); const lag=edcLag(s);
+      logAct("标记 EDC 已录入", s.id, "待录入", `已录入（滞后 ${lag} 天）`, {ss:s.ss});
+      s.edc="已录入";
+      toast(lag>5? `${s.id} EDC 已录入，滞后 ${lag} 天 —— 超出 5 个工作日及时线` : `${s.id} EDC 已录入（滞后 ${lag} 天）`,
+        lag>5?"warn":""); render(); return; }
+    const ct=e.target.closest("[data-ct]");
+    if(ct){ const s=SUBJ.find(x=>x.id===ct.dataset.ct);
+      const order=["待联系","已确认","已改期","失联"];
+      s.contact=order[(order.indexOf(s.contact)+1)%order.length];
+      if(s.contact==="已改期"){ const was=s.due;
+        s.due=new Date(new Date(s.due).getTime()+7*864e5).toISOString().slice(0,10);
+        logAct("修改访视目标日", s.id, was, s.due, {ss:s.ss, why:"受试者改期"});
+        toast(`${s.id} 已改期，目标日顺延至 ${s.due}，窗口已重算`,"warn"); }
+      else toast(`${s.id} 联系状态：${s.contact}`);
+      render(); return; }
+    const sf=e.target.closest("[data-sfail]"); if(sf){ failModal(sf.dataset.sfail); return; }
+    const dp=e.target.closest("[data-sdrop]"); if(dp){ dropModal(dp.dataset.sdrop); return; }
+    const sa=e.target.closest("[data-sae]");   if(sa){ saeModal(sa.dataset.sae); return; }
+    const dn=e.target.closest("[data-sdone]"); if(dn){ doneModal(dn.dataset.sdone); return; }
+  });
+  box.addEventListener("change",e=>{
+    const c=e.target.closest("[data-st]"); if(!c) return;
+    const [id,k]=c.dataset.st.split(":");
+    const s=SUBJ.find(x=>x.id===id); s.tasks[+k][1]=c.checked?1:0;
+    c.closest("label").classList.toggle("done",c.checked);
+    const card=c.closest(".tcard"), d=subjDone(s);
+    card.querySelector(".bartrack .barfill").style.width=d/s.tasks.length*100+"%";
+    card.querySelector(".bartrack .barfill").style.background=d===s.tasks.length?"var(--good)":"var(--accent)";
+    card.querySelector(".note").textContent=`访视任务 ${d} / ${s.tasks.length}`;
+  });
+}
+
+/* ── 完成访视：与工时同一次录入，这样「每次访视实际耗时」才算得出来 ── */
+function doneModal(id){
+  const s=SUBJ.find(x=>x.id===id), left=s.tasks.filter(t=>!t[1]).length;
+  if(left){ toast(`还有 ${left} 项访视任务未完成，无法标记完成`,"crit"); return; }
+  const w=winState(s), sc=soa(s.ss);
+  openLayer($("#modal"),`
+    <div class="drawer-h"><div style="flex:1">
+      <div class="section-t" style="margin:0 0 3px">${esc(s.id)} · ${esc(site(s.ss).hosp)}</div>
+      <h3 style="font-size:15px">${esc(soaLabel(s.ss,s.seq))} 完成登记</h3></div>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      ${w.dev?`<div style="border-left:2px solid var(--crit);background:var(--crit-soft);padding:9px 11px;font-size:12.5px;color:var(--ink-2);line-height:1.6;margin-bottom:12px">
+        <b style="color:var(--crit)">本次访视已超窗 ${Math.abs(w.rem)} 天</b>（窗口 ${w.first} ～ ${w.last}）。
+        提交后将自动生成方案偏离质量事件，并进入研究者签字流程。</div>`:""}
+      <div class="field"><div class="slider-h"><label for="dv-h">本次访视陪同耗时</label><b id="dv-hv">4.0 小时</b></div>
+        <input type="range" id="dv-h" min="0.5" max="12" step="0.5" value="4"></div>
+      <div class="field"><label class="cbx"><input type="checkbox" id="dv-pay" checked><span>本次访视发放受试者补偿（交通 + 营养费）</span></label></div>
+      <div style="border:1px solid var(--line);background:var(--surface-2);padding:9px 11px;border-radius:8px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        提交后系统会一次性完成：<br>
+        ① 记一条工时，<b>关联到本次访视</b>（这样「每次访视实际耗时」才算得出来）<br>
+        ② 成本归集到 ${esc(site(s.ss).hosp)}<br>
+        ③ 本次访视记录转研究者 ${esc(site(s.ss).pi)} 签署确认<br>
+        ④ 自动生成下一次访视：<b>${esc(soaLabel(s.ss, s.seq+1))}</b>，目标日 ${
+          new Date(new Date(s.due).getTime()+sc.cycle*864e5).toISOString().slice(0,10)} ± ${sc.win} 天
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="dv-go">提交</button></div>
+    </div>`);
+  $("#dv-h").addEventListener("input",e=>$("#dv-hv").textContent=(+e.target.value).toFixed(1)+" 小时");
+  $("#dv-go").addEventListener("click",()=>{
+    const h=+$("#dv-h").value, me=PERSONA().n, p=staff(me), ss=site(s.ss);
+    const vName=soaLabel(s.ss,s.seq);
+    TIMESHEET.unshift({id:tsSeq++, d:TODAY, who:me, ss:s.ss, type:"受试者访视陪同",
+      h, travel:0, subj:s.id, visit:vName});
+    const c=h/8*RATE.crcDay; ss.cost=+(ss.cost+c).toFixed(1); ss.md+=Math.round(h/8*10)/10;
+    if($("#dv-pay").checked)
+      PAY.unshift({ss:s.ss, subj:s.id, visit:vName, traffic:200, meal:100, d:TODAY,
+        way:"银行转账", rc:false, st:"待签收"});
+    if(w.dev) ISSUES.unshift({id:"QI-2026-0"+(180+ISSUES.length), src:"中心自查", ss:s.ss, sev:"严重",
+      type:"方案偏离", found:TODAY,
+      desc:`受试者 ${s.id}「${vName}」实际完成日期超出方案窗口 ${Math.abs(w.rem)} 天（窗口 ${w.first} ～ ${w.last}）。`,
+      capa:"（待提交整改措施）", own:me,
+      due:new Date(Date.now()+7*864e5).toISOString().slice(0,10), st:"待整改", sla:null});
+    /* 受试者不消失：推进到下一次访视 */
+    if(s.st==="筛选中"){ s.st="已入组"; s.rnd="R-0"+(30+Math.floor(Math.random()*60));
+      ss.enrolled++; toast(`${s.id} 已随机入组，随机号 ${s.rnd}`); }
+    s.pendPi={visit:vName, date:TODAY, tasks:s.tasks.map(t=>t[0])};
+    s.seq++; s.lastVisit=TODAY; s.edc="待录入"; s.piOk=false; s.contact="待联系";
+    s.due=new Date(new Date(s.due).getTime()+sc.cycle*864e5).toISOString().slice(0,10);
+    s.win=sc.win; s.tasks=soaTasks(s.ss,s.seq);
+    if(s.seq>sc.last){ s.st="已出组"; }
+    closeLayer();
+    toast(w.dev? `${s.id} 访视完成但超窗，已生成方案偏离并转研究者签字｜工时 ${n1(h)}h 已关联记录`
+               : `${s.id} 访视完成，工时 ${n1(h)}h 已关联本次访视，转研究者确认`, w.dev?"crit":"");
+    setTimeout(render,220);
+  });
+}
+
+/* ── 登记筛败 ── */
+function failModal(id){
+  const s=SUBJ.find(x=>x.id===id);
+  openLayer($("#modal"),`
+    <div class="drawer-h"><h3 style="flex:1;font-size:15px">登记筛败 · ${esc(s.id)}</h3>
+      <button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div class="field"><div class="slider-h"><label for="sf-r">筛败原因</label></div>
+        <select class="sel" id="sf-r" style="width:100%">${SF_REASONS.map(r=>`<option>${esc(r)}</option>`).join("")}</select></div>
+      <div class="field"><div class="slider-h"><label for="sf-d">具体说明</label></div>
+        <textarea class="qbox" id="sf-d" placeholder="例：筛选期 ALT 142 U/L，超出入排上限 3×ULN。"></textarea></div>
+      <div style="border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;font-size:12px;color:var(--ink-2);line-height:1.7;margin-bottom:12px">
+        筛败不是白做：本次筛选期工作量照常计入工时，且合同按入组单价的 <b>${pct(SF_FEE)}</b> 计筛败费。<br>
+        筛败原因会进入该中心的原因分布 —— 这是判断「入排不匹配」还是「病源不足」的唯一依据。
+      </div>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="sf-go">确认登记</button></div>
+    </div>`);
+  $("#sf-go").addEventListener("click",()=>{
+    const why=$("#sf-r").value;
+    s.st="筛败"; s.sfWhy=why;
+    const f=FUNNEL[s.ss]; if(f){ f.sf++; f.sfr[SF_REASONS.indexOf(why)]++; }
+    closeLayer();
+    toast(`${s.id} 已登记筛败（${why}），已计入该中心筛败漏斗与筛败费`);
+    setTimeout(render,220);
+  });
+}
+
+/* ── 数据质疑（CRC 回复 / CRA 跟进，同一页两种视角） ── */
+VIEWS.query = box=>{
+  const p=PERSONA(), isCRC=p.k==="crc", ids=scopeIds();
+  /* 非 CRC 视角按行权限取范围，而不是按 STAFF 表 —— DM / QA 不在派工表里 */
+  const all = isCRC ? QUERIES.filter(q=>q.owner===p.n)
+                    : QUERIES.filter(q=>q.by.startsWith(p.n)||ids.has(q.ss));
+  const open=all.filter(q=>q.st==="待中心回复"), waiting=all.filter(q=>q.st!=="待中心回复");
+  const shown = state.qTab==="open"? open : waiting;
+  const avg = all.length? sum(all,q=>q.age)/all.length : 0;
+
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[[isCRC?"待我回复":"待中心回复",open.length,"条",open.length?"var(--warn)":"var(--ink)"],
+       ["挂起超 7 天",open.filter(q=>q.age>7).length,"条",open.filter(q=>q.age>7).length?"var(--crit)":"var(--ink)"],
+       ["平均挂起",n1(avg),"天",avg>7?"var(--crit)":avg>5?"var(--warn)":"var(--ink)"],
+       ["已回复待关闭",waiting.length,"条","var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  <div class="card">
+    <div class="card-h">
+      <div class="seg" id="qt">
+        <button data-q="open" aria-pressed="${state.qTab==="open"}">${isCRC?"待我回复":"待中心回复"} ${open.length}</button>
+        <button data-q="wait" aria-pressed="${state.qTab!=="open"}">已回复待关闭 ${waiting.length}</button>
+      </div><span class="sp"></span>
+      <span class="sub">目标平均关闭 ≤ 5 天</span></div>
+    <div class="card-b" style="padding:0">
+      ${shown.length? shown.map(q=>`
+        <div style="padding:12px 16px 12px 18px;border-bottom:1px solid var(--line);position:relative">
+          <span class="stripe" style="background:var(--${q.age>7?"crit":q.st==="待中心回复"?"warn":"good"})"></span>
+          <div class="row" style="gap:6px">
+            <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(q.id)}</span>
+            <span class="subjid">${esc(q.subj)}</span>
+            <span class="pill p-neut">${esc(q.form)}</span>
+            <span class="sp"></span>
+            <span class="pill ${q.age>7?"p-crit":"p-warn"}">挂起 ${q.age} 天</span></div>
+          <div style="font-size:12.5px;margin-top:5px;color:var(--ink-2);line-height:1.6">${esc(q.txt)}</div>
+          <div class="note" style="margin-top:3px">${esc(site(q.ss).hosp)} · 字段「${esc(q.field)}」｜发起方 ${esc(q.by)}｜责任 CRC ${esc(q.owner)}</div>
+          ${isCRC&&q.st==="待中心回复"?`
+            <div style="margin-top:9px">
+              <textarea class="qbox" id="qr-${q.id}" placeholder="填写核实结果与源数据依据，例如：已核对原始病历，AE 开始日期录入错误，已更正为 2026-08-09，源文件第 12 页。"></textarea>
+              <div class="row" style="margin-top:7px">
+                <button class="btn btn-p" data-qr="${q.id}">提交回复</button>
+                <button class="btn" data-goto4="${q.ss}">中心详情</button></div>
+            </div>`:""}
+          ${!isCRC&&q.st==="待中心回复"&&q.age>7?`
+            <div class="row" style="margin-top:9px">
+              <button class="btn btn-p" data-qp="${q.id}">电话催办并记录</button>
+              <span class="note">超 7 天未回复，靠系统提醒已经不够了</span></div>`:""}
+        </div>`).join("") : `<div class="empty">这一栏是空的</div>`}
+    </div>
+  </div>`;
+  box.addEventListener("click",e=>{
+    const t=e.target.closest("[data-q]"); if(t){ state.qTab=t.dataset.q; render(); return; }
+    const g=e.target.closest("[data-goto4]"); if(g){ openSite(g.dataset.goto4); return; }
+    const r=e.target.closest("[data-qr]");
+    if(r){ const q=QUERIES.find(x=>x.id===r.dataset.qr);
+      const v=$("#qr-"+q.id).value.trim();
+      if(v.length<10){ toast("回复需要写清核实结果与源数据依据（至少 10 个字）","crit"); return; }
+      q.st="已回复待关闭"; toast(`${q.id} 已回复，等待数据管理关闭`); render(); return; }
+    const ph=e.target.closest("[data-qp]");
+    if(ph){ const q=QUERIES.find(x=>x.id===ph.dataset.qp);
+      toast(`已记录对 ${site(q.ss).hosp} 的催办：${q.id}，并同步给 PM`,"warn"); }
+  });
+};
+
+/* ── 中心文件与物资 ── */
+VIEWS.isf = box=>{
+  const mine=staff(PERSONA().n).sites;
+  const list=ISF.filter(i=>mine.includes(i.ss));
+  const bad=list.filter(i=>i.st!=="good");
+  const cats=[...new Set(list.map(i=>i.cat))];
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["清单项",list.length,"项","var(--ink)"],
+       ["缺失 / 过期",list.filter(i=>i.st==="crit").length,"项",list.filter(i=>i.st==="crit").length?"var(--crit)":"var(--ink)"],
+       ["临期待办",list.filter(i=>i.st==="warn").length,"项",list.filter(i=>i.st==="warn").length?"var(--warn)":"var(--ink)"],
+       ["齐备率",pct((list.length-bad.length)/list.length),"",bad.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div></div>`).join("")}
+  </div>
+  ${mine.map(id=>`
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-h"><h3>${esc(site(id).hosp)}</h3>
+        <span class="sub">${esc(S[site(id).sid].short)} · PI ${esc(site(id).pi)}</span></div>
+      <div class="card-b" style="padding:0">
+        ${cats.map(c=>{const rows=list.filter(i=>i.ss===id&&i.cat===c); if(!rows.length) return "";
+          return `<div style="padding:10px 14px;border-bottom:1px solid var(--line)">
+            <div class="section-t" style="margin-bottom:6px">${esc(c)}</div>
+            ${rows.map(i=>`<div class="row" style="justify-content:space-between;gap:10px;padding:5px 0">
+              <div style="flex:1;min-width:0">
+                <div class="row" style="gap:6px"><span class="dot" style="background:var(--${i.st})"></span>
+                  <b style="font-size:12.5px;font-weight:500">${esc(i.item)}</b></div>
+                <div class="note" style="margin-left:12px">${esc(i.note)}</div></div>
+              ${i.st!=="good"?`<button class="btn" data-fix="${esc(i.item)}">${i.st==="crit"?"上报并补齐":"提前处理"}</button>`
+                             :`<span class="pill p-good">齐备</span>`}
+            </div>`).join("")}</div>`;}).join("")}
+      </div>
+    </div>`).join("")}
+  <p class="note">核查现场翻的就是这几摞东西。人员资质缺失与药品效期是最常见的两类严重发现 —— 它们都能被日历提醒兜住，却经常没人管。</p>`;
+  box.addEventListener("click",e=>{const b=e.target.closest("[data-fix]");
+    if(b) toast(`已生成待办并通知 CRA 与 PM：${b.dataset.fix}`,"warn");});
+};
+</script>

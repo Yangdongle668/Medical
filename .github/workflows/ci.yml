@@ -1,0 +1,142 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  contracts:
+    name: 契约与口径 —— 类型 · 产物一致 · 破坏性变更门禁 · I8' 基线
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }          # check:breaking 需要 HEAD 作基线
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run arch:check
+
+      # 产物必须与 zod 定义一致：openapi.yaml 是生成出来的，不允许手改
+      - name: 重新生成并确认无差异
+        run: |
+          npm run contracts:build
+          if ! git diff --quiet -- packages/contracts/openapi.yaml packages/contracts/mocks; then
+            echo "::error::openapi.yaml / mocks 与 zod 定义不一致。请运行 npm run contracts:build 后提交产物。"
+            git --no-pager diff --stat -- packages/contracts/openapi.yaml packages/contracts/mocks
+            exit 1
+          fi
+
+      # 破坏性变更不是不能做，是不能悄悄做
+      - run: npm run contracts:check
+      - run: npm run test -w @sitedesk/contracts
+      # 计算引擎是纯函数，不需要数据库 —— 与契约同一个 job，失败得更早
+      - run: npm run test -w @sitedesk/calc
+      # 设计令牌的对比度实测：明暗双模式逐对量，不靠肉眼
+      - run: npm run test -w @sitedesk/ui
+
+  database:
+    name: 数据库与后端 —— 迁移 · RLS · 等价性 · 权限矩阵
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ['5432:5432']
+    env:
+      PGPASSWORD: postgres
+      TEST_DATABASE_URL: postgres://sitedesk:sitedesk@127.0.0.1:5432/sitedesk_test
+      APP_TEST_DATABASE_URL: postgres://sitedesk_app:sitedesk_app@127.0.0.1:5432/sitedesk_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+      - run: npm ci
+      - name: 引导角色与扩展
+        run: |
+          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE sitedesk_test;"
+          psql -h 127.0.0.1 -U postgres -d sitedesk_test -f db/scripts/bootstrap.sql
+          psql -h 127.0.0.1 -U postgres -d sitedesk_test -c "ALTER DATABASE sitedesk_test OWNER TO sitedesk;"
+      - name: 写入 .env（测试库连接）
+        run: |
+          printf 'TEST_DATABASE_URL=%s\nAPP_TEST_DATABASE_URL=%s\nAPP_DATABASE_URL=%s\n' \
+            "$TEST_DATABASE_URL" "$APP_TEST_DATABASE_URL" "$APP_TEST_DATABASE_URL" > .env
+      - run: npm run test -w db
+      - run: npm run test -w @sitedesk/policy
+      # api 的每个测试文件会自建一个独立数据库（见 test/harness.ts），
+      # 需要 owner 角色有 CREATEDB —— bootstrap.sql 里已给
+      - run: npm run test -w @sitedesk/api
+
+  web:
+    name: 前端 —— 构建 · 三个断点零横向溢出 · mock 走通业务流
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+      - run: npm ci
+
+      # 生产包里不能带上 MSW —— 开关写成方括号访问就会静默失效，
+      # 所以这里量的是产物本身，不是相信那行代码
+      - name: 生产构建不含 mock
+        run: |
+          npm run build -w @sitedesk/web
+          if grep -rlq "msw" apps/web/dist/assets/*.js; then
+            echo "::error::生产构建里出现了 MSW —— 检查 main.tsx 的构建期开关"
+            exit 1
+          fi
+
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e -w @sitedesk/web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-trace
+          path: apps/web/test-results/
+          retention-days: 7
+
+  integration:
+    name: 集成 —— 前端打真实后端与真实数据库
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ['5432:5432']
+    env:
+      PGPASSWORD: postgres
+      TEST_DATABASE_URL: postgres://sitedesk:sitedesk@127.0.0.1:5432/sitedesk_test
+      APP_TEST_DATABASE_URL: postgres://sitedesk_app:sitedesk_app@127.0.0.1:5432/sitedesk_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+      - run: npm ci
+      - name: 引导角色与扩展
+        run: |
+          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE sitedesk_test;"
+          psql -h 127.0.0.1 -U postgres -d sitedesk_test -f db/scripts/bootstrap.sql
+          psql -h 127.0.0.1 -U postgres -d sitedesk_test -c "ALTER DATABASE sitedesk_test OWNER TO sitedesk;"
+      - name: 写入 .env
+        run: |
+          printf 'TEST_DATABASE_URL=%s\nAPP_TEST_DATABASE_URL=%s\nAPP_DATABASE_URL=%s\n' \
+            "$TEST_DATABASE_URL" "$APP_TEST_DATABASE_URL" "$APP_TEST_DATABASE_URL" > .env
+      - run: npx playwright install --with-deps chromium
+      - run: npm run integration -w @sitedesk/web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: integration-trace
+          path: apps/web/test-results/
+          retention-days: 7

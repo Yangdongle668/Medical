@@ -1,0 +1,295 @@
+<script>
+"use strict";
+/* ════════ 图标 ════════ */
+const IC = {
+  dash:'<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  sites:'<rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="9" width="8" height="11" rx="1"/><path d="M6 8h2M6 12h2M16 13h2"/>',
+  enr:'<path d="M3 17l5-6 4 3 6-8"/><path d="M3 21h18"/>',
+  staff:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M17 11h4M19 9v4"/>',
+  time:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  pnl:'<path d="M4 20V9M10 20V4M16 20v-7M22 20H2"/>',
+  bill:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h4"/>',
+  qa:'<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  mon:'<rect x="3" y="5" width="18" height="16" rx="1"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  price:'<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  me:'<path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="5"/>',
+  subj:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 3v4h6V3"/><path d="M8 12l2 2 4-4"/>',
+  query:'<path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 13v.01M12 7a2 2 0 0 1 1.5 3.3c-.6.6-1.5 1-1.5 1.7"/>',
+  isf:'<path d="M4 4h6l2 2h8v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 13l2 2 4-4"/>',
+  approve:'<path d="M9 11l3 3 7-7"/><path d="M20 12v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9"/>',
+  team:'<circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 20a6 6 0 0 1 12 0"/><path d="M15 20a4.5 4.5 0 0 1 7-3.7"/>',
+  intake:'<path d="M12 5v10M8 11l4 4 4-4"/><path d="M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/>',
+  capa:'<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>',
+  inst:'<path d="M3 21h18M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/>',
+  reg:'<rect x="3" y="4" width="18" height="16" rx="1"/><circle cx="9" cy="10" r="2.2"/><path d="M5.5 17a3.8 3.8 0 0 1 7 0"/><path d="M15 9h4M15 13h4"/>',
+  screen:'<path d="M3 4h18l-7 8v7l-4 2v-9z"/>',
+  feas:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/><path d="M8.5 11h5M11 8.5v5"/>',
+  mat:'<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+  pay:'<rect x="2" y="6" width="20" height="12" rx="1"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+  pi:'<path d="M12 3l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4L7.5 16.8l.9-5L4.8 8.3l5-.7z"/>',
+  audit:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.9-4.9"/><path d="M8 10.5l2 2 3.5-3.5"/>'
+};
+
+/* ════════ 每个角色只看得到自己该看的 ════════ */
+const N = {
+  dash:{t:"经营驾驶舱",ic:IC.dash}, sites:{t:"项目 · 中心台账",ic:IC.sites},
+  mysites:{t:"我的中心",ic:IC.sites}, enr:{t:"入组进度",ic:IC.enr},
+  staff:{t:"派工与产能",ic:IC.staff}, time:{t:"工时与差旅",ic:IC.time},
+  pnl:{t:"成本与毛利",ic:IC.pnl}, bill:{t:"里程碑 · 结算",ic:IC.bill},
+  qa:{t:"质量事件与 CAPA",ic:IC.qa}, mon:{t:"监查访视",ic:IC.mon},
+  price:{t:"报价模型",ic:IC.price},
+  crc:{t:"我的一天",ic:IC.me}, cra:{t:"我的一天",ic:IC.me}, pm:{t:"团队工作台",ic:IC.me},
+  subj:{t:"受试者访视窗口",ic:IC.subj}, query:{t:"数据质疑",ic:IC.query},
+  isf:{t:"中心文件与物资",ic:IC.isf}, approve:{t:"待我审批",ic:IC.approve},
+  team:{t:"我的团队",ic:IC.team},
+  intake:{t:()=>PERSONA().k==="boss"?"立项审批":"立项与建档", ic:IC.intake},
+  capa:{t:"我的整改",ic:IC.capa},
+  inst:{t:"机构工作台",ic:IC.inst}, instac:{t:"立项受理",ic:IC.intake},
+  instqc:{t:"机构质控",ic:IC.qa}, instreg:{t:"人员备案与准入",ic:IC.reg},
+  screen:{t:"筛选漏斗与筛败",ic:IC.screen}, feas:{t:"中心可行性调查",ic:IC.feas},
+  material:{t:"药品与样本",ic:IC.mat}, pay:{t:"受试者补偿",ic:IC.pay},
+  pi:{t:"研究者工作台",ic:IC.pi}, audit:{t:"内部稽查",ic:IC.audit}
+};
+Object.assign(N, {
+  mysite:{t:"我的中心",ic:IC.sites},        startup:{t:"中心启动清单",ic:IC.intake},
+  sched:{t:"我的日程",ic:IC.mon},           prescreen:{t:"预筛登记",ic:IC.screen},
+  ethics:{t:"伦理事务",ic:IC.reg},          handover:{t:"交接",ic:IC.team},
+  cash:{t:"现金流预测",ic:IC.price},        client:{t:"客户",ic:IC.inst},
+  bid:{t:"投标与报价闭环",ic:IC.price},     change:{t:"合同变更",ic:IC.capa},
+  people:{t:"人才梯队",ic:IC.staff},        org:{t:"组织与权限",ic:IC.reg},
+  trail:{t:"审计轨迹",ic:IC.audit},         dm:{t:"数据管理工作台",ic:IC.query}
+});
+
+/* 导航不再按角色硬编码，而是由 ROLE_DEF[role].mods 生成 ——
+   老板在「组织与权限」里勾掉一个模块，这里立刻少一项。 */
+const MOD_GROUP = {
+  crc:"我的工作", cra:"我的工作", pm:"我的工作", dm:"我的工作", inst:"机构办公室", pi:"研究者",
+  mysite:"我的工作", mysites:"我的工作", sched:"我的工作", subj:"我的工作", query:"我的工作",
+  team:"我的工作", approve:"我的工作",
+  startup:"项目周期", prescreen:"项目周期", ethics:"项目周期", handover:"项目周期",
+  isf:"现场", material:"现场", pay:"现场",
+  dash:"经营", intake:"经营", sites:"经营", enr:"经营", screen:"经营", client:"经营", cash:"经营",
+  feas:"商务", price:"商务", bid:"商务", change:"商务",
+  staff:"资源", people:"资源", time:"资源",
+  pnl:"财务", bill:"财务",
+  qa:"质量", mon:"质量", audit:"质量", capa:"质量", trail:"质量",
+  instac:"机构办公室", instqc:"机构办公室", instreg:"机构办公室",
+  org:"系统"
+};
+const GROUP_ORDER = ["我的工作","项目周期","现场","经营","商务","资源","财务","质量","机构办公室","研究者","系统"];
+
+const openQ  = who=>QUERIES.filter(q=>q.owner===who&&q.st==="待中心回复").length;
+const myQ    = ()=>QUERIES.filter(q=>q.by.startsWith(PERSONA().n)&&q.st==="待中心回复").length;
+const badQA  = ()=>ISSUES.filter(i=>i.st!=="已关闭"&&i.sev!=="一般").length;
+const myCapa = ()=>ISSUES.filter(i=>i.own===PERSONA().n&&i.st!=="已关闭").length;
+const myEdc  = ()=>SUBJ.filter(s=>s.crc===PERSONA().n&&edcLate(s)).length;
+const myPay  = ()=>PAY.filter(p=>staff(PERSONA().n)?.sites.includes(p.ss)&&p.st!=="已发放").length;
+const ipBad  = ()=>IP.filter(r=>ipM(r).diff!==0).length;
+const piPend = ()=>{const ids=new Set(SITES.filter(s=>s.pi===PERSONA().n).map(s=>s.id));
+  return SUBJ.filter(s=>ids.has(s.ss)&&!s.piOk&&subjDone(s)===s.tasks.length).length;};
+const auOpen = ()=>AUDIT.flatMap(a=>a.findings).filter(f=>f.st!=="已关闭").length;
+const myMods = ()=>{ const p=PERSONA();
+  return p.k==="crc" ? (staff(p.n)?.sites||[]) : [...scopeIds()]; };
+
+/* 徽标：只标"需要我现在动手"的数量，不标存量 */
+const BADGE = {
+  intake:   ()=>INTAKE.length,
+  approve:  ()=>APPROVALS.length,
+  qa:       badQA,
+  capa:     myCapa,
+  audit:    auOpen,
+  pi:       piPend,
+  material: ipBad,
+  pay:      myPay,
+  instac:   ()=>acOpen().length,
+  instqc:   ()=>qcFindOpen().length,
+  instreg:  ()=>regOpen().length,
+  query:    ()=>{ const p=PERSONA();
+    return p.k==="crc" ? openQ(p.n) : p.k==="dm" ? QUERIES.filter(q=>q.st==="已回复待关闭").length : myQ(); },
+  subj:     ()=>SUBJ.filter(s=>s.crc===PERSONA().n
+    && !["筛败","已出组","已脱落"].includes(s.st) && winState(s).k!=="good").length,
+  startup:  ()=>STARTUP.filter(r=>myMods().includes(r.ss) && r.block && !r.done).length,
+  ethics:   ()=>ETHICS.filter(e=>myMods().includes(e.ss) && ethState(e)==="crit").length,
+  sched:    ()=>myAgenda(14).buckets.filter(b=>b.conflict).length,
+  handover: ()=>HANDOVER.filter(h=>h.st!=="已完成"
+    && (PERSONA().k!=="crc" || h.from===PERSONA().n || h.to===PERSONA().n)).length,
+  change:   ()=>CHANGES.filter(c=>c.st==="待提出").length,
+  bid:      ()=>BIDS.filter(b=>b.st==="待定").length,
+  dm:       ()=>QUERIES.filter(q=>q.st==="已回复待关闭").length,
+  people:   ()=>STAFF.filter(x=>talentM(x).risk>=60).length,
+  cash:     ()=>cashF(6).rows.filter(r=>r.cum<0).length
+};
+const HOME = {boss:"dash", pm:"pm", cra:"cra", crc:"crc", inst:"inst", pi:"pi", qa:"audit", dm:"dm"};
+
+const TITLES = {
+  dash:["经营驾驶舱","一页看清人效、毛利、入组与风险。每个数字后面都对应一个具体的人和一个具体的动作。"],
+  sites:["项目 · 中心台账","StudySite（项目 × 中心）是本系统的最小作业单元 —— 收入按中心计、成本按人落在中心上、核查风险按中心暴露。"],
+  mysites:["我的中心","你负责监查的中心。风险分由入组达成、未关闭事件、SDV 缺口三项合成，决定下次监查的密度。"],
+  enr:["入组进度","计划曲线 vs 实际曲线。入组延迟是临床试验项目亏损的第一大原因，这张图必须每天有人看。"],
+  staff:["派工与产能","谁、在哪个项目中心、什么角色、FTE 占比多少。闲置与超载都是问题，所以按状态着色而不是按高低。"],
+  time:["工时与差旅","一线在医院用手机填报，目标 30 秒内提交。可计费与不可计费强制区分 —— 不区分，利用率就是假的。"],
+  pnl:["成本与毛利","单中心 P&L。「项目毛利 15%」没有经营价值，「A 院 40% / B 院 -20%」才能据以行动。"],
+  bill:["里程碑 · 开票 · 回款","里程碑达成 → 证据链 → 开票 → 回款。断在哪一环，现金流就卡在哪一环。"],
+  qa:["质量事件与 CAPA","把风险信号提前到日常作业里，而不是等稽查时第一次看见。"],
+  mon:["监查访视","访视排期与 MVR 跟进项闭环。跟进项没关闭，等于这次监查没做。"],
+  price:["报价模型","用历史真实人天反推报价。对手报价靠经验，你靠自己的成本数据库 —— 这是抄不走的护城河。"],
+  crc:["我的一天","CRC 在医院现场、手机操作、时间碎片。这一页只回答一件事：现在最该做哪一件。"],
+  cra:["我的一天","CRA 常年在路上。这一页把四个中心的风险、监查排期、待办跟进项收在一屏内。"],
+  pm:["团队工作台","小团队管理者要同时对人和项目负责。左手是组员负载与审批，右手是项目进度与风险。"],
+  subj:["受试者访视窗口","访视超窗即方案偏离。窗口由日期算出并倒计时，不靠人记 —— 这是 CRC 最该被系统兜住的地方。"],
+  query:["数据质疑","Query 关闭时长直接反映数据质量与中心战斗力。超过 7 天未回复的，通常已经变成 CRA 的电话催办。"],
+  isf:["中心文件与物资","研究者文件夹、人员资质、药品效期与温控。核查现场翻的就是这几摞东西。"],
+  approve:["待我审批","审批不是盖章。每条都附带风险提示 —— 批准之前先看它背后是不是一个该解决的管理问题。"],
+  team:["我的团队","组员负载、派驻中心、本周排班与调配。看到超载与闲置同时存在，就该动手调人。"],
+  intake:()=>PERSONA().k==="boss"
+    ? ["立项审批","毛利率低于门槛的项目必须过这一关。在立项时就算账，而不是做完半年后财务才告诉你亏了。"]
+    : ["立项与建档","系统的入口：项目怎么进来、中心怎么建档。测算口径与报价模型完全一致，不做两套账。"],
+  capa:["我的整改","机构质控、内部监查、稽查发现最终都落到具体的人。整改回复要写清措施与证据，机构复核通过才算关闭。"],
+  inst:["机构工作台","医院药物临床试验机构办公室视角。机构对本院承接的每一个项目负质量与合规的最终责任。"],
+  instac:["立项受理","受托方递交 → 机构形式审查 → 受理并转伦理。材料不齐就受理，后面每个环节都带着这个缺口往下走。"],
+  instqc:["机构质控","医院方对项目的质量反馈闭环：质控发现 → 出具意见 → 派发整改 → 受托方回复 → 机构复核关闭。"],
+  instreg:["人员备案与准入","谁能进这家医院接触受试者源数据，是医院的责任，不是受托方能自行决定的事。"],
+  screen:["筛选漏斗与筛败","入组数只是漏斗最后一格。「入组落后」没有行动价值，「为什么落后」才有 —— 而答案藏在前面三格。"],
+  feas:["中心可行性调查","报价模型算「要花多少人天」，可行性库算「这家能不能出病人」。事后把亏损中心标红是最便宜也最没用的功能。"],
+  material:["药品与样本","接收 − 发放 = 账面库存，实盘对不上就是严重发现；样本采集→离心→转运→回执，断一环即失效。"],
+  pay:["受试者补偿","CRC 每周固定要花时间的事，也是稽查必查三件套：发放与访视是否对应、有无签收凭证、现金发放是否合规。"],
+  pi:["研究者工作台","方案偏离要 PI 签字、SAE 由 PI 上报、授权分工表由 PI 签署 —— 研究者是法定责任人，不该只是系统里的一个字符串。"],
+  audit:["内部稽查与 CAPA 有效性","机构质控是医院查我们，QA 是我们自己查自己。QA 真正的价值不是再发现一批问题，而是验证 CAPA 到底有没有防住复发。"],
+  mysite:["我的中心","中心也有生命周期：立项 → 伦理 → 合同 → 启动 → 入组 → 随访 → 关闭。CRC 此前只看得到「下一个访视」，看不到自己站在这条线的哪一节。"],
+  startup:["中心启动清单","启动慢一个月，这个中心的整条收入曲线右移一个月。阻塞项未清，不得推进到 SIV —— 这是那个只有一句 ss.st = next 的按钮缺的东西。"],
+  sched:["我的日程","「我的一天」回答先做哪件，这一页回答做不做得完、撞不撞车。一个 CRC 同时带两三个中心是常态，跨院冲突不是优先级问题，是物理上做不到。"],
+  prescreen:["预筛登记","漏斗的第一格此前没有门。预筛量是判断「病源不足」还是「入排太窄」的唯一依据 —— 而这个数只能由现场一条一条录进来。"],
+  ethics:["伦理事务","伦理不是一次性动作，是贯穿全周期的周期性义务。批件断档，该中心必须停止入组与给药 —— 这比访视超窗严重得多。"],
+  handover:["交接","人会休假、会离职、会被调岗，中心不会因此停下。最容易漏也最要命的是在组受试者逐例交底 —— 那些东西不在 EDC 里，只在上一个 CRC 脑子里。"],
+  cash:["现金流预测","人力成本每月刚性支出，回款是里程碑制加账期。要回答的不是「我应收多少」，而是「哪个月我会没钱发工资」。"],
+  client:["客户","比单中心毛利更上位的切片。对一个靠客户复购活着的服务公司，「这个客户明年还续不续」按项目切、按中心切都答不了。"],
+  bid:["投标与报价闭环","报价模型算「按我们的人天该报多少」，这一页算「市场认不认」。报出去的价赢没赢不回写，前者就是自说自话。"],
+  change:["合同变更","亏损第一大原因是入组延迟，第二大就是 scope creep 没有变更单。就算最终要不到钱，也必须记下来 —— 下次报价时这就是该加进去的成本。"],
+  people:["人才梯队","卖的是人天，人走了产品就没了。系统看得到「利用率 96%」，此前看不到「这个人连续三个月 96%，快撑不住了」。"],
+  org:["组织与权限","权限是三件事同时成立：行（看得到哪些中心）、列（哪些字段可见）、动作（能做什么）。外部角色默认拒绝，靠白名单加回。"],
+  trail:["审计轨迹","核查问的是「这条记录谁在什么时候改的、改前是什么、为什么改」。答不上来，这个系统在 GCP 语境下就是不成立的。"],
+  dm:["数据管理工作台","此前 QUERIES 里「数据管理」出现 5 次，系统里却没有这个角色 —— 质疑凭空产生、凭空关闭。发起与关闭都必须有人负责。"]
+};
+
+const state = {view:"dash", persona:"boss", study:"all", enrStudy:"HJ-2024-017", dashRange:"12m",
+  sortKey:"rate", sortDir:1, q:"", stFilter:new Set(), roleFilter:"all",
+  sevFilter:new Set(), pnlSort:"gp", visitSel:0, tsWho:"吴桐", subjSel:null, qTab:"open"};
+
+/* 身份来自会话，不是下拉框：登录那一刻，看得到什么就定了 */
+const SCOPE_DESC = {
+  all:      ()=>`全公司 ${STUDIES.length} 个项目 · ${SITES.length} 个中心`,
+  team:     m=>{const g=groupOf(m.n); return g? `${g.name} · ${g.members.length} 人 · ${g.studies.length} 个项目` : "未分组";},
+  assigned: m=>{const st=staff(m.n); return st? `${st.sites.length} 个中心 · ${new Set(st.sites.map(x=>site(x).sid)).size} 个项目` : "未派驻中心";},
+  hospital: m=>`${m.hosp||"本院"} · 承接 ${SITES.filter(s=>s.hosp===m.hosp).length} 个项目`,
+  pi:       m=>`本人担任研究者 · ${SITES.filter(s=>s.pi===m.n).length} 个中心`,
+  none:     ()=>"无数据范围"
+};
+function PERSONA(){
+  const m = ME();
+  if(!m) return {k:"boss", n:"—", title:"未登录", role:"—", scope:"—"};
+  const r = ROLE_DEF[m.role];
+  return {k:m.role, n:m.n, title:r.t, role:r.t.replace(/\s*[（(].*/,"").split(" ").pop() || r.t,
+          scope:(SCOPE_DESC[r.rows]||SCOPE_DESC.none)(m), hosp:m.hosp, u:m.u};
+}
+
+/* 行维度权限：ROLE_DEF[role].rows 是唯一判定处，改权限立刻改数据范围 */
+function myScope(){
+  const m = ME(); if(!m) return [];
+  const r = ROLE_DEF[m.role];
+  switch(r.rows){
+    case "all":      return SITES;
+    case "team":   { const g = groupOf(m.n); return g ? SITES.filter(s=>g.studies.includes(s.sid)) : []; }
+    case "hospital": return SITES.filter(s=>s.hosp===m.hosp);
+    case "pi":       return SITES.filter(s=>s.pi===m.n);
+    case "assigned":{ const st = staff(m.n); return st ? SITES.filter(s=>st.sites.includes(s.id)) : []; }
+    default:         return [];
+  }
+}
+function scope(){
+  const base = myScope();
+  return state.study==="all" ? base : base.filter(s=>s.sid===state.study);
+}
+function scopeIds(){ return new Set(scope().map(s=>s.id)); }
+function myTeam(){ return TEAM.members.map(staff); }
+
+const myMenu = ()=>{
+  const r = RD(); if(!r) return [];
+  const out = [];
+  GROUP_ORDER.forEach(g=>{
+    const items = r.mods.filter(v=>N[v] && (MOD_GROUP[v]||"系统")===g);
+    if(items.length) out.push({g, items});
+  });
+  const rest = r.mods.filter(v=>N[v] && !GROUP_ORDER.includes(MOD_GROUP[v]||"系统"));
+  if(rest.length) out.push({g:"其他", items:rest});
+  return out;
+};
+function renderNav(){
+  const p = PERSONA();
+  $("#nav").innerHTML = myMenu().map(g=>
+    `<div class="nav-group">${esc(g.g)}</div>` + g.items.map(k=>{
+      let b = 0;
+      try { b = BADGE[k] ? BADGE[k]() : 0; } catch(_) { b = 0; }
+      const d = N[k];
+      return `<button class="nav-item" data-nav="${k}" aria-current="${state.view===k}">
+        <svg class="nav-ic" viewBox="0 0 24 24">${d.ic}</svg><span>${esc(typeof d.t==="function"?d.t():d.t)}</span>
+        ${b?`<span class="nav-badge">${b}</span>`:""}</button>`;
+    }).join("")).join("");
+  const per = $("#persona");
+  if(per) per.innerHTML =
+    `<div class="avatar">${esc(p.n.slice(0,1))}</div>
+     <div><div class="n">${esc(p.n)}</div><div class="d">${esc(p.title)}</div></div>`;
+}
+const titleOf = v=>{ const t=TITLES[v]; return typeof t==="function"? t() : t; };
+function renderTop(){
+  const p = PERSONA(), [t] = titleOf(state.view);
+  const studies = [...new Set(myScope().map(s=>s.sid))];
+  $("#crumb").innerHTML = `恒济临床研究 / <b>${esc(t)}</b>`;
+  $("#who").innerHTML =
+    `<div class="avatar">${esc(p.n.slice(0,1))}</div>
+     <div><b>${esc(p.n)}</b> <span class="r">${esc(p.role)}</span><br>
+     <span class="r">${esc(p.scope)}</span></div>`;
+  const sel = $("#gstudy");
+  sel.innerHTML = `<option value="all">全部项目（${studies.length}）</option>` +
+    studies.map(id=>`<option value="${id}">${esc(id)} · ${esc(S[id].short)}</option>`).join("");
+  sel.value = studies.includes(state.study) ? state.study : "all";
+  state.study = sel.value;
+  sel.disabled = studies.length < 2;
+}
+const VIEWS = {};
+function render(){
+  if(!ME()){ showLogin(); return; }
+  state.persona = ME().role;
+  /* 模块权限在渲染入口强制一次：地址栏、旧状态、被收回的权限都拦在这里 */
+  if(!canMod(state.view) || !VIEWS[state.view]){
+    const r = RD();
+    state.view = canMod(HOME[state.persona]) ? HOME[state.persona]
+               : (r.mods.find(v=>VIEWS[v]) || null);
+    if(!state.view){
+      $("#content").innerHTML = `<div class="view-head"><h1>没有可访问的模块</h1>
+        <p>当前角色「${esc(RD().t)}」未被授予任何模块权限。请联系管理员在「组织与权限」中调整。</p></div>`;
+      renderNav(); renderTop(); return;
+    }
+  }
+  renderNav(); renderTop(); clearTimers();
+  const [t,sub] = titleOf(state.view);
+  $("#content").innerHTML = `<div class="view-head"><h1>${esc(t)}</h1><p>${esc(sub)}</p></div><div id="vbody"></div>`;
+  VIEWS[state.view]($("#vbody"));
+  scrollTo({top:0, behavior:"instant"});
+}
+function go(v,opts={}){ Object.assign(state,opts); state.view=v; render(); }
+
+let timers=[];
+const clearTimers=()=>{timers.forEach(clearInterval);timers=[];};
+
+document.addEventListener("click",e=>{
+  const nav=e.target.closest("[data-nav]");  if(nav){ go(nav.dataset.nav); return; }
+  const gt =e.target.closest("[data-goto]"); if(gt){ const [v,k,val]=gt.dataset.goto.split(":");
+    go(v, k?{[k]:val}:{}); return; }
+  const cl =e.target.closest("[data-close]"); if(cl){ closeLayer(); return; }
+});
+$("#glogout").addEventListener("click",()=>logout());
+$("#gstudy").addEventListener("change",e=>{ state.study=e.target.value;
+  if(state.study!=="all") state.enrStudy=state.study; render(); });
+addEventListener("resize",()=>{ clearTimeout(window.__rz);
+  window.__rz=setTimeout(()=>{ if(["dash","enr","pm","cra"].includes(state.view)) render(); },250); });
+</script>

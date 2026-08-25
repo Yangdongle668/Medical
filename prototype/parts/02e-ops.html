@@ -1,0 +1,134 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   选址、物料与法定角色
+   ════════════════════════════════════════════════════════════════════ */
+
+/* PI 是法定责任人：方案偏离签字、SAE 上报、授权分工表签署都在他这里。
+   QA 是我方的第二道防线：内部稽查 + CAPA 有效性验证（同类问题是否复发）。*/
+PERSONAS.push(
+  {k:"pi", n:"陈国栋", title:"主要研究者", role:"PI",
+   scope:"北京协和医院 · 肝胆外科 · 艾瑞替尼 III", hosp:"北京协和医院"},
+  {k:"qa", n:"卫兰", title:"质量负责人", role:"QA",
+   scope:"恒济临床 · 内部稽查与 CAPA 有效性验证"}
+);
+P_OF.pi = PERSONAS.find(p=>p.k==="pi");
+P_OF.qa = PERSONAS.find(p=>p.k==="qa");
+
+/* ── 中心可行性调查：报价模型算「要花多少人天」，可行性库算「能不能出病人」──
+   PI 承诺普遍虚高，必须乘以历史兑现系数。行业经验 0.4–0.6。          */
+const PI_KEEP = 0.55;
+/* eligPct（按本方案入排估算的合格患者比例）是复盘湘雅二筛败率 57% 之后
+   才加入问卷的字段 —— 早期评估没有这一项，所以拦不住入排不匹配的中心。 */
+let FEAS = [
+  {id:"FS-2024-006", sid:"HJ-2024-017", hosp:"四川大学华西医院", city:"成都", dept:"腹部肿瘤科",
+   pi:"罗建平", date:"2024-11-08", by:"段志远", st:"已入选（SS-04）",
+   q:{ptYear:60, pastN:2, pastBest:1.4, compet:3, ethicsDays:58, startDays:112, teamN:4, piCommit:2.5, eligPct:null},
+   override:"申办方指定：PI 为该适应症区域学术带头人，坚持纳入", actual:0.5},
+  {id:"FS-2025-002", sid:"HJ-2024-017", hosp:"西安交大第一附属医院", city:"西安", dept:"肝胆外科",
+   pi:"白玉山", date:"2025-04-16", by:"段志远", st:"已入选（SS-05）",
+   q:{ptYear:45, pastN:0, pastBest:0, compet:2, ethicsDays:74, startDays:147, teamN:3, piCommit:2.0, eligPct:null},
+   override:"为赶 FPI 时间点凑够中心数，明知评分偏低仍启动", actual:0},
+  {id:"FS-2025-009", sid:"HJ-2025-011", hosp:"中南大学湘雅二医院", city:"长沙", dept:"内分泌科",
+   pi:"龚敏", date:"2025-06-11", by:"徐倩", st:"已入选（SS-11）",
+   q:{ptYear:420, pastN:5, pastBest:4.2, compet:2, ethicsDays:41, startDays:56, teamN:6, piCommit:5.0, eligPct:null},
+   override:null, actual:1.9},
+  {id:"FS-2024-003", sid:"HJ-2024-017", hosp:"北京协和医院", city:"北京", dept:"肝胆外科",
+   pi:"陈国栋", date:"2024-09-20", by:"林敏", st:"已入选（SS-01）",
+   q:{ptYear:280, pastN:8, pastBest:2.6, compet:1, ethicsDays:35, startDays:49, teamN:7, piCommit:3.0, eligPct:null},
+   override:null, actual:1.4},
+  {id:"FS-2026-014", sid:"HJ-2026-004", hosp:"浙江大学医学院附属第二医院", city:"杭州", dept:"心内科",
+   pi:"施允中", date:"2026-08-12", by:"何雨薇", st:"评估中",
+   q:{ptYear:520, pastN:6, pastBest:5.5, compet:1, ethicsDays:38, startDays:52, teamN:8, piCommit:6.0, eligPct:0.34},
+   override:null, actual:null},
+  {id:"FS-2026-015", sid:"HJ-2026-004", hosp:"福建省立医院", city:"福州", dept:"心内科",
+   pi:"林彦成", date:"2026-08-15", by:"何雨薇", st:"评估中",
+   q:{ptYear:150, pastN:1, pastBest:0.8, compet:4, ethicsDays:66, startDays:98, teamN:3, piCommit:3.5, eligPct:0.19},
+   override:null, actual:null}
+];
+let feasSeq = 16;
+
+/* 评分口径全部公开，没有黑箱。满分 100。 */
+function feasScore(q){
+  const src   = clamp(q.ptYear/500, 0, 1) * 30;                       // 病源 30
+  const past  = q.pastN===0 ? 0 : clamp(q.pastBest/5, 0, 1) * 30;     // 既往入组表现 30（最强预测因子）
+  const comp  = -clamp(q.compet/5, 0, 1) * 15;                        // 竞争试验 −15
+  const start = clamp((150-q.startDays)/110, 0, 1) * 15;              // 启动效率 15
+  const team  = clamp(q.teamN/8, 0, 1) * 10;                          // 团队规模 10
+  const elig  = q.eligPct==null ? 0 : (q.eligPct-0.3)*30;             // 入排匹配度修正 ±
+  const total = clamp(src+past+comp+start+team+elig, 0, 100);
+  /* 预测月入组：PI 承诺打折，再受病源与入排匹配度封顶 */
+  const cap  = (q.ptYear/12) * (q.eligPct==null ? 0.30 : q.eligPct) * 0.5;
+  const pred = Math.min(q.piCommit*PI_KEEP, cap);
+  const lvl  = total>=65 ? {k:"good",t:"推荐入选"} : total>=45 ? {k:"warn",t:"谨慎入选"} : {k:"crit",t:"不建议入选"};
+  return {parts:{src,past,comp,start,team,elig}, total, pred, cap, lvl};
+}
+
+/* ── 试验用药品数量平衡：接收 − 发放 = 账面库存，实盘对不上就是严重发现 ── */
+let IP = [
+  {ss:"SS-01", batch:"260711", recv:120, disp:86, count:34, ret:22, dest:0,  exp:"2027-03-31", exc:0},
+  {ss:"SS-07", batch:"260618", recv:80,  disp:63, count:15, ret:14, dest:0,  exp:"2026-09-15", exc:1},
+  {ss:"SS-15", batch:"260502", recv:200, disp:154, count:46, ret:31, dest:12, exp:"2027-06-30", exc:0},
+  {ss:"SS-09", batch:"260502", recv:240, disp:191, count:49, ret:40, dest:18, exp:"2027-06-30", exc:0},
+  {ss:"SS-12", batch:"CF-2604", recv:60, disp:41, count:19, ret:0,  dest:0,  exp:"2028-04-30", exc:1}
+];
+const ipM = r=>({book:r.recv-r.disp, diff:r.count-(r.recv-r.disp), expLeft:days(TODAY,r.exp)});
+
+/* ── 生物样本链：采集 → 离心 → 暂存 → 转运 → 回执，断一环即失效 ────── */
+let SPEC = [
+  {ss:"SS-07", subj:"S-0224", type:"PK 血样（C3D1 0h）", coll:"2026-08-02 09:15", spin:"09:38",
+   store:"-80℃", ship:"2026-08-04", ack:"2026-08-06", st:"已回执"},
+  {ss:"SS-01", subj:"S-0217", type:"药动学血样", coll:"2026-08-21 08:50", spin:"09:12",
+   store:"-80℃", ship:"—", ack:"—", st:"待转运"},
+  {ss:"SS-01", subj:"S-0203", type:"肿瘤组织切片", coll:"2026-07-28 14:20", spin:"—",
+   store:"室温", ship:"2026-07-30", ack:"—", st:"回执逾期"},
+  {ss:"SS-15", subj:"S-0412", type:"HbA1c 全血", coll:"2026-05-26 08:05", spin:"08:22",
+   store:"2-8℃", ship:"2026-05-26", ack:"2026-05-28", st:"已回执"},
+  {ss:"SS-07", subj:"S-0189", type:"免疫组库外周血", coll:"2026-08-06 10:40", spin:"11:35",
+   store:"-80℃", ship:"—", ack:"—", st:"离心超时"}
+];
+
+/* ── 受试者补偿：CRC 每周花大量时间在这上面，且是稽查必查 ────────── */
+let PAY = [
+  {ss:"SS-01", subj:"S-0203", visit:"C7D1", traffic:200, meal:100, d:"2026-07-28", way:"银行转账", rc:true,  st:"已发放"},
+  {ss:"SS-01", subj:"S-0217", visit:"C5D1", traffic:200, meal:100, d:"2026-07-31", way:"银行转账", rc:true,  st:"已发放"},
+  {ss:"SS-01", subj:"S-0240", visit:"筛选期", traffic:200, meal:100, d:"2026-08-10", way:"银行转账", rc:false, st:"待签收"},
+  {ss:"SS-07", subj:"S-0224", visit:"C2D1", traffic:150, meal:100, d:"2026-08-02", way:"银行转账", rc:true,  st:"已发放"},
+  {ss:"SS-07", subj:"S-0189", visit:"C15D1", traffic:150, meal:100, d:"2026-08-06", way:"现金", rc:false, st:"待签收"},
+  {ss:"SS-01", subj:"S-0231", visit:"筛选期", traffic:200, meal:100, d:"—", way:"银行转账", rc:false, st:"待发放"}
+];
+
+/* ── QA 内部稽查（我方第二道防线）与 CAPA 有效性验证 ───────────────── */
+let AUDIT = [
+  {id:"AU-2026-005", ss:"SS-11", type:"中心内部稽查", date:"2026-08-06", by:"卫兰", st:"待整改",
+   scope:"针对筛败率异常（57%）与源数据签名缺失的专项稽查",
+   findings:[
+     {t:"筛选失败日志未按 SOP 逐例记录失败原因，26 例中 11 例原因栏为空", sev:"严重", st:"待整改"},
+     {t:"研究者签名缺日期共 12 处，此前 QI-2026-0151 已提出，本次复发", sev:"严重", st:"待整改", repeat:"QI-2026-0151"}
+   ]},
+  {id:"AU-2026-003", ss:"SS-04", type:"中心内部稽查", date:"2026-06-18", by:"卫兰", st:"已关闭",
+   scope:"入组停滞根因专项",
+   findings:[
+     {t:"预筛记录不完整，无法还原病源实际规模", sev:"一般", st:"已关闭"}
+   ]},
+  {id:"AU-2026-001", ss:"SS-01", type:"体系稽查", date:"2026-03-12", by:"卫兰", st:"已关闭",
+   scope:"SOP 执行与培训记录",
+   findings:[{t:"2 名 CRC 的年度 GCP 复训记录缺失", sev:"一般", st:"已关闭"}]},
+  {id:"AU-2026-006", ss:"SS-01", type:"CAPA 有效性验证", date:"2026-08-20", by:"卫兰", st:"进行中",
+   scope:"验证 QI-2026-0131（实验室资质过期）关闭后是否建立到期日历",
+   findings:[]}
+];
+/* CAPA 有效性 = 同类问题是否复发。复发说明当初的 CAPA 只做了纠正，没做预防。 */
+function capaEffect(){
+  const byType={};
+  ISSUES.forEach(i=>{ const k=i.type.replace(/^机构质控发现 · /,"");
+    (byType[k] ||= {n:0, closed:0, repeat:0}).n++;
+    if(i.st==="已关闭") byType[k].closed++; });
+  AUDIT.flatMap(a=>a.findings).filter(f=>f.repeat).forEach(f=>{
+    const src=ISSUES.find(i=>i.id===f.repeat); if(!src) return;
+    const k=src.type.replace(/^机构质控发现 · /,"");
+    (byType[k] ||= {n:0, closed:0, repeat:0}).repeat++; });
+  return Object.entries(byType).map(([k,v])=>({type:k, ...v}))
+    .sort((a,b)=>b.repeat-a.repeat || b.n-a.n);
+}
+</script>

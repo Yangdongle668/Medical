@@ -1,0 +1,9 @@
+node_modules/
+.env
+dist/
+*.log
+
+# 前端构建产物与 E2E 痕迹
+apps/web/dist/
+apps/web/test-results/
+apps/web/playwright-report/

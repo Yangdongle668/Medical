@@ -1,0 +1,149 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   数据管理 DM 工作台
+   此前 QUERIES 里 by:"数据管理" 出现了 5 次，却没有这个角色 ——
+   质疑凭空产生、凭空关闭。发起与关闭都必须有人负责。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.dm = box=>{
+  const open = QUERIES.filter(q=>q.st==="待中心回复");
+  const repl = QUERIES.filter(q=>q.st==="已回复待关闭");
+  const closed = QUERIES.filter(q=>q.st==="已关闭");
+  const over7 = open.filter(q=>q.age>7);
+  const bySite = [...new Set(QUERIES.map(q=>q.ss))].map(id=>{
+    const l = QUERIES.filter(q=>q.ss===id);
+    const ss = site(id);
+    return {id, hosp:ss.hosp, n:l.length,
+      per: ss.enrolled? l.length/ss.enrolled : 0,
+      avg: l.length? sum(l,q=>q.age)/l.length : 0,
+      open: l.filter(q=>q.st==="待中心回复").length};
+  }).sort((a,b)=>b.per-a.per);
+
+  box.innerHTML = `
+  <div class="grid g4" style="gap:10px;margin-bottom:14px">
+    ${[["待中心回复",open.length,"条",open.length?"var(--warn)":"var(--ink)",""],
+       ["挂起超 7 天",over7.length,"条",over7.length?"var(--crit)":"var(--ink)","该打电话了"],
+       ["已回复待我关闭",repl.length,"条",repl.length?"var(--accent)":"var(--ink)","回复合格才能关"],
+       ["平均挂起",n1(QUERIES.length?sum(QUERIES,q=>q.age)/QUERIES.length:0),"天",
+        "var(--ink)","目标 ≤ 5 天"]
+     ].map(([l,v,u,c,n])=>`<div class="stat"><div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+        <div class="note">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="grid g21" style="gap:12px;margin-bottom:12px">
+    <div class="card">
+      <div class="card-h"><h3>发起数据质疑</h3><span class="sp"></span>
+        <span class="sub">质疑不该凭空出现 —— 发起人要留名</span></div>
+      <div class="card-b">
+        <div class="grid g2" style="gap:10px">
+          <div class="field"><div class="slider-h"><label for="dq-s">受试者</label></div>
+            <select class="sel" id="dq-s" style="width:100%">${
+              SUBJ.filter(s=>s.st!=="筛败").map(s=>
+                `<option value="${esc(s.id)}">${esc(s.id)} · ${esc(site(s.ss).hosp)}</option>`).join("")}</select></div>
+          <div class="field"><div class="slider-h"><label for="dq-f">表单</label></div>
+            <select class="sel" id="dq-f" style="width:100%">${
+              ["合并用药 CM","不良事件 AE","实验室检查 LB","生命体征 VS","访视日期 SV",
+               "疗效评估 RS","用药依从性 EX","既往病史 MH"].map(x=>`<option>${esc(x)}</option>`).join("")}</select></div>
+        </div>
+        <div class="field"><div class="slider-h"><label for="dq-fd">字段</label></div>
+          <input class="sel" id="dq-fd" style="width:100%" placeholder="例：起始日期"></div>
+        <div class="field"><div class="slider-h"><label for="dq-t">质疑内容</label></div>
+          <textarea class="qbox" id="dq-t" placeholder="例：CM 起始日期早于知情同意签署日期，请核实源数据。"></textarea></div>
+        <div class="row" style="justify-content:flex-end">
+          <button class="btn btn-p" id="dq-go">发起质疑</button></div>
+        <div class="note" style="margin-top:9px;line-height:1.7">
+          CRA 在监查中也会发起质疑（<code>raiseQ</code> 动作权限），
+          此前系统里 CRA 只能"看到"质疑、不能"提出"质疑 —— 而 SDV 的产出恰恰就是质疑。</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>每例质疑数</h3><span class="sub">高不一定是中心差，也可能是方案本身难填</span></div>
+      <div class="card-b"><div id="c-dq"></div>
+        <div class="note" style="margin-top:12px;line-height:1.7">
+          质疑密度高的中心有两种：<b>录入质量差</b>（培训问题）
+          与 <b>受试者情况复杂</b>（合并用药多、AE 多）。区分它们要看质疑集中在哪几个表单。</div>
+      </div>
+    </div>
+  </div>
+  ${repl.length?`<div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>待关闭</h3><span class="sp"></span>
+      <span class="sub">中心已回复 —— 回复是否解决了问题，由 DM 判定</span></div>
+    <div class="card-b" style="padding:0">
+      ${repl.map(q=>`<div style="padding:12px 16px;border-bottom:1px solid var(--line)">
+        <div class="row" style="gap:6px">
+          <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(q.id)}</span>
+          <span class="subjid">${esc(q.subj)}</span>
+          <span class="pill p-neut">${esc(q.form)}</span>
+          <span class="t-sub">${esc(site(q.ss).hosp)}</span>
+          <span class="sp"></span>
+          <span class="pill ${q.age>7?"p-crit":"p-warn"}">挂起 ${q.age} 天</span></div>
+        <div style="font-size:12.5px;margin-top:5px;color:var(--ink-2);line-height:1.6">${esc(q.txt)}</div>
+        <div class="note" style="margin-top:3px">责任 CRC ${esc(q.owner)}｜字段「${esc(q.field)}」</div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn btn-p" data-qc="${esc(q.id)}">回复合格，关闭</button>
+          <button class="btn" data-qre="${esc(q.id)}">回复不充分，退回</button></div>
+      </div>`).join("")}
+    </div></div>`:""}
+  <div class="card">
+    <div class="card-h"><h3>中心质疑分布</h3><span class="sp"></span>
+      <span class="sub">已关闭 ${closed.length} 条</span></div>
+    <div class="tw"><table style="min-width:820px">
+      <thead><tr><th>中心</th><th class="ta-r">质疑总数</th><th class="ta-r">入组例数</th>
+        <th class="ta-r">每例质疑</th><th class="ta-r">待回复</th><th class="ta-r">平均挂起</th><th></th></tr></thead>
+      <tbody>${bySite.map(r=>`<tr>
+        <td style="font-size:12px">${esc(r.hosp)}</td>
+        <td class="tnum">${r.n}</td>
+        <td class="tnum">${site(r.id).enrolled}</td>
+        <td class="tnum" style="font-weight:600;color:${r.per>0.4?"var(--crit)":r.per>0.2?"var(--warn)":"var(--ink)"}">${n1(r.per)}</td>
+        <td class="tnum" style="color:${r.open?"var(--warn)":"var(--ink)"}">${r.open}</td>
+        <td class="tnum" style="color:${r.avg>7?"var(--crit)":"var(--ink)"}">${n1(r.avg)} 天</td>
+        <td class="ta-r"><button class="btn" data-goto5="${esc(r.id)}">中心详情</button></td>
+      </tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+  <div class="formula">此前 QUERIES 数组里 <code>by:"数据管理"</code> 出现 5 次，
+但系统里<b>没有数据管理这个角色</b> —— 质疑凭空产生、凭空关闭，没有人对它负责。
+
+现在补齐了闭环的两端：<b>发起</b>（DM 与 CRA 都可以，受 <code>raiseQ</code> 动作权限约束）、
+<b>关闭</b>（只有 DM 可以 —— CRC 回复了不等于问题解决了）。
+
+这也回答了当初那个提问："质量事件应该有一个角色对项目进行反馈"。
+机构办是外部的质量反馈闭环，DM 是内部的数据质量闭环，两条线不能混。</div>`;
+
+  hbars($("#c-dq"), bySite.slice(0,8).map(r=>({label:r.hosp.replace(/(大学|医学院|附属|中国医学科学院)/g,""), v:r.per,
+    color:"var(--ink-2)",
+    vColor: r.per>0.4?"var(--crit)":r.per>0.2?"var(--warn)":"var(--ink)"})),
+    {fmt:v=>n1(v), unit:" 条/例", band:[0.2,0.4]});
+
+  box.addEventListener("click",e=>{
+    const g = e.target.closest("[data-goto5]"); if(g){ openSite(g.dataset.goto5); return; }
+    const c = e.target.closest("[data-qc]");
+    if(c){ const q = QUERIES.find(x=>x.id===c.dataset.qc);
+      q.st = "已关闭";
+      logAct("关闭数据质疑", q.id, "已回复待关闭", "已关闭", {ss:q.ss});
+      toast(`${q.id} 已关闭，挂起 ${q.age} 天`); render(); return; }
+    const r = e.target.closest("[data-qre]");
+    if(r){ const q = QUERIES.find(x=>x.id===r.dataset.qre);
+      q.st = "待中心回复"; q.age += 1;
+      logAct("退回数据质疑", q.id, "已回复待关闭", "待中心回复", {ss:q.ss, why:"回复未提供源数据依据"});
+      toast(`${q.id} 已退回 ${q.owner} —— 回复未提供源数据依据`,"warn"); render(); }
+  });
+
+  $("#dq-go")?.addEventListener("click",()=>{
+    if(!canAct("raiseQ")){ toast("当前角色无「发起数据质疑」动作权限","crit"); return; }
+    const sid = $("#dq-s").value, form = $("#dq-f").value;
+    const field = $("#dq-fd").value.trim(), txt = $("#dq-t").value.trim();
+    if(field.length<2){ toast("请填写字段名","crit"); return; }
+    if(txt.length<10){ toast("质疑内容需写清疑点与要求核实的方向（至少 10 个字）","crit"); return; }
+    const s = SUBJ.find(x=>x.id===sid);
+    const id = "Q-"+(1191+QUERIES.length);
+    const me = ME();
+    QUERIES.unshift({id, ss:s.ss, subj:s.id, form, field, txt,
+      by: me.role==="dm" ? "数据管理" : `${me.n}（${ROLE_DEF[me.role].t.split(" ").pop()}）`,
+      owner: s.crc, age:0, st:"待中心回复"});
+    logAct("发起数据质疑", `${id} ${s.id} ${form}`, "—", field, {ss:s.ss, why:txt.slice(0,40)});
+    toast(`${id} 已发起，指派给 ${s.crc}`);
+    render();
+  });
+};
+</script>

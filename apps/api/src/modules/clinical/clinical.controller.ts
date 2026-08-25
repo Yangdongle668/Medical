@@ -1,0 +1,181 @@
+import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
+import { z } from "zod";
+import {
+  PageQuery, Uuid, DateOnly, WithReason,
+  SubjectState, VisitStatus, ScreenFailReason, WithdrawReason,
+  QualityKind, QualityState
+} from "@sitedesk/contracts";
+import { ClinicalService } from "./clinical.service.js";
+import { IdempotencyService } from "../../infra/idempotency.service.js";
+import { command } from "../../infra/command.js";
+import { ZodPipe } from "../../infra/zod.pipe.js";
+import { Operation } from "../../auth/guards.js";
+
+/* 查询参数的形状与契约同源：契约改了这里必然编译不过 */
+const arr = <T extends z.ZodType>(t: T) =>
+  z.union([t, z.array(t)]).transform(v => Array.isArray(v) ? v : [v]).optional();
+
+const SubjectQ = PageQuery.extend({
+  studySiteId: Uuid.optional(),
+  state: arr(SubjectState),
+  outOfWindow: z.coerce.boolean().optional(),
+  q: z.string().max(64).optional()
+});
+const VisitQ = PageQuery.extend({
+  studySiteId: Uuid.optional(),
+  subjectId: Uuid.optional(),
+  status: arr(VisitStatus),
+  outOfWindow: z.coerce.boolean().optional(),
+  pendingPi: z.coerce.boolean().optional()
+});
+const QualityQ = PageQuery.extend({
+  studySiteId: Uuid.optional(),
+  kind: arr(QualityKind),
+  state: arr(QualityState)
+});
+const PaymentQ = PageQuery.extend({
+  studySiteId: Uuid.optional(),
+  unpaid: z.coerce.boolean().optional()
+});
+
+const CreateSubject = z.object({
+  studySiteId: Uuid, screeningNo: z.string().trim().min(1).max(32)
+});
+const SignIcf = z.object({ signedOn: DateOnly });
+const Enroll = z.object({
+  randomizationNo: z.string().trim().min(1).max(32), enrolledOn: DateOnly
+});
+const ScreenFail = z.object({
+  reason: ScreenFailReason, failedOn: DateOnly, note: z.string().max(500).optional()
+});
+const Withdraw = z.object({
+  reason: WithdrawReason, withdrawnOn: DateOnly, note: z.string().trim().min(4).max(500)
+});
+const CompleteVisit = z.object({
+  actualDate: DateOnly,
+  outOfWindowReason: z.string().trim().min(4).max(500).optional(),
+  hours: z.number().min(0.25).max(24),
+  note: z.string().max(500).optional()
+});
+const Pay = z.object({
+  paidOn: DateOnly, receiptRef: z.string().trim().min(1).max(64)
+});
+const Empty = z.object({});
+
+@Controller("/v1")
+export class ClinicalController {
+  constructor(
+    private readonly svc: ClinicalService,
+    private readonly idem: IdempotencyService
+  ) {}
+
+  /* ── 读 ─────────────────────────────────────────────────────────── */
+
+  @Get("/subjects") @Operation("listSubjects")
+  listSubjects(@Query(new ZodPipe(SubjectQ)) q: z.infer<typeof SubjectQ>) {
+    return this.svc.listSubjects(q);
+  }
+
+  @Get("/subjects/:id") @Operation("getSubject")
+  getSubject(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.getSubject(id); }
+
+  @Get("/study-sites/:id/funnel") @Operation("getSiteFunnel")
+  funnel(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.funnel(id); }
+
+  @Get("/subject-visits") @Operation("listSubjectVisits")
+  listVisits(@Query(new ZodPipe(VisitQ)) q: z.infer<typeof VisitQ>) {
+    return this.svc.listVisits(q);
+  }
+
+  @Get("/quality-events") @Operation("listQualityEvents")
+  listQuality(@Query(new ZodPipe(QualityQ)) q: z.infer<typeof QualityQ>) {
+    return this.svc.listQualityEvents(q);
+  }
+
+  @Get("/subject-payments") @Operation("listSubjectPayments")
+  listPayments(@Query(new ZodPipe(PaymentQ)) q: z.infer<typeof PaymentQ>) {
+    return this.svc.listPayments(q);
+  }
+
+  /* ── 受试者生命周期 ─────────────────────────────────────────────── */
+
+  @Post("/subjects") @Operation("createSubject") @HttpCode(201)
+  createSubject(@Body(new ZodPipe(CreateSubject)) b: z.infer<typeof CreateSubject>) {
+    return this.svc.createSubject(b);
+  }
+
+  @Post("/subjects/:id\\:sign-icf") @Operation("signIcf")
+  signIcf(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(SignIcf)) b: z.infer<typeof SignIcf>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.signIcf(id, b)); }
+
+  @Post("/subjects/:id\\:enroll") @Operation("enrollSubject")
+  enroll(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(Enroll)) b: z.infer<typeof Enroll>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.enroll(id, b)); }
+
+  @Post("/subjects/:id\\:screen-fail") @Operation("screenFailSubject")
+  screenFail(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(ScreenFail)) b: z.infer<typeof ScreenFail>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.screenFail(id, b)); }
+
+  @Post("/subjects/:id\\:withdraw") @Operation("withdrawSubject")
+  withdraw(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(Withdraw)) b: z.infer<typeof Withdraw>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.withdraw(id, b)); }
+
+  /* ── 访视 ───────────────────────────────────────────────────────── */
+
+  @Post("/subject-visits/:id/tasks/:seq\\:done") @Operation("completeVisitTask")
+  completeTask(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Param("seq", new ZodPipe(z.coerce.number().int().min(0))) seq: number,
+    @Body(new ZodPipe(Empty)) b: unknown,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, { id, seq }, () => this.svc.completeTask(id, seq)); }
+
+  @Post("/subject-visits/:id\\:complete") @Operation("completeSubjectVisit")
+  completeVisit(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(CompleteVisit)) b: z.infer<typeof CompleteVisit>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.completeVisit(id, b)); }
+
+  @Post("/subject-visits/:id\\:confirm") @Operation("confirmSubjectVisit")
+  confirmVisit(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(Empty)) b: unknown,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, { id }, () => this.svc.confirmVisit(id)); }
+
+  @Post("/subject-visits/:id\\:edc-entered") @Operation("enterVisitToEdc")
+  edcEntered(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(Empty)) b: unknown,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, { id }, () => this.svc.markEdcEntered(id)); }
+
+  /* ── 质量事件与补偿 ─────────────────────────────────────────────── */
+
+  @Post("/quality-events/:id\\:close") @Operation("closeQualityEvent")
+  closeQuality(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(WithReason)) b: z.infer<typeof WithReason>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.closeQualityEvent(id, b)); }
+
+  @Post("/subject-payments/:id\\:pay") @Operation("paySubjectPayment")
+  pay(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(Pay)) b: z.infer<typeof Pay>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.payPayment(id, b)); }
+}

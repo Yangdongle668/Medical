@@ -1,0 +1,281 @@
+<script>
+"use strict";
+/* ════════════════ 4 · 派工与产能 ════════════════ */
+VIEWS.staff = box=>{
+  const roles=["all","CRA","CRC","PM","QA"];
+  const list = STAFF.filter(p=>state.roleFilter==="all"||p.role===state.roleFilter);
+  const line = STAFF.filter(p=>p.role==="CRA"||p.role==="CRC");
+  const idle = line.filter(p=>p.util<60), over = line.filter(p=>p.util>88);
+  const avg = sum(line,p=>p.util)/line.length;
+  const craSites = sum(STAFF.filter(p=>p.role==="CRA"),p=>p.sites.length)/5;
+  const crcSites = sum(STAFF.filter(p=>p.role==="CRC"),p=>p.sites.length)/7;
+
+  box.innerHTML=`
+  <div class="grid g4" style="margin-bottom:12px">
+    ${[["平均利用率",n1(avg)+"%",`健康区间 60–88%`,utilState(avg).k==="good"?"var(--ink)":utilState(avg).c],
+       ["超载人员",over.length+" 人",over.length?over.map(p=>p.n).join("、"):"无",over.length?"var(--crit)":"var(--ink)"],
+       ["产能闲置",idle.length+" 人",idle.length?idle.map(p=>p.n).join("、"):"无",idle.length?"var(--warn)":"var(--ink)"],
+       ["CRA / CRC 人均带中心",n1(craSites)+" / "+n1(crcSites),"CRA 行业经验值 8–12 个","var(--ink-3)"]
+     ].map(([l,v,n,c])=>`<div class="stat">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:4px;color:${c}">${esc(v)}</div>
+        <div class="note" style="margin-top:2px">${esc(n)}</div></div>`).join("")}
+  </div>
+  <div class="card">
+    <div class="card-h" style="flex-wrap:wrap">
+      <h3>人员派工矩阵</h3>
+      <div class="seg" id="rf">${roles.map(r=>`<button data-r="${r}" aria-pressed="${state.roleFilter===r}">${r==="all"?"全部":r}</button>`).join("")}</div>
+      <span class="sp"></span>
+      <button class="btn btn-p" id="newas">+ 新增派工</button>
+    </div>
+    <div class="tw"><table style="min-width:820px">
+      <thead><tr><th>人员</th><th>常驻</th><th>GCP 证书</th><th class="ta-r">带中心</th><th style="width:36%">利用率 · 状态</th><th>当前派驻中心</th></tr></thead>
+      <tbody>${list.map(p=>{
+        const s=utilState(p.util), left=days(TODAY,p.gcp);
+        const gcpCls = left<70?"p-crit":left<180?"p-warn":"p-neut";
+        return `<tr class="clk" data-p="${esc(p.n)}">
+          <td><div class="t-main">${esc(p.n)}</div><div class="t-sub">${esc(p.role)} · ${esc(p.lvl)}</div></td>
+          <td class="t-sub">${esc(p.city)}</td>
+          <td><span class="pill ${gcpCls}">${esc(p.gcp)}</span><div class="t-sub">剩余 ${left} 天</div></td>
+          <td class="tnum">${p.sites.length}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:9px">
+              <div class="bartrack" style="height:8px;flex:1;position:relative">
+                <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:var(--ink-2);height:100%"></div>
+                <div style="position:absolute;left:60%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
+                <div style="position:absolute;left:88%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
+              </div>
+              <span class="tnum" style="width:38px;font-size:12.5px;font-weight:600;color:${s.k==="good"?"var(--ink)":s.c}">${p.util}%</span>
+              <span class="pill p-${s.k==="good"?"neut":s.k}" style="width:64px;justify-content:center">${s.t}</span>
+            </div>
+          </td>
+          <td class="t-sub">${p.sites.length
+            ? p.sites.slice(0,2).map(id=>site(id).hosp).join("、") + (p.sites.length>2?` 等 ${p.sites.length} 个`:"")
+            : "—"}</td>
+        </tr>`;}).join("")}</tbody>
+    </table></div>
+  </div>
+  <p class="note" style="margin-top:10px">蓝色刻度 = 健康区间边界 60% 与 88%。点击人员查看派工明细与冲突检测。派工变更会即时重算利用率，并回写到驾驶舱与工时模块。</p>`;
+
+  box.addEventListener("click",e=>{
+    const r=e.target.closest("[data-r]"); if(r){state.roleFilter=r.dataset.r;render();return;}
+    if(e.target.closest("#newas")){ assignModal(); return; }
+    const p=e.target.closest("[data-p]"); if(p) openStaff(p.dataset.p);
+  });
+};
+
+function openStaff(name){
+  const p=staff(name), s=utilState(p.util);
+  const rows=p.sites.map(id=>{const ss=site(id);return {ss,m:siteM(ss)};});
+  const cities=[...new Set(rows.map(r=>r.ss.city))];
+  const conflict = cities.length>1 && p.role==="CRC";
+  openLayer($("#drawer"),`
+    <div class="drawer-h">
+      <div style="flex:1"><div class="section-t" style="margin:0 0 3px">${esc(p.role)} · ${esc(p.lvl)}</div>
+        <h2 style="font-size:17px">${esc(p.n)}</h2>
+        <div class="note" style="margin-top:3px">常驻 ${esc(p.city)}｜GCP 证书有效期至 ${esc(p.gcp)}（剩余 ${days(TODAY,p.gcp)} 天）</div></div>
+      <button class="x" data-close aria-label="关闭">✕</button>
+    </div>
+    <div class="drawer-b">
+      <div class="card" style="padding:12px;margin-bottom:14px">
+        <div class="row" style="justify-content:space-between;margin-bottom:8px">
+          <span class="kpi-l">当前利用率</span><span class="pill p-${s.k==="good"?"neut":s.k}">${s.t}</span></div>
+        <div class="num" style="font-size:30px;line-height:1;color:${s.c}">${p.util}<small style="font-size:14px">%</small></div>
+        <div class="bartrack" style="height:8px;margin-top:14px;position:relative">
+          <div class="barfill" style="width:${clamp(p.util,0,100)}%;background:var(--ink-2);height:100%"></div>
+          <div style="position:absolute;left:60%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
+          <div style="position:absolute;left:88%;top:-3px;bottom:-3px;width:2px;background:var(--accent);border-radius:2px"></div>
+        </div>
+        <div class="note" style="margin-top:8px">蓝色刻度为健康区间边界 60% 与 88%。低于 60% 是产能浪费，高于 88% 是质量与流失风险。</div>
+      </div>
+      ${conflict?`<div class="card" style="padding:10px 12px;margin-bottom:14px;border-left:2px solid var(--warn);background:var(--warn-soft)">
+        <b style="font-size:12.5px;color:var(--warn)">跨城市派驻提示</b>
+        <div class="note" style="margin-top:2px;color:var(--ink-2)">该 CRC 被派驻到 ${cities.join("、")} 共 ${cities.length} 个城市的中心。CRC 为现场驻场角色，跨城派驻会产生大量非计费通勤工时。</div>
+      </div>`:""}
+      <div class="section-t">派驻明细（${rows.length} 个中心）</div>
+      ${rows.length? `<div class="stack" style="gap:7px">${rows.map(({ss,m})=>{
+        const rs=rateState(m.rate); const rsC = rs.k==="good"?"var(--ink)":rs.c;
+        return `<button data-goto2="${ss.id}" style="width:100%;text-align:left;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:none;cursor:pointer">
+          <div class="row" style="justify-content:space-between">
+            <b style="font-size:12.5px;font-weight:500">${esc(ss.hosp)}</b>
+            <span class="pill p-${rs.k}">${rs.t}</span></div>
+          <div class="note" style="margin-top:3px">${esc(S[ss.sid].short)} · ${esc(ss.city)}｜已入组 ${ss.enrolled}/${ss.contracted}｜已耗 ${n0(ss.md)} 人天｜毛利 ${m.gp>0?"+":""}${n1(m.gp)} 万</div>
+        </button>`;}).join("")}</div>` : `<div class="empty">该人员当前无中心派驻（职能角色）</div>`}
+      <hr class="hr">
+      <div class="section-t">近 12 个月利用率</div>
+      <div style="margin-top:6px">${spark(SPARK.util.map(v=>clamp(v+(p.util-78),20,100)),s.c,480,54)}</div>
+    </div>`);
+  $("#drawer").addEventListener("click",e=>{const b=e.target.closest("[data-goto2]");
+    if(b){closeLayer();setTimeout(()=>openSite(b.dataset.goto2),230);} });
+}
+
+function assignModal(){
+  openLayer($("#modal"),`
+    <div class="drawer-h"><h3 style="flex:1;font-size:15px">新增派工</h3><button class="x" data-close aria-label="关闭">✕</button></div>
+    <div style="padding:16px 18px 18px">
+      <div class="field"><div class="slider-h"><label for="as-p">人员</label></div>
+        <select class="sel" id="as-p" style="width:100%">${STAFF.filter(p=>p.role==="CRA"||p.role==="CRC")
+          .map(p=>`<option value="${esc(p.n)}">${esc(p.n)} · ${p.role} · ${p.city} · 当前 ${p.util}%</option>`).join("")}</select></div>
+      <div class="field"><div class="slider-h"><label for="as-s">项目中心</label></div>
+        <select class="sel" id="as-s" style="width:100%">${SITES.map(s=>
+          `<option value="${s.id}">${esc(s.hosp)}（${esc(S[s.sid].short)}）· ${esc(s.city)}</option>`).join("")}</select></div>
+      <div class="field"><div class="slider-h"><label for="as-f">投入 FTE</label><b id="as-fv">30%</b></div>
+        <input type="range" id="as-f" min="5" max="60" step="5" value="30"></div>
+      <div id="as-warn" style="margin-bottom:12px"></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" data-close>取消</button>
+        <button class="btn btn-p" id="as-ok">确认派工</button></div>
+    </div>`);
+  const check=()=>{
+    const p=staff($("#as-p").value), ss=site($("#as-s").value), f=+$("#as-f").value;
+    $("#as-fv").textContent=f+"%";
+    const nu=clamp(p.util+f*0.8,0,140), s=utilState(nu);
+    const msgs=[];
+    if(nu>88) msgs.push(["crit",`派工后利用率将达 ${n1(nu)}%，进入超载区间（>88%）`]);
+    if(p.city!==ss.city&&p.role==="CRC") msgs.push(["warn",`${p.n} 常驻 ${p.city}，该中心在 ${ss.city} —— CRC 跨城驻场会产生大量不可计费通勤工时`]);
+    if(days(TODAY,p.gcp)<70) msgs.push(["crit",`${p.n} 的 GCP 证书 ${days(TODAY,p.gcp)} 天后到期，需先安排换证`]);
+    if(p.sites.includes(ss.id)) msgs.push(["warn",`${p.n} 已派驻该中心，本次将叠加投入`]);
+    $("#as-warn").innerHTML = msgs.length? msgs.map(([k,t])=>
+      `<div style="border-left:2px solid var(--${k});background:var(--${k}-soft);padding:7px 10px;margin-bottom:6px;font-size:12px;color:var(--ink-2)">${esc(t)}</div>`).join("")
+      : `<div style="border-left:2px solid var(--good);background:var(--good-soft);padding:7px 10px;font-size:12px;color:var(--ink-2)">派工后利用率 ${n1(nu)}%（${s.t}），无冲突</div>`;
+  };
+  ["#as-p","#as-s","#as-f"].forEach(s=>$(s).addEventListener("input",check));
+  check();
+  $("#as-ok").addEventListener("click",()=>{
+    const p=staff($("#as-p").value), ss=site($("#as-s").value), f=+$("#as-f").value;
+    p.util=Math.round(clamp(p.util+f*0.8,0,140));
+    if(!p.sites.includes(ss.id)) p.sites.push(ss.id);
+    if(p.role==="CRC"&&!ss.crc.includes(p.n)) ss.crc.push(p.n);
+    closeLayer(); toast(`已派工：${p.n} → ${ss.hosp}（${f}% FTE），利用率更新为 ${p.util}%`,
+      p.util>88?"warn":""); setTimeout(render,220);
+  });
+}
+
+/* ════════════════ 5 · 工时与差旅 ════════════════ */
+VIEWS.time = box=>{
+  const ids = scopeIds(), me = PERSONA();
+  /* 员工只看得到自己的填报；PM 与经营层看范围内全部 */
+  const mineOnly = me.k==="cra" || me.k==="crc";
+  const inScope = t=>ids.has(t.ss) && (!mineOnly || t.who===me.n);
+  const rows = TIMESHEET.filter(inScope);
+  const bill = rows.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill);
+  const nb   = rows.filter(t=>!WORKTYPES.find(w=>w.k===t.type).bill);
+  const bd=sum(bill,t=>t.h)/8, nd=sum(nb,t=>t.h)/8, td=bd+nd;
+  const tv=sum(rows,t=>t.travel);
+
+  box.innerHTML=`
+  <div class="grid g12" style="gap:14px">
+    <div>
+      <div class="section-t">移动端填报（模拟）</div>
+      <div style="border:9px solid var(--ink);border-radius:26px;background:var(--surface);overflow:hidden;box-shadow:var(--shadow);max-width:330px">
+        <div style="background:var(--ink);color:var(--ground);padding:3px 14px 7px;display:flex;justify-content:space-between;font-size:10px" class="mono">
+          <span>9:41</span><span>中心台 · CRC 端</span></div>
+        <div style="padding:14px">
+          <div class="field"><div class="slider-h"><label for="ts-w">填报人</label></div>
+            <select class="sel" id="ts-w" style="width:100%" ${mineOnly?"disabled":""}>${
+              (mineOnly?[staff(me.n)]:STAFF.filter(p=>p.role==="CRA"||p.role==="CRC"))
+              .map(p=>`<option ${p.n===(mineOnly?me.n:state.tsWho)?"selected":""}>${esc(p.n)}</option>`).join("")}</select></div>
+          <div class="field"><div class="slider-h"><label for="ts-s">项目中心</label></div>
+            <select class="sel" id="ts-s" style="width:100%"></select></div>
+          <div class="field"><div class="slider-h"><label>工作类型</label></div>
+            <div class="row" style="gap:4px" id="ts-t">${WORKTYPES.map((w,i)=>
+              `<button class="chip" data-t="${esc(w.k)}" aria-pressed="${i===0}" style="font-size:10.5px;padding:2px 7px">${esc(w.k)}</button>`).join("")}</div></div>
+          <div id="ts-bill" style="margin:-4px 0 12px"></div>
+          <div class="field"><div class="slider-h"><label for="ts-h">工时</label><b id="ts-hv">8.0 小时</b></div>
+            <input type="range" id="ts-h" min="0.5" max="12" step="0.5" value="8"></div>
+          <div class="field"><label class="cbx"><input type="checkbox" id="ts-tv"><span>发生差旅费用</span></label>
+            <div id="ts-tvw" hidden style="margin-top:5px"><input class="inp" id="ts-tva" type="number" step="0.01" min="0" value="0.28" style="width:100%"><div class="note" style="margin-top:3px">单位：万元</div></div></div>
+          <button class="btn btn-p" id="ts-go" style="width:100%;justify-content:center;padding:9px">提交（本次约 12 秒）</button>
+          <div class="note" style="text-align:center;margin-top:7px">弱网自动离线暂存，恢复后补传</div>
+        </div>
+      </div>
+      <div class="formula" style="margin-top:12px">
+成本归集口径
+人天 = 工时 ÷ 8
+成本 = 人天 × 费率(CRC ${RATE.crcDay}／CRA ${RATE.craDay} 万) + 差旅
+→ 自动落到该 StudySite
+      </div>
+    </div>
+    <div class="stack">
+      <div class="grid g4" style="gap:10px">
+        ${[[mineOnly?"我的总人天":"本期总人天",n1(td),"人天","含全部类型"],
+           ["可计费人天",n1(bd),"人天",`占比 ${td?pct(bd/td):"—"}`],
+           ["不可计费人天",n1(nd),"人天",`占比 ${td?pct(nd/td):"—"} · 毛利蒸发口`],
+           ["差旅费用",n1(tv),"万元",`${rows.filter(t=>t.travel>0).length} 笔`]
+         ].map(([l,v,u,n],i)=>`<div class="stat">
+            <div class="kpi-l">${esc(l)}</div>
+            <div class="num" style="font-size:23px;margin-top:3px;${i===2&&td&&nd/td>0.15?"color:var(--crit)":""}">${v}<small style="font-size:11px;color:var(--ink-3);margin-left:2px">${u}</small></div>
+            <div class="note">${esc(n)}</div></div>`).join("")}
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>计费 / 不计费构成</h3><span class="sub">不区分，利用率就是假的</span></div>
+        <div class="card-b"><div id="c-bill"></div>
+          <div class="note" style="margin-top:10px;border-top:1px solid var(--line);padding-top:9px">
+            不可计费工时占比若持续高于 15%，通常意味着合同外「帮忙」、返工或投标支持被计入了项目 —— 这是隐性毛利流失最常见的出口。</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>最近填报</h3><span class="sp"></span><span class="sub" id="ts-n">${rows.length} 条</span></div>
+        <div class="tw"><table style="min-width:600px">
+          <thead><tr><th>日期</th><th>填报人</th><th>项目中心</th><th>工作类型</th><th class="ta-r">工时</th><th class="ta-r">差旅</th><th class="ta-r">归集成本</th><th></th></tr></thead>
+          <tbody id="ts-tb"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>`;
+
+  const fillSites=()=>{ const who=$("#ts-w").value, p=staff(who);
+    const opts = (p.sites.length?p.sites:SITES.map(s=>s.id));
+    $("#ts-s").innerHTML = opts.map(id=>{const s=site(id);
+      return `<option value="${id}">${esc(s.hosp)}（${esc(S[s.sid].short)}）</option>`;}).join(""); };
+  const billNote=()=>{ const t=box.querySelector('#ts-t [aria-pressed="true"]')?.dataset.t;
+    const w=WORKTYPES.find(x=>x.k===t);
+    $("#ts-bill").innerHTML = w.bill
+      ? `<span class="pill p-good">✓ 可计费 — 计入合同范围</span>`
+      : `<span class="pill p-crit">✗ 不可计费 — 由公司承担，不进项目收入</span>`; };
+  const drawRows=()=>{
+    const rs = TIMESHEET.filter(inScope).slice().sort((a,b)=>b.d.localeCompare(a.d)||b.id-a.id);
+    $("#ts-tb").innerHTML = rs.map(t=>{
+      const w=WORKTYPES.find(x=>x.k===t.type), p=staff(t.who);
+      const cost=t.h/8*(p.role==="CRA"?RATE.craDay:RATE.crcDay)+t.travel;
+      return `<tr><td class="mono" style="font-size:11.5px">${esc(t.d)}</td>
+        <td>${esc(t.who)} <span class="t-sub">${p.role}</span></td>
+        <td style="font-size:12px">${esc(site(t.ss).hosp)}</td>
+        <td><span class="pill ${w.bill?"p-neut":"p-crit"}">${esc(t.type)}</span></td>
+        <td class="tnum">${n1(t.h)} h</td>
+        <td class="tnum">${t.travel?n1(t.travel)+" 万":"—"}</td>
+        <td class="tnum">${n1(cost)} 万</td>
+        <td class="ta-r"><button class="x" data-del="${t.id}" title="撤销">✕</button></td></tr>`;}).join("")
+      || `<tr><td colspan="8"><div class="empty">${mineOnly?"你还没有填报记录，用左侧手机端提交一条":"当前项目范围内暂无填报记录"}</div></td></tr>`;
+    $("#ts-n").textContent = rs.length+" 条";
+  };
+  const drawBill=()=>{
+    const rs=TIMESHEET.filter(inScope);
+    const b=sum(rs.filter(t=>WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
+    const n=sum(rs.filter(t=>!WORKTYPES.find(w=>w.k===t.type).bill),t=>t.h)/8;
+    stacked($("#c-bill"),[{n:"可计费",v:b},{n:"不可计费",v:n}],{fmt:v=>n1(v)+" 人天"});
+  };
+  fillSites(); billNote(); drawRows(); drawBill();
+  $("#ts-w").addEventListener("change",e=>{state.tsWho=e.target.value;fillSites();});
+  $("#ts-h").addEventListener("input",e=>$("#ts-hv").textContent=(+e.target.value).toFixed(1)+" 小时");
+  $("#ts-tv").addEventListener("change",e=>$("#ts-tvw").hidden=!e.target.checked);
+  $("#ts-t").addEventListener("click",e=>{const b=e.target.closest("[data-t]"); if(!b)return;
+    box.querySelectorAll("#ts-t .chip").forEach(c=>c.setAttribute("aria-pressed",c===b));billNote();});
+  $("#ts-go").addEventListener("click",()=>{
+    const who=$("#ts-w").value, ss=$("#ts-s").value;
+    const type=box.querySelector('#ts-t [aria-pressed="true"]').dataset.t;
+    const h=+$("#ts-h").value, tv=$("#ts-tv").checked? +$("#ts-tva").value||0 : 0;
+    TIMESHEET.unshift({id:tsSeq++, d:TODAY, who, ss, type, h, travel:tv});
+    const p=staff(who), c=h/8*(p.role==="CRA"?RATE.craDay:RATE.crcDay)+tv;
+    const s=site(ss); s.cost=+(s.cost+c).toFixed(1); s.md+=Math.round(h/8*10)/10;
+    const w=WORKTYPES.find(x=>x.k===type);
+    toast(`已记录 ${who} ${n1(h)} 小时 · ${w.bill?"可计费":"不可计费"} · 成本 ${n1(c)} 万已归集到 ${s.hosp}`, w.bill?"":"warn");
+    render();
+  });
+  box.addEventListener("click",e=>{const d=e.target.closest("[data-del]"); if(!d)return;
+    const i=TIMESHEET.findIndex(t=>t.id===+d.dataset.del); if(i<0)return;
+    const t=TIMESHEET[i], p=staff(t.who), s=site(t.ss);
+    s.cost=+(s.cost-(t.h/8*(p.role==="CRA"?RATE.craDay:RATE.crcDay)+t.travel)).toFixed(1);
+    s.md=Math.max(0,s.md-Math.round(t.h/8*10)/10);
+    TIMESHEET.splice(i,1); toast("已撤销该条填报，成本同步回滚"); render();});
+};
+</script>

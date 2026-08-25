@@ -1,0 +1,178 @@
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   中心可行性调查库
+   报价模型算「要花多少人天」，可行性库算「这家能不能出病人」。
+   两者并列，都是靠自己历史数据攒出来、别人抄不走的东西。
+   ════════════════════════════════════════════════════════════════════ */
+VIEWS.feas = box=>{
+  const list = FEAS.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const done = list.filter(f=>f.actual!=null);
+  const evalu = list.filter(f=>f.actual==null);
+  /* 校准：预测 vs 实际，得出本公司的系统性偏差 */
+  const bias = done.length ? sum(done,f=>f.actual)/Math.max(sum(done,f=>feasScore(f.q).pred),0.01) : null;
+  const ov = done.filter(f=>f.override);
+  const ovAvg = ov.length? sum(ov,f=>f.actual)/ov.length : null;
+  const noOv = done.filter(f=>!f.override);
+  const noOvAvg = noOv.length? sum(noOv,f=>f.actual)/noOv.length : null;
+
+  const card = f=>{
+    const r = feasScore(f.q), gapPct = f.actual!=null && r.pred>0 ? (f.actual-r.pred)/r.pred : null;
+    return `<div class="card ${f.override?"alert alert-warn":""}" style="margin-bottom:30px">
+      <div class="card-h">
+        <span class="mono" style="font-size:11px;color:var(--ink-3)">${esc(f.id)}</span>
+        <h3>${esc(f.hosp)}</h3>
+        <span class="sub">${esc(f.dept)} · PI ${esc(f.pi)} · ${esc(f.city)}｜${esc(S[f.sid]?S[f.sid].short:f.sid)}</span>
+        <span class="sp"></span>
+        <span class="pill p-${r.lvl.k}">${r.total.toFixed(0)} 分 · ${esc(r.lvl.t)}</span>
+        <span class="pill p-neut">${esc(f.st)}</span></div>
+      <div class="card-b">
+        <div class="grid g2" style="gap:16px">
+          <div>
+            <div class="section-t">评分构成</div>
+            <div id="fs-${f.id}"></div>
+            <div class="note" style="margin-top:8px">调查人 ${esc(f.by)} · ${esc(f.date)}</div>
+          </div>
+          <div>
+            <div class="section-t">问卷与预测</div>
+            <dl class="kv" style="grid-template-columns:130px 1fr">
+              <dt>年同适应症例数</dt><dd>${f.q.ptYear}</dd>
+              <dt>既往同类试验</dt><dd>${f.q.pastN} 个 · 最好月入组 ${n1(f.q.pastBest)}</dd>
+              <dt>在研竞争试验</dt><dd>${f.q.compet} 个</dd>
+              <dt>伦理 / 启动周期</dt><dd>${f.q.ethicsDays} / ${f.q.startDays} 天</dd>
+              <dt>研究团队</dt><dd>${f.q.teamN} 人</dd>
+              <dt>入排合格率</dt><dd>${f.q.eligPct==null
+                ? `<span class="pill p-warn">未采集</span>` : pct(f.q.eligPct)}</dd>
+              <dt>PI 承诺月入组</dt><dd>${n1(f.q.piCommit)} 例</dd>
+            </dl>
+            <div style="margin-top:10px;border:1px solid var(--line);border-left:2px solid var(--accent);background:var(--accent-soft);padding:9px 11px;border-radius:0 8px 8px 0">
+              <div class="row" style="justify-content:space-between">
+                <span class="kpi-l">系统预测月入组</span>
+                <b class="num" style="font-size:17px;color:var(--accent)">${n1(r.pred)} 例</b></div>
+              <div class="note" style="margin-top:3px;color:var(--ink-2)">
+                = min( PI 承诺 ${n1(f.q.piCommit)} × 兑现系数 ${pct(PI_KEEP)}，病源上限 ${n1(r.cap)} )</div>
+            </div>
+            ${f.actual!=null?`
+              <div class="row" style="justify-content:space-between;margin-top:9px;padding-top:9px;border-top:1px solid var(--line)">
+                <span class="kpi-l">实际月入组</span>
+                <b class="num" style="font-size:17px;color:${gapPct<-0.3?"var(--crit)":gapPct<0?"var(--warn)":"var(--ink)"}">${n1(f.actual)} 例
+                  <span style="font-size:11px;font-weight:400">（${gapPct>0?"+":""}${pct(gapPct)}）</span></b></div>`:""}
+          </div>
+        </div>
+        ${f.override?`<div style="margin-top:12px;border-left:2px solid var(--warn);background:var(--warn-soft);padding:9px 11px;font-size:12.5px;color:var(--ink-2);line-height:1.65">
+          <b style="color:var(--warn)">⚑ 评分被人为覆盖（override）</b><br>${esc(f.override)}
+          ${f.actual!=null?`<br><b>结果</b>：实际月入组 ${n1(f.actual)} 例，预测 ${n1(r.pred)} 例。`:""}</div>`:""}
+        ${f.actual==null?`<div class="row" style="margin-top:12px">
+          <button class="btn btn-p" data-fin="${esc(f.id)}">推荐入选</button>
+          <button class="btn" data-fout="${esc(f.id)}">不予入选</button>
+          ${r.lvl.k!=="good"?`<span class="note">评分 ${r.total.toFixed(0)} 分（${r.lvl.t}）。若仍要入选，必须写明覆盖理由 —— 这条记录会进入回溯统计。</span>`:""}
+        </div>`:""}
+      </div></div>`;
+  };
+
+  box.innerHTML=`
+  <div class="grid g4" style="gap:10px;margin-bottom:12px">
+    ${[["累计调查",FEAS.length,"家","var(--ink)"],
+       ["已入选并有结果",done.length,"家","var(--ink)"],
+       ["预测校准系数",bias===null?"—":n1(bias)+"×",bias&&bias<0.8?"var(--crit)":"var(--warn)"],
+       ["被覆盖入选",ov.length,"家",ov.length?"var(--warn)":"var(--ink)"]
+     ].map(([l,v,u,c])=>`<div class="stat">
+        <div class="kpi-l">${esc(l)}</div>
+        <div class="num" style="font-size:24px;margin-top:3px;color:${c}">${v}<small style="font-size:12px;color:var(--ink-3);margin-left:2px">${typeof u==="string"&&!u.startsWith("var")?u:""}</small></div></div>`).join("")}
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-h"><h3>回溯：这套评分到底准不准</h3><span class="sp"></span>
+      <span class="sub">不做回溯的可行性调查，只是一张走过场的表</span></div>
+    <div class="card-b">
+      <div id="c-feas" style="margin-bottom:12px"></div>
+      <div class="grid g2" style="gap:12px">
+        <div style="border-left:2px solid var(--crit);background:var(--crit-soft);padding:10px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.7">
+          <b style="color:var(--crit)">被覆盖入选的中心：平均月入组 ${ovAvg===null?"—":n1(ovAvg)} 例</b><br>
+          未被覆盖的：${noOvAvg===null?"—":n1(noOvAvg)} 例。<br>
+          样本很小，但方向明确 —— <b>「申办方指定」和「凑中心数」这两个理由，最后都由我们自己买单。</b>
+          把覆盖理由记下来，才有机会在下一次谈判时把它变成筹码。
+        </div>
+        <div style="border-left:2px solid var(--warn);background:var(--warn-soft);padding:10px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.7">
+          <b style="color:var(--warn)">问卷本身也在暴露缺陷</b><br>
+          湘雅二评分 ${feasScore(FEAS.find(f=>f.id==="FS-2025-009").q).total.toFixed(0)} 分、病源充足，却出现 57% 筛败率 ——
+          因为当时的问卷<b>只问了门诊量，没问「按本方案入排能过几个」</b>。
+          「入排合格率」是复盘之后才加进问卷的字段，新一批评估（FS-2026-014/015）已经有了。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  ${evalu.length?`<div class="section-t">评估中（${evalu.length}）</div>${evalu.map(card).join("")}`:""}
+  <div class="section-t" style="margin-top:16px">已入选并有实际结果（${done.length}）</div>
+  ${done.map(card).join("")}
+
+  <div class="formula">评分 = 病源(0–30) + 既往入组表现(0–30) − 竞争试验(0–15) + 启动效率(0–15) + 团队(0–10) ± 入排匹配度修正
+预测月入组 = min( PI 承诺 × 兑现系数 ${pct(PI_KEEP)}，年例数÷12 × 入排合格率 × 0.5 )
+
+PI 承诺必须打折 —— 行业经验兑现率 40%–60%。直接用承诺值排产能，是启动期人力估算失准的头号原因。</div>`;
+
+  /* 预测 vs 实际：成对条形，一眼看出系统性高估 */
+  $("#c-feas").innerHTML = `
+    <div class="legend" style="margin-bottom:9px">
+      <span><i style="background:var(--plan)"></i>系统预测月入组</span>
+      <span><i style="background:var(--s1)"></i>实际月入组</span>
+      <span class="t-mut" style="margin-left:auto">⚑ = 评分被人为覆盖后仍入选</span></div>
+    ${done.map(f=>{const r=feasScore(f.q), M=Math.max(...done.map(x=>Math.max(feasScore(x.q).pred,x.actual)))*1.1||1;
+      return `<div style="display:grid;grid-template-columns:minmax(110px,190px) 1fr 96px;gap:10px;align-items:center;margin-bottom:7px">
+        <div style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${f.override?`<span style="color:var(--warn)">⚑ </span>`:""}${esc(f.hosp)}</div>
+        <div>
+          <div class="bartrack" style="height:9px;margin-bottom:2px">
+            <div class="barfill" style="width:${r.pred/M*100}%;background:var(--plan);height:100%"></div></div>
+          <div class="bartrack" style="height:9px">
+            <div class="barfill" style="width:${f.actual/M*100}%;background:var(--s1);height:100%"></div></div>
+        </div>
+        <div class="tnum" style="font-size:11.5px;line-height:1.35">
+          <div class="t-mut">${n1(r.pred)}</div>
+          <div style="color:${f.actual<r.pred*0.7?"var(--crit)":"var(--ink)"};font-weight:600">${n1(f.actual)}</div></div>
+      </div>`;}).join("")}`;
+
+  list.forEach(f=>{ const r=feasScore(f.q);
+    hbars($("#fs-"+f.id), [
+      {label:"病源规模",v:r.parts.src},
+      {label:"既往入组表现",v:r.parts.past},
+      {label:"启动效率",v:r.parts.start},
+      {label:"研究团队",v:r.parts.team},
+      {label:"竞争试验",v:r.parts.comp,color:"var(--crit)"},
+      ...(f.q.eligPct!=null?[{label:"入排匹配度",v:r.parts.elig,color:"var(--good)"}]:[])
+    ], {max:30, fmt:v=>v.toFixed(0), unit:" 分", h:12, gap:10});
+  });
+
+  box.addEventListener("click",e=>{
+    const yes=e.target.closest("[data-fin]"), no=e.target.closest("[data-fout]");
+    if(!yes&&!no) return;
+    const id=(yes||no).dataset.fin||(yes||no).dataset.fout;
+    const f=FEAS.find(x=>x.id===id), r=feasScore(f.q);
+    if(no){ f.st="未入选"; f.actual=0;
+      toast(`${f.hosp} 不予入选（评分 ${r.total.toFixed(0)}）`); render(); return; }
+    if(r.lvl.k==="good"){ f.st="已入选（待建档）"; f.actual=null;
+      toast(`${f.hosp} 推荐入选，评分 ${r.total.toFixed(0)} 分，预测月入组 ${n1(r.pred)} 例 —— 可在「立项与建档」中建档`);
+      render(); return; }
+    openLayer($("#modal"),`
+      <div class="drawer-h"><h3 style="flex:1;font-size:15px">评分未达推荐线，需写明覆盖理由</h3>
+        <button class="x" data-close aria-label="关闭">✕</button></div>
+      <div style="padding:16px 18px 18px">
+        <div style="border-left:2px solid var(--warn);background:var(--warn-soft);padding:9px 11px;font-size:12.5px;color:var(--ink-2);line-height:1.65;margin-bottom:12px">
+          ${esc(f.hosp)} 评分 <b>${r.total.toFixed(0)} 分</b>（${esc(r.lvl.t)}），预测月入组仅 <b>${n1(r.pred)} 例</b>。<br>
+          覆盖理由会永久记录，并进入「被覆盖入选中心的实际表现」回溯统计。
+        </div>
+        <textarea class="qbox" id="ovr" placeholder="例：申办方指定，PI 为该适应症区域学术带头人；或：为赶 FPI 时间点凑够中心数。"></textarea>
+        <div class="row" style="justify-content:flex-end;margin-top:12px">
+          <button class="btn" data-close>取消</button>
+          <button class="btn btn-p" id="ovr-go">确认覆盖并入选</button></div>
+      </div>`);
+    $("#ovr-go").addEventListener("click",()=>{
+      const v=$("#ovr").value.trim();
+      if(v.length<8){ toast("覆盖理由需写具体（至少 8 个字）","crit"); return; }
+      f.override=v; f.st="已入选（覆盖）"; closeLayer();
+      toast(`${f.hosp} 已覆盖评分入选，理由已记入回溯统计`,"warn"); setTimeout(render,220);
+    });
+  });
+};
+</script>
