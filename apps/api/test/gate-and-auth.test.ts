@@ -11,12 +11,16 @@ afterAll(async () => { await app?.close(); });
 
 let seq = 0;
 async function freshSite() {
-  const study = (await boss.get("/v1/studies?limit=1")).body.items[0];
+  const studies = await boss.get("/v1/studies?limit=1");
+  expect(studies.status, `取项目失败：${JSON.stringify(studies.body)}`).toBe(200);
+  const study = studies.body.items[0];
   const r = await boss.post("/v1/study-sites", {
     studyId: study.id, code: `SS-GATE${String(++seq).padStart(2, "0")}`,
     hospital: "闸门测试医院", dept: "科", city: "北京",
     piName: "测试研究者", contracted: 5, unitPriceCents: 1000000
   });
+  /* 建档失败时不能悄悄往下走：后面的断言会去报一个完全无关的现象 */
+  expect(r.status, `建档失败：${JSON.stringify(r.body)}`).toBe(201);
   return r.body as { id: string; code: string; state: string };
 }
 const advance = (id: string, to: string, reason?: string) =>
@@ -56,7 +60,12 @@ describe("闸门：推进不是给字段赋值，是断言一组事实成立", (
 
   it("闸门预检接口在按钮点下去之前就给出答案", async () => {
     const s = await freshSite();
-    for (const to of ["irb_submit", "irb_approve", "contract"]) await advance(s.id, to, "按流程推进至下一节点");
+    /* 逐步断言：不 assert 的循环一旦有一步失败，后面的断言会去报一个
+       完全无关的现象（"闸门说 from=intake"），而真正的原因被吞掉了。 */
+    for (const to of ["irb_submit", "irb_approve", "contract"]) {
+      const r = await advance(s.id, to, "按流程推进至下一节点");
+      expect(r.status, `推进到 ${to} 失败：${JSON.stringify(r.body)}`).toBe(201);
+    }
     const g = await boss.get(`/v1/study-sites/${s.id}/gate`);
     expect(g.status).toBe(200);
     expect(g.body).toMatchObject({ from: "contract", to: "siv", satisfied: false });
