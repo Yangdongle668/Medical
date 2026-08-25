@@ -47,7 +47,10 @@ const RULES = [
   },
   {
     scope: "apps/web/src",
-    forbid: [/^pg$/, /^@nestjs\//, /@sitedesk\/api/, /^\.\.\/\.\.\/api\//],
+    /* 注意别把前端自己的 src/api（契约 client）也禁掉了：
+       从 features/ 看过去它就是 "../../api/client.js"。
+       要禁的是 apps/api 那个后端，所以按包名与 apps/api 路径来判。 */
+    forbid: [/^pg$/, /^@nestjs\//, /@sitedesk\/api/, /apps\/api\//],
     why: "前端不得依赖后端实现 —— 它只认契约（@sitedesk/contracts）。" +
          "一旦引用了后端的类型或工具，前后端就没法再各自独立部署"
   },

@@ -6,9 +6,11 @@ import { TodayPage } from "./features/today/TodayPage.js";
 import { VisitPage } from "./features/visit/VisitPage.js";
 import { SitesPage } from "./features/sites/SitesPage.js";
 import { QualityPage } from "./features/quality/QualityPage.js";
+import { LoginPage } from "./features/login/LoginPage.js";
 import "./shell/styles.css";
 
 const router = createBrowserRouter([
+  { path: "/login", element: <LoginPage /> },
   {
     path: "/", element: <App />,
     children: [

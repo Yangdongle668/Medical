@@ -9,7 +9,9 @@
     "preview": "vite preview --port 4173 --strictPort",
     "typecheck": "tsc --noEmit",
     "e2e": "npm run build:mock && playwright test",
-    "build:mock": "VITE_USE_MOCKS=1 vite build"
+    "build:mock": "VITE_USE_MOCKS=1 vite build",
+    "build:live": "vite build",
+    "integration": "npm run build:live && playwright test -c playwright.integration.config.ts"
   },
   "dependencies": {
     "@sitedesk/contracts": "*",

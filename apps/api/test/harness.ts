@@ -5,6 +5,7 @@ import request from "supertest";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { expect } from "vitest";
 import { AppModule } from "../src/app.module.js";
 
 /* 仓库根：从本文件位置往上找到带 package.json 的工作区根，**不靠 cwd**。
@@ -32,16 +33,65 @@ if (fs.existsSync(envFile))
 if (!process.env.TEST_DATABASE_URL || !process.env.APP_TEST_DATABASE_URL)
   throw new Error("缺少 TEST_DATABASE_URL / APP_TEST_DATABASE_URL —— " +
     "请写入仓库根的 .env 或由环境注入");
-/* 应用必须以非 owner 角色连接 —— 否则 RLS 形同虚设，测出来的全是假绿 */
-process.env.APP_DATABASE_URL = process.env.APP_TEST_DATABASE_URL;
 process.env.SITEDESK_DEV_LOGIN = "1";
 
+/* ── 每个测试文件一个独立数据库 ────────────────────────────────────
+   原来是所有文件共用一个 sitedesk_test，各自在 beforeAll 里
+   `migrate down 99 && up && seed`。共用 + 各自重置，是一种
+   **每次都能跑通、但偶尔会莫名其妙红一片**的组合：
+   症状是「刚建的中心查不到（404）」「boss 拿到空的项目列表」，
+   看起来像功能坏了，其实是另一个文件把库清了。
+
+   这个问题在本地连跑 8 次都复现不出来，却在 CI 上红了两次 ——
+   而 CI 红一次的代价，远高于每个文件多花 1.3 秒建一个库。
+
+   所以不再共用：库名由测试文件名派生，互相之间物理隔离。
+   隔离不是靠约定，是靠没有共享的东西。 */
+
+const BASE = process.env.TEST_DATABASE_URL!;
+const APP_BASE = process.env.APP_TEST_DATABASE_URL!;
+
+/** 把连接串里的库名换掉 */
+const withDb = (url: string, db: string) =>
+  url.replace(/\/[^/?]+(\?|$)/, `/${db}$1`);
+
+/** 当前测试文件的短名，用作库名后缀 */
+function fileKey(): string {
+  const p = expect.getState().testPath ?? "shared";
+  return path.basename(p).replace(/\.test\.ts$/, "").replace(/[^a-z0-9]/gi, "_").toLowerCase();
+}
+
 export function resetDb() {
-  const env = { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL };
+  const db = `sitedesk_test_${fileKey()}`;
+  const admin = withDb(BASE, "postgres");
+  /* SQL 必须写成一行：多行字符串经 -c 传给 psql 时，换行会被当成
+     另一个参数的开头，报出来的错完全指不到这里。 */
+  const psql = (sql: string, url = admin) => {
+    try {
+      execSync(`psql "${url}" -v ON_ERROR_STOP=1 -c ${JSON.stringify(sql)}`,
+        { cwd: ROOT, stdio: "pipe" });
+    } catch (e) {
+      const err = e as { stderr?: Buffer };
+      throw new Error(`psql 失败：${sql}\n${err.stderr?.toString() ?? String(e)}`);
+    }
+  };
+
+  /* DROP 前先踢掉残留连接：上一轮泄漏的连接池会让 DROP DATABASE 卡住，
+     而那个失败的报错（"is being accessed by other users"）看不出是谁占着。 */
+  psql(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${db}' AND pid <> pg_backend_pid()`);
+  psql(`DROP DATABASE IF EXISTS ${db}`);
+  psql(`CREATE DATABASE ${db}`);
+  psql("CREATE EXTENSION IF NOT EXISTS btree_gist", withDb(BASE, db));
+
+  const url = withDb(BASE, db);
+  const env = { ...process.env, DATABASE_URL: url };
   const M = "npx node-pg-migrate --migrations-dir db/migrations --migrations-table schema_migration";
-  execSync(`${M} down 99`, { cwd: ROOT, env, stdio: "pipe" });
-  execSync(`${M} up`,      { cwd: ROOT, env, stdio: "pipe" });
+  execSync(`${M} up`, { cwd: ROOT, env, stdio: "pipe" });
   execSync(`node db/scripts/seed.mjs`, { cwd: ROOT, env, stdio: "pipe" });
+
+  /* 应用必须以非 owner 角色连接 —— 否则 RLS 形同虚设，测出来的全是假绿 */
+  process.env.APP_DATABASE_URL = withDb(APP_BASE, db);
+  process.env.TEST_DATABASE_URL = url;
 }
 
 export async function boot(): Promise<INestApplication> {

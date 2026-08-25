@@ -7,22 +7,24 @@
     "start": "node dist/main.js",
     "dev": "tsc -p tsconfig.build.json --watch",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "serve": "node --import @swc-node/register/esm-register src/main.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.1",
     "@nestjs/core": "^11.2.1",
     "@nestjs/platform-express": "^11.2.1",
+    "@sitedesk/calc": "*",
     "@sitedesk/contracts": "*",
     "@sitedesk/policy": "*",
     "pg": "^8.13.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "zod": "^4.4.3",
-    "@sitedesk/calc": "*"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.2.1",
+    "@swc-node/register": "^1.12.1",
     "@swc/core": "^1.16.1",
     "@types/express": "^5.0.6",
     "@types/node": "^22.0.0",
@@ -32,5 +34,6 @@
     "typescript": "^5.6.0",
     "unplugin-swc": "^1.5.11",
     "vitest": "^4.0.0"
-  }
+  },
+  "type": "module"
 }

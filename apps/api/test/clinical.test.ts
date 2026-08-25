@@ -333,7 +333,10 @@ describe("I4：超窗必须生成方案偏离，且在同一个事务里", () =>
     const close = await qa.post(`/v1/quality-events/${devId}:close`,
       { reason: "已补方案偏离表并由 PI 签字，报伦理备案" }, K());
     expect(close.status).toBe(201);
-    const q = (await qa.get(`/v1/quality-events?studySiteId=${siteId}&state=closed`)).body;
+    /* 带上 limit：不带的话拿的是默认页，而这条偶尔会被别的已关闭事件挤到第二页 ——
+       断言随即变成「看运气」，且失败时看起来像关闭没生效。 */
+    const q = (await qa.get(
+      `/v1/quality-events?studySiteId=${siteId}&state=closed&limit=200`)).body;
     expect(q.items.some((x: { id: string }) => x.id === devId)).toBe(true);
   });
 });
