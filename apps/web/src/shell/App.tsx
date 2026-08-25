@@ -1,16 +1,13 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { call, ApiError } from "../api/client.js";
+import { ApiError } from "../api/client.js";
 import { loadToken, logout } from "../features/login/session.js";
-
-interface Me {
-  account: { displayName: string; role: { name: string } };
-  scopeLabel: string;
-}
+import { loadMe, type Me } from "../features/login/me.js";
 
 const NAV = [
   { to: "/today", label: "今天" },
   { to: "/sites", label: "我的中心" },
+  { to: "/handovers", label: "交接" },
   { to: "/quality", label: "质量台账" }
 ];
 
@@ -22,7 +19,7 @@ export function App() {
 
   useEffect(() => {
     loadToken();
-    call<Me>("getMe")
+    loadMe()
       .then(m => { setMe(m); setReady(true); })
       .catch(e => {
         setReady(true);

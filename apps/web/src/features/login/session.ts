@@ -1,4 +1,5 @@
 import { call, setToken, ApiError } from "../../api/client.js";
+import { forgetMe } from "./me.js";
 
 /* ════════════════════════════════════════════════════════════════════
    会话。
@@ -24,6 +25,9 @@ export function loadToken(): string | null {
 
 export function saveToken(t: string | null) {
   setToken(t);
+  /* 换令牌就是换身份 —— 缓存的 /v1/me 必须跟着作废，
+     否则登出再登入另一个人，侧栏还挂着上一个人的名字与权限。 */
+  forgetMe();
   try { t ? sessionStorage.setItem(KEY, t) : sessionStorage.removeItem(KEY); }
   catch { /* 存不下就只在内存里活着，刷新即失效 —— 可以接受 */ }
 }

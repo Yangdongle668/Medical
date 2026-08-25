@@ -1017,6 +1017,9 @@ paths:
       description: |-
         清单未逐项确认不得完成 —— 交接单签了字但受试者没交底，等于没交接。
         完成时把派工从原负责人转到接手人，两边的行范围随即改变。
+
+        **一个中心都没转移就不算完成**：返回 422 `invariant-violated`（`handover-must-move-assignments`），整笔请求回滚，状态留在 pending。
+        留下一个「已完成但什么也没发生」的交接单，比报错危险得多 —— 两个人都以为交完了，接手人一个中心也没拿到，而原负责人的账号此刻已经可以停用了。
       x-layer: L2
       parameters:
         - name: id
@@ -7727,6 +7730,7 @@ components:
           description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
       required:
         - to
+        - reason
       additionalProperties: false
     AdvanceStudySiteResponse:
       type: object

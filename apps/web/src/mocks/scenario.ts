@@ -12,7 +12,26 @@
    数据取自原型（吴桐 / SS-01 北京协和 / S-0203），与种子同源。
    ════════════════════════════════════════════════════════════════════ */
 
+import {
+  DEFAULT_STARTUP_ITEMS, DEFAULT_HANDOVER_ITEMS, STARTUP_CATEGORY_LABEL
+} from "@sitedesk/contracts";
+
 export interface MockTask { seq: number; task: string; doneAt: string | null }
+
+export interface MockStartupItem {
+  id: string; studySiteId: string; category: string; categoryLabel: string;
+  item: string; ownerAccountId: string | null; ownerName: string | null;
+  dueOn: string | null; isBlocking: boolean;
+  doneAt: string | null; doneByName: string | null; overdueDays: number | null;
+}
+
+export interface MockHandover {
+  id: string; fromAccountId: string; fromName: string;
+  toAccountId: string; toName: string; reason: string; plannedOn: string;
+  status: string; completedAt: string | null;
+  sites: { id: string; code: string; hospital: string }[];
+  items: { seq: number; item: string; doneAt: string | null; doneByName: string | null }[];
+}
 
 export interface MockVisit {
   id: string; subjectId: string; screeningNo: string;
@@ -33,7 +52,10 @@ const TODAY = new Date();
 
 const SITES = [
   { id: "s1", code: "SS-01", hospital: "北京协和医院", state: "enrolling" },
-  { id: "s2", code: "SS-07", hospital: "中山大学肿瘤防治中心", state: "enrolling" }
+  { id: "s2", code: "SS-07", hospital: "中山大学肿瘤防治中心", state: "enrolling" },
+  /* 第三个中心停在 contract —— 它存在的唯一理由是让 SIV 闸门有东西可拦。
+     两个 enrolling 的中心谁也过不了闸门那一关，因为它们早就过去了。 */
+  { id: "s3", code: "SS-14", hospital: "江苏省人民医院", state: "contract" }
 ];
 
 /** 每例的任务清单来自项目的 SOA —— 与 visit_template_task 同一套文字 */
@@ -73,6 +95,15 @@ function mkVisit(
 /** 可变状态。每次 resetScenario() 回到已知起点 —— 测试要从确定处出发。 */
 export interface Scenario {
   visits: MockVisit[];
+  /** 中心的当前阶段。推进会改它，所以不能从 SITES 常量上读。 */
+  siteState: Record<string, string>;
+  /** 计划 SIV 日 —— 清单项的到期日全是相对它算的，两处必须同源 */
+  sivPlannedOn: string;
+  /** 推进到 siv / enrolling 时回填，与后端的 `coalesce(siv_on, CURRENT_DATE)` 同义 */
+  sivOn: Record<string, string>;
+  fpiOn: Record<string, string>;
+  startupItems: MockStartupItem[];
+  handovers: MockHandover[];
   /** 完成访视时累积产生的质量事件，供台账页读取 */
   qualityEvents: {
     id: string; code: string; siteCode: string; kind: string; severity: string;
@@ -99,9 +130,61 @@ export function makeScenario(): Scenario {
         7, 3, TASKS_IO, 0)
     ],
     qualityEvents: [],
-    timesheets: []
+    timesheets: [],
+    siteState: Object.fromEntries(SITES.map(s => [s.id, s.state])),
+    sivPlannedOn: SIV_PLANNED,
+    sivOn: {}, fpiOn: {},
+    startupItems: makeStartupItems("s3"),
+    handovers: [makeHandover()]
   };
 }
+
+/** 启动清单由**契约里的标准清单**铺开，不另写一份。
+ *  另写一份的代价不是重复，是分歧：真实建档铺 16 项、mock 铺 6 项，
+ *  于是 mock 上走得通的流程在真库上多出十项没人见过的阻塞。 */
+const SIV_PLANNED = shift(TODAY, 20);
+
+function makeStartupItems(siteId: string): MockStartupItem[] {
+  return DEFAULT_STARTUP_ITEMS.map((d, i) => {
+    const due = shift(new Date(SIV_PLANNED), d.dueOffset);
+    const overdue = Math.round(
+      (TODAY.getTime() - new Date(due).getTime()) / 86_400_000);
+    return {
+      id: `si-${i}`, studySiteId: siteId,
+      category: d.category, categoryLabel: STARTUP_CATEGORY_LABEL[d.category],
+      item: d.item, ownerAccountId: "a-wutong", ownerName: "吴桐",
+      dueOn: due, isBlocking: d.blocking,
+      doneAt: null, doneByName: null,
+      overdueDays: overdue > 0 ? overdue : null
+    };
+  });
+}
+
+function makeHandover(): MockHandover {
+  return {
+    id: "h1", fromAccountId: "a-wutong", fromName: "吴桐",
+    toAccountId: "a-tangyan", toName: "唐延",
+    reason: "产假，为期六个月", plannedOn: shift(TODAY, 7),
+    status: "pending", completedAt: null,
+    sites: [{ id: "s1", code: "SS-01", hospital: "北京协和医院" }],
+    items: DEFAULT_HANDOVER_ITEMS.map((item, seq) => ({
+      seq, item, doneAt: null, doneByName: null
+    }))
+  };
+}
+
+/** mock 人员名册。发起交接的表单要靠它把候选人缩到同工种。 */
+export const STAFF_LIST = [
+  { accountId: "a-wutong",  login: "wutong",  displayName: "吴桐", roleKind: "CRC",
+    level: "P4", city: "北京", gcpExpiresOn: null, gcpDaysLeft: null,
+    mentorName: null, successorName: null, siteCount: 2, successionGap: false },
+  { accountId: "a-tangyan", login: "tangyan", displayName: "唐延", roleKind: "CRC",
+    level: "P3", city: "西安", gcpExpiresOn: null, gcpDaysLeft: null,
+    mentorName: "吴桐", successorName: null, siteCount: 1, successionGap: false },
+  { accountId: "a-duan",    login: "duanzhiyu", displayName: "段志远", roleKind: "CRA",
+    level: "P5", city: "上海", gcpExpiresOn: null, gcpDaysLeft: null,
+    mentorName: null, successorName: null, siteCount: 4, successionGap: true }
+];
 
 export const SITE_BY_ID = Object.fromEntries(SITES.map(s => [s.id, s]));
 export const SITES_LIST = SITES;

@@ -8,10 +8,23 @@ import { Uuid, Code, DateOnly, Timestamp } from "../kernel/primitives.js";
 export const STARTUP_CATEGORIES = [
   "ethics", "contract", "isf", "training", "ip", "lab", "systems", "meeting"
 ] as const;
+/** 八类的中文名。**顺序即 `startup_category.seq`**，清单按它分组显示。
+ *
+ *  为什么放在契约里而不是只放在库里：库里的 `startup_category` 表是权威，
+ *  但前端要分组显示、mock 要造清单，各写一份中文名就是三处副本 ——
+ *  加一个类目时必然只改一处。这里作一处声明，
+ *  由 db/test 的「与 startup_category 表逐字一致」断言把两边钉住。 */
+export const STARTUP_CATEGORY_LABEL: Record<
+  (typeof STARTUP_CATEGORIES)[number], string
+> = {
+  ethics: "伦理与批件", contract: "合同与预算", isf: "研究者文件夹",
+  training: "人员与培训", ip: "药品与物资", lab: "检验与设备",
+  systems: "系统与账号", meeting: "启动会筹备"
+};
+
 export const StartupCategory = z.enum(STARTUP_CATEGORIES).meta({
   id: "StartupCategory",
-  description: "伦理与批件 / 合同与预算 / 研究者文件夹 / 人员与培训 / " +
-    "药品与物资 / 检验与设备 / 系统与账号 / 启动会筹备"
+  description: STARTUP_CATEGORIES.map(c => STARTUP_CATEGORY_LABEL[c]).join(" / ")
 });
 
 export const StartupItem = z.object({

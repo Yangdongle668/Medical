@@ -27,8 +27,12 @@ const NEXT = "irb_submit";
 
 describe("幂等 —— CRC 在地下室重发请求，不能记两笔", () => {
   it("缺 Idempotency-Key 的 L2 命令 → 422", async () => {
+    /* 请求体必须是**完整合法**的，否则这条断言其实在验别的东西：
+       body 的 schema 校验跑在处理函数之前，少一个 reason 就会先报 reason，
+       于是"缺幂等键"这条规则从未被真正执行过，而测试照样绿。 */
     const site = await freshSite();
-    const r = await boss.post(`/v1/study-sites/${site.id}:advance`, { to: NEXT });
+    const r = await boss.post(`/v1/study-sites/${site.id}:advance`,
+      { to: NEXT, reason: "材料齐备，已向伦理递交" });
     expect(r.status).toBe(422);
     expect(JSON.stringify(r.body.issues)).toContain("idempotency-key");
   });

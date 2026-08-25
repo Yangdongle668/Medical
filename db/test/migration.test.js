@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { owner } from "./helpers.js";
 import { execSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +21,42 @@ const tables = async () => {
     "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY 1");
   return rows.map(r => r.tablename);
 };
+
+describe("迁移文件的形状", () => {
+  /* 这条是从一次静默失败里长出来的。
+
+     0011 第一版忘了写开头那行 `-- Up Migration`。node-pg-migrate 照样
+     **把它记进 schema_migration**，然后一句 SQL 也没执行 ——
+     `Migrations complete!` 打得干干净净，策略却原地不动。
+     排查时看到的是"迁移已应用、行为没变"，最容易怀疑的反而是业务代码。
+
+     一个记了帐却什么也没做的迁移，比一个报错的迁移危险得多：
+     报错会停下来，这个会带着一个错的数据库继续往前走。 */
+  const dir = path.join(ROOT, "db/migrations");
+  const files = fs.readdirSync(dir).filter(f => f.endsWith(".sql")).sort();
+
+  it("每个迁移都同时带 Up / Down 两个标记", () => {
+    expect(files.length, "应当能找到迁移文件").toBeGreaterThan(0);
+    const bad = files.filter(f => {
+      const t = fs.readFileSync(path.join(dir, f), "utf8");
+      return !/^-- Up Migration\s*$/m.test(t) || !/^-- Down Migration\s*$/m.test(t);
+    });
+    expect(bad, "缺标记的迁移会被记入 schema_migration 却一句也不执行").toEqual([]);
+  });
+
+  it("Up 段不为空 —— 只有标记没有语句同样是记帐不做事", () => {
+    const empty = files.filter(f => {
+      const t = fs.readFileSync(path.join(dir, f), "utf8");
+      const up = t.split(/^-- Down Migration\s*$/m)[0]
+        .replace(/^-- Up Migration\s*$/m, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "")      // 块注释
+        .replace(/^\s*--.*$/gm, "")             // 行注释
+        .trim();
+      return up.length === 0;
+    });
+    expect(empty, "这些迁移的 Up 段里没有任何语句").toEqual([]);
+  });
+});
 
 describe("迁移：本地可重复执行（生产只进不退）", () => {
   /* 断言"前后集合一致"而不是某个数字 —— 数字会让每加一张表都要改测试，

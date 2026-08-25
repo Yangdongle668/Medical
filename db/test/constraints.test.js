@@ -166,6 +166,21 @@ describe("约束不是文档，是数据库拒绝写入", () => {
       .toEqual([]);
   });
 
+  it("启动清单的八个类目：契约与 startup_category 表逐字一致，且顺序相同", async () => {
+    /* 中文名有三处用户：库（权威）、前端分组标题、mock 造清单。
+       让后两者各写一份，加一个类目时必然只改一处 ——
+       症状是清单里冒出一个标题为空的分组，而没有任何报错。
+
+       断言顺序而不只是集合：`seq` 决定清单的分组次序，
+       类目排错了，CRC 看到的就是一份和纸质 SOP 对不上的清单。 */
+    const { STARTUP_CATEGORIES, STARTUP_CATEGORY_LABEL } =
+      await import("@sitedesk/contracts");
+    const { rows } = await o.query(
+      "SELECT code, label FROM startup_category ORDER BY seq");
+    expect(rows.map(r => [r.code, r.label]))
+      .toEqual(STARTUP_CATEGORIES.map(c => [c, STARTUP_CATEGORY_LABEL[c]]));
+  });
+
   it("工时不能删除，只能作废 —— 能悄悄删掉的成本记录等于没有记录", () =>
     tx(async () => {
       await expect(o.query("DELETE FROM timesheet_entry"))

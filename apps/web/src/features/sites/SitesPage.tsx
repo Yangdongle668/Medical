@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { call } from "../../api/client.js";
+import { SITE_STATE_LABEL } from "../site/states.js";
 
 interface Site {
   id: string; code: string; hospital: string; dept: string; city: string;
@@ -38,11 +40,13 @@ export function SitesPage() {
           </thead>
           <tbody>
             {sites?.map(s => (
-              <tr key={s.id}>
-                <td className="mono">{s.code}</td>
+              <tr key={s.id} data-testid="site-row">
+                <td className="mono">
+                  <Link to={`/sites/${s.id}`} data-testid="open-site">{s.code}</Link>
+                </td>
                 <td>{s.hospital}<div className="muted">{s.dept} · {s.city}</div></td>
                 <td>{s.piName}</td>
-                <td><span className="chip flat">{s.state}</span></td>
+                <td><span className="chip flat">{SITE_STATE_LABEL[s.state] ?? s.state}</span></td>
                 <td className="num">{s.contracted}</td>
                 {showPrice && (
                   <td className="num">

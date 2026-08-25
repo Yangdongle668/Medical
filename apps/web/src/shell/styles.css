@@ -74,7 +74,12 @@ a { color: var(--accent); text-underline-offset: 2px; }
   background: var(--surface); border: 1px solid var(--line);
   border-radius: 10px; padding: 14px 16px;
 }
+/* 栅格项的 `min-width` 默认是 auto —— 也就是"不许比内容的最小宽度还窄"。
+   于是卡片里任何一个不肯换行的东西（.flow 那条九格流程条）会把卡片顶宽，
+   卡片再把页面顶宽，横向滚动条就出现在**整页**上而不是那条流程条上。
+   与 .app 的 `minmax(0, 1fr)` 是同一件事的两种写法。 */
 .stack { display: grid; gap: 10px; }
+.stack > * { min-width: 0; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .spread { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; }
 .muted { color: var(--ink-3); }
@@ -137,3 +142,66 @@ input, textarea, select {
   border: 1px solid var(--line-2); border-radius: 7px; padding: 7px 10px;
   width: 100%; max-width: 100%;
 }
+
+/* ── 中心状态机 ───────────────────────────────────────────────────
+   横向的流程条，在 390px 上必然放不下九个节点（九格约 654px）。
+   与表格同一条处置：**滚动发生在它自己的容器里**，页面不跟着横滚。
+
+   这里要两条规则配合，各自负责一半，缺一条都会溢出 ——
+   而且**溢出的样子不一样**，量过才知道谁在管什么（e2e/layout 实测 390px）：
+
+   · 去掉 `.stack > * { min-width: 0 }` → 溢出 281px，元凶是 `section.card`
+     本身被顶到 671px：卡片跟着内容长大了。
+   · 去掉本处的 `overflow-x: auto` → 溢出 264px，元凶是流程条的 `li`
+     跑到了 654px，而卡片没动：卡片不肯长大了，内容却无处可去。
+
+   所以：min-width 让卡片守住宽度，overflow-x 给内容一个去处。 */
+.flow {
+  display: flex; gap: 6px; margin: 0; padding: 0 0 4px; list-style: none;
+  overflow-x: auto; scrollbar-width: thin;
+}
+.flow li {
+  flex: none; padding: 5px 11px; border-radius: 999px; font-size: 12px;
+  background: var(--surface-2); color: var(--ink-3); white-space: nowrap;
+}
+.flow li.past { background: var(--good-soft); color: var(--good); }
+.flow li.now {
+  background: var(--accent); color: var(--accent-ink); font-weight: 600;
+}
+
+/* ── 闸门未满足项 ─────────────────────────────────────────────────
+   一条一行，模块名在前、去处理在后 —— 眼睛从左到右就是
+   「谁的事 → 什么事 → 去哪儿办」。 */
+.unmet { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.unmet li {
+  display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
+  padding: 9px 12px; border-radius: 8px;
+  background: var(--warn-soft); border-left: 2px solid var(--warn);
+}
+.unmet li > span:not(.chip) { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+
+/* ── 闸门横幅：阻塞项不是进度条上的一段 ─────────────────────────── */
+.gatebar { display: flex; gap: 12px; align-items: baseline; }
+.gatebar strong { font-size: 22px; line-height: 1.1; }
+.gatebar.blocked { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.gatebar.clear { background: var(--good-soft); border-color: transparent; color: var(--good); }
+.gatebar span { color: var(--ink-2); }
+.gatebar.blocked span b { color: var(--warn); }
+
+/* ── 键值表 ───────────────────────────────────────────────────── */
+.kv {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr);
+  gap: 7px 18px; margin: 0;
+}
+.kv dt { color: var(--ink-3); font-size: 12px; }
+.kv dd { margin: 0; }
+
+/* 链接样式的按钮 / 按钮样式的链接 —— 两者要长得一样，
+   否则同一行里「撤销」和「去处理」会像是两种不同分量的动作。 */
+.btn.go { text-decoration: none; margin-left: auto; }
+.btn.link {
+  border: 0; background: transparent; color: var(--accent);
+  padding: 4px 6px; font-weight: 500;
+}
+.btn.link:hover:not(:disabled) { background: var(--accent-soft); }
+.tasks li .grow { flex: 1 1 auto; }
