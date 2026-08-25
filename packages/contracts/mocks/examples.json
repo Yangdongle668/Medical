@@ -487,8 +487,8 @@
           "cost"
         ],
         "actions": [
-          "approve",
-          "approve"
+          "advance",
+          "advance"
         ],
         "modules": [
           "示例",
@@ -808,8 +808,8 @@
             "cost"
           ],
           "allowedActions": [
-            "approve",
-            "approve"
+            "advance",
+            "advance"
           ],
           "modules": [
             "示例",
@@ -827,8 +827,8 @@
             "cost"
           ],
           "allowedActions": [
-            "approve",
-            "approve"
+            "advance",
+            "advance"
           ],
           "modules": [
             "示例",
@@ -853,8 +853,8 @@
         "cost"
       ],
       "allowedActions": [
-        "approve",
-        "approve"
+        "advance",
+        "advance"
       ],
       "modules": [
         "示例",

@@ -130,6 +130,62 @@ describe("SIV 闸门：Phase 3 的 unavailable 占位现在是真查询了", () 
     expect(adv.body.data.sivOn).toBeTruthy();
   });
 
+  it("推进必须写明原因，缺了是 422 而不是 500", async () => {
+    /* 这条断言是从一个 500 里挖出来的。
+
+       契约原来写着「siv / closed 这类不可逆节点时必填」，
+       而 `SENSITIVE_ACTIONS` 里 `advanceStudySite` 是**无条件敏感**的 ——
+       两处各说一套，缺原因时审计层抛裸 Error，出口变成
+       「服务内部错误」。调用方被告知服务器坏了，于是去重试、去看监控，
+       唯独不会去补那一栏。**把客户端的错说成服务端的故障，
+       比不校验更糟：它把人引向完全错误的方向。**
+
+       现在以策略为准收口：每一次推进都要写原因，缺了就是 422。 */
+    const study = (await boss.get("/v1/studies?limit=1")).body.items[0];
+    const created = await boss.post("/v1/study-sites", {
+      studyId: study.id, code: `RS-${randomUUID().slice(0, 8)}`,
+      hospital: "原因校验测试医院", dept: "科", city: "北京",
+      piName: "测试研究者", contracted: 5, unitPriceCents: 1000000
+    });
+    expect(created.status).toBe(201);
+    const id = created.body.id;
+
+    /* 可逆节点也一样要写 —— 敏感与否看的是动作，不是目标状态 */
+    const missing = await boss.post(`/v1/study-sites/${id}:advance`,
+      { to: "irb_submit" }, K());
+    expect(missing.status, JSON.stringify(missing.body)).toBe(422);
+    expect(missing.body.code).toBe("validation-failed");
+    expect(JSON.stringify(missing.body.issues)).toContain("reason");
+
+    /* 空白不算原因 —— 否则这条规则等于一个必须按一下的空格键 */
+    const blank = await boss.post(`/v1/study-sites/${id}:advance`,
+      { to: "irb_submit", reason: "   " }, K());
+    expect(blank.status).toBe(422);
+
+    const ok = await boss.post(`/v1/study-sites/${id}:advance`,
+      { to: "irb_submit", reason: "材料齐备，已向伦理递交" }, K());
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+  });
+
+  it("闸门未过时报的是闸门，不是「你还没填原因」", async () => {
+    /* 顺序要紧：**闸门在前，原因在后。**
+       反过来的话，一个还没把阻塞项清完的人先被要求"填个原因"，
+       填完再被告知"还差 8 项" —— 两次都答非所问。
+
+       （body 的 schema 校验确实跑在闸门之前，但那一层只管"有没有填"；
+        这里验的是**填了以后**，先报的仍是闸门而不是别的。） */
+    const s = await siteByCode(boss, "SS-13");        // irb_submit，先推到 contract
+    for (const to of ["irb_approve", "contract"])
+      expect((await boss.post(`/v1/study-sites/${s.id}:advance`,
+        { to, reason: "按流程推进至下一节点" }, K())).status).toBe(201);
+
+    const r = await boss.post(`/v1/study-sites/${s.id}:advance`,
+      { to: "siv", reason: "想直接启动" }, K());
+    expect(r.status).toBe(422);
+    expect(r.body.code).toBe("gate-not-satisfied");
+    expect(r.body.unmet[0].module).toBe("startup");
+  });
+
   it("新建的中心自动铺开标准清单 —— 否则闸门对每个新中心都是默认放行", async () => {
     const study = (await boss.get("/v1/studies?limit=1")).body.items[0];
     const r = await boss.post("/v1/study-sites", {
@@ -272,6 +328,43 @@ describe("交接：中心不会因为人休假就停下", () => {
 
     expect((await crcWu.get("/v1/study-sites?limit=50")).body.items.length).toBe(beforeWu - 1);
     expect((await shen.get("/v1/study-sites?limit=50")).body.items.length).toBe(beforeShen + 1);
+  });
+
+  it("由**接手人**收单，派工同样要真的转移 —— 这条曾经静默失败", async () => {
+    /* 上面那条是**原负责人自己**收的单：他看得见自己的派工，所以转移一直是通的。
+       而真实场景里更常见的是接手人确认完清单顺手收单 —— 那条路上，
+       接手人此刻还看不见这些中心（他正是因为**还没接手**才在做这件事），
+       于是 RLS 让「查原负责人的派工」回 0 行，转移被 `continue` 静默跳过：
+       接口 201、交接单「已完成」、派工原地不动，两个人都以为交完了。
+
+       整个套件此前只走过 from 那一侧，所以它一直是绿的 ——
+       这条断言的价值全在于它走的是**另一侧**。 */
+    const mine = (await crcWu.get("/v1/study-sites?limit=10")).body.items[0];
+    expect(mine, "吴桐至少还要剩一个中心可交接").toBeTruthy();
+    const to = (await boss.get("/v1/staff?limit=50")).body.items
+      .find((s: { login: string }) => s.login === "shenyilin");
+
+    const created = await crcWu.post("/v1/handovers", {
+      toAccountId: to.accountId, studySiteIds: [mine.id],
+      reason: "接手人收单：产假交接，为期六个月", plannedOn: "2026-09-05"
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const id = created.body.id;
+
+    const shen = await as(app, "shenyilin");
+    for (let seq = 0; seq < 8; seq++)
+      expect((await shen.post(`/v1/handovers/${id}/items/${seq}:done`, {}, K())).status)
+        .toBe(201);
+
+    const r = await shen.post(`/v1/handovers/${id}:complete`, {}, K());
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.sideEffects.some((e: { summary: string }) =>
+      e.summary.includes("派工已由"))).toBe(true);
+
+    /* **落库了才算。** 只断言 sideEffects 会把「文案对了」当成「事做了」——
+       而这个 bug 的原形正是文案没了、事也没做，却回了 201。 */
+    expect((await shen.get(`/v1/study-sites/${mine.id}`)).status).toBe(200);
+    expect((await crcWu.get(`/v1/study-sites/${mine.id}`)).status).toBe(404);
   });
 
   it("交接完成后，原负责人不能再看那个中心（404，不是 403）", async () => {

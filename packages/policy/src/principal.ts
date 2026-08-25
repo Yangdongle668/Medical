@@ -1,4 +1,7 @@
-import type { FieldKey } from "@sitedesk/contracts";
+/* 全部 `import type`：这三个在本文件里只出现在类型位置。
+   写成值导入会给这个包添一条它并不需要的运行时依赖 ——
+   而"纯函数、可被前后端共用"正是它存在的前提。 */
+import type { FieldKey, ROW_RULES, ACTION_KEYS } from "@sitedesk/contracts";
 
 /* ════════════════════════════════════════════════════════════════════
    主体与判定所需的事实。
@@ -6,9 +9,12 @@ import type { FieldKey } from "@sitedesk/contracts";
    纯函数是它能被前后端共用、也能被穷举测试的前提。
    ════════════════════════════════════════════════════════════════════ */
 
-export type RowRule = "all" | "team" | "assigned" | "hospital" | "pi" | "none";
-export type ActionKey =
-  | "approve" | "closeQA" | "raiseQ" | "closeQ" | "advance" | "manage" | "bid" | "ethics";
+/* 行规则与动作权限**从契约派生**，不在这里手写第二份。
+   手写那份曾经落后契约五个动作，而 guards.ts 里的 `as ActionKey`
+   把编译期的抗议一并盖住了 —— 一个需要强制转换才能用的联合类型，
+   基本可以断定它已经不对了。 */
+export type RowRule = (typeof ROW_RULES)[number];
+export type ActionKey = (typeof ACTION_KEYS)[number];
 
 export interface Principal {
   accountId: string;

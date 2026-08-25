@@ -149,6 +149,22 @@ describe("约束不是文档，是数据库拒绝写入", () => {
       .toEqual([]);
   });
 
+  it("ACTION_KEYS 与 action_key 表**双向**一致", async () => {
+    /* 原来只断言了一个方向（端点声明的动作 ⊆ 表），于是另一个方向悄悄裂开：
+       表里有 13 个，而契约的 ACTION_KEYS 枚举只有 8 个。
+
+       端点上照常写着 `action: "timeWrite"`，守卫也照常在强制，
+       运行时一切正常 —— 裂开的是类型与契约文档那一侧，两个症状：
+       ① /v1/me 的响应带着自己 schema 里没有的取值；
+       ② updateRolePermissions 的 allowedActions 用同一个枚举，
+          于是那 5 个动作**根本没法通过 API 授予**。
+
+       两个都不会自己响，所以这条断言要**双向**。 */
+    const { ACTION_KEYS } = await import("@sitedesk/contracts");
+    const { rows } = await o.query("SELECT code FROM action_key ORDER BY 1");
+    expect(rows.map(r => r.code)).toEqual([...ACTION_KEYS].sort());
+  });
+
   it("契约里声明的每个动作权限都在 action_key 表里存在", async () => {
     /* 契约是权限的唯一声明处（守卫按 operationId 去查它），
        但取值本身住在数据库。两边对不上时，症状是**所有角色一律 403**，
@@ -164,6 +180,21 @@ describe("约束不是文档，是数据库拒绝写入", () => {
     const known = new Set(rows.map(r => r.code));
     expect(declared.filter(a => !known.has(a)), "契约声明了这些动作，但 action_key 表里没有")
       .toEqual([]);
+  });
+
+  it("启动清单的八个类目：契约与 startup_category 表逐字一致，且顺序相同", async () => {
+    /* 中文名有三处用户：库（权威）、前端分组标题、mock 造清单。
+       让后两者各写一份，加一个类目时必然只改一处 ——
+       症状是清单里冒出一个标题为空的分组，而没有任何报错。
+
+       断言顺序而不只是集合：`seq` 决定清单的分组次序，
+       类目排错了，CRC 看到的就是一份和纸质 SOP 对不上的清单。 */
+    const { STARTUP_CATEGORIES, STARTUP_CATEGORY_LABEL } =
+      await import("@sitedesk/contracts");
+    const { rows } = await o.query(
+      "SELECT code, label FROM startup_category ORDER BY seq");
+    expect(rows.map(r => [r.code, r.label]))
+      .toEqual(STARTUP_CATEGORIES.map(c => [c, STARTUP_CATEGORY_LABEL[c]]));
   });
 
   it("工时不能删除，只能作废 —— 能悄悄删掉的成本记录等于没有记录", () =>

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Problem, ERRORS, type ErrorCode } from "./errors.js";
+import type { ActionKey } from "./actions.js";
 
 /* ════════════════════════════════════════════════════════════════════
    端点注册表 —— 契约的唯一登记处，OpenAPI 由它生成。
@@ -17,8 +18,10 @@ export interface Endpoint {
   context: string;
   summary: string;
   description?: string;
-  /** 需要的动作权限（action_key）。缺省表示只需通过行范围 */
-  action?: string;
+  /** 需要的动作权限（action_key）。缺省表示只需通过行范围。
+   *  **定型为 ActionKey**：写错一个字母、或用了一个没登记的动作，
+   *  在 `define()` 那一行就编译不过 —— 而不是等到运行时全员 403。 */
+  action?: ActionKey;
   query?: z.ZodType;
   params?: z.ZodType;
   body?: z.ZodType;

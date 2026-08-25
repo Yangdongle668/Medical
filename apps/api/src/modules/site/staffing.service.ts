@@ -314,38 +314,54 @@ export class StaffingService {
     await c.client.query(
       `UPDATE handover SET status='completed', completed_at=now() WHERE id=$1`, [id]);
 
-    /* 派工转移：原负责人的派工结束于今天，接手人从今天开始 */
-    const moved: string[] = [];
-    for (const s of h.sites) {
-      const kind = await c.client.query<{ role_kind: string }>(
-        `SELECT role_kind FROM site_assignment
-          WHERE account_id = $1 AND study_site_id = $2 AND effective @> CURRENT_DATE`,
-        [h.fromAccountId, s.id]);
-      if (!kind.rows[0]) continue;
-      await c.client.query(
-        `UPDATE site_assignment
-            SET effective = daterange(lower(effective), CURRENT_DATE, '[)')
-          WHERE account_id = $1 AND study_site_id = $2 AND effective @> CURRENT_DATE`,
-        [h.fromAccountId, s.id]);
-      await c.client.query(
-        `INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective)
-         VALUES ($1,$2,$3, daterange(CURRENT_DATE, NULL, '[)'))`,
-        [h.toAccountId, s.id, kind.rows[0].role_kind]);
-      moved.push(s.code);
-    }
+    /* 派工转移：原负责人的派工结束于今天，接手人从今天开始。
+
+       **这一段曾经静默失败过，值得记住失败的形状：**
+       原来它以调用者的身份去查原负责人的派工，而接手人不在那些行的
+       可见范围里 —— 查回 0 行，代码 `continue`，一个中心也没转，
+       接口照样回 201：交接单显示「已完成」，两个人都以为交完了，
+       实际上谁也没接手。
+
+       现在交给 `app.transfer_handover_assignments()`：授权在函数内部自己判
+       （只有当事人双方能触发），于是"放宽"的范围就只有
+       「这一个命令、这一笔单子」。
+       放宽行范围策略也能让它跑通，但那会波及所有中心相关表 ——
+       packages/policy 的等价性测试当场把那条路否掉了（见迁移 0011）。 */
+    const t = await c.client.query<{ site_code: string; moved: boolean }>(
+      `SELECT site_code, moved FROM app.transfer_handover_assignments($1)`, [id]);
+    const moved = t.rows.filter(r => r.moved).map(r => r.site_code);
+    /* 原负责人此刻确实可能已经没有某个中心了（同一中心交接过两次，
+       或他已被调离）。那种跳过是合理的，但**必须说出来**。 */
+    const skipped = t.rows.filter(r => !r.moved).map(r => r.site_code);
+
+    /* 一个中心都没转移，却把交接标成已完成 —— 那不是"完成"，是丢单。
+       抛出去让整个请求回滚：状态留在 pending，比留下一个
+       「已完成但什么也没发生」的交接单要好得多。 */
+    if (t.rows.length > 0 && moved.length === 0)
+      throw new ProblemException("invariant-violated", {
+        detail: `交接清单已确认，但 ${t.rows.length} 个中心的派工一个也没转移 ——` +
+          `原负责人 ${h.fromName} 当前没有这些中心的有效派工。交接未完成。`,
+        invariant: "handover-must-move-assignments" });
 
     await this.audit.write({
       action: "完成交接", targetType: "handover", targetId: id,
-      before: { status: "pending" }, after: { status: "completed", moved },
+      before: { status: "pending" }, after: { status: "completed", moved, skipped },
       studySiteId: h.sites[0]?.id ?? null,
       reason: `${h.fromName} → ${h.toName}：${h.reason}` });
 
     return {
       data: await this.handover(id),
-      sideEffects: moved.map(code => ({
-        type: "SiteStateChanged" as const,
-        summary: `${code} 的派工已由 ${h.fromName} 转至 ${h.toName} —— 双方的可见范围随即改变`
-      }))
+      sideEffects: [
+        ...moved.map(code => ({
+          type: "SiteStateChanged" as const,
+          summary: `${code} 的派工已由 ${h.fromName} 转至 ${h.toName} —— 双方的可见范围随即改变`
+        })),
+        /* 部分跳过也要出现在明面上，而不是让人从数目对不上里自己发现 */
+        ...(skipped.length ? [{
+          type: "SiteStateChanged" as const,
+          summary: `${skipped.join("、")} 未转移：${h.fromName} 当前没有这些中心的有效派工`
+        }] : [])
+      ]
     };
   }
 }

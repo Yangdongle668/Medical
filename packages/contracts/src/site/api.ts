@@ -87,11 +87,18 @@ define({
   params: ById,
   body: z.object({
     to: SiteState,
-    /** 推进到 siv / closed 这类不可逆节点时必填 */
-    reason: WithReason.shape.reason.optional()
+    /** **每一次推进都必填**，不只是 siv / closed。
+     *
+     *  这里曾写成"不可逆节点时必填"，而 `SENSITIVE_ACTIONS` 里
+     *  `advanceStudySite` 是无条件敏感的 —— 契约与策略各说一套，
+     *  症状是缺原因时返回 500 而不是 422：调用方被告知"服务坏了"，
+     *  于是去重试、去看监控，唯独不会去补那一栏。
+     *  以策略为准收口：中心状态机的每一次推进都是核查会问到的事实。 */
+    reason: WithReason.shape.reason
   }),
   response: commandResult(StudySite),
-  errors: ["gate-not-satisfied", "conflict-version", "idempotency-key-reused"]
+  errors: ["gate-not-satisfied", "validation-failed",
+    "conflict-version", "idempotency-key-reused"]
 });
 
 /* ════════════════════════════════════════════════════════════════════
@@ -184,9 +191,14 @@ define({
   layer: "L2", context: CTX, summary: "确认交接完成",
   description:
     "清单未逐项确认不得完成 —— 交接单签了字但受试者没交底，等于没交接。\n" +
-    "完成时把派工从原负责人转到接手人，两边的行范围随即改变。",
+    "完成时把派工从原负责人转到接手人，两边的行范围随即改变。\n\n" +
+    "**一个中心都没转移就不算完成**：返回 422 `invariant-violated`" +
+    "（`handover-must-move-assignments`），整笔请求回滚，状态留在 pending。\n" +
+    "留下一个「已完成但什么也没发生」的交接单，比报错危险得多 —— " +
+    "两个人都以为交完了，接手人一个中心也没拿到，" +
+    "而原负责人的账号此刻已经可以停用了。",
   params: ById,
   body: z.object({}),
   response: commandResult(Handover),
-  errors: ["gate-not-satisfied", "idempotency-key-reused"]
+  errors: ["gate-not-satisfied", "invariant-violated", "idempotency-key-reused"]
 });

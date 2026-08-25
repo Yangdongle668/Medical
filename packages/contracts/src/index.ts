@@ -2,6 +2,7 @@
    前端类型、后端 DTO、OpenAPI 文档、MSW mock 全部由此派生。 */
 export * from "./kernel/primitives.js";
 export * from "./kernel/fields.js";
+export * from "./kernel/actions.js";
 export * from "./kernel/gates.js";
 export * from "./kernel/errors.js";
 export * from "./kernel/pagination.js";

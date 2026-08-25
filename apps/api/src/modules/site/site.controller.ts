@@ -23,7 +23,7 @@ const CreateBody = z.object({
   sivPlannedOn: DateOnly.nullable().optional()
 });
 const AdvanceBody = z.object({
-  to: SiteState, reason: z.string().trim().min(4).max(500).optional()
+  to: SiteState, reason: z.string().trim().min(4).max(500)
 });
 
 @Controller("/v1")
