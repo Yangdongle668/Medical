@@ -38,6 +38,11 @@ export default defineConfig({
     command: "npm run preview",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: !process.env["CI"],
-    timeout: 60_000
+    /* CI 上冷启动比本机慢；给足时间，超时只会让人去查错的方向 */
+    timeout: 120_000,
+    /* 让 preview 自己的输出可见 —— 否则起不来时只有一句 "Timed out"，
+       而真正的原因（端口占用、dist 不存在、地址族不对）全被吞了 */
+    stdout: "pipe",
+    stderr: "pipe"
   }
 });
