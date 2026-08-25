@@ -111,6 +111,10 @@ jobs:
             exit 1
           fi
 
+      # 队列逻辑的单元测试：e2e 结构上验不到"重复入队会被折叠"——
+      # 界面在第一次入队后就把那一格锁住了，人点不了第二次。
+      - run: npm run test -w @sitedesk/web
+
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e -w @sitedesk/web
       - uses: actions/upload-artifact@v4
