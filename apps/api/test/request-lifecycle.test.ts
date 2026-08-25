@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { EventEmitter } from "node:events";
 import type { Pool } from "pg";
+import { of } from "rxjs";
 import { RequestMiddleware } from "../src/infra/request.middleware.js";
-import type { RequestCtx } from "../src/infra/ctx.js";
+import { TxInterceptor } from "../src/infra/tx.interceptor.js";
+import { runInCtx, type RequestCtx } from "../src/infra/ctx.js";
 
 /* ════════════════════════════════════════════════════════════════════
    请求生命周期 —— 连接什么时候可以收回去。
@@ -50,6 +52,17 @@ async function run(): Promise<{ f: Fake; res: EventEmitter; c: RequestCtx }> {
   return { f, res, c: req.ctx! };
 }
 
+describe("请求生命周期：两道超时", () => {
+  it("每个事务都设了语句超时与事务空闲超时", async () => {
+    const { f } = await run();
+    const set = f.queries.filter(q => q.startsWith("SET LOCAL"));
+    expect(set.some(q => /statement_timeout = \d+/.test(q))).toBe(true);
+    expect(set.some(q => /idle_in_transaction_session_timeout = \d+/.test(q))).toBe(true);
+    /* 必须在 BEGIN 之后 —— SET LOCAL 在事务外是空转，而且不报错 */
+    expect(f.queries.indexOf("BEGIN")).toBeLessThan(f.queries.indexOf(set[0]!));
+  });
+});
+
 describe("请求生命周期：断线时连接归谁", () => {
   it("处理器还在跑时客户端断开 —— 连接不许被抽走", async () => {
     const { f, res, c } = await run();
@@ -87,5 +100,51 @@ describe("请求生命周期：断线时连接归谁", () => {
 
     expect(f.queries).toEqual([]);
     expect(f.released).toBe(0);              // 拦截器那次不算在这里
+  });
+});
+
+
+describe("事务收尾：响应和 COMMIT 谁先谁后", () => {
+  /** 让 COMMIT 慢一拍，好看清响应是不是抢在它前面出去了。 */
+  function ctxWithSlowCommit(order: string[]) {
+    const client = {
+      query: async (q: string) => {
+        if (q === "COMMIT" || q === "ROLLBACK") { await tick(); order.push(q.toLowerCase()); }
+        return { rows: [] };
+      },
+      release: () => { order.push("release"); }
+    };
+    return {
+      requestId: "t", client, principal: null,
+      scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
+      operationId: null, finalized: false, inFlight: false
+    } as unknown as RequestCtx;
+  }
+
+  const drive = (c: RequestCtx, order: string[]) =>
+    new Promise<unknown>((resolve, reject) =>
+      runInCtx(c, () => new TxInterceptor()
+        .intercept({} as never, { handle: () => of("payload") })
+        .subscribe({
+          next: v => { order.push("response"); resolve(v); },
+          error: reject
+        })));
+
+  it("响应必须等 COMMIT 回来 —— 否则客户端读不到自己刚写的东西", async () => {
+    /* 这一条盯的是 api 测试那条"对负载敏感"的老毛病：
+       POST 断言成功，紧接着的 GET 从连接池里换了条连接，读回旧值。
+       只要响应可能抢在 COMMIT 前面出去，那种失败就一定会偶尔出现。 */
+    const order: string[] = [];
+    const c = ctxWithSlowCommit(order);
+    expect(await drive(c, order)).toBe("payload");
+    expect(order).toEqual(["commit", "release", "response"]);
+  });
+
+  it("提交完成后事务才算终结", async () => {
+    const order: string[] = [];
+    const c = ctxWithSlowCommit(order);
+    await drive(c, order);
+    expect(c.finalized).toBe(true);
+    expect(c.inFlight).toBe(false);
   });
 });

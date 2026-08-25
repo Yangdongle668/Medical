@@ -188,3 +188,60 @@ describe("破坏性变更门禁真的会响", () => {
     expect(r.out).toContain("需要留意");
   });
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   基线取哪一个 ref —— 门禁成不成立的全部。
+
+   上面那一组验的是**比对逻辑**，用 `--baseline <文件>` 喂进去，一直是绿的。
+   而门禁在 CI 上其实什么也没验：`actions/checkout` 在 pull_request 事件里
+   检出的是**合并提交**，`git show HEAD:openapi.yaml` 拿到的就是本 PR 提议的
+   那一份，工作区里刚生成的也是同一份 —— **文件在跟自己比**。
+
+   逻辑有测试、取基线没有，于是坏掉的恰好是没被测的那一半。
+   这一组补的就是它。
+   ════════════════════════════════════════════════════════════════════ */
+describe("破坏性变更门禁：基线是怎么选的", () => {
+  const REPO = path.resolve(ROOT, "../..");
+  const REL = path.relative(REPO, SPEC).replace(/\\/g, "/");
+  const run = (args: string[], env: Record<string, string> = {}) => {
+    try {
+      return { code: 0, out: execFileSync("npx", ["tsx", "scripts/check-breaking.ts", ...args],
+        { cwd: ROOT, encoding: "utf8", stdio: "pipe", env: { ...process.env, ...env } }) };
+    } catch (e: any) {
+      return { code: e.status ?? 1, out: (e.stdout ?? "") + (e.stderr ?? "") };
+    }
+  };
+
+  it("CI 上不给 --baseline-ref → 硬失败，而不是拿 HEAD 跟自己比", () => {
+    const r = run([], { CI: "1" });
+    expect(r.code).toBe(2);
+    expect(r.out).toContain("必须显式指定 --baseline-ref");
+  });
+
+  it("ref 取不到（浅克隆写错）→ 硬失败，而不是悄悄放行", () => {
+    /* 原来这里一律 `catch { return null }` 然后 exit 0 ——
+       任何 git 失败都会让门禁绿着过去。那是最坏的一种绿。 */
+    const r = run(["--baseline-ref", "deadbeef".repeat(5)], { CI: "1" });
+    expect(r.code).toBe(2);
+    expect(r.out).toContain("取不到 ref");
+  });
+
+  it("本地不带参数 → 仍然默认 HEAD（比的是工作区相对上一次提交）", () => {
+    const r = run([]);
+    expect(r.code).toBe(0);
+  });
+
+  it("给一个契约确实不同的 ref → 真的比出了差异", () => {
+    /* 这一条才是 CI 那个 bug 的反面：拿历史上**另一个版本**的 openapi.yaml
+       当基线，必须比出东西来。比不出来，就说明它又在跟自己比。 */
+    const revs = execFileSync("git", ["log", "-n", "50", "--format=%H", "--", REL],
+      { cwd: REPO, encoding: "utf8" }).trim().split("\n").filter(Boolean);
+    const older = revs.find(rev =>
+      execFileSync("git", ["show", `${rev}:${REL}`], { cwd: REPO, encoding: "utf8" })
+        !== fs.readFileSync(SPEC, "utf8"));
+    expect(older, "历史里应当存在一个内容不同的 openapi.yaml").toBeTruthy();
+
+    const r = run(["--baseline-ref", older!, "--allow-breaking"]);
+    expect(r.out).not.toContain("契约无变化");
+  });
+});

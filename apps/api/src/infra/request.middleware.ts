@@ -19,6 +19,11 @@ import { loadPrincipal } from "../auth/principal.loader.js";
 
 export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
+/** 单条语句的上限。够慢查询跑完，又不至于让一次锁等待拖住一条连接一整天。 */
+const STATEMENT_TIMEOUT_MS = Number(process.env["SITEDESK_STATEMENT_TIMEOUT_MS"] ?? 30_000);
+/** 事务开着却没人动它的上限 —— 比语句上限宽一点，免得误伤慢查询之间的间隙。 */
+const IDLE_TX_TIMEOUT_MS = Number(process.env["SITEDESK_IDLE_TX_TIMEOUT_MS"] ?? 60_000);
+
 @Injectable()
 export class RequestMiddleware implements NestMiddleware {
   constructor(@Inject(POOL) private readonly pool: Pool) {}
@@ -63,6 +68,22 @@ export class RequestMiddleware implements NestMiddleware {
 
     try {
       await client.query("BEGIN");
+      /* ── 两道超时，都是 SET LOCAL：作用域就是这个事务 ────────────────
+         `statement_timeout`：单条语句跑太久就让它自己报错。
+         关键在于**报错的是处理器正在 await 的那条查询** —— 于是处理器
+         真的停下来，拦截器按失败收尾。
+         用 rxjs 的 timeout() 做这件事是错的：它只让 observable 出错，
+         底下那个 promise 照跑，于是又变成"连接已经还回去了，处理器还在用" ——
+         正是本轮刚修掉的那个问题。取消一个跑着的请求，只能由**执行它的一方**动手。
+
+         `idle_in_transaction_session_timeout`：事务开着却没人动它，
+         说明处理器卡在了数据库之外（死循环、等一个永远不来的 promise）。
+         由数据库把这条连接终结掉 —— 连接池会发现它坏了并丢弃，
+         这才是"处理器卡死则连接泄漏"那条已知问题的收口。 */
+      await client.query(
+        `SET LOCAL statement_timeout = ${Number(STATEMENT_TIMEOUT_MS)}`);
+      await client.query(
+        `SET LOCAL idle_in_transaction_session_timeout = ${Number(IDLE_TX_TIMEOUT_MS)}`);
 
       const auth = req.headers.authorization;
       const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
