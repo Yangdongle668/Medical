@@ -149,6 +149,37 @@ describe("约束不是文档，是数据库拒绝写入", () => {
       .toEqual([]);
   });
 
+  it("契约里声明的每个动作权限都在 action_key 表里存在", async () => {
+    /* 契约是权限的唯一声明处（守卫按 operationId 去查它），
+       但取值本身住在数据库。两边对不上时，症状是**所有角色一律 403**，
+       而错误信息里的动作名在权限表里根本查不到 —— 排查时很容易
+       误以为是授权没配。这条断言把它变成一次编译期之后的立即失败。
+
+       测试跑在 db 包里而不是 api 包里，是因为它断言的是「两个数据源一致」，
+       与 HTTP 无关。 */
+    const { allEndpoints } = await import("@sitedesk/contracts");
+    const declared = [...new Set(allEndpoints().map(e => e.action).filter(Boolean))].sort();
+    expect(declared.length, "契约里应当有声明动作权限的端点").toBeGreaterThan(0);
+    const { rows } = await o.query("SELECT code FROM action_key ORDER BY 1");
+    const known = new Set(rows.map(r => r.code));
+    expect(declared.filter(a => !known.has(a)), "契约声明了这些动作，但 action_key 表里没有")
+      .toEqual([]);
+  });
+
+  it("每个动作权限至少被一个角色持有 —— 没人有的权限等于关掉了那个端点", async () => {
+    /* 这一条是被真事故逼出来的：迁移里写了
+         INSERT INTO role_action ... SELECT FROM role WHERE ...
+       而迁移跑在种子之前，此刻 role 表是空的 —— 插入 0 行，一个错误都不报。
+       结果是契约上声明了权限、守卫也在强制，但**所有人都没有**，
+       于是那几个端点对每一个角色都返回 403，而且看不出是哪里断的。 */
+    const { rows } = await o.query(`
+      SELECT k.code FROM action_key k
+       WHERE NOT EXISTS (SELECT 1 FROM role_action ra
+                          WHERE ra.action_key = k.code AND ra.allowed)
+       ORDER BY 1`);
+    expect(rows.map(r => r.code), "这些动作没有任何角色持有").toEqual([]);
+  });
+
   it("上一条规则不是恒真的 —— 三种典型错法都必须被抓到", () =>
     tx(async () => {
       /* 断言容易写成永远为真而无人察觉。这里故意造三张错表，

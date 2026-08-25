@@ -41,7 +41,9 @@ const STUDIES = grab("STUDIES"), SITES = grab("SITES"),
       GROUPS = grab("GROUPS"), ROLE_DEF = grab("ROLE_DEF"),
       STARTUP = grab("STARTUP"), HO_ITEMS = grab("HO_ITEMS"),
       HANDOVER = grab("HANDOVER", { HO_ITEMS }), TALENT = grab("TALENT"),
-      SIV_PLAN = grab("SIV_PLAN");
+      SIV_PLAN = grab("SIV_PLAN"),
+      SOA = grab("SOA"), SUBJ = grab("SUBJ"), FUNNEL = grab("FUNNEL"),
+      DROPS = grab("DROPS"), QUERIES = grab("QUERIES");
 
 const q  = v => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const d  = v => (!v || v === "—") ? "NULL" : `'${v}'`;
@@ -86,6 +88,23 @@ P(`INSERT INTO role_action (role_id, action_key, allowed) VALUES ` +
 for (const code of Object.keys(ROLE_DEF)) if (code !== "dm")
   P(`INSERT INTO role_action (role_id, action_key, allowed) VALUES ` +
     `('${uuid5("role:"+code)}', 'closeQ', false);`);
+
+/* ClinicalOps 的三个动作：原型没有「查看受试者明细需要单独授权」这个概念，
+   所以在这里显式给出，而不是从 ROLE_DEF 推。
+
+   **QA 与机构办刻意不给 subjRead。** 他们按事件与计数工作：
+   看得到漏斗（只有计数），看得到质量事件上的筛选号（列权限允许），
+   但拉不出全院受试者名册 —— 明细与聚合是两种权限（I10）。 */
+const CLIN_ACTS = {
+  subjRead:  ["boss", "pm", "cra", "crc", "dm", "pi"],
+  subjWrite: ["crc", "pm"],
+  piConfirm: ["pi"]
+};
+P(`-- ClinicalOps 动作维度（见 db/migrations/0009_clinical.sql）`);
+for (const [act, allow] of Object.entries(CLIN_ACTS))
+  for (const code of Object.keys(ROLE_DEF))
+    P(`INSERT INTO role_action (role_id, action_key, allowed) VALUES ` +
+      `('${uuid5("role:"+code)}', ${q(act)}, ${allow.includes(code) ? "true" : "false"});`);
 P(``);
 P(`-- 可访问模块（收敛导航，不是安全边界）`);
 for (const [code, r] of Object.entries(ROLE_DEF))
@@ -207,10 +226,159 @@ HANDOVER.forEach(h => {
       `${it.done ? acc(h.from) : "NULL"});`));
 });
 P(``);
+
+/* ════════════════════════════════════════════════════════════════
+   ClinicalOps —— 受试者是有生命周期的对象，不是一个计数。
+
+   原型的 FUNNEL 是一组写死的计数（预筛 68 / 知情 41 / 筛败 13）。
+   种子把它**展开成真实的受试者行**：漏斗接口由这些行聚合出来，
+   而不是把计数存下来。存计数的看板迟早会和明细对不上，
+   而对不上的那天，没人知道该信哪一个。
+   ════════════════════════════════════════════════════════════════ */
+P(`-- ── 访视计划表 SOA：完成一次访视自动生成下一次，靠的就是它 ────`);
+const SF_CODES = ["lab","prior_therapy","imaging","comorbidity","withdrew_icf","other"];
+const WD_CODES = {"受试者撤回知情":"withdrew_icf","失访":"lost_to_followup",
+  "不良事件终止治疗":"adverse_event","研究者判断需终止":"investigator_decision",
+  "死亡":"death","方案违背终止":"protocol_violation"};
+
+/* 每例访视的受试者补偿：交通与误工，按访视复杂度粗分两档 */
+const COMP = (sid, i) => i === 0 ? 30000 : 20000;      // 分：筛选期 300 元，其余 200 元
+
+const soaOf = sid => SOA[sid] || SOA._default;
+for (const st of STUDIES) {
+  const so = soaOf(st.id);
+  for (let i = 0; i <= so.last; i++) {
+    const code = i === 0 ? "SCR" : (so.label(i).match(/^([A-Za-z]+\d*[A-Za-z]*\d*)/) || [, `V${i}`])[1];
+    P(`INSERT INTO visit_template (study_id, seq, visit_code, visit_label, anchor,` +
+      ` offset_days, window_days, compensation_cents) VALUES (` +
+      `'${uuid5("study:"+st.id)}', ${i}, ${q(code === "SCR" ? "SCR" : code + "-" + i)}, ` +
+      `${q(so.label(i))}, ${q(i === 0 ? "icf" : "enroll")}, ` +
+      `${i === 0 ? -14 : (i - 1) * so.cycle}, ${so.win}, ${COMP(st.id, i)});`);
+    so.tasks(i).forEach((t, k) =>
+      P(`INSERT INTO visit_template_task (study_id, visit_seq, seq, task) VALUES (` +
+        `'${uuid5("study:"+st.id)}', ${i}, ${k}, ${q(t)});`));
+  }
+}
+P(``);
+
+/* ── 受试者：把漏斗计数展开成行 ── */
+P(`-- ── 受试者：漏斗由明细聚合，不存计数 ──────────────────────────`);
+const site = id => SITES.find(x => x.id === id);
+const dropsOf = id => DROPS.filter(x => x.ss === id);
+/* 逐日回推一个稳定的日期，避免种子每次生成都不同 */
+const dayBefore = (base, n) =>
+  new Date(new Date(base).getTime() - n * 864e5).toISOString().slice(0, 10);
+const TODAY = "2026-08-24";
+
+let subjRows = 0;
+for (const ss of SITES) {
+  const f = FUNNEL[ss.id] || { pre: 0, icf: 0, sf: 0, sfr: [0,0,0,0,0,0] };
+  const sid = uuid5("site:" + ss.id);
+  const named = SUBJ.filter(x => x.ss === ss.id);
+  const drops = dropsOf(ss.id);
+  const crc = ss.crc && ss.crc[0] ? acc(ss.crc[0]) : "NULL";
+
+  /* 具名受试者（原型里逐个写出来的那几例）先出，保留其筛选号与状态 */
+  const namedNos = new Set(named.map(x => x.id));
+  for (const x of named) {
+    const state = x.st === "已入组" ? "enrolled" : "screening";
+    P(`INSERT INTO subject (id, study_site_id, screening_no, randomization_no, state,` +
+      ` icf_signed_on, enrolled_on, crc_account_id) VALUES ('${uuid5("subj:"+x.id)}', ` +
+      `'${sid}', ${q(x.id)}, ${x.rnd && x.rnd !== "—" ? q(x.rnd) : "NULL"}, ${q(state)}, ` +
+      `${d(x.icf)}, ${state === "enrolled" ? d(x.icf) : "NULL"}, ${x.crc ? acc(x.crc) : crc});`);
+    subjRows++;
+  }
+  /* 脱落的那几例 */
+  for (const dr of drops) {
+    if (namedNos.has(dr.subj)) continue;
+    namedNos.add(dr.subj);
+    P(`INSERT INTO subject (id, study_site_id, screening_no, randomization_no, state,` +
+      ` icf_signed_on, enrolled_on, exited_on, withdraw_reason, note, crc_account_id)` +
+      ` VALUES ('${uuid5("subj:"+dr.subj)}', '${sid}', ${q(dr.subj)}, ` +
+      `${q("R-" + dr.subj.slice(2))}, 'withdrawn', ${d(dayBefore(dr.d, 120))}, ` +
+      `${d(dayBefore(dr.d, 90))}, ${d(dr.d)}, ${q(WD_CODES[dr.why] || "other")}, ` +
+      `${q(dr.note)}, ${crc});`);
+    subjRows++;
+  }
+
+  /* 其余按漏斗补齐：入组 / 筛败 / 在筛 / 预筛 */
+  let n = 0;
+  const nextNo = () => { let no; do { no = `${ss.id}-P${String(++n).padStart(3,"0")}`; }
+                         while (namedNos.has(no)); return no; };
+  const enrolledLeft = Math.max(0, ss.enrolled - named.filter(x => x.st === "已入组").length
+                                   - drops.length);
+  for (let i = 0; i < enrolledLeft; i++) {
+    const no = nextNo(), icf = dayBefore(TODAY, 200 + i * 7);
+    P(`INSERT INTO subject (study_site_id, screening_no, randomization_no, state,` +
+      ` icf_signed_on, enrolled_on, crc_account_id) VALUES ('${sid}', ${q(no)}, ` +
+      `${q("R" + no.slice(2))}, 'enrolled', ${d(icf)}, ${d(dayBefore(TODAY, 186 + i * 7))}, ${crc});`);
+    subjRows++;
+  }
+  /* 筛败：按原型给出的原因分布逐条展开 —— 筛败也是收入（I8'） */
+  let sfI = 0;
+  f.sfr.forEach((cnt, k) => {
+    for (let i = 0; i < cnt; i++, sfI++) {
+      const no = nextNo(), icf = dayBefore(TODAY, 150 + sfI * 5);
+      P(`INSERT INTO subject (study_site_id, screening_no, state, icf_signed_on, exited_on,` +
+        ` screen_fail_reason, crc_account_id) VALUES ('${sid}', ${q(no)}, 'screen_failed', ` +
+        `${d(icf)}, ${d(dayBefore(TODAY, 143 + sfI * 5))}, ${q(SF_CODES[k])}, ${crc});`);
+      subjRows++;
+    }
+  });
+  /* 在筛：签了知情但既未入组也未筛败 */
+  const inScr = Math.max(0, f.icf - ss.enrolled - f.sf - named.filter(x => x.st === "筛选中").length);
+  for (let i = 0; i < inScr; i++) {
+    const no = nextNo();
+    P(`INSERT INTO subject (study_site_id, screening_no, state, icf_signed_on, crc_account_id)` +
+      ` VALUES ('${sid}', ${q(no)}, 'screening', ${d(dayBefore(TODAY, 10 + i * 3))}, ${crc});`);
+    subjRows++;
+  }
+  /* 预筛：还没签知情 */
+  const pre = Math.max(0, f.pre - f.icf);
+  for (let i = 0; i < pre; i++) {
+    const no = nextNo();
+    P(`INSERT INTO subject (study_site_id, screening_no, state, crc_account_id)` +
+      ` VALUES ('${sid}', ${q(no)}, 'prescreen', ${crc});`);
+    subjRows++;
+  }
+}
+P(``);
+
+/* ── 具名受试者的当前访视：原型里的 due / win / tasks ── */
+P(`-- ── 访视：窗口用 daterange 生成列，超窗查询走 GiST 索引 ────────`);
+let visitRows = 0;
+for (const x of SUBJ) {
+  const ss = site(x.ss); if (!ss) continue;
+  const so = soaOf(ss.sid);
+  const vid = uuid5("visit:" + x.id + ":" + x.seq);
+  P(`INSERT INTO subject_visit (id, subject_id, study_site_id, seq, visit_code, visit_label,` +
+    ` target_date, window_days, status) VALUES ('${vid}', '${uuid5("subj:"+x.id)}', ` +
+    `'${uuid5("site:"+x.ss)}', ${x.seq}, ${q(x.seq === 0 ? "SCR" : "V-" + x.seq)}, ` +
+    `${q(so.label(x.seq))}, ${d(x.due)}, ${x.win}, 'planned');`);
+  x.tasks.forEach((t, k) =>
+    P(`INSERT INTO subject_visit_task (visit_id, seq, task, done_at, done_by) VALUES (` +
+      `'${vid}', ${k}, ${q(t[0])}, ${t[1] ? `'${x.lastVisit}T10:00:00+08'::timestamptz` : "NULL"}, ` +
+      `${t[1] ? acc(x.crc) : "NULL"});`));
+  visitRows++;
+}
+P(``);
+
+/* ── 质量事件：原型的 QUERIES 是真实存在的数据质疑 ── */
+P(`-- ── 质量事件：超窗必须生成方案偏离（I4），质疑同样进这张表 ─────`);
+QUERIES.forEach(qy => {
+  const subj = SUBJ.find(x => x.id === qy.subj);
+  P(`INSERT INTO quality_event (code, study_site_id, subject_id, kind, severity, state,` +
+    ` title, detail, raised_by, raised_on) VALUES (${q(qy.id)}, '${uuid5("site:"+qy.ss)}', ` +
+    `${subj ? `'${uuid5("subj:"+qy.subj)}'` : "NULL"}, 'query', ` +
+    `${q(qy.age > 7 ? "major" : "minor")}, ${q(qy.st === "已关闭" ? "closed" : "open")}, ` +
+    `${q(qy.form + " · " + qy.field)}, ${q(qy.txt)}, 'cra', ` +
+    `${d(dayBefore(TODAY, qy.age))});`);
+});
+P(``);
 P(`COMMIT;`);
 
 fs.mkdirSync("db/seeds", { recursive: true });
 fs.writeFileSync("db/seeds/001_demo.sql", L.join("\n") + "\n");
 console.log(`db/seeds/001_demo.sql 已生成（${L.length} 行）` +
   `｜角色 ${Object.keys(ROLE_DEF).length} · 账号 ${USERS.length} · 分组 ${GROUPS.length}` +
-  ` · 项目 ${STUDIES.length} · 中心 ${SITES.length}`);
+  ` · 项目 ${STUDIES.length} · 中心 ${SITES.length} · 受试者 ${subjRows} · 访视 ${visitRows}`);

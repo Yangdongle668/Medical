@@ -6,7 +6,7 @@ import { StaffingService } from "./staffing.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
-import { ProblemException } from "../../infra/problem.js";
+import { command } from "../../infra/command.js";
 
 const StaffQ = PageQuery.extend({
   roleKind: RoleKind.optional(),
@@ -19,20 +19,6 @@ const CreateHandover = z.object({
   reason: z.string().trim().min(5).max(500),
   plannedOn: DateOnly
 });
-
-/** L2 命令的幂等外壳 —— 每个命令都要写一遍太啰嗦，收在这里 */
-async function command<T>(
-  idem: IdempotencyService, key: string | undefined, body: unknown, run: () => Promise<T>
-): Promise<T> {
-  if (!key) throw new ProblemException("validation-failed", {
-    detail: "L2 命令必须携带 Idempotency-Key 请求头",
-    issues: [{ path: "/headers/idempotency-key", message: "必填" }] });
-  const replay = await idem.begin(key, body);
-  if (replay) return replay.body as T;
-  const out = await run();
-  await idem.complete(key, 200, out);
-  return out;
-}
 
 @Controller("/v1")
 export class StaffingController {

@@ -4,7 +4,7 @@ import { PageQuery, Uuid, WithReason, RowRule, ActionKey, FieldKey } from "@site
 import { IdentityService } from "./identity.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
-import { Operation, RequireAction } from "../../auth/guards.js";
+import { Operation } from "../../auth/guards.js";
 import { ProblemException } from "../../infra/problem.js";
 
 const ListQ = PageQuery.extend({
@@ -45,12 +45,12 @@ export class IdentityController {
   @Get("/accounts") @Operation("listAccounts")
   list(@Query(new ZodPipe(ListQ)) q: z.infer<typeof ListQ>) { return this.svc.listAccounts(q); }
 
-  @Post("/accounts") @Operation("createAccount") @RequireAction("manage") @HttpCode(201)
+  @Post("/accounts") @Operation("createAccount") @HttpCode(201)
   create(@Body(new ZodPipe(CreateBody)) b: z.infer<typeof CreateBody>) {
     return this.svc.createAccount(b);
   }
 
-  @Post("/accounts/:id\\:disable") @Operation("disableAccount") @RequireAction("manage")
+  @Post("/accounts/:id\\:disable") @Operation("disableAccount")
   async disable(
     @Param("id", new ZodPipe(Uuid)) id: string,
     @Body(new ZodPipe(WithReason)) b: { reason: string },
@@ -69,7 +69,7 @@ export class IdentityController {
   @Get("/roles") @Operation("listRoles")
   roles() { return this.svc.listRoles(); }
 
-  @Patch("/roles/:id") @Operation("updateRolePermissions") @RequireAction("manage")
+  @Patch("/roles/:id") @Operation("updateRolePermissions")
   updateRole(
     @Param("id", new ZodPipe(Uuid)) id: string,
     @Body(new ZodPipe(RoleBody)) b: z.infer<typeof RoleBody>

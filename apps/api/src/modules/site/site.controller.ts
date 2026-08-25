@@ -4,7 +4,7 @@ import { PageQuery, Uuid, CentsNonNeg, DateOnly, SiteState } from "@sitedesk/con
 import { SiteService } from "./site.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
-import { Operation, RequireAction } from "../../auth/guards.js";
+import { Operation } from "../../auth/guards.js";
 import { ProblemException } from "../../infra/problem.js";
 
 const ListQ = PageQuery.extend({
@@ -55,7 +55,7 @@ export class SiteController {
     @Query("to") to?: string
   ) { return this.svc.gate(id, to); }
 
-  @Post("/study-sites/:id\\:advance") @Operation("advanceStudySite") @RequireAction("advance")
+  @Post("/study-sites/:id\\:advance") @Operation("advanceStudySite")
   async advance(
     @Param("id", new ZodPipe(Uuid)) id: string,
     @Body(new ZodPipe(AdvanceBody)) b: z.infer<typeof AdvanceBody>,

@@ -46,15 +46,44 @@ const sivBlockers: Checker = async (client, siteId) => {
 
 const SIV_CHECKS: Checker[] = [sivBlockers];
 
-/** 推进到「中心关闭」：七项前置条件 */
+/** 计数型检查的公共形状：为 0 才放行，不为 0 时把数目说清楚。 */
+const counted = (
+  code: string, mod: string, ok: string,
+  sql: string, unmet: (n: number) => string
+): Checker => async (client, siteId) => {
+  const { rows } = await client.query<{ n: string }>(sql, [siteId]);
+  const n = Number(rows[0]?.n ?? 0);
+  return n === 0
+    ? { code, status: "ok", message: ok }
+    : { code, module: mod, status: "unmet", message: unmet(n) };
+};
+
+/** 推进到「中心关闭」：八项前置条件。ClinicalOps 交付后四项变成真查询。 */
 const CLOSE_CHECKS: Checker[] = [
-  pending("subjects-in-trial", "仍有受试者在组未出组",       "clinical"),
-  pending("open-queries",      "仍有数据质疑未关闭",         "clinical"),
-  pending("open-quality",      "仍有质量事件未关闭",         "quality"),
+  counted("subjects-in-trial", "clinical", "全部受试者已出组",
+    `SELECT count(*) AS n FROM subject
+      WHERE study_site_id = $1 AND state IN ('screening','enrolled')`,
+    n => `仍有 ${n} 例受试者在组或在筛未出组 —— 中心一关，他们的随访就无人接续`),
+
+  counted("open-queries", "clinical", "数据质疑已全部关闭",
+    `SELECT count(*) AS n FROM quality_event
+      WHERE study_site_id = $1 AND kind = 'query' AND state <> 'closed'`,
+    n => `仍有 ${n} 条数据质疑未关闭 —— 带着质疑锁库，锁的是一份自己都不认的数据`),
+
+  counted("open-quality", "quality", "质量事件已全部关闭",
+    `SELECT count(*) AS n FROM quality_event
+      WHERE study_site_id = $1 AND kind <> 'query' AND state <> 'closed'`,
+    n => `仍有 ${n} 件质量事件（含方案偏离）未关闭`),
+
+  counted("compensation-open", "clinical", "受试者补偿已全部发放并留有签收凭证",
+    `SELECT count(*) AS n FROM subject_payment
+      WHERE study_site_id = $1 AND paid_on IS NULL`,
+    n => `仍有 ${n} 笔受试者补偿未发放或缺签收凭证`),
+
+  /* 以下四项依赖尚未交付的模块，保持 fail-closed */
   pending("ip-imbalance",      "药品数量不平衡",             "clinical"),
   pending("ip-not-destroyed",  "回收药品未完成销毁登记",     "clinical"),
   pending("specimen-open",     "生物样本链未闭环",           "clinical"),
-  pending("compensation-open", "受试者补偿未发放或缺签收凭证", "clinical"),
   pending("closeout-report",   "未向伦理递交结题报告或尚未获批", "regulatory")
 ];
 

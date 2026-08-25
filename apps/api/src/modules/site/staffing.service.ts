@@ -7,8 +7,13 @@ import { evaluateGate } from "./gate.js";
 
 const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
 const iso = (v: Date | null) => v ? v.toISOString() : null;
+/** 两个**日历日**之间相差几天。
+ *  必须先把两端归到当地零点：`new Date()` 带着时分秒，
+ *  拿它直接和 date 列相减，当天到期的项会算出「逾期 0 天」——
+ *  既进了逾期清单，又显示 0 天。差一天的错误在访视窗口上就是一次方案偏离。 */
+const atMidnight = (v: Date) => new Date(v.getFullYear(), v.getMonth(), v.getDate());
 const daysBetween = (a: Date, b: Date) =>
-  Math.round((b.getTime() - a.getTime()) / 86_400_000);
+  Math.round((atMidnight(b).getTime() - atMidnight(a).getTime()) / 86_400_000);
 
 interface ItemRow {
   id: string; study_site_id: string; category: string; category_label: string;
@@ -32,7 +37,8 @@ const toItem = (r: ItemRow, today = new Date()) => ({
   ownerAccountId: r.owner_account_id, ownerName: r.owner_name,
   dueOn: day(r.due_on), isBlocking: r.is_blocking,
   doneAt: iso(r.done_at), doneByName: r.done_by_name,
-  overdueDays: !r.done_at && r.due_on && r.due_on < today
+  /* 当天到期不算逾期 —— 逾期是「过了应完成日」，不是「今天该做」 */
+  overdueDays: !r.done_at && r.due_on && daysBetween(r.due_on, today) > 0
     ? daysBetween(r.due_on, today) : null
 });
 

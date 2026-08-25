@@ -63,13 +63,16 @@ describe("闸门：推进不是给字段赋值，是断言一组事实成立", (
     expect(g.body.unmet.map((u: { module: string }) => u.module)).toContain("startup");
   });
 
-  it("关闭闸门的七项条件全部就位（尚未交付的模块以 unavailable 出现，闸门保持关闭）", async () => {
-    const s = await freshSite();
+  it("关闭闸门：已交付的检查真查库，未交付的保持 fail-closed", async () => {
+    const s = await freshSite();                      // 无受试者、无质疑、无补偿
     const g = await boss.get(`/v1/study-sites/${s.id}/gate?to=closed`);
     expect(g.body.satisfied).toBe(false);
-    const mods = new Set(g.body.unmet.map((u: { module: string }) => u.module));
-    expect(mods).toEqual(new Set(["clinical", "quality", "regulatory"]));
-    expect(g.body.unmet.length).toBe(8);
+
+    /* ClinicalOps 交付后，八项里有四项是真查询，且在空中心上应当通过 ——
+       它们不再出现在 unmet 里。剩下四项依赖未交付模块，保持 unavailable。 */
+    const codes = g.body.unmet.map((u: { code: string }) => u.code);
+    expect(codes.sort()).toEqual(
+      ["closeout-report", "ip-imbalance", "ip-not-destroyed", "specimen-open"]);
     /* 这是刻意的 fail-closed：查不了不等于通过 */
     for (const u of g.body.unmet) expect(u.message).toContain("尚未交付");
   });

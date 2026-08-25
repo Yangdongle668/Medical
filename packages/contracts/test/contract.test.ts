@@ -14,9 +14,11 @@ const doc = yaml.load(fs.readFileSync(SPEC, "utf8")) as any;
 
 describe("契约约定（不是风格偏好，每条对应一次事故）", () => {
   it("L2 命令一律 POST，且路径形如 /v1/xxx/{id}:action", () => {
+    /* 动作名收紧为小写 kebab —— 原来的 \w+ 会放过 :Foo_BAR，
+       而路径其余部分全是小写。多词动作用连字符（:sign-icf），不用驼峰。 */
     for (const e of allEndpoints().filter(e => e.layer === "L2")) {
       expect(e.method, e.id).toBe("post");
-      expect(e.path, e.id).toMatch(/:\w+$/);
+      expect(e.path, e.id).toMatch(/:[a-z][a-z0-9]*(-[a-z0-9]+)*$/);
     }
   });
 
