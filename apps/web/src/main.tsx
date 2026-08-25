@@ -11,6 +11,7 @@ import { HandoverPage } from "./features/handover/HandoverPage.js";
 import { TimesheetPage } from "./features/cost/TimesheetPage.js";
 import { SitePnlPage } from "./features/cost/SitePnlPage.js";
 import { RateCardPage } from "./features/cost/RateCardPage.js";
+import { OutboxPage } from "./features/outbox/OutboxPage.js";
 import { QualityPage } from "./features/quality/QualityPage.js";
 import { LoginPage } from "./features/login/LoginPage.js";
 import "./shell/styles.css";
@@ -30,6 +31,7 @@ const router = createBrowserRouter([
       { path: "handovers", element: <HandoverPage /> },
       { path: "timesheets", element: <TimesheetPage /> },
       { path: "rate-cards", element: <RateCardPage /> },
+      { path: "outbox", element: <OutboxPage /> },
       { path: "quality", element: <QualityPage /> }
     ]
   }

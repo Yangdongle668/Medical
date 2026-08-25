@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { call, ApiError, type ProblemDetails } from "../../api/client.js";
+import { call, ApiError, queueOwner, type ProblemDetails } from "../../api/client.js";
+import { subscribe } from "../../api/outbox.js";
 import { SITE_STATE_LABEL } from "./states.js";
 
 /* ════════════════════════════════════════════════════════════════════
@@ -17,6 +18,15 @@ import { SITE_STATE_LABEL } from "./states.js";
 
    撤销要填原因，且入口刻意做得比"完成"难按一点：
    撤销可能让一个**已经推进**的中心回到"其实没准备好"的状态。
+
+   ── 断网时这一页长什么样 ────────────────────────────────────────
+   勾选的结果来自服务端（`checked={!!it.doneAt}`），断网时那一勾发不出去，
+   于是**这一行看不出任何变化**。人接下来会做的事是显而易见的：再勾一次。
+   两次点击就是两条命令、两把幂等键 —— 幂等键防不了这个。
+   （集成测试里就是这么撞上的：连勾两下，落库只 +1。）
+
+   所以待发的那一项要在**行上**说出来："待发"，且勾不动。
+   发件箱角标是全局的，它回答不了"我刚才勾的那一行怎么样了"。
    ════════════════════════════════════════════════════════════════════ */
 
 interface Item {
@@ -51,6 +61,13 @@ export function StartupChecklistPage() {
   const [reopening, setReopening] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  /** 待发中的清单项 id —— 断网入队后行上要看得见，刷新也还在（队列落盘）。 */
+  const [queued, setQueued] = useState<Set<string>>(new Set());
+  useEffect(() => subscribe(s => setQueued(new Set(
+    s.pending
+      .filter(i => i.operationId === "completeStartupItem"
+        && i.accountId === queueOwner()?.accountId)
+      .map(i => String(i.params?.["id"] ?? ""))))), []);
 
   const load = useCallback(async () => {
     setCl(await call<Checklist>("getStartupChecklist", { params: { id } }));
@@ -145,9 +162,10 @@ export function StartupChecklistPage() {
             <ul className="tasks">
               {g.items.map(it => (
                 <li key={it.id} className={it.doneAt ? "done" : ""}
-                  data-testid="startup-item" data-blocking={it.isBlocking ? "1" : "0"}>
-                  <input type="checkbox" checked={!!it.doneAt}
-                    disabled={!!it.doneAt || busy === it.id}
+                  data-testid="startup-item" data-blocking={it.isBlocking ? "1" : "0"}
+                  data-queued={queued.has(it.id) ? "1" : undefined}>
+                  <input type="checkbox" checked={!!it.doneAt || queued.has(it.id)}
+                    disabled={!!it.doneAt || queued.has(it.id) || busy === it.id}
                     aria-label={it.item} style={{ width: "auto" }}
                     onChange={() => void complete(it.id)} />
                   <span className="grow">
@@ -158,6 +176,10 @@ export function StartupChecklistPage() {
                       {it.doneAt && <> · 由 {it.doneByName ?? "—"} 完成</>}
                     </div>
                   </span>
+                  {/* 「待发」不是「已完成」：勾是人的意思，落库还没发生。
+                      所以计数条上的"已完成"仍然是服务端那个数，不跟着动。 */}
+                  {queued.has(it.id) && !it.doneAt &&
+                    <span className="chip flat" data-testid="queued-chip">待发</span>}
                   {it.isBlocking && !it.doneAt &&
                     <span className="chip warn" data-testid="blocking-chip">阻塞</span>}
                   {it.overdueDays !== null &&

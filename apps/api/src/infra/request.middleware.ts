@@ -28,14 +28,34 @@ export class RequestMiddleware implements NestMiddleware {
     const c: RequestCtx = {
       requestId: randomUUID(), client, principal: null,
       scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
-      operationId: null, finalized: false
+      operationId: null, finalized: false, inFlight: false
     };
     (req as Request & { requestId?: string }).requestId = c.requestId;
     req.ctx = c;
 
-    /* 兜底：Guard 抛异常时拦截器不会运行，连接不能就这么泄漏出去 */
+    /* 兜底：Guard 抛异常时拦截器不会运行，连接不能就这么泄漏出去。
+       正常结束时也会走到这里，但那时 finalized 已经是 true，什么也不做。
+
+       ── 为什么要看 inFlight ────────────────────────────────────────
+       `res` 的 close 事件不只在响应发完时触发，**客户端中途断开也触发**。
+       原来这里不分青红皂白就 ROLLBACK + release，于是断线时会发生：
+       处理器还在跑，它脚下的连接已经回滚、并且**还回了连接池**。
+       接下来它的每一条 SQL 都打在一个没有 `app.account_id` 的连接上
+       （SET LOCAL 随事务一起没了），更糟的是那条连接可能已经被
+       下一个请求领走 —— 两个请求在同一条连接上交错。
+
+       这不是假想：Phase 7 的离线测试就把它撞出来了 ——
+       重放的请求发到一半上下文被关掉，服务端留下一条
+       「audit_entry 违反行级安全策略」。审计写不进去还算响了；
+       真正危险的是业务 UPDATE 在回滚之后的**自动提交**模式下落了库，
+       而它的审计条目没有 —— 那正是「业务成功、轨迹丢了」。
+
+       所以：处理器在跑就什么都不做，交给拦截器按处理结果收尾。
+       断线**不回滚**：请求已经被授权、活也是真做了，
+       响应丢在回来的路上是常态 —— 客户端带着同一把幂等键重放，
+       服务端认得它。这与 client 那边的假设是同一个假设。 */
     const release = () => {
-      if (c.finalized) return;
+      if (c.inFlight || c.finalized) return;
       c.finalized = true;
       client.query("ROLLBACK").catch(() => {}).finally(() => client.release());
     };
