@@ -205,3 +205,29 @@ input, textarea, select {
 }
 .btn.link:hover:not(:disabled) { background: var(--accent-soft); }
 .tasks li .grow { flex: 1 1 auto; }
+
+/* ── 推导链：一个数字说不出它是怎么来的，这几行说得出 ─────────────── */
+.derive {
+  background: var(--surface-2); border-radius: 8px; padding: 11px 13px;
+  display: grid; gap: 4px;
+}
+.derive .tot {
+  border-top: 1px solid var(--line-2); margin-top: 4px; padding-top: 6px;
+  font-size: 15px;
+}
+
+/* ── 分项表：I8' 四项要一眼看出方向相反的那两项 ───────────────────
+   靠颜色**和**符号两条线索，不只靠颜色 —— 色觉差异下颜色那条会消失。 */
+.terms { width: 100%; min-width: 0; border-collapse: collapse; }
+.terms td { padding: 7px 0; border-bottom: 1px solid var(--line); }
+.terms td:last-child { text-align: right; white-space: nowrap; padding-left: 12px; }
+.terms tr.minus td { color: var(--crit); }
+.terms tr.plus td  { color: var(--good); }
+.terms tr.sum td {
+  border-bottom: 0; border-top: 1px solid var(--line-2);
+  font-weight: 600; padding-top: 9px;
+}
+
+/* 已作废的工时留在台账里，但要一眼看出它不算数 */
+.card.voided { opacity: .62; }
+.card.voided .num { text-decoration: line-through; }

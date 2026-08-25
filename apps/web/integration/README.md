@@ -15,7 +15,7 @@ npm run web:integration        # 会自己起 API 与 preview，跑完自己收
 空数组与 null 的处理不同、列权限删掉字段之后前端画不出来。
 **这些在 mock 上永远不会出现，因为 mock 是照着同一份契约写的。**
 
-## 五条已经被它抓到的事
+## 六条已经被它抓到的事
 
 1. **`devSession` 不在契约里，client 拒绝调用它。** 那是 client 的正确行为
    （把后门写进公开契约，等于告诉别人有这么个后门），所以开发登录
@@ -33,7 +33,13 @@ npm run web:integration        # 会自己起 API 与 preview，跑完自己收
    接口回 201、单子显示「已完成」、派工原地不动。
    API 套件此前只走过「原负责人自己收单」那一侧，所以一直是绿的 ——
    **这条只有从另一侧走一遍才会暴露**。（见迁移 0011）
-5. **`FOR ALL` 策略的 WITH CHECK 也管 UPDATE。**
+5. **拿 `count()` 取基线，前面必须有一条等待渲染的断言。**
+   同一个坑的第三次（前两次是 `allInnerTexts()` 与循环里的 `count()`）。
+   `goto` 之后立刻 `count()` 拿到 0，`before + 1` 于是变成 1，
+   而页面上其实有 4 条 —— 失败信息说"期望 1 实际 4"，
+   看起来像业务逻辑错了。
+   循环里的 `count()` 不受影响：它们前面本来就有别的断言挡着。
+6. **`FOR ALL` 策略的 WITH CHECK 也管 UPDATE。**
    `handover_scope` 那句「只能发起从自己出去的交接」本意是 INSERT 的规则，
    结果连带把接手人挡在了收单那一步，报的是
    `new row violates row-level security policy` → 出口 500。

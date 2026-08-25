@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ACTION_KEYS, ActionKey } from "../kernel/actions.js";
 import { Uuid, Code, DateOnly, Timestamp } from "../kernel/primitives.js";
 import { FieldKey } from "../kernel/fields.js";
 
@@ -16,10 +17,9 @@ export const RowRule = z.enum(ROW_RULES).meta({
     "**由身份推导，绝不由用户选择。**"
 });
 
-export const ACTION_KEYS = [
-  "approve", "closeQA", "raiseQ", "closeQ", "advance", "manage", "bid", "ethics"
-] as const;
-export const ActionKey = z.enum(ACTION_KEYS).meta({ id: "ActionKey" });
+/* 动作权限住在 kernel（registry 要用它给 action 定型），这里只作再导出，
+   好让既有的 `from "./identity/model.js"` 与桶文件路径都不用改。 */
+export { ACTION_KEYS, ActionKey };
 
 export const AccountStatus = z.enum(["active", "disabled"]).meta({ id: "AccountStatus" });
 

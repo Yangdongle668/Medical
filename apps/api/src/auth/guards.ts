@@ -15,8 +15,10 @@ export const Public = () => SetMetadata(PUBLIC, true);
  *  契约上写了 action，控制器忘了加装饰器，端点就是敞开的，
  *  而所有测试都会照常通过 —— 因为没有任何一处会发现两边不一样。
  *  （这正是 ClinicalOps 交付时踩到的：契约写了 subjRead，QA 照样拉得出名册。） */
+/* 不再 `as ActionKey`：那个 cast 会把「契约声明了一个 ActionKey 里没有的动作」
+   这件事默默盖过去。去掉之后，下一次漏登记会在编译期就停下来。 */
 const ACTION_OF = new Map<string, ActionKey>(
-  allEndpoints().filter(e => e.action).map(e => [e.id, e.action as ActionKey]));
+  allEndpoints().filter(e => e.action).map(e => [e.id, e.action!]));
 
 /** 契约里声明了动作权限的端点集合 —— 供架构测试反查。 */
 export const contractActions = (): ReadonlyMap<string, ActionKey> => ACTION_OF;

@@ -5346,6 +5346,22 @@ components:
         - code
       additionalProperties: false
       description: RFC 9457 Problem Details。所有非 2xx 响应都是这个形状。
+    ActionKey:
+      type: string
+      enum:
+        - advance
+        - approve
+        - bid
+        - closeQ
+        - closeQA
+        - ethics
+        - manage
+        - piConfirm
+        - raiseQ
+        - rateWrite
+        - subjRead
+        - subjWrite
+        - timeWrite
     SideEffectType:
       type: string
       enum:
@@ -5429,17 +5445,6 @@ components:
         - pi
         - none
       description: 行范围规则。all=全部｜team=本组承接的项目｜assigned=被指派的中心｜hospital=本院承接的项目｜pi=本人担任研究者的中心｜none=无。**由身份推导，绝不由用户选择。**
-    ActionKey:
-      type: string
-      enum:
-        - approve
-        - closeQA
-        - raiseQ
-        - closeQ
-        - advance
-        - manage
-        - bid
-        - ethics
     AccountStatus:
       type: string
       enum:

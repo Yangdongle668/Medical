@@ -14,7 +14,9 @@
     "integration": "npm run build:live && playwright test -c playwright.integration.config.ts"
   },
   "dependencies": {
+    "@sitedesk/calc": "*",
     "@sitedesk/contracts": "*",
+    "@sitedesk/policy": "*",
     "@sitedesk/ui": "*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

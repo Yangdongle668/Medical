@@ -8,7 +8,9 @@ const NAV = [
   { to: "/today", label: "今天" },
   { to: "/sites", label: "我的中心" },
   { to: "/handovers", label: "交接" },
-  { to: "/quality", label: "质量台账" }
+  { to: "/timesheets", label: "工时" },
+  { to: "/quality", label: "质量台账" },
+  { to: "/rate-cards", label: "费率卡" }
 ];
 
 export function App() {

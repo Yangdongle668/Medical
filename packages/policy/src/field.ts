@@ -9,7 +9,13 @@ import type { Principal } from "./principal.js";
    知道我们有「毛利率」这个字段，和知道它的值，是两个不同的泄漏等级。
    ════════════════════════════════════════════════════════════════════ */
 
-export const canField = (p: Principal, f: FieldKey): boolean =>
+/** 参数只要 `active` 与 `fields` —— 判定用不到主体的其余部分。
+ *  收窄到这两项，前端 mock 才能诚实地传它真正拥有的东西，
+ *  而不是把一个半截对象 `as Principal` 硬塞进来：
+ *  那种转换会一直成立，直到 Principal 加了一个判定真的要用的字段。 */
+export type FieldSubject = Pick<Principal, "active" | "fields">;
+
+export const canField = (p: FieldSubject, f: FieldKey): boolean =>
   p.active && p.fields.includes(f);
 
 /** 字段路径 → 所需权限。与契约里的 x-gated-by 同源，由 CI 断言两者一致。 */
@@ -22,7 +28,7 @@ export type FieldGates = Readonly<Record<string, FieldKey>>;
  * `unitPriceCents` 无论出现在 StudySite 还是 SiteGate 里，都是报价信息。
  * 这条约定让脱敏无法被"换个嵌套位置"绕过。
  */
-export function maskFields<T>(p: Principal, gates: FieldGates, value: T): T {
+export function maskFields<T>(p: FieldSubject, gates: FieldGates, value: T): T {
   const denied = new Set(
     Object.entries(gates).filter(([, f]) => !canField(p, f)).map(([k]) => k));
   if (denied.size === 0) return value;

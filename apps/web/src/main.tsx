@@ -8,6 +8,9 @@ import { SitesPage } from "./features/sites/SitesPage.js";
 import { SiteDetailPage } from "./features/site/SiteDetailPage.js";
 import { StartupChecklistPage } from "./features/site/StartupChecklistPage.js";
 import { HandoverPage } from "./features/handover/HandoverPage.js";
+import { TimesheetPage } from "./features/cost/TimesheetPage.js";
+import { SitePnlPage } from "./features/cost/SitePnlPage.js";
+import { RateCardPage } from "./features/cost/RateCardPage.js";
 import { QualityPage } from "./features/quality/QualityPage.js";
 import { LoginPage } from "./features/login/LoginPage.js";
 import "./shell/styles.css";
@@ -23,7 +26,10 @@ const router = createBrowserRouter([
       { path: "sites", element: <SitesPage /> },
       { path: "sites/:id", element: <SiteDetailPage /> },
       { path: "sites/:id/startup", element: <StartupChecklistPage /> },
+      { path: "sites/:id/pnl", element: <SitePnlPage /> },
       { path: "handovers", element: <HandoverPage /> },
+      { path: "timesheets", element: <TimesheetPage /> },
+      { path: "rate-cards", element: <RateCardPage /> },
       { path: "quality", element: <QualityPage /> }
     ]
   }

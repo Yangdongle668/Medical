@@ -217,6 +217,8 @@ export function SiteDetailPage() {
         <div className="row">
           <Link to={`/sites/${id}/startup`} className="btn go"
             data-testid="open-startup">启动清单</Link>
+          <Link to={`/sites/${id}/pnl`} className="btn go"
+            data-testid="open-pnl">损益</Link>
         </div>
       </div>
     </>
