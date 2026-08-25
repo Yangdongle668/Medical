@@ -22,6 +22,8 @@ export interface RequestCtx {
   /** 拦截器已进入处理器、尚未结束。
    *  客户端中途断开时靠它判断"现在能不能收连接" —— 处理器还在跑的话不能。 */
   inFlight: boolean;
+  /** 这个请求发了多少条 SQL。N+1 不会自己响，所以先让它可数。 */
+  queryCount: number;
 }
 
 const als = new AsyncLocalStorage<RequestCtx>();

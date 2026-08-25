@@ -2,6 +2,15 @@ import { test, expect, type Page } from "@playwright/test";
 
 /** 逐项勾掉访视任务，每一项都等服务端回写后再点下一个。 */
 async function tickAllTasks(page: Page) {
+  /* **先等任务列表真的出现。**
+     不等的话 `count()` 立刻返回 0，`for` 一次都不执行，函数安安静静地返回 ——
+     而"一个都没勾"和"全勾完了"在这个函数的出口处长得一模一样。
+     后果落在很远的地方：提交按钮一直 disabled，看起来像功能坏了。
+
+     这是同一条规则的第五次，也是最恶劣的一种形态：
+     **0 既是"没有了"，也是"还没来"。** 用 count() 判空之前，
+     必须先有一个"它已经来了"的锚点。 */
+  await expect(page.locator(".tasks input[type=checkbox]").first()).toBeVisible();
   const boxes = page.locator(".tasks input[type=checkbox]:not(:checked)");
   for (let n = await boxes.count(); n > 0; n = await boxes.count()) {
     await boxes.first().click();

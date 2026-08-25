@@ -1,7 +1,8 @@
 import { Injectable, NestMiddleware, Inject } from "@nestjs/common";
 import type { Request, Response, NextFunction } from "express";
 import { createHash, randomUUID } from "node:crypto";
-import type { Pool } from "pg";
+import { Logger } from "@nestjs/common";
+import type { Pool, PoolClient } from "pg";
 import { POOL } from "./db.js";
 import { runInCtx, type RequestCtx } from "./ctx.js";
 import { loadPrincipal } from "../auth/principal.loader.js";
@@ -19,6 +20,32 @@ import { loadPrincipal } from "../auth/principal.loader.js";
 
 export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
+/** 一个请求发多少条 SQL 算可疑。
+ *
+ *  N+1 的特征不是"慢"，是**条数随数据量线性增长** —— 在开发库上
+ *  15 个中心跑得飞快，上线之后 1500 个中心就是 1500 条查询。
+ *  它不会自己报错，也不会在任何测试里变红，所以这里给它装一个响铃：
+ *  超过阈值就打一条 warn，并把 operationId 一起写出来。 */
+const QUERY_WARN_AT = Number(process.env["SITEDESK_QUERY_WARN_AT"] ?? 30);
+/** 打开后每个响应带 X-Query-Count —— 测试据此断言"这个端点不许超过 N 条"。 */
+const STATS = !!process.env["SITEDESK_QUERY_STATS"];
+const LOG = new Logger("QueryCount");
+
+/** 只数数的代理。除 query 外一律转发给真连接（并绑定 this）。 */
+function countingClient(raw: PoolClient, c: RequestCtx): PoolClient {
+  return new Proxy(raw, {
+    get(t, prop, recv) {
+      if (prop === "query")
+        return (...args: unknown[]) => {
+          c.queryCount++;
+          return (t.query as (...a: unknown[]) => unknown)(...args);
+        };
+      const v = Reflect.get(t, prop, recv);
+      return typeof v === "function" ? v.bind(t) : v;
+    }
+  }) as PoolClient;
+}
+
 /** 单条语句的上限。够慢查询跑完，又不至于让一次锁等待拖住一条连接一整天。 */
 const STATEMENT_TIMEOUT_MS = Number(process.env["SITEDESK_STATEMENT_TIMEOUT_MS"] ?? 30_000);
 /** 事务开着却没人动它的上限 —— 比语句上限宽一点，免得误伤慢查询之间的间隙。 */
@@ -33,8 +60,13 @@ export class RequestMiddleware implements NestMiddleware {
     const c: RequestCtx = {
       requestId: randomUUID(), client, principal: null,
       scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
-      operationId: null, finalized: false, inFlight: false
+      operationId: null, finalized: false, inFlight: false, queryCount: 0
     };
+    /* 业务代码拿到的是一个**代理**：除了数数，什么都不做。
+       为什么不直接改 client.query —— 连接会还回池子里给下一个请求用，
+       打过补丁的方法会跟着一起回去，把这一个请求的计数器泄漏给下一个。
+       代理只活在这个请求的上下文里，池子从头到尾看到的都是原始连接。 */
+    c.client = countingClient(client, c);
     (req as Request & { requestId?: string }).requestId = c.requestId;
     req.ctx = c;
 
@@ -98,6 +130,23 @@ export class RequestMiddleware implements NestMiddleware {
           c.scope = loaded.scope;
         }
       }
+      /* 响应头必须在**头发出去之前**写，所以挂在 writeHead 上。
+         第一版挂的是 res.on("finish") —— 那时头早发完了，
+         setHeader 抛 ERR_HTTP_HEADERS_SENT，而且抛在一个没人接的回调里。 */
+      if (STATS) {
+        const writeHead = res.writeHead.bind(res);
+        res.writeHead = ((...args: Parameters<typeof writeHead>) => {
+          res.setHeader("X-Query-Count", String(c.queryCount));
+          return writeHead(...args);
+        }) as typeof res.writeHead;
+      }
+      /* 告警可以晚一点：日志不受"头已经发了"的限制。 */
+      res.on("finish", () => {
+        if (c.queryCount > QUERY_WARN_AT)
+          LOG.warn(`${c.operationId ?? req.path} 发了 ${c.queryCount} 条 SQL ` +
+            `（阈值 ${QUERY_WARN_AT}）—— 这通常意味着循环里在查库（N+1）`);
+      });
+
       runInCtx(c, () => next());
     } catch (e) {
       release();

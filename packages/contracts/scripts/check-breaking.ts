@@ -11,9 +11,22 @@
    工作区里刚生成的也是同一份 —— 门禁在拿文件跟它自己比，
    **永远输出「契约无变化」**。它一直是绿的，因为它什么都没比。
 
-   所以 CI 上必须显式传 --baseline-ref（PR 传 base.sha，push 传 HEAD^），
+   所以 CI 上必须显式给基线（PR 给 base.sha，push 给 HEAD^），
    而这里在 CI 环境下**拒绝**回退到 HEAD：
-   一个不成立的门禁比没有门禁更糟 —— 没有门禁的时候人还知道要自己看。 */
+   一个不成立的门禁比没有门禁更糟 —— 没有门禁的时候人还知道要自己看。
+
+   ── 基线用环境变量传，不用命令行参数 ─────────────────────────────
+   第一版是 `npm run contracts:check -- --baseline-ref "$BASE"`，CI 上直接红了：
+
+     > npm run check:breaking -w @sitedesk/contracts --baseline-ref 2586482…
+     > tsx scripts/check-breaking.ts 2586482…
+
+   **npm 把 `--baseline-ref` 这个名字自己吃掉了，只把值透传下来。**
+   根脚本又套了一层 `npm run … -w`，参数每过一层都可能被重新解析。
+   于是脚本看到一个没有名字的裸参数，判定"没给基线"，按规矩 exit 2。
+
+   门禁这次是对的 —— 它宁可停下也不肯拿 HEAD 凑合。错的是我传参的方式。
+   环境变量不经过任何一层的参数解析，**套几层 npm 都不会变形**。 */
 import * as yaml from "js-yaml";
 import fs from "node:fs";
 import path from "node:path";
@@ -50,15 +63,27 @@ function baseline(): Doc | null {
   const f = arg("--baseline");
   if (f) return yaml.load(fs.readFileSync(f, "utf8")) as Doc;
 
-  const ref = arg("--baseline-ref");
+  /* 环境变量优先：它是 CI 用的那条路，套几层 npm 都不会被吃掉。 */
+  const ref = process.env["SITEDESK_BASELINE_REF"]?.trim() || arg("--baseline-ref");
   if (!ref) {
-    if (CI) die("CI 上必须显式指定 --baseline-ref。\n" +
+    if (CI) die("CI 上必须显式给出基线 —— 设 SITEDESK_BASELINE_REF。\n" +
       "  pull_request 事件检出的是合并提交，HEAD 里的 openapi.yaml\n" +
       "  就是本 PR 提议的那一份 —— 拿它当基线等于文件跟自己比，门禁永远是绿的。\n" +
-      "  PR 传 base.sha，push 传 HEAD^。");
+      "  PR 用 base.sha，push 用 HEAD^。" + swallowedFlagHint());
     return fromRef("HEAD");
   }
   return fromRef(ref);
+}
+
+/** 踩过一次：`npm run … -- --baseline-ref <sha>` 会被 npm 吃掉参数名，
+ *  只剩一个裸 sha 传进来。这种失败看起来像"我明明传了"，所以直接点破。 */
+function swallowedFlagHint(): string {
+  const bare = process.argv.slice(2).find(a => /^[0-9a-f]{7,40}$/i.test(a));
+  return bare
+    ? `\n\n  注意：argv 里有一个没有名字的参数 \`${bare}\` —— ` +
+      "这几乎可以肯定是 npm 把 `--baseline-ref` 这个**名字**吃掉了，只透传了值。\n" +
+      "  改用环境变量：SITEDESK_BASELINE_REF=<ref> npm run contracts:check"
+    : "";
 }
 
 function die(msg: string): never {

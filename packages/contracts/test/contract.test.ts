@@ -212,10 +212,11 @@ describe("破坏性变更门禁：基线是怎么选的", () => {
     }
   };
 
-  it("CI 上不给 --baseline-ref → 硬失败，而不是拿 HEAD 跟自己比", () => {
+  it("CI 上不给基线 → 硬失败，而不是拿 HEAD 跟自己比", () => {
     const r = run([], { CI: "1" });
     expect(r.code).toBe(2);
-    expect(r.out).toContain("必须显式指定 --baseline-ref");
+    expect(r.out).toContain("必须显式给出基线");
+    expect(r.out).toContain("SITEDESK_BASELINE_REF");
   });
 
   it("ref 取不到（浅克隆写错）→ 硬失败，而不是悄悄放行", () => {
@@ -226,8 +227,26 @@ describe("破坏性变更门禁：基线是怎么选的", () => {
     expect(r.out).toContain("取不到 ref");
   });
 
+  it("环境变量 SITEDESK_BASELINE_REF 能定基线 —— CI 走的是这条路", () => {
+    /* 为什么是环境变量而不是 `-- --baseline-ref`：
+       npm 会把参数**名字**吃掉只透传值（根脚本外面还套了一层 `npm run … -w`，
+       每过一层都可能被重新解析）。CI 上就是这么红的一次。 */
+    const r = run([], { CI: "1", SITEDESK_BASELINE_REF: "HEAD" });
+    expect(r.code).toBe(0);
+  });
+
+  it("只收到一个没有名字的裸 sha → 点破是 npm 把参数名吃了", () => {
+    const r = run(["deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"], { CI: "1" });
+    expect(r.code).toBe(2);
+    expect(r.out).toContain("npm 把");
+    expect(r.out).toContain("SITEDESK_BASELINE_REF");
+  });
+
   it("本地不带参数 → 仍然默认 HEAD（比的是工作区相对上一次提交）", () => {
-    const r = run([]);
+    /* 必须显式把 CI 清掉：GitHub Actions 会**全局**设 CI=true，
+       而这条验的恰恰是"不在 CI 时的行为"。
+       不清的话它在本地绿、在 CI 红 —— 而红的原因跟被测代码毫无关系。 */
+    const r = run([], { CI: "" });
     expect(r.code).toBe(0);
   });
 

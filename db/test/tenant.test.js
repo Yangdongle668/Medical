@@ -66,3 +66,25 @@ describe("app.provision_tenant：开一个新租户", () => {
     expect(after).toEqual(before);
   });
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   访视列表的排序索引 —— 这条不能被悄悄删掉。
+
+   它看起来只是"一条索引"，代价却不是线性的：
+   没有它，默认访视列表全表扫，而 **RLS 的行谓词是每行一次函数调用**。
+   18 万行实测 48 秒；有了它 15 毫秒。
+
+   这类退化在功能测试里完全看不见（小库上两种计划一样快），
+   所以至少要保证"它还在"。
+   ════════════════════════════════════════════════════════════════════ */
+describe("性能相关的索引", () => {
+  it("subject_visit 上有按排序键建的表达式索引", async () => {
+    const { rows } = await o.query(
+      `SELECT indexdef FROM pg_indexes
+        WHERE tablename = 'subject_visit' AND indexname = 'visit_feed_idx'`);
+    expect(rows.length, "visit_feed_idx 不见了 —— 见迁移 0013").toBe(1);
+    /* 排序键是 upper(visit_window)，不是 target_date：
+       换成后者的话索引还在、计划却会退回全表扫。 */
+    expect(rows[0].indexdef).toContain("upper(visit_window)");
+  });
+});
