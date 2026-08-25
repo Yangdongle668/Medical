@@ -11,7 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 2 }          # check:breaking 需要 HEAD 作基线
+        # 门禁要取 PR 的 base.sha 作基线 —— 浅克隆里通常没有那个提交
+        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: '22', cache: npm }
       - run: npm ci
@@ -28,8 +29,18 @@ jobs:
             exit 1
           fi
 
-      # 破坏性变更不是不能做，是不能悄悄做
-      - run: npm run contracts:check
+      # 破坏性变更不是不能做，是不能悄悄做。
+      #
+      # 基线必须显式给：pull_request 检出的是**合并提交**，
+      # HEAD 里的 openapi.yaml 就是本 PR 提议的那一份 ——
+      # 用它当基线等于拿文件跟自己比，门禁会一直绿着而什么也没验。
+      # （脚本在 CI 下已拒绝回退到 HEAD，这里是它的另一半。）
+      - name: 破坏性变更门禁
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          [ -n "$BASE" ] || BASE="$(git rev-parse HEAD^)"   # push 到 main：与上一次提交比
+          echo "基线 = $BASE"
+          npm run contracts:check -- --baseline-ref "$BASE"
       - run: npm run test -w @sitedesk/contracts
       # 计算引擎是纯函数，不需要数据库 —— 与契约同一个 job，失败得更早
       - run: npm run test -w @sitedesk/calc

@@ -14,7 +14,8 @@ const WIDTHS = [390, 834, 1500];
 /* 新增的三条：流程条与未满足清单都是横向组件，
    在 390px 上最容易把整页顶出去 —— 正是这条断言要抓的东西。 */
 const ROUTES = ["/today", "/sites", "/sites/s3", "/sites/s3/startup",
-  "/handovers", "/quality", "/timesheets", "/sites/s1/pnl", "/rate-cards"];
+  "/handovers", "/quality", "/timesheets", "/sites/s1/pnl", "/rate-cards",
+  "/outbox"];
 
 async function overflow(page: Page) {
   return page.evaluate(() => {

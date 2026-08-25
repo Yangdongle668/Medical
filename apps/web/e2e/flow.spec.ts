@@ -84,6 +84,11 @@ test("窗口内完成不要求填原因，也不生成偏离", async ({ page }) 
   expect(target).toBeTruthy();
 
   await expect(page.getByTestId("oow-reason")).toHaveCount(0);
+  /* 勾完最后一项到"提交"真的可按之间，还隔着一次回读 ——
+     `tickAllTasks` 只等到复选框自己变了，那是**代理状态**，不是闸门本身。
+     少了这一行会偶尔红在「submit 仍然 disabled」上，而且看起来像功能坏了。
+     （同一条规则在这个仓库里栽过四次，都记在 integration/README.md。） */
+  await expect(page.getByTestId("submit")).toBeEnabled();
   await page.getByTestId("submit").click();
   const effects = page.getByTestId("effects");
   await expect(effects).toBeVisible();

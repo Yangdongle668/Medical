@@ -19,6 +19,9 @@ export interface RequestCtx {
   operationId: string | null;
   /** 事务是否已终结（提交或回滚），用于兜底释放 */
   finalized: boolean;
+  /** 拦截器已进入处理器、尚未结束。
+   *  客户端中途断开时靠它判断"现在能不能收连接" —— 处理器还在跑的话不能。 */
+  inFlight: boolean;
 }
 
 const als = new AsyncLocalStorage<RequestCtx>();

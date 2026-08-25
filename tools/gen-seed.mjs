@@ -59,63 +59,27 @@ const STATE = {"立项":"intake","伦理递交":"irb_submit","伦理批件":"irb
 const L = [];
 const P = s => L.push(s);
 P(`-- 由 tools/gen-seed.mjs 从 prototype/index.html 生成，请勿手改。`);
+P(`-- 只含演示数据。角色矩阵由 app.provision_tenant() 开出（0012 迁移），`);
+P(`-- 因此本文件必须在迁移跑完之后执行 —— 它按 code 反查角色。`);
 P(`-- 全部为虚构演示数据，不含任何真实受试者可识别信息。`);
 P(`-- 受试者数据不在 Phase 1 范围内；届时录入的筛选号须重新生成，与原型脱钩。`);
 P(`BEGIN;`);
 P(`SET LOCAL client_min_messages = warning;`);
 P(``);
 
-/* ── 角色（三维权限） ── */
-P(`-- ── 角色：行 × 列 × 动作 ──────────────────────────────────────`);
-for (const [code, r] of Object.entries(ROLE_DEF)) {
-  P(`INSERT INTO role (id, code, name, is_external, row_rule) VALUES (` +
-    `'${uuid5("role:"+code)}', ${q(code)}, ${q(r.t)}, ${r.ext ? "true":"false"}, ${q(r.rows)});`);
-}
-P(``);
-P(`-- 列维度：外部角色默认拒绝，只有显式为 true 的才写入 visible=true`);
-for (const [code, r] of Object.entries(ROLE_DEF))
-  for (const [f, v] of Object.entries(r.fields))
-    P(`INSERT INTO role_field (role_id, field_key, visible) VALUES (` +
-      `'${uuid5("role:"+code)}', ${q(FIELD[f] ?? f)}, ${v ? "true":"false"});`);
-P(``);
-P(`-- 动作维度`);
-for (const [code, r] of Object.entries(ROLE_DEF))
-  for (const [a, v] of Object.entries(r.acts))
-    P(`INSERT INTO role_action (role_id, action_key, allowed) VALUES (` +
-      `'${uuid5("role:"+code)}', ${q(a)}, ${v ? "true":"false"});`);
-/* DM 的关闭质疑权：原型里由角色隐含，这里显式化 */
-P(`INSERT INTO role_action (role_id, action_key, allowed) VALUES ` +
-  `('${uuid5("role:dm")}', 'closeQ', true);`);
-for (const code of Object.keys(ROLE_DEF)) if (code !== "dm")
-  P(`INSERT INTO role_action (role_id, action_key, allowed) VALUES ` +
-    `('${uuid5("role:"+code)}', 'closeQ', false);`);
+/* ── 角色矩阵不在这里了 ────────────────────────────────────────────
+   role / role_field / role_action / role_module 现在由
+   `app.provision_tenant()` 开出来（见 db/migrations/0012_tenant_provisioning.sql）。
 
-/* ClinicalOps 的三个动作：原型没有「查看受试者明细需要单独授权」这个概念，
-   所以在这里显式给出，而不是从 ROLE_DEF 推。
+   为什么搬走：那 224 行是**开户物料**，不是演示数据。
+   混在这个文件里的时候，开第二个租户等于把恒济那 20 个人、15 个中心、
+   598 个受试者也灌一遍 —— 而且根本插不进去：
+   角色主键当时是 `uuid5('role:' + code)`，不含租户，两个租户的 `crc`
+   会算出同一个 UUID，直接在 role_pkey 上冲突。
 
-   **QA 与机构办刻意不给 subjRead。** 他们按事件与计数工作：
-   看得到漏斗（只有计数），看得到质量事件上的筛选号（列权限允许），
-   但拉不出全院受试者名册 —— 明细与聚合是两种权限（I10）。 */
-const CLIN_ACTS = {
-  subjRead:  ["boss", "pm", "cra", "crc", "dm", "pi"],
-  subjWrite: ["crc", "pm"],
-  piConfirm: ["pi"],
-  /* 工时是每个一线自己填的；作废别人的工时由服务层再判一次「是不是本人」 */
-  timeWrite: ["boss", "pm", "cra", "crc"],
-  /* 费率卡是报价底线，只有经营层能动 */
-  rateWrite: ["boss"]
-};
-P(`-- ClinicalOps 动作维度（见 db/migrations/0009_clinical.sql）`);
-for (const [act, allow] of Object.entries(CLIN_ACTS))
-  for (const code of Object.keys(ROLE_DEF))
-    P(`INSERT INTO role_action (role_id, action_key, allowed) VALUES ` +
-      `('${uuid5("role:"+code)}', ${q(act)}, ${allow.includes(code) ? "true" : "false"});`);
-P(``);
-P(`-- 可访问模块（收敛导航，不是安全边界）`);
-for (const [code, r] of Object.entries(ROLE_DEF))
-  r.mods.forEach((m, i) => P(`INSERT INTO role_module (role_id, module_key, sort_order) VALUES (` +
-    `'${uuid5("role:"+code)}', ${q(m)}, ${i});`));
-P(``);
+   这个文件从此只管演示数据，角色一律**按 code 反查**，不写死 UUID。
+   ──────────────────────────────────────────────────────────────── */
+const roleId = code => `(SELECT id FROM role WHERE code = ${q(code)} AND tenant_id = app.default_tenant_id())`;
 
 /* ── 分组 ── */
 P(`-- ── 分组 ────────────────────────────────────────────────────`);
@@ -133,7 +97,7 @@ for (const u of USERS) {
   const disabled = u.st !== "在职";
   P(`INSERT INTO account (id, login, display_name, role_id, team_id, is_external, org_ref,` +
     ` status, joined_on, disabled_at, disabled_reason) VALUES (` +
-    `'${uuid5("account:"+u.u)}', ${q(u.u)}, ${q(u.n)}, '${uuid5("role:"+u.role)}', ` +
+    `'${uuid5("account:"+u.u)}', ${q(u.u)}, ${q(u.n)}, ${roleId(u.role)}, ` +
     `${team ? `'${uuid5("team:"+team.id)}'` : "NULL"}, ${u.ext ? "true":"false"}, ${q(org)}, ` +
     `${q(disabled ? "disabled" : "active")}, ${d(u.joined)}, ` +
     `${disabled ? `'${u.off || "2026-07-15"}'::timestamptz` : "NULL"}, ` +
