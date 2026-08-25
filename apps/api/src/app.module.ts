@@ -18,17 +18,22 @@ import { StaffingService } from "./modules/site/staffing.service.js";
 import { StaffingController } from "./modules/site/staffing.controller.js";
 import { ClinicalService } from "./modules/clinical/clinical.service.js";
 import { ClinicalController } from "./modules/clinical/clinical.controller.js";
+import { CostService } from "./modules/cost/cost.service.js";
+import { CostController } from "./modules/cost/cost.controller.js";
+import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
 
 /* 拦截器执行顺序 = 注册顺序（外 → 内）：
    TxInterceptor 在最外层，保证脱敏之后才提交/回滚；
    MaskInterceptor 紧贴处理器，对**所有**出口统一脱敏。 */
 @Module({
   controllers: [AuthController, IdentityController, SiteController, StaffingController,
-                ClinicalController],
+                ClinicalController, CostController],
   providers: [
     { provide: POOL, useFactory: () => makePool() },
     AuthService, AuditService, IdempotencyService, IdentityService, SiteService, StaffingService,
-    ClinicalService,
+    ClinicalService, CostService,
+    /* 跨上下文装配：ClinicalOps 只认 ports.ts 里的接口，不 import CostService */
+    { provide: VISIT_TIMESHEET_PORT, useExisting: CostService },
     { provide: APP_FILTER, useClass: ProblemFilter },
     { provide: APP_INTERCEPTOR, useClass: TxInterceptor },
     { provide: APP_INTERCEPTOR, useClass: MaskInterceptor },

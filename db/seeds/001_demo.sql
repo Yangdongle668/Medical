@@ -146,6 +146,22 @@ INSERT INTO role_action (role_id, action_key, allowed) VALUES ('a4b3cebd-5319-55
 INSERT INTO role_action (role_id, action_key, allowed) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'piConfirm', false);
 INSERT INTO role_action (role_id, action_key, allowed) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'piConfirm', false);
 INSERT INTO role_action (role_id, action_key, allowed) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'piConfirm', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'timeWrite', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'timeWrite', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'timeWrite', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'timeWrite', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'timeWrite', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'timeWrite', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'timeWrite', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'timeWrite', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'rateWrite', true);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('65dd9550-c9d6-5235-bd4b-1167dcf55c8c', 'rateWrite', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('0faf88cf-cd25-59c0-8abb-e2b7f9a0a111', 'rateWrite', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('60080180-bc0e-5d6b-a94a-aae5889621a5', 'rateWrite', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('a4b3cebd-5319-556d-a456-e5d01660fa53', 'rateWrite', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('f96de05c-0ad3-58ca-9f91-7db9bf0ec3f2', 'rateWrite', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('060c16f9-6a53-507a-b065-f2c5ea994ab5', 'rateWrite', false);
+INSERT INTO role_action (role_id, action_key, allowed) VALUES ('e3786fde-4dce-512c-8632-6511d42b37bd', 'rateWrite', false);
 
 -- 可访问模块（收敛导航，不是安全边界）
 INSERT INTO role_module (role_id, module_key, sort_order) VALUES ('4cabad81-ab2b-59db-a70f-410395a48260', 'dash', 0);
@@ -1319,5 +1335,30 @@ INSERT INTO quality_event (code, study_site_id, subject_id, kind, severity, stat
 INSERT INTO quality_event (code, study_site_id, subject_id, kind, severity, state, title, detail, raised_by, raised_on) VALUES ('Q-1155', '0b08f031-8d02-53b8-a193-819317b4bc15', '2d812ba0-8c61-539e-882b-f34bab6345db', 'query', 'major', 'open', '访视日期 SV · 实际访视日期', '第 4 次访视超出方案窗口 5 天，请提供方案偏离说明及 PI 签字。', 'cra', '2026-08-03');
 INSERT INTO quality_event (code, study_site_id, subject_id, kind, severity, state, title, detail, raised_by, raised_on) VALUES ('Q-1171', '915ff2c3-4a1a-5549-af44-29eb0f4dc9d0', NULL, 'query', 'minor', 'open', '疗效评估 RS · 靶病灶长径', '基线与 C4 靶病灶数量不一致（3 → 2），请补充说明。', 'cra', '2026-08-18');
 INSERT INTO quality_event (code, study_site_id, subject_id, kind, severity, state, title, detail, raised_by, raised_on) VALUES ('Q-1188', '553ef290-0777-5eb3-8f11-3a2ff21c86d1', '15452d55-fb0c-5801-ace8-8cffe6bc94a5', 'query', 'minor', 'open', '用药依从性 EX · 回收片数', '发放 90 片、回收 12 片、服用记录 71 片，三者不平，请核对。', 'cra', '2026-08-21');
+
+-- ── 费率卡：生效区间不重叠由 EXCLUDE 约束保证（I2） ────────────
+INSERT INTO rate_card (id, role_kind, day_cost_cents, valid_from, valid_to, note) VALUES ('d95b0fac-59ab-54f8-b6d1-c547448b5638', 'CRC', 118000, '2024-01-01', '2025-12-31', '2024–2025 年费率');
+INSERT INTO rate_card (id, role_kind, day_cost_cents, valid_from, valid_to, note) VALUES ('17e07853-9b1f-5e2f-9035-6ae67ee23fd4', 'CRC', 129800, '2026-01-01', NULL, '2026 年调价 +10%');
+INSERT INTO rate_card (id, role_kind, day_cost_cents, valid_from, valid_to, note) VALUES ('f39f4c4b-e080-5a0b-bd63-e38a4e20c840', 'CRA', 192000, '2024-01-01', '2025-12-31', '2024–2025 年费率');
+INSERT INTO rate_card (id, role_kind, day_cost_cents, valid_from, valid_to, note) VALUES ('aa6d21d5-1c5f-5392-b49d-8281c479e638', 'CRA', 211200, '2026-01-01', NULL, '2026 年调价 +10%');
+INSERT INTO rate_card (id, role_kind, day_cost_cents, valid_from, valid_to, note) VALUES ('3c1f6b77-dfa6-5cfd-943b-e32e165185f0', 'PM', 220800, '2024-01-01', NULL, 'PM 按 CRA 上浮 15%');
+INSERT INTO rate_card (id, role_kind, day_cost_cents, valid_from, valid_to, note) VALUES ('dbc5f527-c413-57d5-b5ba-21f3f63a3275', 'QA', 220800, '2024-01-01', NULL, '同 PM');
+INSERT INTO rate_card (id, role_kind, day_cost_cents, valid_from, valid_to, note) VALUES ('bb35ad33-d679-5480-b45b-cd1bc0526987', 'DM', 192000, '2024-01-01', NULL, '同 CRA');
+
+-- ── 工时：不可变事实，只能作废不能删（I1） ─────────────────────
+INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type, billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES ('44cb314d-e661-5594-b207-97efc0c52b30', '1c8425f6-c481-5938-b156-8caddcc5239c', '2026-08-21', 'visit_support', true, 7.5, '17e07853-9b1f-5e2f-9035-6ae67ee23fd4', 129800, 0, 121688);
+INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type, billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES ('915ff2c3-4a1a-5549-af44-29eb0f4dc9d0', '870aae7f-f91f-506c-a854-4961d1847f6d', '2026-08-21', 'monitoring', true, 8, 'aa6d21d5-1c5f-5392-b49d-8281c479e638', 211200, 320000, 531200);
+INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type, billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES ('0b08f031-8d02-53b8-a193-819317b4bc15', 'd9857040-ed68-5ae8-9351-cfdd35f3cb28', '2026-08-21', 'training', false, 4, '17e07853-9b1f-5e2f-9035-6ae67ee23fd4', 129800, 0, 64900);
+INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type, billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES ('553ef290-0777-5eb3-8f11-3a2ff21c86d1', '8ffe778e-9704-5cf1-a979-c31ea1a49cc1', '2026-08-20', 'sdv', true, 8, '17e07853-9b1f-5e2f-9035-6ae67ee23fd4', 129800, 0, 129800);
+INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type, billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES ('e10af465-11b4-5907-8490-a55a94fa6f4e', 'fd325647-5ba2-5f67-a1cc-aea053cd8736', '2026-08-20', 'visit_support', true, 6.5, '17e07853-9b1f-5e2f-9035-6ae67ee23fd4', 129800, 0, 105463);
+INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type, billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES ('e7bc6829-b4f1-5c79-9160-98f38f92be0d', '554d35d7-5eb0-5fe8-a691-df71031c2c97', '2026-08-20', 'ethics', true, 5, 'aa6d21d5-1c5f-5392-b49d-8281c479e638', 211200, 180000, 312000);
+INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type, billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES ('a7a32e26-70ac-5ce4-ba1a-64d3e4e104e4', 'd9857040-ed68-5ae8-9351-cfdd35f3cb28', '2026-08-19', 'bd', false, 6, '17e07853-9b1f-5e2f-9035-6ae67ee23fd4', 129800, 0, 97350);
+INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type, billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES ('553ef290-0777-5eb3-8f11-3a2ff21c86d1', '374a53e7-95ee-5aca-87af-e56090580112', '2026-08-20', 'sdv', true, 6.5, 'aa6d21d5-1c5f-5392-b49d-8281c479e638', 211200, 0, 171600);
+INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type, billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES ('44cb314d-e661-5594-b207-97efc0c52b30', '374a53e7-95ee-5aca-87af-e56090580112', '2026-08-19', 'monitoring', true, 8, 'aa6d21d5-1c5f-5392-b49d-8281c479e638', 211200, 290000, 501200);
+INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type, billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES ('ee57f7b2-4cb5-5ff7-a318-77f1633eb6a6', '374a53e7-95ee-5aca-87af-e56090580112', '2026-08-18', 'training', false, 3, 'aa6d21d5-1c5f-5392-b49d-8281c479e638', 211200, 0, 79200);
+INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type, billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES ('fdf08b80-b1cb-51b4-9429-934a9486f59d', '374a53e7-95ee-5aca-87af-e56090580112', '2026-08-21', 'monitoring', true, 7.5, 'aa6d21d5-1c5f-5392-b49d-8281c479e638', 211200, 310000, 508000);
+
+-- ── 合同条款：筛败费率与管理分摊（原型里是两个写死的常量） ─────
+UPDATE study SET screen_fail_fee_rate = 0.350, overhead_rate = 0.12;
 
 COMMIT;

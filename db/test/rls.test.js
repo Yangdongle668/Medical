@@ -180,3 +180,25 @@ describe("account 表：外部方只看得到自己", () => {
     expect(await visibleAccounts(ID.chenguod)).toEqual(["chenguod"]);
   });
 });
+
+describe("成本对外部方完全不可见", () => {
+  it("机构办与 PI 一条工时都看不到 —— 知道我们投了多少人天，等于知道报价底线", async () => {
+    for (const login of ["zhanghm", "chenguod"]) {
+      const { rows } = await asAccount(c, ID[login], () =>
+        c.query("SELECT count(*)::int AS n FROM timesheet_entry"));
+      expect(rows[0].n, `${login} 不该看到任何工时`).toBe(0);
+    }
+  });
+
+  it("费率卡同理 —— 它就是报价底线本身", async () => {
+    const { rows } = await asAccount(c, ID.zhanghm, () =>
+      c.query("SELECT count(*)::int AS n FROM rate_card"));
+    expect(rows[0].n).toBe(0);
+  });
+
+  it("内部员工看得到自己行范围内的工时", async () => {
+    const { rows } = await asAccount(c, ID.wutong, () =>
+      c.query("SELECT count(*)::int AS n FROM timesheet_entry"));
+    expect(rows[0].n).toBeGreaterThan(0);
+  });
+});

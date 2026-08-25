@@ -43,7 +43,8 @@ const STUDIES = grab("STUDIES"), SITES = grab("SITES"),
       HANDOVER = grab("HANDOVER", { HO_ITEMS }), TALENT = grab("TALENT"),
       SIV_PLAN = grab("SIV_PLAN"),
       SOA = grab("SOA"), SUBJ = grab("SUBJ"), FUNNEL = grab("FUNNEL"),
-      DROPS = grab("DROPS"), QUERIES = grab("QUERIES");
+      DROPS = grab("DROPS"), QUERIES = grab("QUERIES"),
+      RATE = grab("RATE"), WORKTYPES = grab("WORKTYPES"), TIMESHEET = grab("TIMESHEET");
 
 const q  = v => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const d  = v => (!v || v === "—") ? "NULL" : `'${v}'`;
@@ -98,7 +99,11 @@ for (const code of Object.keys(ROLE_DEF)) if (code !== "dm")
 const CLIN_ACTS = {
   subjRead:  ["boss", "pm", "cra", "crc", "dm", "pi"],
   subjWrite: ["crc", "pm"],
-  piConfirm: ["pi"]
+  piConfirm: ["pi"],
+  /* 工时是每个一线自己填的；作废别人的工时由服务层再判一次「是不是本人」 */
+  timeWrite: ["boss", "pm", "cra", "crc"],
+  /* 费率卡是报价底线，只有经营层能动 */
+  rateWrite: ["boss"]
 };
 P(`-- ClinicalOps 动作维度（见 db/migrations/0009_clinical.sql）`);
 for (const [act, allow] of Object.entries(CLIN_ACTS))
@@ -375,10 +380,72 @@ QUERIES.forEach(qy => {
     `${d(dayBefore(TODAY, qy.age))});`);
 });
 P(``);
+
+/* ════════════════════════════════════════════════════════════════
+   Timesheet & Cost
+   ════════════════════════════════════════════════════════════════ */
+P(`-- ── 费率卡：生效区间不重叠由 EXCLUDE 约束保证（I2） ────────────`);
+/* 原型只有一组当前费率。种子给出**两段**，才能真的验证
+   「费率变更不回溯历史」——只有一段的话，这条不变量测不出来。 */
+const RATES = [
+  { role: "CRC", day: RATE.crcDay,        from: "2024-01-01", to: "2025-12-31",
+    note: "2024–2025 年费率" },
+  { role: "CRC", day: RATE.crcDay * 1.10, from: "2026-01-01", to: null,
+    note: "2026 年调价 +10%" },
+  { role: "CRA", day: RATE.craDay,        from: "2024-01-01", to: "2025-12-31",
+    note: "2024–2025 年费率" },
+  { role: "CRA", day: RATE.craDay * 1.10, from: "2026-01-01", to: null,
+    note: "2026 年调价 +10%" },
+  { role: "PM",  day: RATE.craDay * 1.15, from: "2024-01-01", to: null,
+    note: "PM 按 CRA 上浮 15%" },
+  { role: "QA",  day: RATE.craDay * 1.15, from: "2024-01-01", to: null, note: "同 PM" },
+  { role: "DM",  day: RATE.craDay,        from: "2024-01-01", to: null, note: "同 CRA" }
+];
+RATES.forEach((r, i) => {
+  P(`INSERT INTO rate_card (id, role_kind, day_cost_cents, valid_from, valid_to, note)` +
+    ` VALUES ('${uuid5("rate:" + r.role + ":" + r.from)}', ${q(r.role)}, ` +
+    `${cents(r.day)}, ${d(r.from)}, ${d(r.to)}, ${q(r.note)});`);
+});
+P(``);
+
+P(`-- ── 工时：不可变事实，只能作废不能删（I1） ─────────────────────`);
+const WT = { "受试者访视陪同": "visit_support", "源数据准备与核对": "sdv",
+  "伦理递交与跟进": "ethics", "现场监查（IMV）": "monitoring",
+  "药品与物资管理": "ip_mgmt", "内部培训": "training",
+  "投标与商务支持": "bd", "返工与整改": "rework" };
+const BILLABLE = Object.fromEntries(WORKTYPES.map(x => [WT[x.k], x.bill]));
+const roleOf = name => {
+  const st = STAFF.find(x => x.n === name);
+  return st ? st.role : "CRC";
+};
+/* 8 小时 = 一个人天（与 packages/calc 的 HOURS_PER_DAY 同一口径） */
+const HOURS_PER_DAY = 8;
+let tsRows = 0;
+TIMESHEET.forEach(t => {
+  const role = roleOf(t.who);
+  /* 与 app.rate_on() 同一套挑选规则：按 work_date 落在哪一段区间 */
+  const card = RATES.find(r => r.role === role && t.d >= r.from && (!r.to || t.d <= r.to))
+            ?? RATES.find(r => r.role === role);
+  const dayCost = cents(card.day);
+  const cost = Math.round((t.h / HOURS_PER_DAY) * dayCost) + cents(t.travel || 0);
+  P(`INSERT INTO timesheet_entry (study_site_id, account_id, work_date, work_type,` +
+    ` billable, hours, rate_card_id, day_cost_cents, travel_cents, cost_cents) VALUES (` +
+    `'${uuid5("site:" + t.ss)}', ${acc(t.who)}, ${d(t.d)}, ${q(WT[t.type])}, ` +
+    `${BILLABLE[WT[t.type]] ? "true" : "false"}, ${t.h}, ` +
+    `'${uuid5("rate:" + card.role + ":" + card.from)}', ${dayCost}, ` +
+    `${cents(t.travel || 0)}, ${cost});`);
+  tsRows++;
+});
+P(``);
+
+P(`-- ── 合同条款：筛败费率与管理分摊（原型里是两个写死的常量） ─────`);
+P(`UPDATE study SET screen_fail_fee_rate = 0.350, overhead_rate = ${RATE.overhead};`);
+P(``);
 P(`COMMIT;`);
 
 fs.mkdirSync("db/seeds", { recursive: true });
 fs.writeFileSync("db/seeds/001_demo.sql", L.join("\n") + "\n");
 console.log(`db/seeds/001_demo.sql 已生成（${L.length} 行）` +
   `｜角色 ${Object.keys(ROLE_DEF).length} · 账号 ${USERS.length} · 分组 ${GROUPS.length}` +
-  ` · 项目 ${STUDIES.length} · 中心 ${SITES.length} · 受试者 ${subjRows} · 访视 ${visitRows}`);
+  ` · 项目 ${STUDIES.length} · 中心 ${SITES.length} · 受试者 ${subjRows} · 访视 ${visitRows}` +
+  ` · 费率卡 ${RATES.length} · 工时 ${tsRows}`);

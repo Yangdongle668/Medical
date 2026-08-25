@@ -7,7 +7,7 @@ on:
 
 jobs:
   contracts:
-    name: 契约 —— 类型 · 产物一致 · 破坏性变更门禁
+    name: 契约与口径 —— 类型 · 产物一致 · 破坏性变更门禁 · I8' 基线
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +31,8 @@ jobs:
       # 破坏性变更不是不能做，是不能悄悄做
       - run: npm run contracts:check
       - run: npm run test -w @sitedesk/contracts
+      # 计算引擎是纯函数，不需要数据库 —— 与契约同一个 job，失败得更早
+      - run: npm run test -w @sitedesk/calc
 
   database:
     name: 数据库与后端 —— 迁移 · RLS · 等价性 · 权限矩阵

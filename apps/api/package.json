@@ -18,7 +18,8 @@
     "pg": "^8.13.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@sitedesk/calc": "*"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.2.1",

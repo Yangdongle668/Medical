@@ -166,6 +166,95 @@ describe("约束不是文档，是数据库拒绝写入", () => {
       .toEqual([]);
   });
 
+  it("工时不能删除，只能作废 —— 能悄悄删掉的成本记录等于没有记录", () =>
+    tx(async () => {
+      await expect(o.query("DELETE FROM timesheet_entry"))
+        .rejects.toThrow(/只能作废/);
+    }));
+
+  it("改工时数会被拒 —— 改数字要作废后重报", () =>
+    tx(async () => {
+      await expect(o.query("UPDATE timesheet_entry SET hours = 99"))
+        .rejects.toThrow(/不可修改/);
+    }));
+
+  it("改成本会被拒", () =>
+    tx(async () => {
+      await expect(o.query("UPDATE timesheet_entry SET cost_cents = 1"))
+        .rejects.toThrow(/不可修改/);
+    }));
+
+  it("改归属的中心会被拒 —— 成本挪一个中心，两边的毛利同时错", () =>
+    tx(async () => {
+      await expect(o.query(`
+        UPDATE timesheet_entry SET study_site_id =
+          (SELECT id FROM study_site WHERE code = 'SS-09')`))
+        .rejects.toThrow(/不可修改/);
+    }));
+
+  it("但打作废标记是允许的 —— 那正是唯一的更正途径", () =>
+    tx(async () => {
+      const { rowCount } = await o.query(`
+        UPDATE timesheet_entry SET voided_at = now(),
+               voided_by = (SELECT id FROM account WHERE login = 'lingyuan'),
+               void_reason = '测试作废'
+         WHERE voided_at IS NULL`);
+      expect(rowCount).toBeGreaterThan(0);
+    }));
+
+  it("已作废的工时不可再改 —— 否则冲销之后还能被改回来", () =>
+    tx(async () => {
+      await o.query(`
+        UPDATE timesheet_entry SET voided_at = now(),
+               voided_by = (SELECT id FROM account WHERE login = 'lingyuan'),
+               void_reason = '第一次作废'
+         WHERE id = (SELECT id FROM timesheet_entry WHERE voided_at IS NULL LIMIT 1)`);
+      await expect(o.query(`
+        UPDATE timesheet_entry SET void_reason = '改一下理由'
+         WHERE voided_at IS NOT NULL`)).rejects.toThrow(/已作废/);
+    }));
+
+  it("作废三件套要么都有要么都没有 —— 只记「作废了」而不记谁作废的，说不清", () =>
+    tx(async () => {
+      await expect(o.query(
+        "UPDATE timesheet_entry SET voided_at = now() WHERE voided_at IS NULL"))
+        .rejects.toThrow(/timesheet_void_complete/);
+    }));
+
+  it("费率卡的生效区间不允许重叠 —— 重叠时「当天用哪个费率」没有答案（I2）", () =>
+    tx(async () => {
+      await expect(o.query(`
+        INSERT INTO rate_card (role_kind, day_cost_cents, valid_from)
+        VALUES ('CRC', 150000, '2026-06-01')`))
+        .rejects.toThrow(/rate_card_no_overlap/);
+    }));
+
+  it("app.rate_on 按日期挑卡：2025 年的工时用旧价，2026 年的用新价", async () => {
+    const { rows } = await o.query(`
+      SELECT (app.rate_on('CRC', NULL, '2025-06-01')).day_cost_cents AS old,
+             (app.rate_on('CRC', NULL, '2026-06-01')).day_cost_cents AS new`);
+    expect(Number(rows[0].old)).toBeLessThan(Number(rows[0].new));
+    /* 关键不在于新价更高，而在于**同一个函数对不同日期给出不同答案** ——
+       只存一个常量的话，调价当天所有历史项目的毛利会集体变化。 */
+  });
+
+  it("一次访视只自动生成一条工时 —— 重复触发不该重复计成本", () =>
+    tx(async () => {
+      const src = await o.query(`
+        SELECT study_site_id, account_id, work_date, work_type, billable, hours,
+               rate_card_id, day_cost_cents, cost_cents
+          FROM timesheet_entry LIMIT 1`);
+      const v = await o.query("SELECT id, subject_id FROM subject_visit LIMIT 1");
+      const cols = `study_site_id, account_id, work_date, work_type, billable, hours,
+        rate_card_id, day_cost_cents, cost_cents, visit_id, auto_generated`;
+      const vals = Object.values(src.rows[0]);
+      const ins = `INSERT INTO timesheet_entry (${cols})
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true)`;
+      await o.query(ins, [...vals, v.rows[0].id]);
+      await expect(o.query(ins, [...vals, v.rows[0].id]))
+        .rejects.toThrow(/timesheet_one_auto_per_visit/);
+    }));
+
   it("每个动作权限至少被一个角色持有 —— 没人有的权限等于关掉了那个端点", async () => {
     /* 这一条是被真事故逼出来的：迁移里写了
          INSERT INTO role_action ... SELECT FROM role WHERE ...

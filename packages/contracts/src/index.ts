@@ -12,9 +12,11 @@ export * from "./identity/model.js";
 export * from "./site/model.js";
 export * from "./site/staffing.js";
 export * from "./clinical/model.js";
+export * from "./cost/model.js";
 
 /* 端点定义有副作用（注册到 registry），必须被导入 */
 import "./auth/api.js";
 import "./identity/api.js";
 import "./site/api.js";
 import "./clinical/api.js";
+import "./cost/api.js";

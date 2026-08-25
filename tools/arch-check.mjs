@@ -30,8 +30,20 @@ const RULES = [
   },
   {
     scope: "apps/api/src/modules/clinical",
-    forbid: [/modules\/identity\//, /modules\/site\/site\./, /modules\/site\/staffing\./],
-    why: "ClinicalOps 不直接引用别的上下文的服务；跨界只走领域事件或只读查询"
+    forbid: [/modules\/identity\//, /modules\/site\/site\./, /modules\/site\/staffing\./,
+             /modules\/cost\//],
+    why: "ClinicalOps 不直接引用别的上下文的服务 —— 记工时走 ports.ts 里的接口，" +
+         "装配在 app.module 完成。直接 import 是最省事的写法，也是最贵的"
+  },
+  {
+    scope: "apps/api/src/modules/cost",
+    forbid: [/modules\/identity\//, /modules\/clinical\//, /modules\/site\//],
+    why: "同上，方向反过来也一样"
+  },
+  {
+    scope: "packages/calc",
+    forbid: [/^node:/, /^pg$/, /^fs$/, /^express$/, /^@nestjs\//, /^\.\.\/\.\.\/apps\//],
+    why: "计算引擎必须是纯函数 —— 前后端共用同一份口径，且能被穷举测试"
   }
 ];
 

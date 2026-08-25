@@ -39,10 +39,10 @@ export const VISIT_COMPLETED_SUBSCRIBERS: readonly Subscriber[] = [
   { name: "QueuePiConfirmation", what: "进入 PI 待确认队列（I3）",
     context: "External", effect: null, delivered: true },
 
-  /* 以下两条尚未交付。**它们不是被遗忘的，是被记着的。** */
   { name: "PostVisitTimesheet", what: "按费率卡生成工时与成本快照（I1 / I2）",
-    context: "Timesheet & Cost", effect: "TimesheetPosted",
-    delivered: false, pendingPhase: "Phase 4c" },
+    context: "Timesheet & Cost", effect: "TimesheetPosted", delivered: true },
+
+  /* 以下一条尚未交付。**它不是被遗忘的，是被记着的。** */
   { name: "RefreshProjections", what: "刷新入组漏斗、单中心 P&L、驾驶舱投影",
     context: "Analytics", effect: null,
     delivered: false, pendingPhase: "Phase 6" }

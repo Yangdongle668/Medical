@@ -1564,6 +1564,314 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/rate-cards:
+    get:
+      operationId: listRateCards
+      tags:
+        - cost
+      summary: 费率卡
+      description: 同一工种/级别的生效区间不允许重叠 —— 重叠时「当天用哪个费率」没有答案。
+      x-layer: L1
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: roleKind
+          in: query
+          required: false
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/RoleKindForRate'
+      responses:
+        '200':
+          description: 费率卡
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListRateCardsResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+    post:
+      operationId: createRateCard
+      tags:
+        - cost
+      summary: 新增费率卡
+      description: 调价的正确做法是**给旧卡收口、开一张新卡**，不是改旧卡的数字 ——改数字等于改写历史成本。区间重叠会被数据库直接拒绝。
+      x-layer: L1
+      x-required-action: rateWrite
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRateCardRequest'
+      responses:
+        '201':
+          description: 新增费率卡
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateCard'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/rate-cards/{id}:close:
+    post:
+      operationId: closeRateCard
+      tags:
+        - cost
+      summary: 给费率卡收口
+      description: |-
+        把一张不封口的费率卡设上 `validTo`，好让新卡从次日接上 —— 这是调价的第一步，第二步才是 `POST /v1/rate-cards`。
+        **只能收口，不能改单价。** 改单价等于改写历史成本：那张卡已经被若干条工时的快照引用着，它们的成本是按当时那个数算出来的。
+      x-layer: L2
+      x-required-action: rateWrite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseRateCardRequest'
+      responses:
+        '200':
+          description: 给费率卡收口
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseRateCardResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/roles:
     get:
       operationId: listRoles
@@ -2744,6 +3052,99 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SiteGate'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/study-sites/{id}/pnl:
+    get:
+      operationId: getSitePnl
+      tags:
+        - cost
+      summary: 单中心损益
+      description: |-
+        收入按 I8' 四项算出，成本来自未作废工时，两者都带口径版本号。
+        **视图层不做算术** —— 界面上出现的每个业务数字都来自 `@sitedesk/calc`。
+        无权限的字段从响应里消失：一线拿到的是同一个接口，只是没有钱那几栏。
+      x-layer: L1
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        '200':
+          description: 单中心损益
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SitePnl'
         '401':
           description: 未认证
           content:
@@ -4511,6 +4912,358 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/timesheets:
+    get:
+      operationId: listTimesheets
+      tags:
+        - cost
+      summary: 工时台账
+      description: |-
+        外部方看不到任何工时 —— 机构办知道我们在他们医院投了多少人天，等于知道我们的报价底线。
+        成本三件套（人天单价 / 差旅 / 成本）受列权限管辖：一线填工时，但看不到自己值多少钱。
+      x-layer: L1
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: studySiteId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: accountId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: workType
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/WorkType'
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: >-
+              ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            pattern: >-
+              ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        - name: includeVoided
+          in: query
+          required: false
+          description: 默认不含已作废
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: 工时台账
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListTimesheetsResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+    post:
+      operationId: createTimesheet
+      tags:
+        - cost
+      summary: 填报工时
+      description: |-
+        `billable` 由工作类型推导并**落库固化**（I1）；成本按**填报当日生效的费率卡**算出快照（I2）。
+        找不到当日生效的费率卡时拒绝填报 —— 用一个「差不多的」费率入账，比不入账更糟：它会一直躺在报表里没人发现。
+      x-layer: L1
+      x-required-action: timeWrite
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTimesheetRequest'
+      responses:
+        '201':
+          description: 填报工时
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimesheetEntry'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/timesheets/{id}:void:
+    post:
+      operationId: voidTimesheet
+      tags:
+        - cost
+      summary: 作废工时
+      description: |-
+        **工时不能删，只能作废。** 作废写下时间、人与原因，成本随即从统计里退出。
+        只能作废自己填的；作废别人的需要 `approve` 权限。
+        自动生成的工时（来自完成访视）同样可作废 —— 访视填错了，成本得能退回来。
+      x-layer: L2
+      x-required-action: timeWrite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisableAccountRequest'
+      responses:
+        '200':
+          description: 作废工时
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoidTimesheetResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
 components:
   schemas:
     FieldIssue:
@@ -6104,6 +6857,348 @@ components:
         - ageDays
       additionalProperties: false
       description: 受试者补偿未发放或缺签收凭证，中心关不掉 —— 这是关闭闸门的七项之一。
+    WorkType:
+      type: string
+      enum:
+        - visit_support
+        - sdv
+        - ethics
+        - monitoring
+        - ip_mgmt
+        - training
+        - bd
+        - rework
+      description: 受试者访视陪同 / 源数据准备与核对 / 伦理递交与跟进 / 现场监查（IMV） / 药品与物资管理 / 内部培训 / 投标与商务支持 / 返工与整改
+    RoleKindForRate:
+      type: string
+      enum:
+        - CRA
+        - CRC
+        - PM
+        - QA
+        - DM
+    RateCard:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        roleKind:
+          $ref: '#/components/schemas/RoleKindForRate'
+        level:
+          nullable: true
+          description: null 表示不分级别的通用行；精确级别优先匹配
+          type: string
+        dayCostCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        validFrom:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        validTo:
+          nullable: true
+          description: null = 至今
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        note:
+          nullable: true
+          type: string
+      required:
+        - id
+        - roleKind
+        - level
+        - validFrom
+        - validTo
+        - note
+      additionalProperties: false
+      description: |-
+        费率卡。**生效日期决定历史不被改写**（I2）——
+        只存一个常量的话，调价当天所有历史项目的毛利会集体变化，且无法向任何人解释。
+        同一工种/级别的生效区间不允许重叠，由数据库的 EXCLUDE 约束直接杜绝。
+    TimesheetEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        accountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        personName:
+          type: string
+        workDate:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        workType:
+          $ref: '#/components/schemas/WorkType'
+        workTypeLabel:
+          type: string
+        billable:
+          type: boolean
+          description: 提交时按工作类型推导并**落库固化**。工作类型日后改了定义，历史工时不变。
+        hours:
+          type: number
+          minimum: 0
+          maximum: 24
+        dayCostCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        travelCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        costCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        rateCardId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        subjectId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        visitId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        autoGenerated:
+          type: boolean
+          description: 由完成访视自动生成，非手工填报
+        note:
+          nullable: true
+          type: string
+        voidedAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        voidedByName:
+          nullable: true
+          type: string
+        voidReason:
+          nullable: true
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+      required:
+        - id
+        - studySiteId
+        - siteCode
+        - accountId
+        - personName
+        - workDate
+        - workType
+        - workTypeLabel
+        - billable
+        - hours
+        - rateCardId
+        - subjectId
+        - visitId
+        - autoGenerated
+        - note
+        - voidedAt
+        - voidedByName
+        - voidReason
+        - createdAt
+      additionalProperties: false
+      description: '**工时不能删，只能作废。** 理由有两个，第二个更要紧：核查要求可追溯；「昨天的报表和今天不一样」是信任崩塌的开始 —— 一旦一线发现报表会变，他们就不再照着它做决定了。'
+    RevenueBreakdown:
+      type: object
+      properties:
+        startupCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        enrollmentCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        dropoutDeductionCents:
+          x-gated-by: price
+          description: 负数。按已完成访视比例扣回
+          type: integer
+          minimum: -1000000000000
+          maximum: 1000000000000
+        screenFailFeeCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        revenueCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: -1000000000000
+          maximum: 1000000000000
+      additionalProperties: false
+      description: |-
+        I8'：收入 = 启动费 + 入组×单价 − 脱落未完成部分 + 筛败×单价×筛败费率。**四项缺一不可。**
+        两处修正方向相反：漏算筛败费会砍掉本来赚钱的高筛败中心；漏算脱落扣减会保住实际在亏钱的高脱落中心。
+        **只做一个比两个都不做更危险 —— 因为它看起来是对的。**
+    CostBreakdown:
+      type: object
+      properties:
+        directCostCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        billableCostCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        nonBillableCostCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        overheadCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        totalCostCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        personDays:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: number
+        nonBillableShare:
+          x-gated-by: cost
+          description: 不可计费占比。它高，说明人力花在了卖不出去的事情上
+          type: number
+          minimum: 0
+          maximum: 1
+        costPerEnrolledCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+      additionalProperties: false
+    SitePnl:
+      type: object
+      properties:
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        hospital:
+          type: string
+        state:
+          type: string
+        enrolled:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        screenFailed:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        withdrawn:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        contracted:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        revenue:
+          $ref: '#/components/schemas/RevenueBreakdown'
+        cost:
+          $ref: '#/components/schemas/CostBreakdown'
+        grossProfitCents:
+          x-gated-by: margin
+          description: 【毛利与利润率】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: -1000000000000
+          maximum: 1000000000000
+        grossMargin:
+          x-gated-by: margin
+          description: 收入为 0 时不出现该字段 —— 「还没有收入」不等于「毛利率 0%」
+          type: number
+        calcVersion:
+          type: string
+      required:
+        - studySiteId
+        - siteCode
+        - hospital
+        - state
+        - enrolled
+        - screenFailed
+        - withdrawn
+        - contracted
+        - revenue
+        - cost
+        - calcVersion
+      additionalProperties: false
+      description: |-
+        单中心损益。所有数字来自 `@sitedesk/calc`，视图层不做算术。
+        三层列权限在这里同时生效：一线看得到中心，看不到价；
+        看得到自己填的工时，看不到它折成多少钱；毛利只有经营层看得到。
     ListAccountsResponse:
       type: object
       properties:
@@ -6340,6 +7435,82 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/QualityEvent'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    ListRateCardsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RateCard'
+        nextCursor:
+          nullable: true
+          description: null 表示已到末页
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+        - items
+        - nextCursor
+      additionalProperties: false
+    CreateRateCardRequest:
+      type: object
+      properties:
+        roleKind:
+          $ref: '#/components/schemas/RoleKindForRate'
+        level:
+          nullable: true
+          type: string
+          maxLength: 16
+        dayCostCents:
+          type: integer
+          minimum: 1
+          maximum: 1000000000000
+          description: 金额，单位：分（整数）
+        validFrom:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        validTo:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        note:
+          type: string
+          maxLength: 200
+      required:
+        - roleKind
+        - dayCostCents
+        - validFrom
+      additionalProperties: false
+    CloseRateCardRequest:
+      type: object
+      properties:
+        validTo:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+          description: 最后一个生效日（含）。必须不早于 validFrom
+      required:
+        - validTo
+      additionalProperties: false
+    CloseRateCardResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/RateCard'
         sideEffects:
           type: array
           items:
@@ -6870,6 +8041,75 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/Subject'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    ListTimesheetsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimesheetEntry'
+        nextCursor:
+          nullable: true
+          description: null 表示已到末页
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+        - items
+        - nextCursor
+      additionalProperties: false
+    CreateTimesheetRequest:
+      type: object
+      properties:
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        workDate:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        workType:
+          $ref: '#/components/schemas/WorkType'
+        hours:
+          type: number
+          minimum: 0.25
+          maximum: 24
+        travelCents:
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+          description: 金额，单位：分（整数）
+        subjectId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        note:
+          type: string
+          maxLength: 500
+      required:
+        - studySiteId
+        - workDate
+        - workType
+        - hours
+      additionalProperties: false
+    VoidTimesheetResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/TimesheetEntry'
         sideEffects:
           type: array
           items:

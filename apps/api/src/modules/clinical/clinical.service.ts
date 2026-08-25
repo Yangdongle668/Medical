@@ -1,9 +1,10 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import type { PoolClient } from "pg";
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { pendingSubscribers } from "./visit-completed.js";
+import { VISIT_TIMESHEET_PORT, type VisitTimesheetPort } from "./ports.js";
 
 /* ════════════════════════════════════════════════════════════════════
    ClinicalOps —— 受试者与访视。
@@ -136,7 +137,11 @@ function toVisit(r: VisitRow) {
 
 @Injectable()
 export class ClinicalService {
-  constructor(private readonly audit: AuditService) {}
+  constructor(
+    private readonly audit: AuditService,
+    /* 只认接口，不认实现 —— 装配在 app.module 里完成，见 ports.ts */
+    @Inject(VISIT_TIMESHEET_PORT) private readonly timesheet: VisitTimesheetPort
+  ) {}
 
   /* ── 读 ─────────────────────────────────────────────────────────── */
 
@@ -588,7 +593,34 @@ export class ClinicalService {
       });
     }
 
-    /* ③ 筛选期访视完成 → 受试者从预筛/筛选进入待入组；④ 排下一次 */
+    /* ③ PostVisitTimesheet：记一条工时并归集成本（I1 / I2）。
+          同一个事务里做 —— 访视记下了而工时没记上，成本就永远少一块，
+          且没有任何地方会提示你。 */
+    const ts = await this.timesheet.postVisitTimesheet({
+      studySiteId: v.studySiteId, visitId: id, subjectId: v.subjectId,
+      actualDate: b.actualDate, hours: b.hours });
+    if (ts) {
+      effects.push({
+        type: "TimesheetPosted",
+        summary: `已记 ${b.hours} 小时工时`,
+        ref: ts.id, studySiteId: v.studySiteId
+      });
+      effects.push({
+        type: "CostPosted",
+        summary: `成本 ${(ts.costCents / 100).toFixed(2)} 元已归集到 ${v.siteCode}`,
+        ref: ts.id, amountCents: ts.costCents, studySiteId: v.studySiteId
+      });
+    } else {
+      /* 没入账就要说出来。悄悄跳过的那条成本，最后是从毛利里出的。 */
+      effects.push({
+        type: "QualityEventOpened",
+        summary: "**工时未入账**：当日没有生效的费率卡，或该账号没有员工记录。" +
+          "请补齐后手工填报这条工时",
+        studySiteId: v.studySiteId
+      });
+    }
+
+    /* ④ 筛选期访视完成 → 受试者从预筛/筛选进入待入组；⑤ 排下一次 */
     if (v.seq >= 1) {
       const nx = await this.scheduleVisit(v.subjectId, v.seq + 1,
         (await this.rawSubject(v.subjectId)).enrolled_on!.toISOString().slice(0, 10));
