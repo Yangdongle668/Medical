@@ -5,6 +5,8 @@
  *  它发生在部署那一刻，而不是三个月后有人翻日志的时候。
  */
 
+import { emit } from "./log.js";
+
 export interface Preflight { fatal: string[]; warn: string[] }
 
 const isProd = (env: NodeJS.ProcessEnv) =>
@@ -46,9 +48,10 @@ export function preflight(env: NodeJS.ProcessEnv = process.env): Preflight {
 /** 有致命项就打印并退出。启动路径上调用。 */
 export function assertPreflight(env: NodeJS.ProcessEnv = process.env): void {
   const { fatal, warn } = preflight(env);
-  for (const w of warn) console.warn(`⚠ 启动自检：${w}`);
+  for (const w of warn) emit("warn", "preflight", w);
   if (!fatal.length) return;
-  console.error("✗ 启动自检不通过，拒绝启动：");
-  for (const f of fatal) console.error(`  · ${f}`);
+  /* 多行的说明整段进 msg —— JSON.stringify 会把换行转义成 \n，
+     一条记录仍然只占一行，采集器不会把它切成几条不知所云的碎片。 */
+  for (const f of fatal) emit("error", "preflight", `启动自检不通过，拒绝启动：\n  · ${f}`);
   process.exit(1);
 }

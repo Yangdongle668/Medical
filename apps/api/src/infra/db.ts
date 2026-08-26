@@ -1,4 +1,5 @@
 import { Pool, types } from "pg";
+import { emit } from "./log.js";
 
 /* bigint (oid 20) 默认被 pg 返回为字符串 —— int8 可能溢出 JS 安全整数。
    本系统的金额上限是 5 亿元 = 5e10 分，远在 9e15 之内，因此可以安全地解析为数字。
@@ -26,7 +27,7 @@ export const makePool = (url = process.env.APP_DATABASE_URL) => {
      接住它就够了：池子自己会丢弃坏掉的连接、按需重建。
      进程要做的只是**活着**，等数据库回来 —— 那正是存活探针的意思。 */
   pool.on("error", (err) => {
-    console.error(`[pool] 空闲连接出错（已丢弃该连接，进程继续）：${err.message}`);
+    emit("error", "pool", "空闲连接出错（已丢弃该连接，进程继续）", { err: err.message });
   });
 
   return pool;

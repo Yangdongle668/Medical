@@ -32,6 +32,11 @@ export interface RequestCtx {
 const als = new AsyncLocalStorage<RequestCtx>();
 
 export const runInCtx = <T>(ctx: RequestCtx, fn: () => T): T => als.run(ctx, fn);
+/** 拿不到就返回 null。
+ *  日志要用它 —— 日志会在请求之外被调用（启动、停机、连接池的 error 事件），
+ *  在那里抛「有代码绕过了请求中间件」是错的：绕过的不是代码，是这条日志本来
+ *  就不属于任何请求。业务代码仍然该用会抛的 ctx()。 */
+export const ctxOrNull = (): RequestCtx | null => als.getStore() ?? null;
 export const ctx = (): RequestCtx => {
   const c = als.getStore();
   if (!c) throw new Error("不在请求上下文中 —— 说明有代码绕过了请求中间件");

@@ -19,6 +19,8 @@
  *  设成 0 就是"立刻关"，本地开发用得上。
  */
 
+import { emit } from "./log.js";
+
 let draining = false;
 
 /** 就绪探针据此立刻转 503。存活探针**不看**这个标志。 */
@@ -41,7 +43,7 @@ export interface ShutdownOpts {
 }
 
 export function installGracefulShutdown(app: Closable, o: ShutdownOpts = {}): void {
-  const log = o.log ?? ((m: string) => console.log(m));
+  const log = o.log ?? ((m: string) => emit("info", "shutdown", m));
   const wait = o.wait ?? Number(process.env["SITEDESK_DRAIN_MS"] ?? 5000);
   const exit = o.exit ?? ((c: number) => process.exit(c));
   const on = o.on ?? ((sig: string, fn: () => void) => { process.on(sig as "SIGTERM", fn); });
@@ -50,11 +52,11 @@ export function installGracefulShutdown(app: Closable, o: ShutdownOpts = {}): vo
     if (closing) return;          // 连发两次信号不该触发两次关闭
     closing = true;
     draining = true;
-    log(`[shutdown] 收到 ${sig}：就绪探针开始返回 503，${wait}ms 后关闭。`);
+    log(`收到 ${sig}：就绪探针开始返回 503，${wait}ms 后关闭。`);
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    log("[shutdown] 停止监听，等在途请求做完…");
+    log("停止监听，等在途请求做完…");
     await app.close();
-    log("[shutdown] 已关闭。");
+    log("已关闭。");
     exit(0);
   };
   on("SIGTERM", onSignal("SIGTERM"));

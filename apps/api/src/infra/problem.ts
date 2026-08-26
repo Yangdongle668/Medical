@@ -1,6 +1,7 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from "@nestjs/common";
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { ERRORS, ERROR_BASE, type ErrorCode } from "@sitedesk/contracts";
+import { emit } from "./log.js";
 
 /* ════════════════════════════════════════════════════════════════════
    RFC 9457 Problem Details —— 所有非 2xx 响应都是这个形状。
@@ -27,8 +28,6 @@ export const forbidden = (action: string) =>
 
 @Catch()
 export class ProblemFilter implements ExceptionFilter {
-  private readonly log = new Logger("Problem");
-
   catch(err: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
     const res = http.getResponse<Response>();
@@ -45,8 +44,11 @@ export class ProblemFilter implements ExceptionFilter {
            : s === 422 ? "validation-failed" : "internal";
       extra = { detail: err.message };
     } else {
-      /* 未预期的异常：细节只进日志，不进响应体 —— 堆栈里常有连接串与内部路径 */
-      this.log.error(err instanceof Error ? err.stack ?? err.message : String(err));
+      /* 未预期的异常：细节只进日志，不进响应体 —— 堆栈里常有连接串与内部路径。
+         requestId 由 emit 从请求上下文里自动带上，于是响应体里那个 traceId
+         和这条日志能对上 —— 用户报一个号，日志里就能捞出这一条堆栈。 */
+      emit("error", "Problem", err instanceof Error ? err.stack ?? err.message : String(err),
+        { method: req.method, path: req.originalUrl.split("?")[0] });
     }
 
     const { status, title } = ERRORS[code];

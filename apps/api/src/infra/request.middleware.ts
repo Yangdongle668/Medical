@@ -1,10 +1,10 @@
 import { Injectable, NestMiddleware, Inject } from "@nestjs/common";
 import type { Request, Response, NextFunction } from "express";
 import { createHash, randomUUID } from "node:crypto";
-import { Logger } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
 import { POOL } from "./db.js";
 import { runInCtx, type RequestCtx } from "./ctx.js";
+import { emit } from "./log.js";
 import { loadPrincipal } from "../auth/principal.loader.js";
 
 /* ════════════════════════════════════════════════════════════════════
@@ -26,7 +26,7 @@ export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex"
  *  15 个中心跑得飞快，上线之后 1500 个中心就是 1500 条查询。
  *  它不会自己报错，也不会在任何测试里变红，所以这里给它装一个响铃：
  *  超过阈值就打一条 warn，并把 operationId 一起写出来。 */
-const QUERY_WARN_AT = Number(process.env["SITEDESK_QUERY_WARN_AT"] ?? 30);
+const QUERY_WARN_AT = () => Number(process.env["SITEDESK_QUERY_WARN_AT"] ?? 30);
 /** 打开后每个响应带 X-Query-Count —— 测试据此断言"这个端点不许超过 N 条"。
  *
  *  **按次读取，不做成模块级常量。** 常量在 import 那一刻就定死了，
@@ -35,7 +35,6 @@ const QUERY_WARN_AT = Number(process.env["SITEDESK_QUERY_WARN_AT"] ?? 30);
  *  跑 `npm test` 就变成 `expected NaN to be +0`：
  *  **它一直是靠外部条件通过的，不是靠被测代码。** */
 const stats = () => !!process.env["SITEDESK_QUERY_STATS"];
-const LOG = new Logger("QueryCount");
 
 /** 不开事务的路由（存活 / 就绪探针）。就绪探针要用库，
  *  但它自己从池子里取连接、自己还（见 HealthController）——
@@ -79,6 +78,45 @@ export class RequestMiddleware implements NestMiddleware {
   constructor(@Inject(POOL) private readonly pool: Pool) {}
 
   async use(req: Request & { ctx?: RequestCtx }, res: Response, next: NextFunction) {
+    const t0 = process.hrtime.bigint();
+    /* 路径去掉查询串再进日志：搜索词、姓名片段都可能在 query 里，
+       而日志的留存周期通常比业务数据长得多。低基数的那把键是 operationId。 */
+    const path = req.originalUrl.split("?")[0]!;
+
+    /* ── 每个请求一行访问日志 ──────────────────────────────────────
+       挂 close 而不是 finish：finish 只在响应**发完**时触发，
+       客户端中途断开就一条日志都没有 —— 而"请求打到一半没了"
+       恰恰是最需要留痕的那一类。close 两种情况都触发，
+       用 writableEnded 区分，断开的那条带上 aborted。
+
+       用 runInCtx 包一层，是因为 close 回调**有时**在请求的
+       AsyncLocalStorage 之外跑。量过（真 server + 真 fetch）：
+         · 正常收尾 → store 还在（close 发自 res.end() 的续体，
+           那时仍在 als.run 的作用域内）
+         · 客户端断开 → store 没了（事件来自 socket 拆除，
+           跟处理器不在一条异步链上）
+       也就是说不包的话，**只有断开的那些请求会丢 requestId** ——
+       而那恰恰是最需要把它捞出来的一类。这种"大部分情况下能用"的
+       依赖不值得留着，显式带上下文就完事了。 */
+    const accessLog = (c: RequestCtx) => {
+      res.on("close", () => {
+        const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+        runInCtx(c, () => {
+          emit(c.dbless ? "debug" : "info", "access", `${req.method} ${path}`, {
+            method: req.method, path, status: res.statusCode,
+            ms: Math.round(ms * 10) / 10, queries: c.queryCount,
+            ...(res.writableEnded ? {} : { aborted: true })
+          });
+          const warnAt = QUERY_WARN_AT();
+          if (c.queryCount > warnAt)
+            emit("warn", "QueryCount",
+              `一个请求发了 ${c.queryCount} 条 SQL（阈值 ${warnAt}）` +
+              "—— 这通常意味着循环里在查库（N+1）",
+              { queries: c.queryCount, warnAt });
+        });
+      });
+    };
+
     /* ── 健康探针：建上下文，但**不取连接、不开事务** ────────────────
        不能干脆把中间件从这些路由上摘掉：全局守卫与拦截器都依赖
        这个上下文存在（`ctx()` 会直接抛「有代码绕过了请求中间件」——
@@ -110,6 +148,7 @@ export class RequestMiddleware implements NestMiddleware {
       (req as Request & { requestId?: string }).requestId = c.requestId;
       req.ctx = c;
       withStats(c);
+      accessLog(c);
       runInCtx(c, () => next());
       return;
     }
@@ -128,6 +167,7 @@ export class RequestMiddleware implements NestMiddleware {
     c.client = countingClient(client, c);
     (req as Request & { requestId?: string }).requestId = c.requestId;
     req.ctx = c;
+    accessLog(c);
 
     /* 兜底：Guard 抛异常时拦截器不会运行，连接不能就这么泄漏出去。
        正常结束时也会走到这里，但那时 finalized 已经是 true，什么也不做。
@@ -193,12 +233,6 @@ export class RequestMiddleware implements NestMiddleware {
          第一版挂的是 res.on("finish") —— 那时头早发完了，
          setHeader 抛 ERR_HTTP_HEADERS_SENT，而且抛在一个没人接的回调里。 */
       withStats(c);
-      /* 告警可以晚一点：日志不受"头已经发了"的限制。 */
-      res.on("finish", () => {
-        if (c.queryCount > QUERY_WARN_AT)
-          LOG.warn(`${c.operationId ?? req.path} 发了 ${c.queryCount} 条 SQL ` +
-            `（阈值 ${QUERY_WARN_AT}）—— 这通常意味着循环里在查库（N+1）`);
-      });
 
       runInCtx(c, () => next());
     } catch (e) {
