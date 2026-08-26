@@ -124,6 +124,14 @@ describe("访问日志", () => {
     expect(rows[0]!.requestId).toBeDefined();
   });
 
+  it("回显 X-Request-Id —— devtools 里就能读到报障要用的号", async () => {
+    const s = await serve((_req, res) => { res.end("ok"); });
+    const r = await fetch(`${s.url}/v1/me`);
+    await settle();
+    await s.close();
+    expect(r.headers.get("x-request-id")).toBe(cap.access()[0]!.requestId);
+  });
+
   it("健康探针降到 debug —— 默认级别下不刷屏", async () => {
     /* 编排器每几秒探一次，按 info 打的话日志里全是它。 */
     const s = await serve((_req, res) => { res.end("ok"); });
@@ -131,5 +139,36 @@ describe("访问日志", () => {
     await settle();
     await s.close();
     expect(cap.access()).toHaveLength(0);
+  });
+});
+
+describe("外来的 X-Request-Id —— 让两跳落在同一条时间线上", () => {
+  /* 前面那一跳（apps/web/server.mjs）会把号带过来。不认它的话，
+     同一个请求在两份日志里是两个不相干的号，拼不成一条线。 */
+  const send = async (value: string) => {
+    const s = await serve((_req, res) => { res.end("ok"); });
+    const r = await fetch(`${s.url}/v1/me`, { headers: { "X-Request-Id": value } });
+    await settle();
+    await s.close();
+    return { header: r.headers.get("x-request-id"), logged: cap.access()[0]!.requestId };
+  };
+
+  it("形状对就沿用", async () => {
+    const { header, logged } = await send("edge-0123456789ab");
+    expect(logged).toBe("edge-0123456789ab");
+    expect(header).toBe("edge-0123456789ab");
+  });
+
+  it("形状不对就当没有，重新发一个", async () => {
+    /* 这个值会进日志、也会回到响应体的 traceId 里。
+       半信半疑地用它，等于把日志的写入权交给了调用方。 */
+    const { logged } = await send('bad id with spaces and "quotes"');
+    expect(logged).not.toContain("quotes");
+    expect(logged).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("超长的头不许进日志（拿它撑爆日志）", async () => {
+    const { logged } = await send("a".repeat(5000));
+    expect(logged.length).toBeLessThanOrEqual(36);
   });
 });

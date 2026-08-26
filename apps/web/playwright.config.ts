@@ -20,8 +20,13 @@ const EXE = chromiumPath();
 /* Phase 5 的两条退出标准都只能在真实浏览器里验：
    ② 390 / 834 / 1500px 零横向溢出
    ③ 用 mock 走通一条完整业务流
-   所以 E2E 跑在 preview 构建上（带 MSW），不是 dev server ——
-   dev 与 prod 的模块解析不同，只测 dev 等于没测发出去的那份。 */
+   所以 E2E 跑在构建产物上（带 MSW），不是 dev server ——
+   dev 与 prod 的模块解析不同，只测 dev 等于没测发出去的那份。
+
+   Phase 9e 起，`npm run preview` 起的是**生产托管服务器**
+   （apps/web/server.mjs），不再是 vite preview。于是这两层测试
+   顺带把上线要走的那条路径也走了一遍：SPA 回退、CSP、同源反代
+   一旦配错，这里就是白屏或者满屏 CSP 报错。 */
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,

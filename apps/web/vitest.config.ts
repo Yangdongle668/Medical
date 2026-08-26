@@ -10,6 +10,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["test/**/*.test.ts", "src/**/*.test.ts"],
-    setupFiles: ["./test/setup.ts"]
+    setupFiles: ["./test/setup.ts"],
+    /* 托管服务器每个请求一行访问日志，会把 reporter 淹掉 */
+    env: { SITEDESK_LOG_LEVEL: "warn" }
   }
 });

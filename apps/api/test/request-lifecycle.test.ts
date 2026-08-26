@@ -41,10 +41,27 @@ function fakePool(): { pool: Pool; f: Fake } {
 
 const tick = () => new Promise(r => setImmediate(r));
 
+/** 假的 res：EventEmitter 加上中间件真的会调的那几个方法。
+ *
+ *  替身单薄的代价已经吃过两次了 —— 先是 req 少了 originalUrl，
+ *  后来是 res 少了 setHeader（加回显请求号那天，四条测试一起
+ *  `res.setHeader is not a function`）。两次报错都**看起来像中间件坏了**，
+ *  其实是替身不像真的。所以头存下来，顺便还能断言。 */
+function fakeRes() {
+  const headers: Record<string, string> = {};
+  return Object.assign(new EventEmitter(), {
+    headers,
+    statusCode: 200,
+    writableEnded: true,
+    setHeader(k: string, v: string) { headers[k.toLowerCase()] = String(v); return this; },
+    getHeader(k: string) { return headers[k.toLowerCase()]; }
+  });
+}
+
 /** 跑一次中间件，返回它建好的上下文（就是处理器里 `ctx()` 拿到的那个）。 */
-async function run(): Promise<{ f: Fake; res: EventEmitter; c: RequestCtx }> {
+async function run(): Promise<{ f: Fake; res: ReturnType<typeof fakeRes>; c: RequestCtx }> {
   const { pool, f } = fakePool();
-  const res = new EventEmitter();
+  const res = fakeRes();
   /* 假的 req 也得**像**真的：中间件要按路径判断这条路由开不开事务，
      只给 `headers` 的话它会在 originalUrl 上炸 —— 而那种炸法
      看起来像中间件坏了，其实是替身太单薄。 */

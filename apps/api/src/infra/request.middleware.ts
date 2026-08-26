@@ -68,6 +68,22 @@ function countingClient(raw: PoolClient, c: RequestCtx): PoolClient {
   }) as PoolClient;
 }
 
+/** 外来的请求 ID 长什么样才认。
+ *
+ *  认它，是为了让前端那一跳和 API 这一跳落在**同一条时间线**上 ——
+ *  否则同一个请求在两份日志里是两个不相干的号，拼不起来。
+ *
+ *  校验必须严：这个值会进日志、也会回到响应体的 traceId 里。
+ *  长度封顶挡住"用一个 1MB 的头把日志撑爆"，字符集封顶挡住把
+ *  控制字符塞进日志（JSON 那边会转义，但 pretty 那边不会）。
+ *  形状不对就当没有，重新发一个 —— 绝不半信半疑地用。 */
+const TRACE_RE = /^[A-Za-z0-9_-]{8,64}$/;
+const traceIdOf = (req: Request): string => {
+  const h = req.headers["x-request-id"];
+  const v = Array.isArray(h) ? h[0] : h;
+  return typeof v === "string" && TRACE_RE.test(v) ? v : randomUUID();
+};
+
 /** 单条语句的上限。够慢查询跑完，又不至于让一次锁等待拖住一条连接一整天。 */
 const STATEMENT_TIMEOUT_MS = Number(process.env["SITEDESK_STATEMENT_TIMEOUT_MS"] ?? 30_000);
 /** 事务开着却没人动它的上限 —— 比语句上限宽一点，免得误伤慢查询之间的间隙。 */
@@ -82,6 +98,9 @@ export class RequestMiddleware implements NestMiddleware {
     /* 路径去掉查询串再进日志：搜索词、姓名片段都可能在 query 里，
        而日志的留存周期通常比业务数据长得多。低基数的那把键是 operationId。 */
     const path = req.originalUrl.split("?")[0]!;
+    const requestId = traceIdOf(req);
+    /* 回显出去：浏览器 devtools 里就能读到这个号，报障时直接可用。 */
+    res.setHeader("X-Request-Id", requestId);
 
     /* ── 每个请求一行访问日志 ──────────────────────────────────────
        挂 close 而不是 finish：finish 只在响应**发完**时触发，
@@ -140,7 +159,7 @@ export class RequestMiddleware implements NestMiddleware {
 
     if (DBLESS.has(req.originalUrl.split("?")[0]!.replace(/\/+$/, ""))) {
       const c: RequestCtx = {
-        requestId: randomUUID(), client: noDb(), principal: null,
+        requestId, client: noDb(), principal: null,
         scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
         operationId: null, finalized: true, inFlight: false,
         queryCount: 0, dbless: true
@@ -155,7 +174,7 @@ export class RequestMiddleware implements NestMiddleware {
 
     const client = await this.pool.connect();
     const c: RequestCtx = {
-      requestId: randomUUID(), client, principal: null,
+      requestId, client, principal: null,
       scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
       operationId: null, finalized: false, inFlight: false,
       queryCount: 0, dbless: false
