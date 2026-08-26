@@ -4,11 +4,13 @@
   "version": "0.1.0",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/main.js",
+    "start": "node build/server.mjs",
     "dev": "tsc -p tsconfig.build.json --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "serve": "node --import @swc-node/register/esm-register src/main.ts"
+    "serve": "node --import @swc-node/register/esm-register src/main.ts",
+    "bundle": "npm run build && node scripts/bundle.mjs",
+    "smoke": "npm run bundle && node scripts/smoke.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.1",

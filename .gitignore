@@ -7,3 +7,6 @@ dist/
 apps/web/dist/
 apps/web/test-results/
 apps/web/playwright-report/
+
+# 生产打包产物（npm run bundle -w @sitedesk/api）
+apps/api/build/

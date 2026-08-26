@@ -92,6 +92,12 @@ jobs:
       # 需要 owner 角色有 CREATEDB —— bootstrap.sql 里已给
       - run: npm run test -w @sitedesk/api
 
+      # 生产产物：打包 → 真的起起来 → 真的打一个请求。
+      # `node build/server.mjs` 这条路径在 Phase 9 之前从来没有被走过
+      # （测试走 vitest，开发走 @swc-node/register，两者都有转译），
+      # 于是它断了整整五个阶段都没人发现。没人走的路径不会自己报警。
+      - run: npm run smoke -w @sitedesk/api
+
   web:
     name: 前端 —— 构建 · 三个断点零横向溢出 · mock 走通业务流
     runs-on: ubuntu-latest
