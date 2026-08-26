@@ -1,0 +1,48 @@
+# ══════════════════════════════════════════════════════════════════════
+# 前端的部署镜像 —— 静态产物 + 托管服务器。
+#
+# 运行阶段**没有任何 npm 依赖**：server.mjs 只用 Node 内置模块。
+# 所以这里没有 npm ci，也没有 node_modules —— 镜像里就两样东西，
+# 一份 dist/ 和一个文件。能少一层就少一层：不存在的依赖不会有 CVE。
+#
+# 和 API 镜像的关系：两个独立的部署单元。前端把 /v1 同源反代给 API
+# （SITEDESK_API_ORIGIN），所以中间不需要再摆一台 nginx，
+# 浏览器那边也就没有 CORS 这件事。
+# ══════════════════════════════════════════════════════════════════════
+FROM node:22-slim AS build
+WORKDIR /repo
+
+# 先只拷清单，让依赖层能被缓存
+COPY package.json package-lock.json ./
+COPY apps/api/package.json        apps/api/
+COPY apps/web/package.json        apps/web/
+COPY packages/contracts/package.json packages/contracts/
+COPY packages/calc/package.json      packages/calc/
+COPY packages/policy/package.json    packages/policy/
+COPY packages/ui/package.json        packages/ui/
+COPY db/package.json                 db/
+RUN npm ci
+
+COPY . .
+# build:live —— 不打 MSW。带 mock 的产物上线等于把整个后端换成假数据，
+# 而它看起来一切正常，这是最难发现的那种发布事故。
+RUN npm run build:live -w @sitedesk/web
+
+# ── 运行阶段 ──────────────────────────────────────────────────────────
+FROM node:22-slim AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+
+COPY --from=build /repo/apps/web/dist ./dist
+COPY apps/web/server.mjs ./server.mjs
+
+USER node
+
+ENV SITEDESK_WEB_ROOT=/app/dist
+ENV PORT=8080
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "server.mjs"]

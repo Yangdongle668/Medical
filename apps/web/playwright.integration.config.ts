@@ -73,6 +73,8 @@ export default defineConfig({
       env: apiEnv()
     },
     {
+      /* 生产托管服务器（apps/web/server.mjs），不是 vite preview ——
+         /v1 由它同源反代到上面那个真实后端。 */
       command: "npm run preview",
       url: "http://127.0.0.1:4173",
       reuseExistingServer: !process.env["CI"],

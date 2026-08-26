@@ -1,10 +1,10 @@
 import { Injectable, NestMiddleware, Inject } from "@nestjs/common";
 import type { Request, Response, NextFunction } from "express";
 import { createHash, randomUUID } from "node:crypto";
-import { Logger } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
 import { POOL } from "./db.js";
 import { runInCtx, type RequestCtx } from "./ctx.js";
+import { emit } from "./log.js";
 import { loadPrincipal } from "../auth/principal.loader.js";
 
 /* ════════════════════════════════════════════════════════════════════
@@ -26,10 +26,32 @@ export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex"
  *  15 个中心跑得飞快，上线之后 1500 个中心就是 1500 条查询。
  *  它不会自己报错，也不会在任何测试里变红，所以这里给它装一个响铃：
  *  超过阈值就打一条 warn，并把 operationId 一起写出来。 */
-const QUERY_WARN_AT = Number(process.env["SITEDESK_QUERY_WARN_AT"] ?? 30);
-/** 打开后每个响应带 X-Query-Count —— 测试据此断言"这个端点不许超过 N 条"。 */
-const STATS = !!process.env["SITEDESK_QUERY_STATS"];
-const LOG = new Logger("QueryCount");
+const QUERY_WARN_AT = () => Number(process.env["SITEDESK_QUERY_WARN_AT"] ?? 30);
+/** 打开后每个响应带 X-Query-Count —— 测试据此断言"这个端点不许超过 N 条"。
+ *
+ *  **按次读取，不做成模块级常量。** 常量在 import 那一刻就定死了，
+ *  而测试是在 `beforeAll` 里设这个变量的 —— 那时模块早就加载完了。
+ *  于是那条测试只有在命令行上预先设了变量时才绿，
+ *  跑 `npm test` 就变成 `expected NaN to be +0`：
+ *  **它一直是靠外部条件通过的，不是靠被测代码。** */
+const stats = () => !!process.env["SITEDESK_QUERY_STATS"];
+
+/** 不开事务的路由（存活 / 就绪探针）。就绪探针要用库，
+ *  但它自己从池子里取连接、自己还（见 HealthController）——
+ *  和请求事务是两回事。 */
+const DBLESS = new Set(["/v1/health", "/v1/health/ready"]);
+
+/** dbless 请求拿到的"连接"：碰一下就炸。
+ *  给 null 的话，误用会得到一句 "Cannot read properties of null"，
+ *  指不出是哪里错了；这样至少它自己说得清。 */
+function noDb(): PoolClient {
+  const boom = () => {
+    throw new Error(
+      "这条路由被声明为不开事务（DBLESS），不该使用请求事务的连接。" +
+      "确实需要数据库的话，像就绪探针那样自己从池子里取。");
+  };
+  return new Proxy({} as PoolClient, { get: boom, apply: boom });
+}
 
 /** 只数数的代理。除 query 外一律转发给真连接（并绑定 this）。 */
 function countingClient(raw: PoolClient, c: RequestCtx): PoolClient {
@@ -46,6 +68,22 @@ function countingClient(raw: PoolClient, c: RequestCtx): PoolClient {
   }) as PoolClient;
 }
 
+/** 外来的请求 ID 长什么样才认。
+ *
+ *  认它，是为了让前端那一跳和 API 这一跳落在**同一条时间线**上 ——
+ *  否则同一个请求在两份日志里是两个不相干的号，拼不起来。
+ *
+ *  校验必须严：这个值会进日志、也会回到响应体的 traceId 里。
+ *  长度封顶挡住"用一个 1MB 的头把日志撑爆"，字符集封顶挡住把
+ *  控制字符塞进日志（JSON 那边会转义，但 pretty 那边不会）。
+ *  形状不对就当没有，重新发一个 —— 绝不半信半疑地用。 */
+const TRACE_RE = /^[A-Za-z0-9_-]{8,64}$/;
+const traceIdOf = (req: Request): string => {
+  const h = req.headers["x-request-id"];
+  const v = Array.isArray(h) ? h[0] : h;
+  return typeof v === "string" && TRACE_RE.test(v) ? v : randomUUID();
+};
+
 /** 单条语句的上限。够慢查询跑完，又不至于让一次锁等待拖住一条连接一整天。 */
 const STATEMENT_TIMEOUT_MS = Number(process.env["SITEDESK_STATEMENT_TIMEOUT_MS"] ?? 30_000);
 /** 事务开着却没人动它的上限 —— 比语句上限宽一点，免得误伤慢查询之间的间隙。 */
@@ -56,11 +94,90 @@ export class RequestMiddleware implements NestMiddleware {
   constructor(@Inject(POOL) private readonly pool: Pool) {}
 
   async use(req: Request & { ctx?: RequestCtx }, res: Response, next: NextFunction) {
+    const t0 = process.hrtime.bigint();
+    /* 路径去掉查询串再进日志：搜索词、姓名片段都可能在 query 里，
+       而日志的留存周期通常比业务数据长得多。低基数的那把键是 operationId。 */
+    const path = req.originalUrl.split("?")[0]!;
+    const requestId = traceIdOf(req);
+    /* 回显出去：浏览器 devtools 里就能读到这个号，报障时直接可用。 */
+    res.setHeader("X-Request-Id", requestId);
+
+    /* ── 每个请求一行访问日志 ──────────────────────────────────────
+       挂 close 而不是 finish：finish 只在响应**发完**时触发，
+       客户端中途断开就一条日志都没有 —— 而"请求打到一半没了"
+       恰恰是最需要留痕的那一类。close 两种情况都触发，
+       用 writableEnded 区分，断开的那条带上 aborted。
+
+       用 runInCtx 包一层，是因为 close 回调**有时**在请求的
+       AsyncLocalStorage 之外跑。量过（真 server + 真 fetch）：
+         · 正常收尾 → store 还在（close 发自 res.end() 的续体，
+           那时仍在 als.run 的作用域内）
+         · 客户端断开 → store 没了（事件来自 socket 拆除，
+           跟处理器不在一条异步链上）
+       也就是说不包的话，**只有断开的那些请求会丢 requestId** ——
+       而那恰恰是最需要把它捞出来的一类。这种"大部分情况下能用"的
+       依赖不值得留着，显式带上下文就完事了。 */
+    const accessLog = (c: RequestCtx) => {
+      res.on("close", () => {
+        const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+        runInCtx(c, () => {
+          emit(c.dbless ? "debug" : "info", "access", `${req.method} ${path}`, {
+            method: req.method, path, status: res.statusCode,
+            ms: Math.round(ms * 10) / 10, queries: c.queryCount,
+            ...(res.writableEnded ? {} : { aborted: true })
+          });
+          const warnAt = QUERY_WARN_AT();
+          if (c.queryCount > warnAt)
+            emit("warn", "QueryCount",
+              `一个请求发了 ${c.queryCount} 条 SQL（阈值 ${warnAt}）` +
+              "—— 这通常意味着循环里在查库（N+1）",
+              { queries: c.queryCount, warnAt });
+        });
+      });
+    };
+
+    /* ── 健康探针：建上下文，但**不取连接、不开事务** ────────────────
+       不能干脆把中间件从这些路由上摘掉：全局守卫与拦截器都依赖
+       这个上下文存在（`ctx()` 会直接抛「有代码绕过了请求中间件」——
+       第一版就是这么撞上的，而那句话说得完全正确）。
+       要避免的是**依赖数据库**，不是避免上下文。 */
+    /* 用 originalUrl，不用 req.path：中间件经 MiddlewareConsumer 挂载之后，
+       `req.path` 是相对挂载点的那一段，匹配不上完整路径 ——
+       第一版就是这么漏过去的，探针照样连了库（库停掉时 ECONNREFUSED）。
+       originalUrl 永远是客户端请求的原样，去掉查询串即可。 */
+    /* 统计钩子挂在最前面，**dbless 的路由也要带上** ——
+       "存活探针发了 0 条 SQL" 正是要断言的那件事，
+       没有这个头就没法把"不碰库"写成一条测试。 */
+    const withStats = (c: RequestCtx) => {
+      if (!stats()) return;
+      const writeHead = res.writeHead.bind(res);
+      res.writeHead = ((...args: Parameters<typeof writeHead>) => {
+        res.setHeader("X-Query-Count", String(c.queryCount));
+        return writeHead(...args);
+      }) as typeof res.writeHead;
+    };
+
+    if (DBLESS.has(req.originalUrl.split("?")[0]!.replace(/\/+$/, ""))) {
+      const c: RequestCtx = {
+        requestId, client: noDb(), principal: null,
+        scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
+        operationId: null, finalized: true, inFlight: false,
+        queryCount: 0, dbless: true
+      };
+      (req as Request & { requestId?: string }).requestId = c.requestId;
+      req.ctx = c;
+      withStats(c);
+      accessLog(c);
+      runInCtx(c, () => next());
+      return;
+    }
+
     const client = await this.pool.connect();
     const c: RequestCtx = {
-      requestId: randomUUID(), client, principal: null,
+      requestId, client, principal: null,
       scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
-      operationId: null, finalized: false, inFlight: false, queryCount: 0
+      operationId: null, finalized: false, inFlight: false,
+      queryCount: 0, dbless: false
     };
     /* 业务代码拿到的是一个**代理**：除了数数，什么都不做。
        为什么不直接改 client.query —— 连接会还回池子里给下一个请求用，
@@ -69,6 +186,7 @@ export class RequestMiddleware implements NestMiddleware {
     c.client = countingClient(client, c);
     (req as Request & { requestId?: string }).requestId = c.requestId;
     req.ctx = c;
+    accessLog(c);
 
     /* 兜底：Guard 抛异常时拦截器不会运行，连接不能就这么泄漏出去。
        正常结束时也会走到这里，但那时 finalized 已经是 true，什么也不做。
@@ -133,19 +251,7 @@ export class RequestMiddleware implements NestMiddleware {
       /* 响应头必须在**头发出去之前**写，所以挂在 writeHead 上。
          第一版挂的是 res.on("finish") —— 那时头早发完了，
          setHeader 抛 ERR_HTTP_HEADERS_SENT，而且抛在一个没人接的回调里。 */
-      if (STATS) {
-        const writeHead = res.writeHead.bind(res);
-        res.writeHead = ((...args: Parameters<typeof writeHead>) => {
-          res.setHeader("X-Query-Count", String(c.queryCount));
-          return writeHead(...args);
-        }) as typeof res.writeHead;
-      }
-      /* 告警可以晚一点：日志不受"头已经发了"的限制。 */
-      res.on("finish", () => {
-        if (c.queryCount > QUERY_WARN_AT)
-          LOG.warn(`${c.operationId ?? req.path} 发了 ${c.queryCount} 条 SQL ` +
-            `（阈值 ${QUERY_WARN_AT}）—— 这通常意味着循环里在查库（N+1）`);
-      });
+      withStats(c);
 
       runInCtx(c, () => next());
     } catch (e) {

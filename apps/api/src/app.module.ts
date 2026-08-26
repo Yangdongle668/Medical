@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { makePool, POOL } from "./infra/db.js";
+import { HealthController } from "./modules/platform/health.controller.js";
 import { ProblemFilter } from "./infra/problem.js";
 import { RequestMiddleware } from "./infra/request.middleware.js";
 import { TxInterceptor } from "./infra/tx.interceptor.js";
@@ -26,10 +27,23 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
    TxInterceptor 在最外层，保证脱敏之后才提交/回滚；
    MaskInterceptor 紧贴处理器，对**所有**出口统一脱敏。 */
 @Module({
-  controllers: [AuthController, IdentityController, SiteController, StaffingController,
+  controllers: [HealthController, AuthController, IdentityController, SiteController, StaffingController,
                 ClinicalController, CostController],
   providers: [
-    { provide: POOL, useFactory: () => makePool() },
+    /* 池子必须能被关掉。`enableShutdownHooks()` 会调 `app.close()`，
+       而 `app.close()` 只会去调 provider 的 onModuleDestroy ——
+       原来这里只有 useFactory，没有任何人负责 `pool.end()`：
+       滚动发布时旧实例的连接一直挂到 TCP 超时，
+       每个实例 max=10，几轮就能把 postgres 的 max_connections 吃光。 */
+    {
+      provide: POOL,
+      useFactory: () => {
+        const pool = makePool();
+        return Object.assign(pool, {
+          async onModuleDestroy() { await pool.end(); }
+        });
+      }
+    },
     AuthService, AuditService, IdempotencyService, IdentityService, SiteService, StaffingService,
     ClinicalService, CostService,
     /* 跨上下文装配：ClinicalOps 只认 ports.ts 里的接口，不 import CostService */
@@ -42,5 +56,7 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
   ]
 })
 export class AppModule implements NestModule {
+  /* 健康探针照常经过中间件（全局守卫依赖它建立的上下文），
+     但中间件对这两条路径**不取连接、不开事务**（见 DBLESS）。 */
   configure(c: MiddlewareConsumer) { c.apply(RequestMiddleware).forRoutes("*path"); }
 }

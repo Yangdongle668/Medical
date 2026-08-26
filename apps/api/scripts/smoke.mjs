@@ -5,11 +5,13 @@
  *  于是它断了整整五个阶段都没人发现。
  *  一条没人走的路径不会自己报警，所以让 CI 每次都走一遍。
  *
- *  验四件事：
+ *  验六件事：
  *    ① 生产配置下的自检真的会拒绝启动（Phase 8c 那道闸，在**真产物**上验）
  *    ② 起得来（DI 装配成功 —— 装饰器元数据没在打包时丢掉）
  *    ③ 打得通（认证 + 行范围 + 契约，一个真实请求走到底）
  *    ④ 未认证被挡（守卫也在产物里）
+ *    ⑤ 日志真的是一行一条 JSON —— 包括 Nest 自己那些行
+ *    ⑥ 响应里的 traceId 能在日志里捞得到（线上排查全靠这一步）
  */
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -54,9 +56,9 @@ function start(env) {
 }
 
 /* ── ②③④ 正常起一遍，打真实请求 ───────────────────────────────── */
-const srv = start({ NODE_ENV: "test", SITEDESK_DEV_LOGIN: "1" });
-let log = "";
-srv.stdout.on("data", d => { log += d; });
+const srv = start({ NODE_ENV: "test", SITEDESK_DEV_LOGIN: "1", SITEDESK_LOG_FORMAT: "json" });
+let log = "", stdout = "";
+srv.stdout.on("data", d => { log += d; stdout += d; });
 srv.stderr.on("data", d => { log += d; });
 
 const stop = () => { try { srv.kill("SIGTERM"); } catch { /* 已经没了 */ } };
@@ -87,6 +89,42 @@ console.log(`✓ 一个真实请求走到底：认证 → 行范围 → 契约�
 const anon = await fetch(`${BASE}/study-sites`);
 if (anon.status !== 401) fail(`未认证请求应当 401，实际 ${anon.status}`);
 console.log("✓ 未认证请求 401（守卫也在产物里）");
+const traceId = (await j(anon))?.traceId;
+if (!traceId) fail("401 响应里没有 traceId —— 排查时没有可报的号");
+
+/* ── ⑤⑥ 日志：在**真产物**上验，而不是在单元测试的假 stdout 上 ──────
+   为什么必须在这里再验一遍：单元测试验的是 emit 这个函数，
+   而线上真正被采集的是这个进程写进管道的字节。中间隔着
+   NestFactory 的 logger 选项有没有真的生效、打包有没有把它替换掉、
+   有没有哪个依赖偷偷 console.log 了一行 —— 任何一条都足以让
+   "结构化日志"退化成"大部分结构化"，而采集器遇到一行坏的就整条断掉。 */
+await new Promise(r => setTimeout(r, 300));   // 等最后几行落到管道里
+
+const lines = stdout.split("\n").filter(l => l.trim() !== "");
+if (lines.length < 3) fail(`日志行太少（${lines.length}），产物大概没在打日志`);
+const recs = [];
+for (const l of lines) {
+  try { recs.push(JSON.parse(l)); }
+  catch { fail(`有一行不是 JSON —— 采集管道会在这里断掉：\n${l.slice(0, 300)}`); }
+}
+for (const r of recs)
+  if (!r.ts || !r.level || !r.scope || typeof r.msg !== "string")
+    fail(`记录缺字段：${JSON.stringify(r).slice(0, 200)}`);
+console.log(`✓ 日志一行一条 JSON，字段齐全（${recs.length} 行，含 Nest 自己那些行）`);
+
+const hit = recs.find(r => r.scope === "access" && r.requestId === traceId);
+if (!hit)
+  fail(`响应给了 traceId=${traceId}，日志里却捞不到 ——\n` +
+       `  用户报的那个号对不上任何一行，等于没有。\n` +
+       `  日志里的 access 行：${JSON.stringify(
+         recs.filter(r => r.scope === "access").map(r => r.requestId))}`);
+if (hit.status !== 401 || hit.path !== "/v1/study-sites")
+  fail(`捞到了，但内容不对：${JSON.stringify(hit)}`);
+console.log(`✓ 响应里的 traceId 在日志里捞得到（${traceId} → ${hit.method} ${hit.path} ${hit.status}）`);
+
+const authed = recs.find(r => r.scope === "access" && r.operationId === "listStudySites");
+if (!authed?.accountId) fail(`认证请求那一行没带上主体：${JSON.stringify(authed)}`);
+console.log(`✓ 访问日志带得上 operationId 与主体（${authed.operationId} / role=${authed.role}）`);
 
 stop();
 console.log("\n✓ 生产产物冒烟检查通过。");

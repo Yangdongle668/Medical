@@ -8,6 +8,7 @@ export * from "./kernel/errors.js";
 export * from "./kernel/pagination.js";
 export * from "./kernel/command.js";
 export * from "./kernel/registry.js";
+export * from "./platform/api.js";
 export * from "./auth/api.js";
 export * from "./identity/model.js";
 export * from "./site/model.js";
@@ -16,6 +17,7 @@ export * from "./clinical/model.js";
 export * from "./cost/model.js";
 
 /* 端点定义有副作用（注册到 registry），必须被导入 */
+import "./platform/api.js";
 import "./auth/api.js";
 import "./identity/api.js";
 import "./site/api.js";
