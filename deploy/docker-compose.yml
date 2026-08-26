@@ -1,0 +1,116 @@
+# ══════════════════════════════════════════════════════════════════════
+# 一套完整的中心台：数据库 + API + 前端。
+#
+# ── 只有前端暴露端口 ──────────────────────────────────────────────────
+# API 待在内网里，浏览器永远打的是前端那一个端口，`/v1` 由前端同源反代
+# 给 API。于是没有 CORS、不用把 API 地址编译进产物、也不必再摆一台 nginx。
+#
+# ── 迁移是**单独一步**，不是随 API 启动跑的 ──────────────────────────
+# 放进启动流程的话，多副本会同时迁移同一个库；而且迁移失败会表现成
+# "服务起不来"，指向完全错误的方向。所以它是 tools 档里的一次性容器，
+# 由 deploy.sh / update.sh 显式执行，跑完就退出。
+# ══════════════════════════════════════════════════════════════════════
+name: sitedesk
+
+x-db-owner: &db-owner
+  postgres://sitedesk:${SITEDESK_DB_OWNER_PASSWORD}@db:5432/${POSTGRES_DB:-sitedesk}
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请先跑 deploy.sh，它会生成 .env}
+      POSTGRES_DB: ${POSTGRES_DB:-sitedesk}
+      # 给 initdb 里的 20-roles.sh 用
+      SITEDESK_DB_OWNER_PASSWORD: ${SITEDESK_DB_OWNER_PASSWORD:?}
+      SITEDESK_DB_APP_PASSWORD: ${SITEDESK_DB_APP_PASSWORD:?}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 用的就是 CI 与本地开发那一份 bootstrap.sql —— 不另抄一份，
+      # 免得两处角色定义慢慢分叉，而分叉的那天一切照常运行。
+      - ../db/scripts/bootstrap.sql:/docker-entrypoint-initdb.d/10-bootstrap.sql:ro
+      - ./initdb/20-roles.sh:/docker-entrypoint-initdb.d/20-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${POSTGRES_DB:-sitedesk}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ── 一次性容器：迁移 ────────────────────────────────────────────────
+  migrate:
+    profiles: ["tools"]
+    image: sitedesk-api:${SITEDESK_TAG:-local}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: "no"
+    environment:
+      # 迁移以 owner 身份执行 —— 它要建表、建策略、授权
+      DATABASE_URL: *db-owner
+    # 走明确的路径，不用 npx —— npx 找不到的时候会去**下载**一个，
+    # 于是一个"镜像里漏装了迁移工具"的问题，会变成一次静默的联网安装，
+    # 而离线的机器上它又表现成超时。直接指路径，缺了就当场报错。
+    command:
+      - node_modules/.bin/node-pg-migrate
+      - --migrations-dir=db/migrations
+      - --migration-filename-format=utc
+      - --migrations-table=schema_migration
+      - up
+    depends_on:
+      db: { condition: service_healthy }
+
+  # ── 一次性容器：演示种子 ────────────────────────────────────────────
+  seed:
+    profiles: ["tools"]
+    image: sitedesk-api:${SITEDESK_TAG:-local}
+    restart: "no"
+    environment:
+      DATABASE_URL: *db-owner
+    command: ["node", "db/scripts/seed.mjs"]
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    image: sitedesk-api:${SITEDESK_TAG:-local}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # **非 owner**。用 owner 连的话 RLS 全面失效，而且一切测试照常绿。
+      # 启动自检会拒绝以 owner 启动，见 apps/api/src/infra/preflight.ts。
+      APP_DATABASE_URL:
+        postgres://sitedesk_app:${SITEDESK_DB_APP_PASSWORD}@db:5432/${POSTGRES_DB:-sitedesk}
+      NODE_ENV: production
+      PORT: "3000"
+      SITEDESK_LOG_FORMAT: json
+      SITEDESK_LOG_LEVEL: ${SITEDESK_LOG_LEVEL:-info}
+      # 必须比负载均衡的探测间隔长：SIGTERM 之后就绪先转 503，
+      # 等这么久让 LB 摘掉自己，再关门。
+      SITEDESK_DRAIN_MS: ${SITEDESK_DRAIN_MS:-5000}
+    depends_on:
+      db: { condition: service_healthy }
+    # 不映射端口：外面进不来，只有 web 能通过内网找到它
+
+  web:
+    image: sitedesk-web:${SITEDESK_TAG:-local}
+    build:
+      context: ..
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    environment:
+      SITEDESK_API_ORIGIN: http://api:3000
+      PORT: "8080"
+      SITEDESK_LOG_FORMAT: json
+      SITEDESK_LOG_LEVEL: ${SITEDESK_LOG_LEVEL:-info}
+      SITEDESK_DRAIN_MS: ${SITEDESK_DRAIN_MS:-5000}
+    ports:
+      # 只暴露这一个。前面通常还有一层做 TLS 的 ingress。
+      - "${SITEDESK_PORT:-8080}:8080"
+    depends_on:
+      api: { condition: service_healthy }
+
+volumes:
+  pgdata:
