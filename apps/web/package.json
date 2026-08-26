@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run precompress",
     "preview": "PORT=4173 HOST=127.0.0.1 node server.mjs",
     "typecheck": "tsc --noEmit",
     "e2e": "npm run build:mock && playwright test",
-    "build:mock": "VITE_USE_MOCKS=1 vite build",
-    "build:live": "vite build",
+    "build:mock": "VITE_USE_MOCKS=1 vite build && npm run precompress",
+    "build:live": "vite build && npm run precompress",
+    "precompress": "node scripts/precompress.mjs",
     "integration": "npm run build:live && playwright test -c playwright.integration.config.ts",
     "test": "vitest run",
     "start": "node server.mjs"

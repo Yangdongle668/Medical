@@ -1,6 +1,7 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from "@nestjs/common";
 import { Observable, catchError, concatMap, from, throwError } from "rxjs";
-import { ctx } from "./ctx.js";
+import { ctx, runInCtx, type RequestCtx } from "./ctx.js";
+import { emit } from "./log.js";
 
 /* ════════════════════════════════════════════════════════════════════
    事务收尾：处理成功则提交，抛错则回滚。
@@ -42,6 +43,11 @@ export class TxInterceptor implements NestInterceptor {
       c.finalized = true;
       try { await c.client.query(ok ? "COMMIT" : "ROLLBACK"); }
       finally { c.client.release(); }
+      /* 提交成功之后才做的事（目前只有：把登录链接真的发出去）。
+         **不 await** —— 这些是对外的动作，慢的是网络，
+         让响应等它等于把一次 SMTP 往返算进接口耗时。
+         回滚时一件都不做：外部世界不认识回滚。 */
+      if (ok) runAfterCommit(c);
     };
     return next.handle().pipe(
       /* 提交失败就让它抛出去 —— 客户端该知道这笔没落库 */
@@ -49,4 +55,21 @@ export class TxInterceptor implements NestInterceptor {
       catchError(err => from(done(false)).pipe(concatMap(() => throwError(() => err))))
     );
   }
+}
+
+/** 跑提交后的挂钩。**它们自己出错不能影响任何已经发出去的响应** ——
+ *  所以这里只记日志，且带上请求上下文（不带的话，这几行在日志里
+ *  跟任何一个请求都对不上号，正是最需要对上号的那几行）。 */
+function runAfterCommit(c: RequestCtx): void {
+  const hooks = c.afterCommit;
+  if (!hooks.length) return;
+  c.afterCommit = [];
+  void (async () => {
+    for (const h of hooks)
+      try { await h(); }
+      catch (err) {
+        runInCtx(c, () => emit("error", "after-commit", "提交后的动作失败",
+          { err: err instanceof Error ? err.message : String(err) }));
+      }
+  })();
 }

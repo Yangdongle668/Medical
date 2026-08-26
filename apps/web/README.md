@@ -88,9 +88,27 @@ PORT=8080 SITEDESK_API_ORIGIN=http://api:3000 \
 | `SITEDESK_API_ORIGIN` | `http://127.0.0.1:3000` | `/v1` 反代到哪 |
 | `SITEDESK_LOG_FORMAT` | 生产 json / 其余 pretty | |
 | `SITEDESK_LOG_LEVEL` | info | `debug` 打开探针与静态产物的访问日志 |
-| `SITEDESK_DRAIN_MS` | 5000 | 收到 SIGTERM 后 `/healthz` 转 503，等这么久再关 |
+| `SITEDESK_DRAIN_MS` | 未设 → 5000 | 收到 SIGTERM 后 `/healthz` 转 503，等这么久再关。畸形的值**拒绝启动** |
+| `SITEDESK_LB_PROBE_MS` | 未设 | 填 LB 的探测间隔，排空时长由它 × 失败阈值算出来 |
+| `SITEDESK_LB_PROBE_FAILURES` | 2 | 连续几次探测失败才摘掉 |
+| `SITEDESK_HSTS_MAX_AGE` | 未设（关） | 秒。**只在 `X-Forwarded-Proto: https` 时发** |
+| `SITEDESK_HSTS_PRELOAD` | 未设 | `1` 时在 HSTS 头上加 `; preload` |
+| `SITEDESK_FORCE_HTTPS` | 未设（关） | 明文请求 308 到 https（`/healthz` 除外） |
 
 `npm run preview` 起的就是它（只是换成测试用的 4173 端口），
 所以 e2e 与 integration 走的是**真正要上线的那条路径**。
 
-TLS、HSTS、限流、预压缩交给前面那层 ingress —— 这个进程只管它自己那一层。
+**TLS 握手**交给前面那层 ingress，限流归 API。其余两件这个进程自己做：
+
+**预压缩**：`npm run build` 之后跑 `scripts/precompress.mjs`，产出 `.br` / `.gz`
+（452 kB 的 js → 117 kB）。这里只做协商：按 `Accept-Encoding` 挑一份发出去，
+带上 `Vary: Accept-Encoding`，ETag 按**实际发出去的那份**算 ——
+三种编码共用一个 ETag 是缓存投毒的经典形状。没有预压缩产物就发原文，
+那是正常情况（小文件不值得压），不是错误。
+
+**HSTS / 强制 https**：默认关，因为打开它们造成的破坏不可回滚 ——
+对着一个没有证书的域名发一次 HSTS，浏览器会把它锁到 `max-age` 过期。
+判断"这一跳在不在 TLS 后面"只看 `X-Forwarded-Proto` 的**最左**一段：
+多层代理时那才是浏览器真正用的协议。强制跳转用 308（301/302 允许客户端
+把 POST 改写成 GET，请求体会被静默丢掉），且**探针不跟着跳** ——
+健康检查通常不带 `X-Forwarded-Proto`，跟着跳等于把自己摘掉。

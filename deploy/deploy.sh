@@ -89,10 +89,17 @@ if [ "$DEMO" = "1" ]; then
   dc run --rm -e SITEDESK_PUBLIC_ORIGIN="$ORIGIN" --entrypoint node api \
     apps/api/scripts/issue-login-link.mjs lingyuan || true
 else
-  灰 "  库是空的。建好账号之后，用下面这条命令给本人签发登录链接："
+  灰 "  库是空的。建好账号之后，先登记收件地址，本人就能自助申请登录链接了："
+  echo
+  echo "    ./deploy/login-address.sh <登录名> <邮箱或手机号>"
+  echo
+  灰 "  收件地址只认这里登记的那个 —— 请求里带的地址一律无视，"
+  灰 "  否则 /v1/auth/magic-link 就成了一键账号接管。"
+  echo
+  灰 "  通道没配（SITEDESK_SMTP_URL / SITEDESK_SMS_WEBHOOK_URL 见 deploy/.env）时，"
+  灰 "  链接仍然可以由运维代发 —— 那是备用路径，不是常态："
   echo
   echo "    ./deploy/login-link.sh <登录名>"
   echo
   灰 "  生产环境没有密码，也没有开发登录 —— 一次性链接是唯一入口。"
-  灰 "  邮件/短信通道还没做，所以链接目前由运维在服务器上签发。"
 fi

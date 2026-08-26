@@ -26,9 +26,18 @@
  *  ④ **安全响应头**：nosniff / CSP / frame-ancestors。
  *     这些是"没有就没有"的东西，不会有任何报错提醒你。
  *
+ *  ⑤ **预压缩产物的协商**：450 kB 的 js 明文发出去，是一件不会报错、
+ *     只会让每个人首屏多等两秒的事。构建期压好 br/gz（见 scripts/precompress.mjs），
+ *     这里按 Accept-Encoding 挑一份发出去。
+ *
  *  ── 不做的事 ────────────────────────────────────────────────────────
- *  TLS、HSTS、限流、Range 请求：交给前面的 ingress。
+ *  **TLS 握手本身**、限流、Range 请求：交给前面的 ingress。
  *  这个进程假设自己跑在一个反向代理后面，只负责它自己那一层。
+ *
+ *  HSTS 是个例外，它**不是** TLS：它只是一个响应头，而只有真正发响应的
+ *  这一层知道该不该发。所以这里能发就发（见 SITEDESK_HSTS_MAX_AGE），
+ *  条件是这一跳确实在 TLS 后面（X-Forwarded-Proto: https）——
+ *  对着一个没有证书的域名发 HSTS，等于把它锁死到浏览器缓存过期为止。
  */
 import { randomUUID } from "node:crypto";
 import http from "node:http";
@@ -107,6 +116,47 @@ const SECURITY = {
   "Cross-Origin-Opener-Policy": "same-origin"
 };
 
+/* ── 这一跳是不是在 TLS 后面 ──────────────────────────────────────────
+   只认 X-Forwarded-Proto 的**最左**一个值：多层代理时它是逗号分隔的链条，
+   而链条最左边那一段才是浏览器真正用的协议。取最右边（或整串比较）
+   会让"浏览器 https → ingress → 本进程 http"被判成不安全，
+   于是 HSTS 永远发不出去 —— 一个静默失效的安全头，比没有更糟，
+   因为配置看起来是对的。 */
+function forwardedProto(req) {
+  const raw = req.headers["x-forwarded-proto"];
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return typeof v === "string" ? v.split(",")[0].trim().toLowerCase() : "";
+}
+
+/** Host 头是**客户端可控的**。它会被拼进 Location，所以必须先验形状：
+ *  塞进 CRLF 就是响应拆分，塞进别的域名就是一次开放重定向。 */
+const SAFE_HOST = /^[A-Za-z0-9._-]+(:\d{1,5})?$/;
+
+/* ── 预压缩产物 ───────────────────────────────────────────────────────
+   构建期已经压好了 `x.js.br` / `x.js.gz`（scripts/precompress.mjs）。
+   这里只做协商：客户端接受哪个就发哪个，都不接受就发原文。
+   顺序按压缩率排，br 在前。 */
+const ENCODINGS = [["br", ".br"], ["gzip", ".gz"]];
+
+/** 客户端**明确接受**的编码集合。
+ *
+ *  不能写成 `header.includes("br")`：`br;q=0` 的意思是"明确不要"，
+ *  而它恰恰包含 "br"。发一份对方声明过不接受的编码，
+ *  在浏览器那头是一堆二进制乱码 —— 而且只发生在某些客户端上。 */
+function acceptedEncodings(req) {
+  const raw = req.headers["accept-encoding"];
+  const header = Array.isArray(raw) ? raw.join(",") : (raw ?? "");
+  const out = new Set();
+  for (const part of header.split(",")) {
+    const [name, ...params] = part.trim().split(";");
+    if (!name) continue;
+    const q = params.map((x) => x.trim().toLowerCase()).find((x) => x.startsWith("q="));
+    if (q && Number(q.slice(2)) === 0) continue;      // q=0 是拒绝，不是接受
+    out.add(name.trim().toLowerCase());
+  }
+  return out;
+}
+
 /** 把 URL 路径解析成 root 内的真实文件路径；越界或非法一律 null。 */
 function resolveInRoot(root, pathname) {
   let decoded;
@@ -147,13 +197,39 @@ async function sendFile(req, res, file, { immutable }) {
   catch { return false; }
   if (!st.isFile()) return false;
 
-  const etag = `W/"${st.size.toString(16)}-${st.mtimeMs.toString(16)}"`;
+  /* Content-Type 永远按**原文**的扩展名定。
+     按实际发出去的那份定的话，`.js.br` 会变成 application/octet-stream，
+     而浏览器对 type="module" 的脚本强制校验 MIME —— 页面白屏，
+     报的是一句和真正原因毫无关系的话。 */
+  const type = MIME[path.extname(file).toLowerCase()] ?? "application/octet-stream";
+
+  /* 挑一份发。压缩产物缺失（没跑预压缩、或这个文件太小不值得压）
+     是完全正常的情况 —— 那就发原文，不是错误。 */
+  let body = file, encoding = null, meta = st;
+  const accepted = acceptedEncodings(req);
+  for (const [name, suffix] of ENCODINGS) {
+    if (!accepted.has(name) && !accepted.has("*")) continue;
+    try {
+      const alt = await fsp.stat(file + suffix);
+      if (alt.isFile()) { body = file + suffix; encoding = name; meta = alt; break; }
+    } catch { /* 这一份没预压缩，接着试下一个 */ }
+  }
+
+  /* ETag 取自**实际发出去的那份**，所以三种编码天然是三个值。
+     共用一个 ETag 是缓存投毒的经典形状：中间代理拿 br 那份去回答
+     一个只接受 gzip 的客户端。配合下面的 Vary，两道都不缺。 */
+  const etag = `W/"${meta.size.toString(16)}-${meta.mtimeMs.toString(16)}"`;
   const headers = {
     ...SECURITY,
-    "Content-Type": MIME[path.extname(file).toLowerCase()] ?? "application/octet-stream",
-    "Content-Length": String(st.size),
-    "Last-Modified": st.mtime.toUTCString(),
+    "Content-Type": type,
+    "Content-Length": String(meta.size),
+    "Last-Modified": meta.mtime.toUTCString(),
     ETag: etag,
+    /* **不管这次发的是不是压缩版都要带 Vary。**
+       只在压缩响应上带，等于告诉缓存"原文这一份对所有人通用" ——
+       于是不支持 br 的客户端会拿到别人的 br。 */
+    Vary: "Accept-Encoding",
+    ...(encoding ? { "Content-Encoding": encoding } : {}),
     /* 带哈希的产物可以永久缓存；其余（index.html、service worker）
        必须每次回源校验 —— no-cache 是"可以存，但用之前先问"，
        配合 ETag 之后代价只是一次 304。 */
@@ -163,14 +239,17 @@ async function sendFile(req, res, file, { immutable }) {
   };
 
   if (req.headers["if-none-match"] === etag) {
-    res.writeHead(304, { ETag: etag, "Cache-Control": headers["Cache-Control"] });
+    res.writeHead(304, {
+      ETag: etag, "Cache-Control": headers["Cache-Control"], Vary: "Accept-Encoding",
+      ...(encoding ? { "Content-Encoding": encoding } : {})
+    });
     res.end();
     return true;
   }
   res.writeHead(200, headers);
   if (req.method === "HEAD") { res.end(); return true; }
   await new Promise((done) => {
-    const s = fs.createReadStream(file);
+    const s = fs.createReadStream(body);
     s.on("error", () => { res.destroy(); done(); });
     s.on("end", done);
     s.pipe(res);
@@ -221,12 +300,33 @@ function proxy(api, requestId, req, res) {
 
 /**
  * 建一个服务器实例。
- * @param root 静态目录（vite build 的产物）
- * @param api  API 源站，/v1 反代到它
+ * @param root        静态目录（vite build 的产物）
+ * @param api         API 源站，/v1 反代到它
+ * @param hstsMaxAge  HSTS 的 max-age（秒）。0 = 不发。默认读 SITEDESK_HSTS_MAX_AGE。
+ * @param forceHttps  收到明文请求时 308 到 https。默认读 SITEDESK_FORCE_HTTPS=1。
+ *
+ * 后两个参数**默认关**，而且是刻意的：打开它们的前提是前面真有一层
+ * 在做 TLS。对着一个没有证书的域名发 HSTS，等于把它锁死到 max-age 过期
+ * 为止 —— 那是这两行代码唯一能造成的、且无法回滚的破坏。
  */
-export function createServer({ root, api }) {
+export function createServer({ root, api, hstsMaxAge, forceHttps } = {}) {
   const ROOT = path.resolve(root);
   const API = api instanceof URL ? api : new URL(api);
+  /* 在这里读环境变量，不在模块顶层读：顶层读的话，测试没法用两份不同配置
+     跑同一个模块 —— 于是这两个开关就只剩"上线之后再看"这一条验证路径。 */
+  const rawHsts = hstsMaxAge ?? process.env["SITEDESK_HSTS_MAX_AGE"] ?? 0;
+  const HSTS_MAX_AGE = Number(String(rawHsts).trim() || 0);
+  const HSTS = Number.isSafeInteger(HSTS_MAX_AGE) && HSTS_MAX_AGE > 0
+    ? `max-age=${HSTS_MAX_AGE}; includeSubDomains` +
+      (process.env["SITEDESK_HSTS_PRELOAD"] === "1" ? "; preload" : "")
+    : null;
+  /* 填了但填错了，和没填是两回事：后者是决定，前者是事故。
+     这里失败的方向是安全的（不发头），但**不能没有声音** ——
+     否则运维会以为 HSTS 已经开了。 */
+  if (!HSTS && String(rawHsts).trim() && String(rawHsts).trim() !== "0")
+    emit("warn", "web", "SITEDESK_HSTS_MAX_AGE 不是正整数秒数，HSTS 不会发出",
+      { value: String(rawHsts) });
+  const FORCE_HTTPS = forceHttps ?? process.env["SITEDESK_FORCE_HTTPS"] === "1";
   let draining = false;
 
   const server = http.createServer((req, res) => {
@@ -238,6 +338,11 @@ export function createServer({ root, api }) {
     const requestId = typeof inbound === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(inbound)
       ? inbound : randomUUID();
     res.setHeader("X-Request-Id", requestId);
+    /* HSTS 只在这一跳确实走了 TLS 时才发 —— RFC 6797 要求浏览器忽略
+       明文连接上收到的 HSTS，所以在 http 上发它没有意义；
+       而在"以为自己在 TLS 后面、其实不是"的部署里发它，是有害的。 */
+    const secure = forwardedProto(req) === "https";
+    if (HSTS && secure) res.setHeader("Strict-Transport-Security", HSTS);
     res.on("close", () => {
       /* 探针、以及**取到了**的静态产物，降到 debug。
          一次页面加载要拉十几个文件，按 info 打的话日志里全是它们，
@@ -254,6 +359,19 @@ export function createServer({ root, api }) {
     });
 
     void (async () => {
+      /* 明文进来就把人送去 https。**探针除外** —— 负载均衡的健康检查
+         通常直接打容器端口、不带 X-Forwarded-Proto，跟着一起被 308
+         的话，这个实例会被判成不健康然后摘掉：一个安全开关变成一次停机。 */
+      if (FORCE_HTTPS && !secure && pathname !== "/healthz") {
+        const host = req.headers.host;
+        if (typeof host !== "string" || !SAFE_HOST.test(host))
+          return sendText(res, 400, "Host 头不合法");
+        /* 308 而不是 301/302：后两个允许客户端把 POST 改写成 GET，
+           于是一次写操作会**静默丢掉请求体**，看起来只是"没生效"。 */
+        res.writeHead(308, { ...SECURITY, Location: `https://${host}${url}`,
+          "Cache-Control": "no-store" });
+        return res.end();
+      }
       if (pathname === "/healthz") {
         /* 排空中报 503，让 LB 把自己摘掉 —— 与 API 那边同一套顺序。 */
         return sendText(res, draining ? 503 : 200,
@@ -265,6 +383,12 @@ export function createServer({ root, api }) {
 
       if (req.method !== "GET" && req.method !== "HEAD")
         return sendText(res, 405, "只支持 GET / HEAD");
+
+      /* 预压缩产物是实现细节，不是资源：直接来要 `x.js.br` 的话，
+         发出去的是一份没有 Content-Encoding 的二进制 —— 浏览器会把它
+         当成 js 去解析然后报一句莫名其妙的语法错。让它 404，
+         协商那条路仍然照常发得出来。 */
+      if (/\.(br|gz)$/i.test(pathname)) return sendText(res, 404, "没有这个文件");
 
       const file = resolveInRoot(ROOT, pathname);
       if (!file) return sendText(res, 400, "路径不合法");
@@ -290,6 +414,47 @@ export function createServer({ root, api }) {
   return server;
 }
 
+/* ── 排空时长 ─────────────────────────────────────────────────────────
+   与 apps/api/src/infra/drain.ts 同一套规则，**有意重复**：
+   这个文件在运行镜像里是孤零零一份（Dockerfile.web 只 COPY 它和 dist/），
+   为了共用十几行解析而让前端去依赖后端的构建产物，那个耦合贵得多。
+
+   两件事必须和那边一致：
+     · `Number("3o")` 是 NaN，而 `NaN > 0` 是 false —— 一个手滑的值会把
+       三步停机静默降级成「立刻关」。所以畸形的值在这里也是拒绝启动。
+     · 5000 只是兜底；真正该填的是 LB 的探测间隔，由这里换算。 */
+function drainMs(env) {
+  const int = (raw) => {
+    if (raw === undefined) return null;
+    const t = String(raw).trim();
+    if (!/^\d+$/.test(t)) return null;
+    const n = Number(t);
+    return Number.isSafeInteger(n) ? n : null;
+  };
+  const bad = (name, raw) => ({ ms: 5000, detail: "配置不合法",
+    error: `${name}=${JSON.stringify(raw)} 不是合法的毫秒数。` +
+           "它会被解析成 NaN，把排空静默降级成「立刻关」—— 所以这里拒绝启动。" });
+
+  const raw = env["SITEDESK_DRAIN_MS"]?.trim();
+  if (raw) {
+    const ms = int(raw);
+    if (ms === null || ms > 600_000) return bad("SITEDESK_DRAIN_MS", raw);
+    return { ms, detail: `SITEDESK_DRAIN_MS=${ms}` };
+  }
+  const probeRaw = env["SITEDESK_LB_PROBE_MS"]?.trim();
+  if (probeRaw) {
+    const probe = int(probeRaw);
+    if (probe === null || probe < 100) return bad("SITEDESK_LB_PROBE_MS", probeRaw);
+    const failsRaw = env["SITEDESK_LB_PROBE_FAILURES"]?.trim();
+    const fails = failsRaw ? int(failsRaw) : 2;
+    if (fails === null || fails < 1 || fails > 10)
+      return bad("SITEDESK_LB_PROBE_FAILURES", failsRaw);
+    return { ms: Math.min(probe * fails + 1000, 600_000),
+      detail: `按 LB 参数推算：${probe}ms × ${fails} + 余量 1000ms` };
+  }
+  return { ms: 5000, detail: "未配置，用默认值 5000ms" };
+}
+
 /* ── 直接跑这个文件时才真的监听 ──────────────────────────────────────
    被 import 时不监听：测试要自己挑端口、自己挑 root，
    而一个"import 就占端口"的模块没法在测试里用两份不同配置。 */
@@ -298,10 +463,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const API = process.env["SITEDESK_API_ORIGIN"] ?? "http://127.0.0.1:3000";
   const PORT = Number(process.env["PORT"] ?? 8080);
   const HOST = process.env["HOST"] ?? "0.0.0.0";
-  const DRAIN_MS = Number(process.env["SITEDESK_DRAIN_MS"] ?? 5000);
+  const DRAIN = drainMs(process.env);
 
   if (!fs.existsSync(ROOT))
     emit("warn", "web", "静态目录不存在 —— 先跑一次 vite build", { root: ROOT });
+  if (DRAIN.error) { emit("error", "shutdown", DRAIN.error); process.exit(1); }
 
   const server = createServer({ root: ROOT, api: API });
 
@@ -312,16 +478,24 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       if (closing) return;
       closing = true;
       server.startDraining();
-      emit("info", "shutdown", `收到 ${sig}：/healthz 开始返回 503，${DRAIN_MS}ms 后关闭。`);
+      emit("info", "shutdown",
+        `收到 ${sig}：/healthz 开始返回 503，${DRAIN.ms}ms 后关闭（${DRAIN.detail}）。`);
       setTimeout(() => {
         server.close(() => { emit("info", "shutdown", "已关闭。"); process.exit(0); });
         server.closeIdleConnections();
-      }, DRAIN_MS);
+      }, DRAIN.ms);
     });
   }
 
   server.listen(PORT, HOST, () => {
-    emit("info", "web", "前端已启动",
-      { port: PORT, host: HOST, root: ROOT, api: new URL(API).origin });
+    /* TLS 的姿态写进启动日志。这两个开关默认关，而"关着"和"忘了配"
+       在运行时长得一模一样 —— 让它每次启动都自报一次，
+       比事后去猜 ingress 到底有没有配 HSTS 便宜得多。 */
+    emit("info", "web", "前端已启动", {
+      port: PORT, host: HOST, root: ROOT, api: new URL(API).origin,
+      drainMs: DRAIN.ms,
+      hsts: process.env["SITEDESK_HSTS_MAX_AGE"] ? `max-age=${process.env["SITEDESK_HSTS_MAX_AGE"]}` : "off",
+      forceHttps: process.env["SITEDESK_FORCE_HTTPS"] === "1"
+    });
   });
 }

@@ -252,13 +252,30 @@ describe("破坏性变更门禁：基线是怎么选的", () => {
 
   it("给一个契约确实不同的 ref → 真的比出了差异", () => {
     /* 这一条才是 CI 那个 bug 的反面：拿历史上**另一个版本**的 openapi.yaml
-       当基线，必须比出东西来。比不出来，就说明它又在跟自己比。 */
+       当基线，必须比出东西来。比不出来，就说明它又在跟自己比。
+
+       挑基线要按**结构**挑，不能按字节挑。门禁比的是端点、schema、字段、
+       枚举 —— 说明文字的改动它看不见，而且**本来就该看不见**（改一句
+       描述不是破坏性变更）。按字节挑的话，一次纯文案改动就会挑中上一个
+       提交，然后门禁如实回答"契约无变化"，这条测试当场红 ——
+       红的是测试的挑法，不是被测的门禁。 */
+    const shapeOf = (text: string): string => {
+      const d = yaml.load(text) as any;
+      const paths = Object.entries(d.paths ?? {}).flatMap(([p, ms]: [string, any]) =>
+        Object.entries(ms).map(([m, op]: [string, any]) => `${m} ${p} ${op.operationId ?? ""}`));
+      const schemas = Object.entries(d.components?.schemas ?? {}).map(([n, sc]: [string, any]) =>
+        `${n}(${Object.keys(sc.properties ?? {}).sort().join(",")})` +
+        `[${(sc.required ?? []).slice().sort().join(",")}]`);
+      return JSON.stringify([paths.sort(), schemas.sort()]);
+    };
+
+    const here = shapeOf(fs.readFileSync(SPEC, "utf8"));
     const revs = execFileSync("git", ["log", "-n", "50", "--format=%H", "--", REL],
       { cwd: REPO, encoding: "utf8" }).trim().split("\n").filter(Boolean);
     const older = revs.find(rev =>
-      execFileSync("git", ["show", `${rev}:${REL}`], { cwd: REPO, encoding: "utf8" })
-        !== fs.readFileSync(SPEC, "utf8"));
-    expect(older, "历史里应当存在一个内容不同的 openapi.yaml").toBeTruthy();
+      shapeOf(execFileSync("git", ["show", `${rev}:${REL}`], { cwd: REPO, encoding: "utf8" }))
+        !== here);
+    expect(older, "历史里应当存在一个结构不同的 openapi.yaml").toBeTruthy();
 
     const r = run(["--baseline-ref", older!, "--allow-breaking"]);
     expect(r.out).not.toContain("契约无变化");

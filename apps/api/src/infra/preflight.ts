@@ -6,6 +6,8 @@
  */
 
 import { emit } from "./log.js";
+import { drainConfig, DRAIN_DEFAULT_WARNING } from "./drain.js";
+import { deliveryPlan, NO_CHANNEL_WARNING } from "./login-delivery.js";
 
 export interface Preflight { fatal: string[]; warn: string[] }
 
@@ -41,6 +43,41 @@ export function preflight(env: NodeJS.ProcessEnv = process.env): Preflight {
 
   if (isProd(env) && !env["APP_DATABASE_URL"])
     fatal.push("生产环境缺少 APP_DATABASE_URL。");
+
+  /* ── 排空时长 ──────────────────────────────────────────────────
+     两件事在这里拦：
+
+     ① **畸形的值**。`Number("3o")` 是 NaN，而 `NaN > 0` 是 false ——
+        一个手滑的环境变量会把三步停机静默降级成「立刻关」，
+        发布照常成功，只是每次漏掉一小撮请求。这类"配错了反而没声音"
+        的东西，正是自检该拦的。
+
+     ② **默认值**。5000 是拍的：它必须比 LB 摘掉本实例所需的时间长，
+        而 k8s 默认 30 秒、ALB 默认 60 秒。生产上没显式配过就告警 ——
+        不拒绝启动（它不是安全问题，且本地与演示部署照样要能跑），
+        但也不能一声不吭。 */
+  const drain = drainConfig(env);
+  if (drain.error) fatal.push(drain.error);
+  else if (isProd(env)) {
+    if (drain.source === "default") warn.push(DRAIN_DEFAULT_WARNING);
+    else if (drain.ms === 0)
+      warn.push(
+        "SITEDESK_DRAIN_MS=0：收到 SIGTERM 后立刻关闭，不给负载均衡摘掉本实例的时间。\n" +
+        "    本地开发这样是对的；生产环境等于每次发布都主动丢一小撮请求。");
+  }
+
+  /* ── 登录链接的投递通道 ────────────────────────────────────────
+     致命项只有一类：**把可用的登录链接打进日志**。
+     console 通道在开发环境是必要的（否则本地根本拿不到链接），
+     在生产环境则等于把登录权限授予所有能读日志的人 ——
+     而审计轨迹里看到的会是那个被冒用的人自己。
+
+     两条通道都没配不是致命的：运维用 deploy/login-link.sh 代发仍然
+     是一条可用的路径。但它必须被说出来 —— 那正是这条已知问题的内容。 */
+  const delivery = deliveryPlan(env);
+  fatal.push(...delivery.fatal);
+  if (isProd(env) && delivery.email === "none" && delivery.sms === "none")
+    warn.push(NO_CHANNEL_WARNING);
 
   return { fatal, warn };
 }

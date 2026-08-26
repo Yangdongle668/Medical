@@ -138,7 +138,7 @@ describe("事务收尾：响应和 COMMIT 谁先谁后", () => {
     return {
       requestId: "t", client, principal: null,
       scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
-      operationId: null, finalized: false, inFlight: false
+      operationId: null, finalized: false, inFlight: false, afterCommit: []
     } as unknown as RequestCtx;
   }
 

@@ -31,10 +31,15 @@ define({
   summary: "申请一次性登录链接",
   description:
     "**无论账号是否存在都返回同样的 202。** 区别对待会让这个接口变成账号枚举器。\n" +
+    "「存在但没登记收件地址」也返回同样的 202 —— 那是第三种状态，同样不能被区分出来。\n" +
     "链接由邮件 / 短信通道直接发给本人，绝不回显给调用方。",
   body: z.object({
     login: z.string().min(1).max(64),
-    sentTo: z.string().max(128).optional().describe("收件地址，仅用于审计留痕")
+    sentTo: z.string().max(128).optional()
+      .describe(
+        "调用方声称的收件地址，**仅用于审计留痕，不决定投递到哪里**。" +
+        "实际收件地址由服务端从已登记的身份解析（auth_identity, provider=magic-link）——" +
+        "拿这个字段当收件地址的话，这个公开端点就是一键账号接管。")
   }),
   response: LinkAccepted
 });

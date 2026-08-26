@@ -87,9 +87,24 @@ services:
       PORT: "3000"
       SITEDESK_LOG_FORMAT: json
       SITEDESK_LOG_LEVEL: ${SITEDESK_LOG_LEVEL:-info}
-      # 必须比负载均衡的探测间隔长：SIGTERM 之后就绪先转 503，
-      # 等这么久让 LB 摘掉自己，再关门。
-      SITEDESK_DRAIN_MS: ${SITEDESK_DRAIN_MS:-5000}
+      # ── 排空 ──────────────────────────────────────────────────────
+      # 三个都**默认留空**，不在这里给 5000。给了的话，进程会认为
+      # "运维显式配过"，于是启动自检那条告警永远不会出现 ——
+      # 而那条告警正是要提醒你：5 秒是拍的，k8s 默认要 30 秒、ALB 要 60 秒。
+      # 留空时它仍然按 5000 跑（单机演示够用），只是会说一声。
+      SITEDESK_DRAIN_MS: ${SITEDESK_DRAIN_MS:-}
+      # 不知道该填几秒？填你 LB 的探测间隔，让进程自己乘。
+      SITEDESK_LB_PROBE_MS: ${SITEDESK_LB_PROBE_MS:-}
+      SITEDESK_LB_PROBE_FAILURES: ${SITEDESK_LB_PROBE_FAILURES:-}
+      # ── 登录链接的投递通道 ────────────────────────────────────────
+      # 链接里的地址就是拿这个拼的。填错了，链接点开会落到别处。
+      SITEDESK_PUBLIC_ORIGIN: ${SITEDESK_PUBLIC_ORIGIN:-http://localhost:8080}
+      # 一个都没配 = 不发：链接照样签发，但只能由运维用
+      # ./deploy/login-link.sh 代发（启动自检会为此打一条告警）。
+      SITEDESK_SMTP_URL: ${SITEDESK_SMTP_URL:-}
+      SITEDESK_MAIL_FROM: ${SITEDESK_MAIL_FROM:-}
+      SITEDESK_SMS_WEBHOOK_URL: ${SITEDESK_SMS_WEBHOOK_URL:-}
+      SITEDESK_SMS_WEBHOOK_TOKEN: ${SITEDESK_SMS_WEBHOOK_TOKEN:-}
     depends_on:
       db: { condition: service_healthy }
     # 不映射端口：外面进不来，只有 web 能通过内网找到它
@@ -105,7 +120,14 @@ services:
       PORT: "8080"
       SITEDESK_LOG_FORMAT: json
       SITEDESK_LOG_LEVEL: ${SITEDESK_LOG_LEVEL:-info}
-      SITEDESK_DRAIN_MS: ${SITEDESK_DRAIN_MS:-5000}
+      SITEDESK_DRAIN_MS: ${SITEDESK_DRAIN_MS:-}
+      SITEDESK_LB_PROBE_MS: ${SITEDESK_LB_PROBE_MS:-}
+      SITEDESK_LB_PROBE_FAILURES: ${SITEDESK_LB_PROBE_FAILURES:-}
+      # TLS 握手仍然归前面那层 ingress。这两个是 ingress 做不了的部分：
+      # HSTS 只是一个响应头，而只有真正发响应的这一层知道该不该发它。
+      # **默认关**：对着一个没有证书的域名发一次 HSTS，浏览器会把它锁到过期。
+      SITEDESK_HSTS_MAX_AGE: ${SITEDESK_HSTS_MAX_AGE:-}
+      SITEDESK_FORCE_HTTPS: ${SITEDESK_FORCE_HTTPS:-}
     ports:
       # 只暴露这一个。前面通常还有一层做 TLS 的 ingress。
       - "${SITEDESK_PORT:-8080}:8080"

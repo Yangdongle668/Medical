@@ -54,7 +54,7 @@ const fakeCtx = (over: Partial<RequestCtx> = {}): RequestCtx => ({
   requestId: "req-1", client: {} as PoolClient, principal: null,
   scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
   operationId: null, finalized: false, inFlight: false,
-  queryCount: 0, dbless: false, ...over
+  queryCount: 0, dbless: false, afterCommit: [], ...over
 });
 
 describe("一条记录一行，且能 parse 回来", () => {

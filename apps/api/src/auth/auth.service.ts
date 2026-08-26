@@ -2,8 +2,13 @@ import { Injectable } from "@nestjs/common";
 import { randomBytes, createHash } from "node:crypto";
 import { ctx } from "../infra/ctx.js";
 import { ProblemException } from "../infra/problem.js";
+import { emit } from "../infra/log.js";
+import { LoginDelivery, type Channel } from "../infra/login-delivery.js";
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+/** 台的公开地址 —— 链接就是拿它拼的。填错了，链接点开会落到别处。 */
+const publicOrigin = () =>
+  (process.env["SITEDESK_PUBLIC_ORIGIN"] ?? "http://localhost:8080").replace(/\/+$/, "");
 const LINK_TTL_MIN = 15;
 const SESSION_TTL_H = 8;
 
@@ -19,17 +24,61 @@ const SESSION_TTL_H = 8;
    ════════════════════════════════════════════════════════════════════ */
 @Injectable()
 export class AuthService {
-  /** 签发一次性登录链接。**不返回给调用方**，由邮件/短信通道直接发给本人。 */
-  async issueLink(login: string, sentTo: string | null): Promise<{ token: string } | null> {
+  constructor(private readonly delivery: LoginDelivery) {}
+
+  /** 签发一次性登录链接，并**交给通道送给本人**。
+   *
+   *  返回值只给开发登录（SITEDESK_DEV_LOGIN=1）用。生产环境下调用方
+   *  拿到它也不该回显 —— 回显等于把登录接口变成谁都能用的后门。
+   *
+   *  收件地址**不看参数**：它由 app.issue_login_link 从 auth_identity 里解析。
+   *  拿请求里的 sentTo 当收件地址，这个公开端点就是一键账号接管。 */
+  async issueLink(login: string, claimedSentTo: string | null): Promise<{ token: string } | null> {
     const c = ctx();
     /* 签发发生在认证之前：此刻既没有 app.account_id，login_token 的 RLS 也会挡住插入。
        走 SECURITY DEFINER 函数一次性完成「解析 + 插入」，不去改会话状态 ——
        临时把 app.account_id 设成目标账号，等于给一个未认证请求提权。 */
     const token = randomBytes(32).toString("base64url");
-    const { rows } = await c.client.query<{ issued: boolean }>(
-      `SELECT app.issue_login_token($1,$2,$3,$4) AS issued`,
-      [login, sha256(token), LINK_TTL_MIN, sentTo]);
-    return rows[0]?.issued ? { token } : null;
+    const { rows } = await c.client.query<{
+      issued: boolean; reason: string; channel: Channel | null;
+      destination: string | null; display_name: string | null;
+    }>(`SELECT issued, reason, channel, destination, display_name
+          FROM app.issue_login_link($1,$2,$3)`,
+      [login, sha256(token), LINK_TTL_MIN]);
+    const r = rows[0];
+
+    if (!r?.issued) {
+      /* 对外一律同一个 202；差别只写进日志。
+         no-destination 是运维该去补的一件事，而它在响应里看不见 ——
+         不写日志的话，"某个人一直收不到链接"就没有任何线索。 */
+      emit("info", "login-delivery",
+        r?.reason === "no-destination"
+          ? "账号没有登记收件地址，未签发链接（用 deploy/login-address.sh 登记）"
+          : "申请登录链接的账号不存在或已停用，未签发",
+        { reason: r?.reason ?? "unknown" });
+      return null;
+    }
+
+    if (claimedSentTo && claimedSentTo !== r.destination)
+      /* 请求里带了一个和登记的不一样的地址。**照登记的发**，但要留声音：
+         这既可能是有人在试探，也可能是这个人换了邮箱而没人来改。 */
+      emit("warn", "login-delivery",
+        "请求里声称的收件地址与登记的不一致，按登记的投递", {});
+
+    /* **提交之后再发。** 在事务里发的话，用户可能在令牌落库之前就点开链接，
+       拿到一句"链接无效"，而库里明明有 —— 那是最难复现的一类报障。 */
+    const link = `${publicOrigin()}/login?token=${encodeURIComponent(token)}`;
+    c.afterCommit.push(() => this.delivery.deliver({
+      channel: r.channel ?? "email", to: r.destination!,
+      displayName: r.display_name, link, ttlMin: LINK_TTL_MIN
+    }).then((how) => {
+      if (how === "no-transport")
+        emit("warn", "login-delivery",
+          "链接已签发，但没有配置对应的投递通道 —— 只能由运维用 deploy/login-link.sh 代发",
+          { channel: r.channel });
+    }));
+
+    return { token };
   }
 
   /** 兑换链接换会话。兑换在数据库里原子完成，并发只有一次能成功。 */

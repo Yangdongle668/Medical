@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "node:http";
+import zlib from "node:zlib";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -42,8 +43,18 @@ function fixture() {
   fs.mkdirSync(path.join(root, "assets"), { recursive: true });
   fs.writeFileSync(path.join(root, "index.html"), "<!doctype html><title>台</title>");
   fs.writeFileSync(path.join(root, "assets", "index-abc123.js"), "export const x = 1;\n");
+  /* 一份**够大、值得压**的产物，外加构建期会生成的那两份。
+     内容是重复的 —— 真实的 js bundle 也是（同样的关键字、同样的缩进），
+     压缩率才有可比性。 */
+  fs.writeFileSync(path.join(root, "assets", "big-abc123.js"), BIG);
+  fs.writeFileSync(path.join(root, "assets", "big-abc123.js.br"), zlib.brotliCompressSync(BIG));
+  fs.writeFileSync(path.join(root, "assets", "big-abc123.js.gz"), zlib.gzipSync(BIG, { level: 9 }));
   return { box, root };
 }
+
+/** 只有 br、没有 gz 的那一份也要有：预压缩会丢掉"压了反而更大"的结果，
+ *  所以"两份都在"不能当成前提。 */
+const BIG = Buffer.from("export const 台账 = () => ({ 中心: 1, 工时: 2 });\n".repeat(200));
 
 /** 假上游 API：把收到的东西原样报回来，好断言转发是不是完整的。 */
 function upstream() {
@@ -87,6 +98,25 @@ function raw(rawPath: string, method = "GET"): Promise<{
         let body = "";
         res.on("data", (d) => { body += d; });
         res.on("end", () => resolve({ status: res.statusCode!, headers: res.headers, body }));
+      });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+/** 和 raw 一样不经规范化，但**自己指定请求头、拿回原始字节**。
+ *  压缩协商必须这么测：fetch 会自动带 Accept-Encoding 并**自动解压**，
+ *  于是"发出去的到底是哪一份"在断言里根本看不见。 */
+function rawBytes(rawPath: string, headers: Record<string, string> = {}, method = "GET"):
+  Promise<{ status: number; headers: http.IncomingHttpHeaders; buf: Buffer }> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { host: "127.0.0.1", port: webPort, path: rawPath, method, headers },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (d) => chunks.push(d as Buffer));
+        res.on("end", () => resolve({
+          status: res.statusCode!, headers: res.headers, buf: Buffer.concat(chunks) }));
       });
     req.on("error", reject);
     req.end();
@@ -296,5 +326,198 @@ describe("healthz 与排空", () => {
     expect(r.status).toBe(503);
     expect((await r.json()).status).toBe("draining");
     await new Promise((done) => s.close(done));
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   预压缩产物的协商。
+
+   这一组盯的是"不会报错、只会更慢或更怪"的那几件事：
+
+     · 发一份客户端没声明接受的编码 → 浏览器里是二进制乱码，
+       而且只在某些客户端上发生（`br;q=0` 那种）
+     · 压缩响应与原文共用一个 ETag → 中间代理拿 br 那份去回答
+       只接受 gzip 的客户端，一次缓存投毒
+     · Content-Type 按 `.br` 定 → type="module" 的脚本被 MIME 校验拒掉，
+       页面白屏，报的话和真正原因毫无关系
+
+   验过它不是空的：把 Vary 那行删掉，"原文也要带 Vary"当场红；
+   把 ETag 改回按原文算，"三份不能共用一个 ETag"当场红。
+   ════════════════════════════════════════════════════════════════════ */
+describe("预压缩产物 —— 450 kB 的 js 不该走明文", () => {
+  it("接受 br 就发 br，而且解出来和原文一模一样", async () => {
+    const r = await rawBytes("/assets/big-abc123.js", { "accept-encoding": "br" });
+    expect(r.status).toBe(200);
+    expect(r.headers["content-encoding"]).toBe("br");
+    expect(zlib.brotliDecompressSync(r.buf).toString()).toBe(BIG.toString());
+    /* 体积真的小了 —— 否则这一整套只是多发了一个响应头 */
+    expect(r.buf.length).toBeLessThan(BIG.length / 2);
+  });
+
+  it("Content-Length 是压缩后的长度，不是原文的", async () => {
+    /* 写成原文长度的话，客户端会一直等那些永远不会到的字节。 */
+    const r = await rawBytes("/assets/big-abc123.js", { "accept-encoding": "br" });
+    expect(Number(r.headers["content-length"])).toBe(r.buf.length);
+  });
+
+  it("Content-Type 仍然按原文的扩展名定", async () => {
+    const r = await rawBytes("/assets/big-abc123.js", { "accept-encoding": "br" });
+    expect(r.headers["content-type"]).toContain("text/javascript");
+  });
+
+  it("只接受 gzip 就发 gzip", async () => {
+    const r = await rawBytes("/assets/big-abc123.js", { "accept-encoding": "gzip, deflate" });
+    expect(r.headers["content-encoding"]).toBe("gzip");
+    expect(zlib.gunzipSync(r.buf).toString()).toBe(BIG.toString());
+  });
+
+  it("`br;q=0` 是拒绝，不是接受", async () => {
+    /* includes("br") 那种写法在这里会发出一份对方明确不要的编码。 */
+    const r = await rawBytes("/assets/big-abc123.js", { "accept-encoding": "br;q=0, gzip" });
+    expect(r.headers["content-encoding"]).toBe("gzip");
+  });
+
+  it("什么都不接受就发原文", async () => {
+    const r = await rawBytes("/assets/big-abc123.js", { "accept-encoding": "identity" });
+    expect(r.headers["content-encoding"]).toBeUndefined();
+    expect(r.buf.toString()).toBe(BIG.toString());
+  });
+
+  it("`*` 也算接受", async () => {
+    const r = await rawBytes("/assets/big-abc123.js", { "accept-encoding": "*" });
+    expect(r.headers["content-encoding"]).toBe("br");
+  });
+
+  it("没有预压缩产物的文件照常发原文，不是 404", async () => {
+    /* 小文件不值得压，构建期就不会生成 .br —— 这是正常情况，不是缺失。 */
+    const r = await rawBytes("/assets/index-abc123.js", { "accept-encoding": "br" });
+    expect(r.status).toBe(200);
+    expect(r.headers["content-encoding"]).toBeUndefined();
+  });
+
+  it("**原文那一份也要带 Vary** —— 否则不支持 br 的客户端会拿到别人的 br", async () => {
+    const plain = await rawBytes("/assets/big-abc123.js", { "accept-encoding": "identity" });
+    const br = await rawBytes("/assets/big-abc123.js", { "accept-encoding": "br" });
+    expect(plain.headers["vary"]).toBe("Accept-Encoding");
+    expect(br.headers["vary"]).toBe("Accept-Encoding");
+  });
+
+  it("三份不能共用一个 ETag", async () => {
+    const [a, b, c] = await Promise.all([
+      rawBytes("/assets/big-abc123.js", { "accept-encoding": "identity" }),
+      rawBytes("/assets/big-abc123.js", { "accept-encoding": "br" }),
+      rawBytes("/assets/big-abc123.js", { "accept-encoding": "gzip" })
+    ]);
+    expect(new Set([a.headers.etag, b.headers.etag, c.headers.etag]).size).toBe(3);
+  });
+
+  it("ETag 命中仍然给 304，而且带上 Vary", async () => {
+    const first = await rawBytes("/assets/big-abc123.js", { "accept-encoding": "br" });
+    const again = await rawBytes("/assets/big-abc123.js",
+      { "accept-encoding": "br", "if-none-match": String(first.headers.etag) });
+    expect(again.status).toBe(304);
+    expect(again.headers["vary"]).toBe("Accept-Encoding");
+    expect(again.buf.length).toBe(0);
+  });
+
+  it("HEAD 给压缩后的长度，不给身子", async () => {
+    const r = await rawBytes("/assets/big-abc123.js", { "accept-encoding": "br" }, "HEAD");
+    expect(r.status).toBe(200);
+    expect(Number(r.headers["content-length"])).toBeGreaterThan(0);
+    expect(r.buf.length).toBe(0);
+  });
+
+  it("直接来要 .br / .gz 一律 404 —— 那是实现细节，不是资源", async () => {
+    /* 发出去的话是一份没有 Content-Encoding 的二进制，
+       浏览器当 js 解析然后报一句莫名其妙的语法错。 */
+    expect((await rawBytes("/assets/big-abc123.js.br")).status).toBe(404);
+    expect((await rawBytes("/assets/big-abc123.js.gz")).status).toBe(404);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   HSTS 与强制 https。
+
+   TLS 握手归 ingress，这没变。但 HSTS 只是一个响应头 ——
+   只有真正发响应的这一层知道该不该发它，而"该不该"取决于
+   这一跳是不是真的在 TLS 后面。
+
+   两个开关都默认关，因为**打开它们的破坏是不可回滚的**：
+   对着一个没有证书的域名发一次 HSTS，浏览器会把它锁到 max-age 过期。
+   所以这一组里有一半是在验"默认情况下什么都不发"。
+   ════════════════════════════════════════════════════════════════════ */
+describe("HSTS / 强制 https —— 归 ingress 的那一半和不归它的那一半", () => {
+  let srv: ReturnType<typeof createServer>, port: number, at: string;
+
+  beforeAll(async () => {
+    srv = createServer({ root, api: "http://127.0.0.1:1", hstsMaxAge: 63072000, forceHttps: true });
+    await new Promise<void>((r) => { srv.listen(0, "127.0.0.1", r); });
+    port = (srv.address() as AddressInfo).port;
+    at = `http://127.0.0.1:${port}`;
+  });
+  afterAll(async () => { await new Promise((r) => srv.close(r)); });
+
+  const get = (p: string, headers: Record<string, string> = {}, method = "GET") =>
+    fetch(`${at}${p}`, { headers, method, redirect: "manual" });
+
+  it("默认那台什么都不发 —— 没配就是没配", async () => {
+    const r = await fetch(`${base}/`, { headers: { "x-forwarded-proto": "https" } });
+    expect(r.headers.get("strict-transport-security")).toBeNull();
+  });
+
+  it("这一跳确实在 TLS 后面 → 发 HSTS", async () => {
+    const r = await get("/", { "x-forwarded-proto": "https" });
+    expect(r.headers.get("strict-transport-security"))
+      .toBe("max-age=63072000; includeSubDomains");
+  });
+
+  it("多层代理时看最左那一段", async () => {
+    /* "https, http" 的意思是浏览器走的 https、内网这一跳是 http。
+       比整串或取最右的话，HSTS 永远发不出去，而配置看起来是对的。 */
+    const r = await get("/healthz", { "x-forwarded-proto": "https, http" });
+    expect(r.headers.get("strict-transport-security")).toBeTruthy();
+  });
+
+  it("明文连接上不发 HSTS —— 浏览器本来就会忽略它", async () => {
+    const r = await get("/healthz");
+    expect(r.headers.get("strict-transport-security")).toBeNull();
+  });
+
+  it("明文请求 308 到 https，路径与查询串原样带上", async () => {
+    const r = await get("/sites/abc?tab=cost");
+    expect(r.status).toBe(308);
+    expect(r.headers.get("location")).toBe(`https://127.0.0.1:${port}/sites/abc?tab=cost`);
+  });
+
+  it("308 而不是 301/302 —— 后两个允许把 POST 改写成 GET", async () => {
+    /* 改写之后请求体被静默丢掉，表现为"提交了但没生效"。 */
+    const r = await get("/v1/timesheets", {}, "POST");
+    expect(r.status).toBe(308);
+  });
+
+  it("**探针不跟着跳**", async () => {
+    /* LB 的健康检查通常直接打容器端口、不带 X-Forwarded-Proto。
+       跟着 308 的话这个实例会被判成不健康摘掉 —— 一个安全开关变成一次停机。 */
+    const r = await get("/healthz");
+    expect(r.status).toBe(200);
+  });
+
+  it("已经是 https 就正常处理，不跳", async () => {
+    const r = await get("/", { "x-forwarded-proto": "https" });
+    expect(r.status).toBe(200);
+  });
+
+  it("Host 头不合法就 400 —— 它会被拼进 Location", async () => {
+    /* 客户端可控的值直接进 Location，就是一次开放重定向。
+       用裸 http.request 发：fetch 会先替我们把不合规的头拦下来，
+       而攻击方不用 fetch。 */
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = http.request(
+        { host: "127.0.0.1", port, path: "/", method: "GET", headers: { host: "bad host" } },
+        (res) => { res.resume(); resolve(res.statusCode!); });
+      req.on("error", reject);
+      req.end();
+    });
+    expect(status).toBe(400);
   });
 });

@@ -162,7 +162,7 @@ export class RequestMiddleware implements NestMiddleware {
         requestId, client: noDb(), principal: null,
         scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
         operationId: null, finalized: true, inFlight: false,
-        queryCount: 0, dbless: true
+        queryCount: 0, dbless: true, afterCommit: []
       };
       (req as Request & { requestId?: string }).requestId = c.requestId;
       req.ctx = c;
@@ -177,7 +177,7 @@ export class RequestMiddleware implements NestMiddleware {
       requestId, client, principal: null,
       scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
       operationId: null, finalized: false, inFlight: false,
-      queryCount: 0, dbless: false
+      queryCount: 0, dbless: false, afterCommit: []
     };
     /* 业务代码拿到的是一个**代理**：除了数数，什么都不做。
        为什么不直接改 client.query —— 连接会还回池子里给下一个请求用，
