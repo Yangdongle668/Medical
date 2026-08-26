@@ -92,6 +92,12 @@ jobs:
       # 需要 owner 角色有 CREATEDB —— bootstrap.sql 里已给
       - run: npm run test -w @sitedesk/api
 
+      # 生产产物：打包 → 真的起起来 → 真的打一个请求。
+      # `node build/server.mjs` 这条路径在 Phase 9 之前从来没有被走过
+      # （测试走 vitest，开发走 @swc-node/register，两者都有转译），
+      # 于是它断了整整五个阶段都没人发现。没人走的路径不会自己报警。
+      - run: npm run smoke -w @sitedesk/api
+
   web:
     name: 前端 —— 构建 · 三个断点零横向溢出 · mock 走通业务流
     runs-on: ubuntu-latest
@@ -111,6 +117,10 @@ jobs:
             exit 1
           fi
 
+      # 队列逻辑的单元测试：e2e 结构上验不到"重复入队会被折叠"——
+      # 界面在第一次入队后就把那一格锁住了，人点不了第二次。
+      - run: npm run test -w @sitedesk/web
+
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e -w @sitedesk/web
       - uses: actions/upload-artifact@v4
@@ -119,6 +129,43 @@ jobs:
           name: playwright-trace
           path: apps/web/test-results/
           retention-days: 7
+
+  plans:
+    name: 性能 —— 真数据量下的执行计划
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ['5432:5432']
+    env:
+      PGPASSWORD: postgres
+      TEST_DATABASE_URL: postgres://sitedesk:sitedesk@127.0.0.1:5432/sitedesk_test
+      APP_TEST_DATABASE_URL: postgres://sitedesk_app:sitedesk_app@127.0.0.1:5432/sitedesk_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+      - run: npm ci
+      - name: 引导角色与扩展
+        run: |
+          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE sitedesk_test;"
+          psql -h 127.0.0.1 -U postgres -d sitedesk_test -f db/scripts/bootstrap.sql
+          psql -h 127.0.0.1 -U postgres -d sitedesk_test -c "ALTER DATABASE sitedesk_test OWNER TO sitedesk;"
+      - name: 写入 .env
+        run: |
+          printf 'TEST_DATABASE_URL=%s\nAPP_TEST_DATABASE_URL=%s\n' \
+            "$TEST_DATABASE_URL" "$APP_TEST_DATABASE_URL" > .env
+
+      # 这一步自己建库、灌到 18 万行访视、以应用角色（RLS 生效）量执行计划。
+      # 慢，但这是唯一能挡住计划退化的地方：
+      # 小库上 Seq Scan 和 Index Scan 一样快，EXPLAIN 长得都对。
+      - run: npm run perf:plans
 
   integration:
     name: 集成 —— 前端打真实后端与真实数据库
