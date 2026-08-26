@@ -24,6 +24,9 @@ export interface RequestCtx {
   inFlight: boolean;
   /** 这个请求发了多少条 SQL。N+1 不会自己响，所以先让它可数。 */
   queryCount: number;
+  /** 这个请求**不开事务、不占连接**（目前只有存活/就绪探针）。
+   *  存活探针一旦间接依赖数据库，一次数据库抖动就会让编排器重启全部实例。 */
+  dbless: boolean;
 }
 
 const als = new AsyncLocalStorage<RequestCtx>();

@@ -45,7 +45,11 @@ const tick = () => new Promise(r => setImmediate(r));
 async function run(): Promise<{ f: Fake; res: EventEmitter; c: RequestCtx }> {
   const { pool, f } = fakePool();
   const res = new EventEmitter();
-  const req = { headers: {} } as unknown as Parameters<RequestMiddleware["use"]>[0];
+  /* 假的 req 也得**像**真的：中间件要按路径判断这条路由开不开事务，
+     只给 `headers` 的话它会在 originalUrl 上炸 —— 而那种炸法
+     看起来像中间件坏了，其实是替身太单薄。 */
+  const req = { headers: {}, originalUrl: "/v1/study-sites", path: "/v1/study-sites" } as
+    unknown as Parameters<RequestMiddleware["use"]>[0];
   await new RequestMiddleware(pool).use(
     req, res as unknown as Parameters<RequestMiddleware["use"]>[1], () => {});
   await tick();

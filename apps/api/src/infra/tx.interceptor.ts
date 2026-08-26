@@ -31,6 +31,8 @@ import { ctx } from "./ctx.js";
 export class TxInterceptor implements NestInterceptor {
   intercept(_: ExecutionContext, next: CallHandler): Observable<unknown> {
     const c = ctx();
+    /* 不开事务的路由（健康探针）没有连接可提交 —— 直接放行。 */
+    if (c.dbless) return next.handle();
     /* 从这里到 done() 之间，这条连接归处理器所有 ——
        中间件的兜底释放看到 inFlight 就不会来抢。 */
     c.inFlight = true;

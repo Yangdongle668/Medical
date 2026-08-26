@@ -20,6 +20,10 @@ export const ERRORS = {
   "invariant-violated":     { status: 422, title: "违反业务不变量" },
   "gate-not-satisfied":     { status: 422, title: "前置条件未满足" },
   "rate-limited":           { status: 429, title: "请求过于频繁" },
+  /** 就绪探针专用。**必须是 503 而不是 200 + 一个字段** ——
+   *  编排器看的是 HTTP 状态码，body 它不读。
+   *  回 200 的就绪探针等于没有：它会把一个连不上库的实例放进负载均衡。 */
+  "service-unavailable":    { status: 503, title: "服务暂时不可用" },
   "internal":               { status: 500, title: "服务内部错误" }
 } as const;
 

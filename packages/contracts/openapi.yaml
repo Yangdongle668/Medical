@@ -1248,6 +1248,188 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/health:
+    get:
+      operationId: liveness
+      tags:
+        - platform
+      summary: 存活探针（不碰数据库）
+      description: |-
+        只回答「这个进程要不要被重启」。**绝不碰数据库** —— 接上数据库的话，一次数据库抖动会让编排器重启全部实例，把数据库故障放大成全站故障。
+
+        无需认证。不返回任何内部细节。
+      x-layer: L1
+      parameters: []
+      responses:
+        '200':
+          description: 存活探针（不碰数据库）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Liveness'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/health/ready:
+    get:
+      operationId: readiness
+      tags:
+        - platform
+      summary: 就绪探针（真的探一次库）
+      description: |-
+        **真的探一次库**，探不通返回 503。
+        只回 200 的就绪探针等于没有 —— 编排器只看状态码，它会把一个连不上库的实例照样放进负载均衡。
+
+        无需认证。不返回任何内部细节。
+      x-layer: L1
+      parameters: []
+      responses:
+        '200':
+          description: 就绪探针（真的探一次库）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Readiness'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+        '503':
+          description: 服务暂时不可用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/service-unavailable
+                title: 服务暂时不可用
+                status: 503
+                code: service-unavailable
   /v1/me:
     get:
       operationId: getMe
@@ -5321,6 +5503,7 @@ components:
             - invariant-violated
             - gate-not-satisfied
             - rate-limited
+            - service-unavailable
             - internal
         detail:
           type: string
@@ -5404,6 +5587,36 @@ components:
         - summary
       additionalProperties: false
       description: 命令执行时被连带触发的领域事件。客户端必须忽略不认识的 type。
+    Liveness:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+        uptimeSec:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+        - status
+        - uptimeSec
+      additionalProperties: false
+    Readiness:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ready
+        checkMs:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+        - status
+        - checkMs
+      additionalProperties: false
     SessionGranted:
       type: object
       properties:

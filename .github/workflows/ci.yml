@@ -130,6 +130,71 @@ jobs:
           path: apps/web/test-results/
           retention-days: 7
 
+  image:
+    name: 部署镜像 —— 真的构建，真的起容器
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ['5432:5432']
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm }
+
+      - name: 准备数据库
+        run: |
+          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE sitedesk_test;"
+          psql -h 127.0.0.1 -U postgres -d sitedesk_test -f db/scripts/bootstrap.sql
+          psql -h 127.0.0.1 -U postgres -d sitedesk_test -c "ALTER DATABASE sitedesk_test OWNER TO sitedesk;"
+          npm ci
+          DATABASE_URL=postgres://sitedesk:sitedesk@127.0.0.1:5432/sitedesk_test \
+            npx node-pg-migrate --migrations-dir db/migrations --migrations-table schema_migration up
+          DATABASE_URL=postgres://sitedesk:sitedesk@127.0.0.1:5432/sitedesk_test \
+            node db/scripts/seed.mjs
+
+      - run: docker build -t sitedesk-api:ci .
+
+      # 起容器、打探针、打一个真实请求。
+      # 只构建不运行的镜像检查，和"编译通过就算能跑"是同一种自欺。
+      - name: 起容器并验探针
+        run: |
+          docker run -d --name api --network host \
+            -e APP_DATABASE_URL=postgres://sitedesk_app:sitedesk_app@127.0.0.1:5432/sitedesk_test \
+            -e PORT=3000 -e SITEDESK_DEV_LOGIN=1 -e NODE_ENV=test \
+            sitedesk-api:ci
+          for i in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:3000/v1/health >/dev/null && break
+            sleep 1
+          done
+          echo "存活：$(curl -s -w ' [%{http_code}]' http://127.0.0.1:3000/v1/health)"
+          echo "就绪：$(curl -s -w ' [%{http_code}]' http://127.0.0.1:3000/v1/health/ready)"
+          curl -fsS http://127.0.0.1:3000/v1/health/ready >/dev/null
+
+          TOKEN=$(curl -fsS -X POST http://127.0.0.1:3000/v1/auth/dev-session \
+            -H 'Content-Type: application/json' -d '{"login":"lingyuan"}' \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).token))")
+          N=$(curl -fsS "http://127.0.0.1:3000/v1/study-sites?limit=3" \
+            -H "Authorization: Bearer $TOKEN" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).items.length))")
+          echo "取到 $N 个中心"
+          [ "$N" -gt 0 ] || { echo '::error::容器起来了，但取不到数据'; docker logs api; exit 1; }
+
+          # 未认证必须被挡 —— 守卫也要在镜像里
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/v1/study-sites)
+          [ "$CODE" = "401" ] || { echo "::error::未认证请求返回 $CODE，应为 401"; exit 1; }
+
+      - if: failure()
+        run: docker logs api || true
+
   plans:
     name: 性能 —— 真数据量下的执行计划
     runs-on: ubuntu-latest

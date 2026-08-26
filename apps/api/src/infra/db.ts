@@ -10,7 +10,26 @@ types.setTypeParser(types.builtins.INT8, (v: string) => Number(v));
 
 export const makePool = (url = process.env.APP_DATABASE_URL) => {
   if (!url) throw new Error("缺少 APP_DATABASE_URL —— 应用必须以非 owner 角色连接，否则 RLS 形同虚设");
-  return new Pool({ connectionString: url, max: 10, idleTimeoutMillis: 30_000 });
+  const pool = new Pool({ connectionString: url, max: 10, idleTimeoutMillis: 30_000 });
+
+  /* **这一行的缺席会让数据库每重启一次就杀掉一次 API 进程。**
+     `pg.Pool` 在**空闲连接**出错时发 `error` 事件（数据库重启、主备切换、
+     管理员 pg_terminate_backend，都会让空闲连接被服务端掐断）。
+     EventEmitter 的规矩是：没有人监听 `error`，就当作未捕获异常抛出 ——
+     于是 Node 直接退进程。
+
+     实测：`pg_ctlcluster stop` 之后进程立刻死掉，
+       error: terminating connection due to administrator command
+       Emitted 'error' event on BoundPool instance
+     一次计划内的数据库维护，就此变成一轮崩溃循环。
+
+     接住它就够了：池子自己会丢弃坏掉的连接、按需重建。
+     进程要做的只是**活着**，等数据库回来 —— 那正是存活探针的意思。 */
+  pool.on("error", (err) => {
+    console.error(`[pool] 空闲连接出错（已丢弃该连接，进程继续）：${err.message}`);
+  });
+
+  return pool;
 };
 
 export const POOL = Symbol("PG_POOL");

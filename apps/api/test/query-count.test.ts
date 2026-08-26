@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { INestApplication } from "@nestjs/common";
-import { boot, resetDb, as, type Caller } from "./harness.js";
+import { boot, resetDb, as, api, type Caller } from "./harness.js";
 
 /* ════════════════════════════════════════════════════════════════════
    一个请求发多少条 SQL —— 把 N+1 变成看得见的数字。
@@ -72,5 +72,46 @@ describe("聚合端点：条数是常量", () => {
     const b = count(await boss.get("/v1/me"));
     const c = count(await crc.get("/v1/me"));
     expect(b).toBe(c);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   存活探针一条 SQL 都不许发。
+
+   这不是性能问题，是可用性问题：存活探针一旦（哪怕间接）依赖数据库，
+   数据库抖一下，所有实例的存活探针一起失败，编排器把它们**全部重启** ——
+   一次数据库故障就此被放大成一次全站故障，而重启风暴还会让数据库
+   恢复得更慢。
+
+   "不碰库"这件事光靠读代码保证不了：请求中间件默认对**每个**请求
+   取连接 + BEGIN，只要有人把探针路径写错一个字母，它就悄悄回到了
+   依赖数据库的状态 —— 而且在数据库正常时完全看不出来。
+   所以把它钉成一个数字。
+   ════════════════════════════════════════════════════════════════════ */
+describe("健康探针", () => {
+  it("存活探针发 0 条 SQL，而普通端点至少 1 条", async () => {
+    const live = await boss.get("/v1/health");
+    expect(live.status).toBe(200);
+    expect(count(live)).toBe(0);
+
+    /* 对照组：没有这一条，上面那个 0 可能只是因为计数器根本没接上 */
+    const normal = await boss.get("/v1/study-sites?limit=1");
+    expect(count(normal)).toBeGreaterThan(0);
+  });
+
+  it("存活探针不需要认证 —— 探针在拿到凭据之前就要能用", async () => {
+    const r = await api(app).get("/v1/health");
+    expect(r.status).toBe(200);
+    expect(r.body.status).toBe("ok");
+  });
+
+  it("就绪探针真的探了库（发了 SQL），库在时 200", async () => {
+    /* 只回 200 的就绪探针等于没有 —— 它会把连不上库的实例放进负载均衡。
+       就绪探针自己从池子取连接，不走请求事务，所以计数是 0；
+       这里验的是它的**语义**：库在 → ready，并给出探库耗时。 */
+    const r = await api(app).get("/v1/health/ready");
+    expect(r.status).toBe(200);
+    expect(r.body.status).toBe("ready");
+    expect(typeof r.body.checkMs).toBe("number");
   });
 });

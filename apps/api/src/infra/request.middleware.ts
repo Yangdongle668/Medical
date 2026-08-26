@@ -27,9 +27,32 @@ export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex"
  *  它不会自己报错，也不会在任何测试里变红，所以这里给它装一个响铃：
  *  超过阈值就打一条 warn，并把 operationId 一起写出来。 */
 const QUERY_WARN_AT = Number(process.env["SITEDESK_QUERY_WARN_AT"] ?? 30);
-/** 打开后每个响应带 X-Query-Count —— 测试据此断言"这个端点不许超过 N 条"。 */
-const STATS = !!process.env["SITEDESK_QUERY_STATS"];
+/** 打开后每个响应带 X-Query-Count —— 测试据此断言"这个端点不许超过 N 条"。
+ *
+ *  **按次读取，不做成模块级常量。** 常量在 import 那一刻就定死了，
+ *  而测试是在 `beforeAll` 里设这个变量的 —— 那时模块早就加载完了。
+ *  于是那条测试只有在命令行上预先设了变量时才绿，
+ *  跑 `npm test` 就变成 `expected NaN to be +0`：
+ *  **它一直是靠外部条件通过的，不是靠被测代码。** */
+const stats = () => !!process.env["SITEDESK_QUERY_STATS"];
 const LOG = new Logger("QueryCount");
+
+/** 不开事务的路由（存活 / 就绪探针）。就绪探针要用库，
+ *  但它自己从池子里取连接、自己还（见 HealthController）——
+ *  和请求事务是两回事。 */
+const DBLESS = new Set(["/v1/health", "/v1/health/ready"]);
+
+/** dbless 请求拿到的"连接"：碰一下就炸。
+ *  给 null 的话，误用会得到一句 "Cannot read properties of null"，
+ *  指不出是哪里错了；这样至少它自己说得清。 */
+function noDb(): PoolClient {
+  const boom = () => {
+    throw new Error(
+      "这条路由被声明为不开事务（DBLESS），不该使用请求事务的连接。" +
+      "确实需要数据库的话，像就绪探针那样自己从池子里取。");
+  };
+  return new Proxy({} as PoolClient, { get: boom, apply: boom });
+}
 
 /** 只数数的代理。除 query 外一律转发给真连接（并绑定 this）。 */
 function countingClient(raw: PoolClient, c: RequestCtx): PoolClient {
@@ -56,11 +79,47 @@ export class RequestMiddleware implements NestMiddleware {
   constructor(@Inject(POOL) private readonly pool: Pool) {}
 
   async use(req: Request & { ctx?: RequestCtx }, res: Response, next: NextFunction) {
+    /* ── 健康探针：建上下文，但**不取连接、不开事务** ────────────────
+       不能干脆把中间件从这些路由上摘掉：全局守卫与拦截器都依赖
+       这个上下文存在（`ctx()` 会直接抛「有代码绕过了请求中间件」——
+       第一版就是这么撞上的，而那句话说得完全正确）。
+       要避免的是**依赖数据库**，不是避免上下文。 */
+    /* 用 originalUrl，不用 req.path：中间件经 MiddlewareConsumer 挂载之后，
+       `req.path` 是相对挂载点的那一段，匹配不上完整路径 ——
+       第一版就是这么漏过去的，探针照样连了库（库停掉时 ECONNREFUSED）。
+       originalUrl 永远是客户端请求的原样，去掉查询串即可。 */
+    /* 统计钩子挂在最前面，**dbless 的路由也要带上** ——
+       "存活探针发了 0 条 SQL" 正是要断言的那件事，
+       没有这个头就没法把"不碰库"写成一条测试。 */
+    const withStats = (c: RequestCtx) => {
+      if (!stats()) return;
+      const writeHead = res.writeHead.bind(res);
+      res.writeHead = ((...args: Parameters<typeof writeHead>) => {
+        res.setHeader("X-Query-Count", String(c.queryCount));
+        return writeHead(...args);
+      }) as typeof res.writeHead;
+    };
+
+    if (DBLESS.has(req.originalUrl.split("?")[0]!.replace(/\/+$/, ""))) {
+      const c: RequestCtx = {
+        requestId: randomUUID(), client: noDb(), principal: null,
+        scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
+        operationId: null, finalized: true, inFlight: false,
+        queryCount: 0, dbless: true
+      };
+      (req as Request & { requestId?: string }).requestId = c.requestId;
+      req.ctx = c;
+      withStats(c);
+      runInCtx(c, () => next());
+      return;
+    }
+
     const client = await this.pool.connect();
     const c: RequestCtx = {
       requestId: randomUUID(), client, principal: null,
       scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
-      operationId: null, finalized: false, inFlight: false, queryCount: 0
+      operationId: null, finalized: false, inFlight: false,
+      queryCount: 0, dbless: false
     };
     /* 业务代码拿到的是一个**代理**：除了数数，什么都不做。
        为什么不直接改 client.query —— 连接会还回池子里给下一个请求用，
@@ -133,13 +192,7 @@ export class RequestMiddleware implements NestMiddleware {
       /* 响应头必须在**头发出去之前**写，所以挂在 writeHead 上。
          第一版挂的是 res.on("finish") —— 那时头早发完了，
          setHeader 抛 ERR_HTTP_HEADERS_SENT，而且抛在一个没人接的回调里。 */
-      if (STATS) {
-        const writeHead = res.writeHead.bind(res);
-        res.writeHead = ((...args: Parameters<typeof writeHead>) => {
-          res.setHeader("X-Query-Count", String(c.queryCount));
-          return writeHead(...args);
-        }) as typeof res.writeHead;
-      }
+      withStats(c);
       /* 告警可以晚一点：日志不受"头已经发了"的限制。 */
       res.on("finish", () => {
         if (c.queryCount > QUERY_WARN_AT)
