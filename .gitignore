@@ -10,3 +10,6 @@ apps/web/playwright-report/
 
 # 生产打包产物（npm run bundle -w @sitedesk/api）
 apps/api/build/
+
+# 部署生成的口令，绝不进版本库
+deploy/.env

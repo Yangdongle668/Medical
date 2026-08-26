@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { requestLink, redeem, devLogin } from "./session.js";
 import { ApiError } from "../../api/client.js";
 
@@ -7,7 +7,14 @@ import { ApiError } from "../../api/client.js";
    链接 15 分钟有效、只能用一次、兑换在数据库里原子完成。
 
    开发登录是另一条，且刻意不进公开契约：它只在后端
-   SITEDESK_DEV_LOGIN=1 时存在，生产环境直接 404。 */
+   SITEDESK_DEV_LOGIN=1 时存在，生产环境直接 404。
+
+   ── 为什么这个页面必须认 `?token=` ──────────────────────────────────
+   发出去的链接长这样：`https://台/login?token=…`。用户点开就落在这里。
+   在此之前这个页面**只认自己刚要来的那个令牌**（开发环境回显的那个）——
+   于是真正从邮件点进来的人，看到的是一张空白的登录表单，什么也没发生。
+   开发环境永远正常，因为开发环境根本不走链接。
+   一键部署之后没有开发登录，这条路径就是唯一的入口，所以它必须成立。 */
 
 const DEV_LOGINS = [
   { login: "wutong", who: "吴桐 · CRC" },
@@ -19,6 +26,7 @@ const DEV_LOGINS = [
 
 export function LoginPage() {
   const nav = useNavigate();
+  const [params] = useSearchParams();
   const [login, setLogin] = useState("");
   const [sent, setSent] = useState<string | null>(null);
   const [devToken, setDevToken] = useState<string | null>(null);
@@ -31,6 +39,29 @@ export function LoginPage() {
     catch (e) { setErr(e instanceof ApiError ? (e.problem.detail ?? e.problem.title) : String(e)); }
     finally { setBusy(false); }
   }
+
+  /* 从链接进来：直接兑换。
+     兑换成功就 replace 掉这条历史记录 —— 令牌虽然一次性，
+     但把它留在地址栏和浏览历史里没有任何好处（还会随 Referer 外泄）。
+     失败也要把它从 URL 上摘掉，否则用户一刷新就再撞一次同一个死令牌，
+     看到的还是同一句"已过期"，会以为是系统坏了。
+
+     用 ref 挡住重复执行：StrictMode 下 effect 会跑两遍，
+     而令牌是**一次性**的 —— 第一次兑换成功，第二次必然失败，
+     于是明明登进去了却弹一句"链接无效"。这个坑只在开发构建里出现，
+     正好是最容易被当成偶发问题放过去的那种。 */
+  const redeeming = useRef(false);
+  useEffect(() => {
+    const t = params.get("token");
+    if (!t || redeeming.current) return;
+    redeeming.current = true;
+    void go(async () => {
+      try { await redeem(t); nav("/today", { replace: true }); }
+      catch (e) { nav("/login", { replace: true }); throw e; }
+    });
+    /* 只看首次进入时地址栏上的那个令牌 */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div style={{ maxWidth: 420, margin: "12vh auto", padding: "0 20px" }}>
