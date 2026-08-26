@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { POOL } from "../../infra/db.js";
 import { Public, Operation } from "../../auth/guards.js";
 import { ProblemException } from "../../infra/problem.js";
+import { isDraining } from "../../infra/shutdown.js";
 
 /* ════════════════════════════════════════════════════════════════════
    两个探针。区别是本质性的，不是命名上的：
@@ -29,6 +30,13 @@ export class HealthController {
 
   @Get("/ready") @Public() @Operation("readiness")
   async ready() {
+    /* 正在停机：立刻说"别再给我流量了"。
+       **存活仍然 200** —— 这个进程没坏，只是不该再接新活，
+       此时报存活失败会让编排器多做一次无谓的重启。 */
+    if (isDraining())
+      throw new ProblemException("service-unavailable", {
+        detail: "本实例正在停机，已停止接收新流量。" });
+
     const t0 = Date.now();
     try {
       /* 自己从池子里取连接、自己还回去 —— 这里没有请求事务可用。
