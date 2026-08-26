@@ -27,6 +27,12 @@ export interface RequestCtx {
   /** 这个请求**不开事务、不占连接**（目前只有存活/就绪探针）。
    *  存活探针一旦间接依赖数据库，一次数据库抖动就会让编排器重启全部实例。 */
   dbless: boolean;
+  /** **提交成功之后**才做的事。回滚时一件都不做。
+   *
+   *  唯一的用户是投递登录链接：信必须在 COMMIT 之后才发，否则用户可能
+   *  在令牌落库之前就点开链接 —— 拿到的是"链接无效"，而库里明明有。
+   *  这类"外部世界不认识回滚"的副作用，一律挂在这里。 */
+  afterCommit: Array<() => Promise<void>>;
 }
 
 const als = new AsyncLocalStorage<RequestCtx>();

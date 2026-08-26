@@ -8,4 +8,11 @@ export interface WebServer extends Server {
   root: string;
 }
 
-export function createServer(opts: { root: string; api: string | URL }): WebServer;
+export function createServer(opts: {
+  root: string;
+  api: string | URL;
+  /** HSTS 的 max-age（秒）。0 / 省略 = 不发。默认读 SITEDESK_HSTS_MAX_AGE。 */
+  hstsMaxAge?: number;
+  /** 明文请求 308 到 https（按 X-Forwarded-Proto 判定）。默认读 SITEDESK_FORCE_HTTPS=1。 */
+  forceHttps?: boolean;
+}): WebServer;

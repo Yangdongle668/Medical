@@ -238,6 +238,23 @@ jobs:
           echo "经前端反代取到 $N 个中心"
           [ "$N" -gt 0 ] || { echo '::error::反代通了，但取不到数据'; docker logs web; exit 1; }
 
+          # ⑦ 预压缩产物真的进了镜像，而且真的会被发出去。
+          #    这一条只能在镜像上验：构建期漏跑 precompress 的话，
+          #    托管服务器会安安静静地退回原文 —— 不报错、不告警，
+          #    只是每个人首屏多等两秒。单测里那个 dist 是测试自己造的，
+          #    它证明不了"真构建出来的那份带着 .br"。
+          ASSET=$(curl -fsS http://127.0.0.1:8080/ \
+            | grep -o '/assets/[^"]*\.js' | head -1)
+          [ -n "$ASSET" ] || { echo '::error::首页里找不到 js 产物'; exit 1; }
+          curl -sI -H 'Accept-Encoding: br' "http://127.0.0.1:8080$ASSET" \
+            | tr -d '\r' | grep -qi '^content-encoding: br' \
+            || { echo "::error::$ASSET 没有走 br —— 镜像里可能没有预压缩产物"; exit 1; }
+          # 压缩响应与原文共用一个缓存条目，就是一次缓存投毒
+          curl -sI -H 'Accept-Encoding: br' "http://127.0.0.1:8080$ASSET" \
+            | tr -d '\r' | grep -qi '^vary: accept-encoding' \
+            || { echo '::error::压缩响应没有带 Vary: Accept-Encoding'; exit 1; }
+          echo "预压缩产物在镜像里，且按 Accept-Encoding 发出（$ASSET）"
+
       - if: failure()
         run: docker logs api || true
 

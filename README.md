@@ -123,10 +123,26 @@ git clone <仓库地址> && cd Medical
 
 把链接交给本人，点开即登录。
 
-> **邮件 / 短信通道还没做。** `POST /v1/auth/magic-link` 会老老实实签发令牌、
-> 写进库，然后**不告诉任何人** —— 回显令牌等于把登录接口变成谁都能用的后门，
-> 所以它不回显是对的。在通道补上之前，链接由**能进服务器的人**代发：
-> 签发权限因此等同于运维权限，这个前提是清楚的。**这是上线前必须补的一件事。**
+### 让本人自己申请（配好通道之后）
+
+上面那条路要求有人能进服务器。配好通道之后，本人在登录页填自己的登录名即可，
+链接由邮件或短信直接送到他手里：
+
+```sh
+./deploy/login-address.sh lingyuan lingyuan@hengji.com   # 登记一次
+#  ✓ 「lingyuan」的登录链接将投递到：lingyuan@hengji.com（走邮件通道）
+```
+
+通道在 `deploy/.env` 里配（`SITEDESK_SMTP_URL` / `SITEDESK_SMS_WEBHOOK_URL`）。
+一个都不配也能跑，只是链接没人收得到 —— 启动自检会为此打一条告警。
+
+> **收件地址只认库里登记的那个。** `POST /v1/auth/magic-link` 的请求体里有一个
+> `sentTo` 字段（契约里写着"仅用于审计留痕"），它**不决定投递到哪里**。
+> 拿它当收件地址的话，这个公开端点就是一键账号接管：
+> `{"login":"lingyuan","sentTo":"我@攻击者"}`。
+>
+> 同理，"这个账号没登记地址"和"这个账号不存在"返回**完全一样的 202** ——
+> 区别对待就是账号枚举器。差别只写进服务端日志。
 
 `--demo` 的演示账号（种子数据）：
 
@@ -172,6 +188,20 @@ git clone <仓库地址> && cd Medical
 **数据库不回滚。** 上一版跑不了新 schema 的话，回滚救不了 —— 这也是
 "迁移必须向后兼容一个版本"这条规矩存在的原因。
 
+### 从投递通道之前的版本升上来
+
+登录链接现在只会送到**库里登记过**的地址；没登记地址的账号申请链接时
+服务端**不签发**（对外仍然是同一个 202，那个人永远收不到）。
+所以升级之后要给每个人登记一次：
+
+```sh
+./deploy/login-address.sh lingyuan lingyuan@hengji.com
+```
+
+在此之前，运维代发那条路照常可用（`./deploy/login-link.sh <登录名>`）——
+它不看收件地址，也就不受这条影响。谁还没登记，服务端日志里说得出来
+（`reason=no-destination`）。
+
 ---
 
 ## 四、部署之后
@@ -182,7 +212,17 @@ git clone <仓库地址> && cd Medical
 浏览器永远打前端，`/v1` 由前端同源反代过去。于是：没有 CORS、
 不用把 API 地址编译进产物（换个环境不必重新构建）、也不必再摆一台 nginx。
 
-TLS / HSTS / 限流 / 预压缩交给前面那层 ingress —— 这两个进程只管自己那一层。
+**TLS 握手**交给前面那层 ingress。其余三件这两个进程自己做了：
+
+- **预压缩**：构建期就把 br / gz 压好（452 kB 的 js → **117 kB**），
+  按 `Accept-Encoding` 协商。前面有 ingress 时它看到 `Content-Encoding: br`
+  直接透传，省掉的正是它自己那次压缩。
+- **HSTS / 强制 https**：默认关。确认 ingress 真的在做 TLS、且会带
+  `X-Forwarded-Proto` 之后，用 `SITEDESK_HSTS_MAX_AGE` / `SITEDESK_FORCE_HTTPS` 打开。
+  HSTS 只是一个响应头，而只有真正发响应的这一层知道该不该发它。
+- **限流**：两个 `@Public()` 登录端点上，**跨实例共享**（进程内计数器挡洪水，
+  数据库计数器定阈值）。**即使**跑成 3 个副本，阈值仍然是那一个阈值，
+  不会跟着乘以副本数 —— 而这个 compose 本身仍然是单副本的（见第七节）。
 
 ### 配置
 
@@ -193,9 +233,22 @@ TLS / HSTS / 限流 / 预压缩交给前面那层 ingress —— 这两个进程
 | `SITEDESK_PORT` | `8080` | 对外端口 |
 | `SITEDESK_PUBLIC_ORIGIN` | `http://localhost:8080` | 台的公开地址，签发登录链接时用它拼 URL |
 | `SITEDESK_TAG` | `local` | 镜像标签；`update.sh` 每次改成新的 git 短 sha |
-| `SITEDESK_DRAIN_MS` | `5000` | SIGTERM 后等多久再关。**必须比 LB 的探测间隔长** |
+| `SITEDESK_DRAIN_MS` | 未设 → 5000 + 一条告警 | SIGTERM 后等多久再关。**必须比 LB 摘掉本实例所需的时间长** |
+| `SITEDESK_LB_PROBE_MS` | 未设 | 不知道上面填几秒？填 LB 的探测间隔，进程自己乘 |
+| `SITEDESK_LB_PROBE_FAILURES` | `2` | 连续几次探测失败才摘掉 |
+| `SITEDESK_SMTP_URL` | 未设 | `smtp://用户:口令@主机:587`。配了就走邮件通道 |
+| `SITEDESK_MAIL_FROM` | 未设 | 发件人。配了 SMTP 却没配它 → **拒绝启动** |
+| `SITEDESK_SMS_WEBHOOK_URL` | 未设 | 短信网关，POST `{to, text}` + Bearer |
+| `SITEDESK_HSTS_MAX_AGE` | 未设（关） | 秒。只在 `X-Forwarded-Proto: https` 时发 |
+| `SITEDESK_FORCE_HTTPS` | 未设（关） | 明文请求 308 到 https（探针除外） |
 | `SITEDESK_LOG_LEVEL` | `info` | `debug` 会把静态产物与探针的访问日志也打出来 |
 | `POSTGRES_PASSWORD` 等三个口令 | 随机生成 | **请备份 `deploy/.env`** —— 数据卷还在而口令丢了，库就打不开了 |
+
+`SITEDESK_DRAIN_MS` 该填多少：**探测间隔 × 连续失败阈值 + 一点余量**。
+k8s 默认 10s × 3 = 30 秒，ALB 默认 30s × 2 = 60 秒 —— 都远大于 5 秒。
+短了不会报错，只会让每次发布漏掉一小撮请求。填不出来就填
+`SITEDESK_LB_PROBE_MS`，让进程替你算。畸形的值（`5s`、`3o`）**拒绝启动** ——
+它们会被解析成 NaN，把三步停机静默降级成"立刻关"。
 
 ### 日志
 
@@ -251,7 +304,7 @@ npm run web:dev                         # :5173
 ```
 
 ```sh
-npm test                # 全量单元与集成（423 条）
+npm test                # 全量单元与集成（514 条）
 npm run typecheck
 npm run arch:check      # 依赖图 + 端点与契约一一对应
 npm run smoke -w @sitedesk/api   # 在**真产物**上冒烟：起进程、打真实请求
@@ -268,7 +321,7 @@ npm run web:integration # 27 条，真实浏览器打真库
 
 | 目录 | 内容 |
 |---|---|
-| [`db/`](db/README.md) | Schema 与迁移：10 条 SQL 规约、13 支迁移、79 条测试 |
+| [`db/`](db/README.md) | Schema 与迁移：15 条 SQL 规约、15 支迁移、90 条测试 |
 | [`packages/contracts/`](packages/contracts/README.md) | **契约唯一定义源**：zod → OpenAPI，破坏性变更门禁 |
 | [`packages/policy/`](packages/policy/) | 权限判定纯函数；与数据库实现由 300 组用例穷举比对 |
 | [`packages/calc/`](packages/calc/README.md) | 计算引擎：I8' 收入口径、费率卡成本、毛利（纯函数，带口径版本号） |
@@ -295,10 +348,30 @@ node docs/render.mjs docs/03-开发需求与技术架构.md out/spec.html "中�
 
 ## 七、当前已知问题
 
-1. **邮件 / 短信通道没做** —— 登录链接目前由运维在服务器上签发（见上文）。**上线前必须补。**
-2. **单机 compose，不是高可用** —— 数据库与两个服务在同一台机器上；限流也是单实例的
-   （多副本下阈值等于被放大 N 倍）。
-3. **`SITEDESK_DRAIN_MS` 默认 5 秒是拍的** —— 必须比实际 LB 的探测间隔长。
-4. **静态资源没有预压缩**（br / gzip）—— 450 kB 的 js 走明文，通常由 ingress 压。
-5. **TLS / HSTS 属于前面那层 ingress**，这两个进程不管。
-6. 其余见 [阶段交付记录](docs/05-阶段交付记录.md) 各阶段末尾的"当前已知问题"。
+原来那五条：**一、三、四、五做掉了**；第二条只做掉了属于代码的那一半
+（限流不再随副本数被放大），另一半不是代码能解决的。
+逐条的过程见 [Phase 10](docs/05-%E9%98%B6%E6%AE%B5%E4%BA%A4%E4%BB%98%E8%AE%B0%E5%BD%95.md)。
+下面是剩下的、和这一轮新暴露出来的。
+
+1. **单机 compose，仍然不是高可用** —— 数据库与两个服务在同一台机器上，
+   机器没了就全没了。这一轮只挪掉了其中一块**代码层的**绊脚石：
+   限流不再随副本数被放大。真正的高可用还差两样，两样都不是这个仓库能给的：
+   一套带故障切换的 PostgreSQL，和一层真的会做负载均衡的 ingress
+   （compose 内网那点 DNS 轮询遇上 keep-alive 长连接就会粘在同一个实例上，
+   那不叫负载均衡）。
+2. **共享限流在数据库不可用时会退回单实例判定**（并打一条 warn）。
+   这是刻意的取舍：库挂了的时候把登录端点再变成 500 只是放大故障。
+   代价是那段时间里多副本的阈值仍然会被放大。
+3. **短信通道只定了一个最小形状**（POST `{to, text}` + Bearer）。
+   真实网关的字段名对不上时要在中间摆一个适配器 —— 这是有意的，
+   在这里长出一张厂商清单比一个十行的适配器贵得多。
+4. **SMTP 客户端是自己写的最小实现**：纯文本、单收件人、PLAIN / LOGIN 认证。
+   附件、DKIM 签名、连接复用都没有，也不打算有 —— 它只发一种信。
+5. **HSTS / 强制 https 默认关**，需要确认前面那层真的在做 TLS 之后再打开。
+   TLS 握手本身仍然归 ingress。
+6. **收件地址只能由运维登记**（`./deploy/login-address.sh`），本人不能自助改。
+   自助改要先回答"改地址要不要二次确认"—— 那是产品决定，不是存储问题。
+7. **投递失败只进日志，不重试。** 链接 15 分钟就过期了，重试的窗口很窄；
+   真要重试得有队列与去重，那是另一件事的规模。发不出去时，
+   运维仍然可以用 `./deploy/login-link.sh` 代发。
+8. 其余见 [阶段交付记录](docs/05-%E9%98%B6%E6%AE%B5%E4%BA%A4%E4%BB%98%E8%AE%B0%E5%BD%95.md) 各阶段末尾的"当前已知问题"。

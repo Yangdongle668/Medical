@@ -8,6 +8,8 @@ import { TxInterceptor } from "./infra/tx.interceptor.js";
 import { MaskInterceptor } from "./infra/mask.interceptor.js";
 import { AuditService } from "./infra/audit.service.js";
 import { IdempotencyService } from "./infra/idempotency.service.js";
+import { RateLimitService } from "./infra/rate-limit.service.js";
+import { LoginDelivery } from "./infra/login-delivery.js";
 import { AuthGuard, ActionGuard } from "./auth/guards.js";
 import { AuthService } from "./auth/auth.service.js";
 import { AuthController } from "./auth/auth.controller.js";
@@ -44,7 +46,10 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
         });
       }
     },
-    AuthService, AuditService, IdempotencyService, IdentityService, SiteService, StaffingService,
+    AuthService, AuditService, IdempotencyService, RateLimitService,
+    /* 投递通道按环境变量决定走哪一种；没配就是不发，见 infra/login-delivery.ts */
+    LoginDelivery,
+    IdentityService, SiteService, StaffingService,
     ClinicalService, CostService,
     /* 跨上下文装配：ClinicalOps 只认 ports.ts 里的接口，不 import CostService */
     { provide: VISIT_TIMESHEET_PORT, useExisting: CostService },

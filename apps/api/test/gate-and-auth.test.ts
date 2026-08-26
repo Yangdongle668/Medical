@@ -2,6 +2,25 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { INestApplication } from "@nestjs/common";
 import { boot, resetDb, as, api, type Caller } from "./harness.js";
 import { randomUUID } from "node:crypto";
+import pg from "pg";
+
+/** 直接看库：投递这件事在响应里是**看不见**的（对外永远是同一个 202），
+ *  只有 login_token.sent_to 说得出信到底往哪送。 */
+async function db<T>(fn: (c: pg.Client) => Promise<T>): Promise<T> {
+  const c = new pg.Client({ connectionString: process.env["TEST_DATABASE_URL"] });
+  await c.connect();
+  try { return await fn(c); } finally { await c.end(); }
+}
+const tokensOf = (login: string) => db(async (c) => (await c.query<{ sent_to: string }>(
+  `SELECT t.sent_to FROM login_token t JOIN account a ON a.id = t.account_id
+    WHERE a.login = $1 ORDER BY t.issued_at`, [login])).rows);
+/** 把某个账号的收件地址摘掉，造出"存在、但没登记地址"那一种状态。
+ *  演示种子给每个在职账号都登记了地址（否则演示环境里大半人登不进去），
+ *  所以这个状态得在测试里自己造 —— 不能挑一个"恰好没有地址"的账号，
+ *  那种测试会在下一次改种子时无声地失去意义。 */
+const 摘掉地址 = (login: string) => db((c) => c.query(
+  `DELETE FROM auth_identity i USING account a
+    WHERE i.account_id = a.id AND a.login = $1 AND i.provider = 'magic-link'`, [login]));
 
 let app: INestApplication, boss: Caller;
 beforeAll(async () => {
@@ -91,9 +110,13 @@ describe("认证：一次性链接、会话、停用即失效", () => {
   it("申请链接对存在与不存在的账号返回同样的 202 —— 不做账号枚举器", async () => {
     const ok = await api(app).post("/v1/auth/magic-link").send({ login: "zhanghm" });
     const no = await api(app).post("/v1/auth/magic-link").send({ login: "nobody_here" });
-    expect(ok.status).toBe(202);
-    expect(no.status).toBe(202);
+    /* 通道做出来之后**多了一种**账号状态：存在、但没登记收件地址。
+       它必须和前两种长得一模一样，否则这个端点又变回枚举器。 */
+    await 摘掉地址("zhaokun");
+    const noAddr = await api(app).post("/v1/auth/magic-link").send({ login: "zhaokun" });
+    expect([ok.status, no.status, noAddr.status]).toEqual([202, 202, 202]);
     expect(no.body.message).toBe(ok.body.message);
+    expect(noAddr.body.message).toBe(ok.body.message);
   });
 
   it("链接可兑换为会话，且只能用一次", async () => {
@@ -165,6 +188,69 @@ describe("认证：一次性链接、会话、停用即失效", () => {
       { reason: "试图自我停用" }, { "Idempotency-Key": randomUUID() });
     expect(r.status).toBe(422);
     expect(r.body.detail).toContain("自己");
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   登录链接送到哪去 —— 通道补上之后新出现的那条攻击面。
+
+   `sentTo` 在契约里的说明一直是"仅用于审计留痕"。通道没做的时候
+   它是惰性的；通道做出来之后，如果顺手拿它当收件地址，
+   这个 @Public() 端点就成了一键账号接管：
+
+     POST /v1/auth/magic-link {"login":"lingyuan","sentTo":"我@攻击者"}
+
+   所以地址只能来自库里登记的那个（auth_identity，provider='magic-link'）。
+   这几条盯的就是这件事。
+
+   验过它不是空的：把 issue_login_link 的 v_dest 换成传进来的 sentTo，
+   第一条当场红。
+   ════════════════════════════════════════════════════════════════════ */
+describe("收件地址由服务端解析，不由请求携带", () => {
+
+  it("**请求里塞一个别的地址没有用**", async () => {
+    const r = await api(app).post("/v1/auth/magic-link")
+      .send({ login: "linmin", sentTo: "攻击者@evil.example" });
+    expect(r.status).toBe(202);
+    const rows = await tokensOf("linmin");
+    expect(rows.at(-1)!.sent_to).toBe("linmin@hengji.example");
+  });
+
+  it("没登记地址的账号：照样 202，但不签一把没人收得到的令牌", async () => {
+    /* 签了也没用 —— 没有任何通道知道该往哪送。留着只是往库里堆垃圾。 */
+    await 摘掉地址("heyuwei");
+    const r = await api(app).post("/v1/auth/magic-link").send({ login: "heyuwei" });
+    expect(r.status).toBe(202);
+    expect(await tokensOf("heyuwei")).toEqual([]);
+  });
+
+  it("登记之后就能签发了 —— 而且记的是登记的那个地址", async () => {
+    await db((c) => c.query("SELECT app.set_login_address($1,$2)",
+      ["heyuwei", "heyuwei@example.invalid"]));
+    const r = await api(app).post("/v1/auth/magic-link").send({ login: "heyuwei" });
+    expect(r.status).toBe(202);
+    const rows = await tokensOf("heyuwei");
+    expect(rows.map((x) => x.sent_to)).toEqual(["heyuwei@example.invalid"]);
+  });
+
+  it("手机号登记的账号走短信通道", async () => {
+    await db((c) => c.query("SELECT app.set_login_address($1,$2)",
+      ["xuqian", "+8613800001111"]));
+    const r = await api(app).post("/v1/auth/magic-link").send({ login: "xuqian" });
+    expect(r.status).toBe(202);
+    expect((await tokensOf("xuqian")).at(-1)!.sent_to).toBe("+8613800001111");
+  });
+
+  it("一个地址不能同时属于两个账号 —— 那等于把登录入口转给别人", async () => {
+    await expect(db((c) => c.query("SELECT app.set_login_address($1,$2)",
+      ["duanzhiyu", "linmin@hengji.example"]))).rejects.toThrow(/另一个账号/);
+  });
+
+  it("既不像邮箱也不像手机号的地址当场拒绝", async () => {
+    /* 打错的地址不会报错，只会让那个人永远收不到链接 ——
+       而他会以为是系统坏了。 */
+    await expect(db((c) => c.query("SELECT app.set_login_address($1,$2)",
+      ["duanzhiyu", "写错了"]))).rejects.toThrow(/既不像邮箱/);
   });
 });
 

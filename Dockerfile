@@ -51,8 +51,9 @@ COPY --from=build /repo/db/migrations ./db/migrations
 # 是按 `../..` 反推仓库根的，挪个地方它就找不到 db/seeds 了。
 COPY --from=build /repo/db/scripts   ./db/scripts
 COPY --from=build /repo/db/seeds     ./db/seeds
-# 运维工具：签发一次性登录链接（邮件通道补上之前的唯一入口）
-COPY --from=build /repo/apps/api/scripts/issue-login-link.mjs ./apps/api/scripts/
+# 运维工具：登记收件地址、以及在通道不可用时手工签发一次性登录链接
+COPY --from=build /repo/apps/api/scripts/issue-login-link.mjs   ./apps/api/scripts/
+COPY --from=build /repo/apps/api/scripts/set-login-address.mjs  ./apps/api/scripts/
 
 # 不用 root 跑。node 镜像自带 uid 1000 的 node 用户。
 USER node

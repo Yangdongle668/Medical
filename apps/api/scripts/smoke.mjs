@@ -5,8 +5,9 @@
  *  于是它断了整整五个阶段都没人发现。
  *  一条没人走的路径不会自己报警，所以让 CI 每次都走一遍。
  *
- *  验六件事：
- *    ① 生产配置下的自检真的会拒绝启动（Phase 8c 那道闸，在**真产物**上验）
+ *  验六件事（其中 ① 有两条）：
+ *    ① 生产配置下的自检真的会拒绝启动 —— 两条：开发登录（Phase 8c 那道闸）、
+ *       以及把登录链接打进日志的 console 投递通道（Phase 10）。都在**真产物**上验
  *    ② 起得来（DI 装配成功 —— 装饰器元数据没在打包时丢掉）
  *    ③ 打得通（认证 + 行范围 + 契约，一个真实请求走到底）
  *    ④ 未认证被挡（守卫也在产物里）
@@ -53,6 +54,25 @@ function start(env) {
   if (code !== 1) fail(`生产环境 + 开发登录时应当拒绝启动（退出码 1），实际 ${code}`);
   if (!out.includes("SITEDESK_DEV_LOGIN")) fail(`拒绝启动了，但没说清原因：\n${out}`);
   console.log("✓ 生产配置 + 开发登录 → 拒绝启动，并写明原因");
+}
+
+/* ── ①' 再验一条同类的闸：生产环境不许把登录链接打进日志 ──────────
+   和上面那条是同一个道理，验的也是同一件事（自检真的在产物里）。
+   单独列出来是因为它拦的是**另一个**后门：console 通道会把可用的
+   登录链接写进日志，于是所有能读日志的人都能以任何人的身份登录，
+   而审计轨迹里看到的是那个人自己。 */
+{
+  const p = start({ NODE_ENV: "production", SITEDESK_LOGIN_LINK_TRANSPORT: "console" });
+  let out = "";
+  p.stdout.on("data", d => { out += d; });
+  p.stderr.on("data", d => { out += d; });
+  const code = await new Promise(r => p.on("exit", r));
+  if (/ERR_MODULE_NOT_FOUND|Cannot find module|SyntaxError|ReferenceError/.test(out))
+    fail(`产物根本起不来（不是被自检拒绝的）：\n${out.split("\n").slice(0, 6).join("\n")}`);
+  if (code !== 1) fail(`生产环境 + console 投递通道时应当拒绝启动（退出码 1），实际 ${code}`);
+  if (!out.includes("SITEDESK_LOGIN_LINK_TRANSPORT"))
+    fail(`拒绝启动了，但没说清原因：\n${out}`);
+  console.log("✓ 生产配置 + console 投递通道 → 拒绝启动，并写明原因");
 }
 
 /* ── ②③④ 正常起一遍，打真实请求 ───────────────────────────────── */

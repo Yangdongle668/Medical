@@ -15,11 +15,14 @@
  *    ② 等一小会儿，给 LB 一个探测周期把自己摘掉
  *    ③ 再 app.close()：停止监听 + 把在途请求做完 + 关连接池
  *
- *  ② 的长度必须比 LB 的探测间隔长。默认 5 秒，按部署环境调。
+ *  ② 的长度必须比 LB 的探测间隔长 —— 具体是「探测间隔 × 连续失败阈值」，
+ *  怎么算见 infra/drain.ts（原来这里写的 `Number(env ?? 5000)` 有两个毛病：
+ *  5000 是拍的，而一个手滑的值会变成 NaN，把三步停机静默降级成「立刻关」）。
  *  设成 0 就是"立刻关"，本地开发用得上。
  */
 
 import { emit } from "./log.js";
+import { drainConfig } from "./drain.js";
 
 let draining = false;
 
@@ -44,7 +47,11 @@ export interface ShutdownOpts {
 
 export function installGracefulShutdown(app: Closable, o: ShutdownOpts = {}): void {
   const log = o.log ?? ((m: string) => emit("info", "shutdown", m));
-  const wait = o.wait ?? Number(process.env["SITEDESK_DRAIN_MS"] ?? 5000);
+  /* 畸形的值在这里已经不可能了 —— preflight 先拒绝启动。
+     这里只负责把算好的数用上，并在日志里写清它是**怎么**来的：
+     排空时长是一个平时没人看、出事时第一个要问的数。 */
+  const cfg = drainConfig();
+  const wait = o.wait ?? cfg.ms;
   const exit = o.exit ?? ((c: number) => process.exit(c));
   const on = o.on ?? ((sig: string, fn: () => void) => { process.on(sig as "SIGTERM", fn); });
   let closing = false;
@@ -52,7 +59,7 @@ export function installGracefulShutdown(app: Closable, o: ShutdownOpts = {}): vo
     if (closing) return;          // 连发两次信号不该触发两次关闭
     closing = true;
     draining = true;
-    log(`收到 ${sig}：就绪探针开始返回 503，${wait}ms 后关闭。`);
+    log(`收到 ${sig}：就绪探针开始返回 503，${wait}ms 后关闭（${o.wait !== undefined ? "调用方指定" : cfg.detail}）。`);
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
     log("停止监听，等在途请求做完…");
     await app.close();
