@@ -50,3 +50,47 @@ Phase 0 的目录规划写的是「由 openapi.yaml 生成的 client」。这里
 `e2e/layout.spec.ts` 在 390 / 834 / 1500 三个宽度 × 三个路由上量
 `documentElement.scrollWidth`，溢出时**指出是哪个元素撑开的** ——
 只报「溢出了 12px」没法修。
+
+## 上线怎么跑：`server.mjs`，不是 `vite preview`
+
+`vite preview` 是开发工具（Vite 自己的文档写着不要用于生产）。
+生产托管在 `server.mjs`，它负责四件**缺了不会报错**的事：
+
+- **SPA 回退** —— react-router 用 history 路由，刷新 `/sites/abc`
+  服务器上没有这个文件。不回退就是 404：开发环境永远正常，
+  上线之后"一刷新就白屏"。
+  但**带扩展名的路径不回退** —— 少一个 js 却回一份 HTML，
+  浏览器报的是 `Unexpected token '<'`，指向完全错误的方向。
+- **缓存方向** —— `assets/` 带内容哈希，一年 + `immutable`；
+  `index.html` 只能 `no-cache`（配 ETag，代价是一次 304）。
+  反过来做一次，用户手里的旧 index.html 会去要一个已经删掉的哈希文件：
+  白屏，而且清不掉，因为那份 index.html 自己就在缓存里。
+- **同源反代 `/v1`** —— 于是没有 CORS，也不用把 API 地址编译进产物。
+- **安全响应头** —— CSP / nosniff / frame-ancestors。
+  CSP 是照着真实产物写的：`script-src 'self'` 成立（产物里没有内联脚本），
+  但 index.html 里有 Google Fonts 的两个外部域，写死 `'self'`
+  会让字体**静默失效**（页面照常显示，只是全部回退到系统字体）。
+  **加了新的外部资源就要同步改 CSP**，否则它会被静默拦掉。
+
+运行时零 npm 依赖，只用 Node 内置模块。
+
+```bash
+npm run build:live -w @sitedesk/web              # 产物 → dist/
+PORT=8080 SITEDESK_API_ORIGIN=http://api:3000 \
+  node apps/web/server.mjs
+```
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `PORT` | 8080 | |
+| `HOST` | 0.0.0.0 | |
+| `SITEDESK_WEB_ROOT` | `./dist` | 静态目录 |
+| `SITEDESK_API_ORIGIN` | `http://127.0.0.1:3000` | `/v1` 反代到哪 |
+| `SITEDESK_LOG_FORMAT` | 生产 json / 其余 pretty | |
+| `SITEDESK_LOG_LEVEL` | info | `debug` 打开探针与静态产物的访问日志 |
+| `SITEDESK_DRAIN_MS` | 5000 | 收到 SIGTERM 后 `/healthz` 转 503，等这么久再关 |
+
+`npm run preview` 起的就是它（只是换成测试用的 4173 端口），
+所以 e2e 与 integration 走的是**真正要上线的那条路径**。
+
+TLS、HSTS、限流、预压缩交给前面那层 ingress —— 这个进程只管它自己那一层。
