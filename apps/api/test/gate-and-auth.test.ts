@@ -167,3 +167,30 @@ describe("认证：一次性链接、会话、停用即失效", () => {
     expect(r.body.detail).toContain("自己");
   });
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   限流真的接上了吗 —— 契约里 rate-limited(429) 一直在 COMMON_ERRORS 里，
+   也就是每个端点都**声明**过自己可能返回 429，而实现一直没有。
+   这一条验的是它现在真的会返回。
+   ════════════════════════════════════════════════════════════════════ */
+describe("公开端点的限流", () => {
+  it("反复申请登录链接 → 到上限后 429，并说得出还要等多久", async () => {
+    const login = "lingyuan";
+    const limit = Number(process.env["SITEDESK_LINK_LIMIT"] ?? 5);
+
+    let last: { status: number; body: { code?: string; detail?: string } } | null = null;
+    for (let i = 0; i < limit + 2; i++)
+      last = await api(app).post("/v1/auth/magic-link").send({ login });
+
+    expect(last!.status).toBe(429);
+    expect(last!.body.code).toBe("rate-limited");
+    expect(last!.body.detail).toMatch(/秒后重试/);
+  });
+
+  it("换一个账号不受影响 —— 按 login 计数，不是全局闸门", async () => {
+    /* 全局计数的话，一个人被刷就把所有人挡在门外 —— 那是拒绝服务，
+       不是防拒绝服务。 */
+    const r = await api(app).post("/v1/auth/magic-link").send({ login: "wutong" });
+    expect(r.status).toBe(202);
+  });
+});
