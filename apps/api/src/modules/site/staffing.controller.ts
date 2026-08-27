@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
-import { PageQuery, Uuid, DateOnly, WithReason, RoleKind, HandoverStatus }
+import { PageQuery, Uuid, DateOnly, WithReason, RoleKind, HandoverStatus, QueryBool }
   from "@sitedesk/contracts";
 import { StaffingService } from "./staffing.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
@@ -10,7 +10,8 @@ import { command, idempotent } from "../../infra/command.js";
 
 const StaffQ = PageQuery.extend({
   roleKind: RoleKind.optional(),
-  successionGap: z.coerce.boolean().optional()
+  successionGap: QueryBool.optional(),
+  activeOnly: QueryBool.optional()
 });
 const HandoverQ = PageQuery.extend({ status: HandoverStatus.optional() });
 const CreateHandover = z.object({

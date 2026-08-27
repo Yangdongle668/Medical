@@ -6,6 +6,7 @@ import { POOL } from "./db.js";
 import { runInCtx, type RequestCtx } from "./ctx.js";
 import { emit } from "./log.js";
 import { loadPrincipal } from "../auth/principal.loader.js";
+import { EMPTY_SCOPE } from "@sitedesk/policy";
 
 /* ════════════════════════════════════════════════════════════════════
    每个请求：取连接 → BEGIN → 认证 → SET LOCAL app.account_id → 装载主体。
@@ -188,7 +189,7 @@ export class RequestMiddleware implements NestMiddleware {
     if (DBLESS.has(req.originalUrl.split("?")[0]!.replace(/\/+$/, ""))) {
       const c: RequestCtx = {
         requestId, client: noDb(), principal: null,
-        scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
+        scope: EMPTY_SCOPE,
         operationId: null, finalized: true, inFlight: false,
         queryCount: 0, dbless: true, afterCommit: []
       };
@@ -203,7 +204,7 @@ export class RequestMiddleware implements NestMiddleware {
     const client = await this.pool.connect();
     const c: RequestCtx = {
       requestId, client, principal: null,
-      scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
+      scope: EMPTY_SCOPE,
       operationId: null, finalized: false, inFlight: false,
       queryCount: 0, dbless: false, afterCommit: []
     };

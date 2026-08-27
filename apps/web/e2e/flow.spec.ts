@@ -69,8 +69,10 @@ test("CRC 的一天：从今日清单走到方案偏离进台账", async ({ page
                       "TimesheetPosted", "CostPosted", "NextVisitScheduled"])
     await expect(effects).toContainText(type);
 
-  /* 尚未接上的订阅者也留在明面上 —— 与后端 pending 字段一致 */
-  await expect(effects).toContainText("RefreshProjections");
+  /* 七个订阅者全接上了，界面上不该再出现"待接"那一块。
+     它曾经挂着 RefreshProjections —— 断言它消失了，
+     是为了防止有人把"已交付"改回去而没人发现。 */
+  await expect(page.getByTestId("pending-subscribers")).toHaveCount(0);
 
   /* ⑦ 去质量台账确认偏离真的在那儿。
         「提交成功」不等于「后果发生了」，这一步才是闭环。 */

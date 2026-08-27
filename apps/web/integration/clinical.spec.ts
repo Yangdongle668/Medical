@@ -132,7 +132,7 @@ test.describe("完成一次访视：真库上的一串后果", () => {
     /* 真后端的副作用集合：补偿、工时、成本、下一次访视一定有 */
     for (const t of ["CompensationDue", "TimesheetPosted", "CostPosted", "NextVisitScheduled"])
       await expect(effects).toContainText(t);
-    /* 尚未接上的订阅者，后端 pending 字段照样透传到界面 */
-    await expect(effects).toContainText("RefreshProjections");
+    /* 七个订阅者全接上了，后端 pending 是空的 —— 界面上那一块不出现 */
+    await expect(page.getByTestId("pending-subscribers")).toHaveCount(0);
   });
 });

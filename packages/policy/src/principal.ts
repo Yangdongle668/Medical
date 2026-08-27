@@ -39,10 +39,16 @@ export interface ScopeContext {
   assignedSiteIds: ReadonlySet<string>;
   /** 本组承接的项目 */
   teamStudyIds: ReadonlySet<string>;
+  /** 正在接手的中心 —— 交接单还没完成，正式派工还没转过来。
+   *
+   *  它和 `assignedSiteIds` **必须分开**：这是一段会自己过期的临时可见性
+   *  （单子一完成或作废就没了），而派工是正式的。合成一个集合之后，
+   *  "他为什么看得见这个中心"就再也答不出来了。 */
+  handoverSiteIds: ReadonlySet<string>;
 }
 
 export const EMPTY_SCOPE: ScopeContext = {
-  assignedSiteIds: new Set(), teamStudyIds: new Set()
+  assignedSiteIds: new Set(), teamStudyIds: new Set(), handoverSiteIds: new Set()
 };
 
 /** 判定一个中心是否可见所需的四项事实 —— 与 app.site_visible() 的四个入参一一对应 */

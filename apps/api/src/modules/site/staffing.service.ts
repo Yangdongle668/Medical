@@ -3,6 +3,7 @@ import { DEFAULT_HANDOVER_ITEMS } from "@sitedesk/contracts";
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { NotifyService } from "../../infra/notify.js";
 import { evaluateGate } from "./gate.js";
 
 const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
@@ -44,7 +45,10 @@ const toItem = (r: ItemRow, today = new Date()) => ({
 
 @Injectable()
 export class StaffingService {
-  constructor(private readonly audit: AuditService) {}
+  constructor(
+    private readonly audit: AuditService,
+    private readonly notify: NotifyService
+  ) {}
 
   /* ── 启动清单 ─────────────────────────────────────────────────── */
   async checklist(siteId: string) {
@@ -134,22 +138,32 @@ export class StaffingService {
   }
 
   /* ── 人员 ─────────────────────────────────────────────────────── */
-  async listStaff(q: { limit: number; cursor?: string; roleKind?: string; successionGap?: boolean }) {
+  async listStaff(q: {
+    limit: number; cursor?: string; roleKind?: string;
+    successionGap?: boolean; activeOnly?: boolean;
+  }) {
     const c = ctx();
     const params: unknown[] = [];
     const conds = ["true"];
     const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
     if (q.roleKind) conds.push(`st.role_kind = ${add(q.roleKind)}`);
+    /* 停用的人默认**留在名册里** —— 「谁离职了、他的中心谁接的」是
+       交接台账要回答的问题，把人从名册上抹掉等于抹掉那段历史。
+       但发起交接的候选人列表要传 activeOnly：选一个登不进来的人，
+       等于把中心交给一个没人的位置。 */
+    if (q.activeOnly) conds.push("a.status = 'active'");
     if (q.cursor)   conds.push(`a.login > ${add(q.cursor)}`);
     const { rows } = await c.client.query<{
       account_id: string; login: string; display_name: string; role_kind: string;
       level: string; city: string; gcp_expires_on: Date | null;
       mentor_name: string | null; successor_name: string | null;
       successor_id: string | null; site_count: string;
+      status: string; disabled_reason: string | null;
     }>(`
       SELECT st.account_id, a.login, a.display_name, st.role_kind, st.level, st.city,
              st.gcp_expires_on, m.display_name AS mentor_name,
              su.display_name AS successor_name, st.successor_account_id AS successor_id,
+             a.status, a.disabled_reason,
              (SELECT count(*) FROM site_assignment sa
                WHERE sa.account_id = st.account_id AND sa.effective @> CURRENT_DATE) AS site_count
         FROM staff st JOIN account a ON a.id = st.account_id
@@ -168,7 +182,9 @@ export class StaffingService {
         mentorName: r.mentor_name, successorName: r.successor_name,
         siteCount: n,
         /* 带 3 个以上中心却没有继任者 —— 一旦离职就断档 */
-        successionGap: n >= 3 && !r.successor_id
+        successionGap: n >= 3 && !r.successor_id,
+        active: r.status === "active",
+        disabledReason: r.disabled_reason
       };
     });
     if (q.successionGap) items = items.filter(i => i.successionGap);
@@ -312,7 +328,27 @@ export class StaffingService {
       action: "发起交接", targetType: "handover", targetId: id,
       after: { to: to.rows[0].name, sites: b.studySiteIds.length },
       studySiteId: b.studySiteIds[0] ?? null, reason: b.reason });
-    return this.handover(id);
+
+    const made = await this.handover(id);
+
+    /* 通知接手人（欠账 D5）。**交接是发起人单方面做的动作** ——
+       在此之前接手人完全不知道有这回事：系统里多了一笔单子，
+       界面上多了几个中心，但没有任何人告诉他。
+       于是"交接"实际发生在微信群里，系统只是事后记账。 */
+    this.notify.queue({
+      accountId: b.toAccountId,
+      subject: `交接给你：${made.sites.length} 个中心（计划 ${b.plannedOn}）`,
+      text: [
+        `${to.rows[0].name}，你好：`, "",
+        `${made.fromName} 发起了一笔交接，计划 ${b.plannedOn} 生效，交给你的是：`,
+        ...made.sites.map(x => `  · ${x.code} ${x.hospital}`), "",
+        `原因：${b.reason}`, "",
+        "交接期间你已经能看到这几个中心的受试者与访视 ——",
+        "清单里最要命的一项是「在组受试者逐例交底」，**逐例交底之前先自己核对一遍**。",
+        "", "打开中心台的「交接」页逐项确认。"
+      ].join("\n")
+    });
+    return made;
   }
 
   async completeHandoverItem(id: string, seq: number) {
@@ -382,6 +418,37 @@ export class StaffingService {
       before: { status: "pending" }, after: { status: "completed", moved, skipped },
       studySiteId: h.sites[0]?.id ?? null,
       reason: `${h.fromName} → ${h.toName}：${h.reason}` });
+
+    /* 收单之后**两边都要收到通知**：接手人要知道派工真的转过来了
+       （在此之前那只是一段会过期的临时可见性），
+       原负责人要知道自己不再对这些中心负责 ——
+       "我以为还是我在管"和"我以为已经不归我了"一样贵。
+       由谁点的"完成"不重要：两个人都需要这条消息。 */
+    const list = moved.length ? moved.join("、") : "（无）";
+    this.notify.queue({
+      accountId: h.toAccountId,
+      subject: `交接已完成：${moved.length} 个中心现在归你`,
+      text: [
+        `${h.toName}，你好：`, "",
+        `${h.fromName} 与你的交接已完成，以下中心的派工已经转到你名下：`,
+        `  ${list}`, "",
+        ...(skipped.length
+          ? [`另有 ${skipped.length} 个中心未转移（${skipped.join("、")}）——`,
+             "原负责人当时已经没有它们的有效派工。如果这不符合预期，找项目总监确认。", ""]
+          : []),
+        "从现在起这些中心的访视、质疑、药品台账都由你负责。"
+      ].join("\n")
+    });
+    this.notify.queue({
+      accountId: h.fromAccountId,
+      subject: `交接已完成：${moved.length} 个中心已转出`,
+      text: [
+        `${h.fromName}，你好：`, "",
+        `你与 ${h.toName} 的交接已完成，以下中心的派工已经转出：`,
+        `  ${list}`, "",
+        "你不再看得到这些中心 —— 如果还有没交代完的事，现在就找接手人讲。"
+      ].join("\n")
+    });
 
     return {
       data: await this.handover(id),

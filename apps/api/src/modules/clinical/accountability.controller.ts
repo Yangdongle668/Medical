@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
-import { PageQuery, Uuid, DateOnly } from "@sitedesk/contracts";
+import { PageQuery, Uuid, DateOnly, QueryBool } from "@sitedesk/contracts";
 import { AccountabilityService } from "./accountability.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { command, idempotent } from "../../infra/command.js";
@@ -13,7 +13,7 @@ import { Operation } from "../../auth/guards.js";
    让人在关闭时勾四个框，等于把闸门变成一句口头承诺。 */
 
 const IpQ = PageQuery;
-const SpecimenQ = PageQuery.extend({ openOnly: z.coerce.boolean().optional() });
+const SpecimenQ = PageQuery.extend({ openOnly: QueryBool.optional() });
 
 const IpKind = z.enum(["receipt", "dispense", "return", "ship_back", "destroy"]);
 const RecordIp = z.object({

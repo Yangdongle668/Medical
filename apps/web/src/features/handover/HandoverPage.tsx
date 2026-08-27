@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { usePending } from "../../api/pending.js";
@@ -47,6 +48,8 @@ export function HandoverPage() {
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  /* 「这单是不是交给我的」决定要不要画上面那句提示 */
+  const [myId, setMyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const r = await call<{ items: Handover[] }>("listHandovers", { query: { limit: 50 } });
@@ -55,6 +58,9 @@ export function HandoverPage() {
       (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1)));
   }, []);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void loadMe().then(m => setMyId(m.account.id)).catch(() => setMyId(null));
+  }, []);
 
   async function run<T extends { sideEffects: SideEffect[] }>(
     key: string, fn: () => Promise<T>
@@ -133,11 +139,30 @@ export function HandoverPage() {
             </p>
             <div className="row">
               {h.sites.map(s => (
-                <span className="chip flat" key={s.id}>
+                <Link className="chip flat" key={s.id} to={`/sites/${s.id}`}
+                  data-testid="handover-site-link">
                   <span className="mono">{s.code}</span> {s.hospital}
-                </span>
+                </Link>
               ))}
             </div>
+
+            {/* 接手人在交接**完成之前**就看得到这几个中心（迁移 0021）。
+                清单里最要命的一项是「在组受试者逐例交底」——
+                在此之前他连一张名单都对不上：勾"已确认"的时候，
+                确认的是自己听懂了，不是自己核对过。
+
+                这段可见性自己会过期（单子一完成或作废就没了），
+                而它必须**在界面上说出来**：一个人突然看得见几个
+                本来看不见的中心，如果没人告诉他为什么，
+                他会以为那是自己本来就有的权限。 */}
+            {h.status === "pending" && myId === h.toAccountId && (
+              <p className="muted" data-testid="handover-preview-note">
+                交接期间你已经能看到上面这几个中心的受试者与访视 ——
+                <b>逐例交底之前先自己核对一遍</b>。
+                这段可见性在交接完成或取消时自动结束；
+                你看的每一眼都进审计（和正式派工一样）。
+              </p>
+            )}
 
             <div className="spread">
               <span className="muted">交接清单</span>
@@ -205,7 +230,12 @@ export function HandoverPage() {
 /* ── 发起交接 ─────────────────────────────────────────────────────
    接手人只能是**同工种**的在职人员：CRA 与 CRC 不能互相顶替。
    这条规则由后端强制（invariant `handover-same-role-kind`），
-   前端只把候选人缩到同工种 —— 是筛选，不是复刻校验。 */
+   前端只把候选人缩到同工种 —— 是筛选，不是复刻校验。
+
+   在职状态同理：候选人列表传 `activeOnly`，把已离职的人筛掉。
+   在此之前只筛工种不筛在职，而停用的人**会**出现在下拉里
+   （名册里留着他们是对的：「谁离职了、他的中心谁接的」是交接台账
+   要回答的问题）。选中之后后端拒了，界面上是一次白跑。 */
 function CreateHandover({ onDone }: { onDone: () => void }) {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
@@ -220,9 +250,16 @@ function CreateHandover({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     void (async () => {
       const me = await loadMe();
-      const s = await call<{ items: Staff[] }>("listStaff", { query: { limit: 200 } });
+      /* activeOnly：把已离职的人筛掉 —— 交给一个登不进来的人，
+         等于把中心交给一个没人的位置。 */
+      const s = await call<{ items: Staff[] }>("listStaff",
+        { query: { limit: 200, activeOnly: true } });
       const sites = await call<{ items: Site[] }>("listStudySites", { query: { limit: 200 } });
-      const mine = s.items.find(x => x.accountId === me.account.id);
+      /* 自己的工种得从**全量**名册里找：activeOnly 的那一份里也有自己，
+         但万一自己刚被停用（例如离职当天还开着页面），那一份就没有了，
+         于是"同工种"筛不出来 —— 界面会安静地把所有人都列出来。 */
+      const all = await call<{ items: Staff[] }>("listStaff", { query: { limit: 200 } });
+      const mine = all.items.find(x => x.accountId === me.account.id);
       setMyKind(mine?.roleKind ?? null);
       setStaff(s.items.filter(x => x.accountId !== me.account.id));
       setSites(sites.items);

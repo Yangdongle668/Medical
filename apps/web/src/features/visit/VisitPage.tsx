@@ -169,8 +169,13 @@ export function VisitPage() {
                   <div>{e.summary}</div>
                 </li>
               ))}
+              {/* 「尚未接上」那一块。现在七个订阅者全接上了，后端下发的
+                  pending 是空数组，于是这里一条都不画。
+                  **字段和这段渲染都留着** —— 下一个暂时接不上的订阅者
+                  出现时，它要能立刻在界面上说出来，而不是先经历一轮
+                  "为什么没人知道还差一件事"。 */}
               {result.pending?.map(p => (
-                <li key={p.name} className="pending">
+                <li key={p.name} className="pending" data-testid="pending-subscribers">
                   <div className="t">尚未接上</div>
                   <div>{p.name}：{p.what}（{p.phase}）</div>
                 </li>

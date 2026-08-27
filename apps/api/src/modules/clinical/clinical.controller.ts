@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
 import {
-  PageQuery, Uuid, DateOnly, WithReason,
+  PageQuery, Uuid, DateOnly, Timestamp, WithReason,
   SubjectState, VisitStatus, ScreenFailReason, WithdrawReason,
-  QualityKind, QualityState
+  QualityKind, QualityState, QueryBool
 } from "@sitedesk/contracts";
 import { ClinicalService } from "./clinical.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
@@ -18,15 +18,15 @@ const arr = <T extends z.ZodType>(t: T) =>
 const SubjectQ = PageQuery.extend({
   studySiteId: Uuid.optional(),
   state: arr(SubjectState),
-  outOfWindow: z.coerce.boolean().optional(),
+  outOfWindow: QueryBool.optional(),
   q: z.string().max(64).optional()
 });
 const VisitQ = PageQuery.extend({
   studySiteId: Uuid.optional(),
   subjectId: Uuid.optional(),
   status: arr(VisitStatus),
-  outOfWindow: z.coerce.boolean().optional(),
-  pendingPi: z.coerce.boolean().optional()
+  outOfWindow: QueryBool.optional(),
+  pendingPi: QueryBool.optional()
 });
 const QualityQ = PageQuery.extend({
   studySiteId: Uuid.optional(),
@@ -35,7 +35,7 @@ const QualityQ = PageQuery.extend({
 });
 const PaymentQ = PageQuery.extend({
   studySiteId: Uuid.optional(),
-  unpaid: z.coerce.boolean().optional()
+  unpaid: QueryBool.optional()
 });
 
 const CreateSubject = z.object({
@@ -61,6 +61,31 @@ const Pay = z.object({
   paidOn: DateOnly, receiptRef: z.string().trim().min(1).max(64)
 });
 const Empty = z.object({});
+const ReportSae = z.object({
+  subjectId: Uuid.optional(),
+  title: z.string().trim().min(1).max(200),
+  detail: z.string().trim().min(4).max(2000),
+  occurredAt: Timestamp,
+  reportedAt: Timestamp.optional()
+});
+const SaeReported = z.object({ reportedAt: Timestamp });
+const SoaVisitIn = z.object({
+  seq: z.coerce.number().int().min(0),
+  /* 与契约的 Code 同一条规则。`~` 不在允许字符里 ——
+     服务端腾编号位置时用的正是那个后缀。 */
+  visitCode: z.string().trim().min(1).max(64)
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
+  visitLabel: z.string().trim().min(1).max(120),
+  anchor: z.enum(["icf", "enroll"]),
+  offsetDays: z.coerce.number().int().min(-365).max(3650),
+  windowDays: z.coerce.number().int().min(0).max(120),
+  compensationCents: z.coerce.number().int().min(0),
+  tasks: z.array(z.string().trim().min(1).max(120)).max(30)
+});
+const ReplaceSoa = z.object({
+  visits: z.array(SoaVisitIn).min(1).max(80),
+  reason: z.string().trim().min(4).max(500)
+});
 
 @Controller("/v1")
 export class ClinicalController {
@@ -91,6 +116,15 @@ export class ClinicalController {
   listQuality(@Query(new ZodPipe(QualityQ)) q: z.infer<typeof QualityQ>) {
     return this.svc.listQualityEvents(q);
   }
+
+  @Get("/study-sites/:id/sae") @Operation("listSaeEvents")
+  listSae(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Query(new ZodPipe(PageQuery)) q: z.infer<typeof PageQuery>
+  ) { return this.svc.listSae(id, q); }
+
+  @Get("/studies/:id/visit-template") @Operation("getSoa")
+  soa(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.soa(id); }
 
   @Get("/subject-payments") @Operation("listSubjectPayments")
   listPayments(@Query(new ZodPipe(PaymentQ)) q: z.infer<typeof PaymentQ>) {
@@ -170,6 +204,27 @@ export class ClinicalController {
   ) { return command(this.idem, key, { id }, () => this.svc.markEdcEntered(id)); }
 
   /* ── 质量事件与补偿 ─────────────────────────────────────────────── */
+
+  @Post("/study-sites/:id/sae") @Operation("reportSae") @HttpCode(201)
+  reportSae(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(ReportSae)) b: z.infer<typeof ReportSae>,
+    @Headers("idempotency-key") key?: string
+  ) { return idempotent(this.idem, key, b, () => this.svc.reportSae(id, b)); }
+
+  @Post("/studies/:id/visit-template\\:replace") @Operation("replaceSoa")
+  replaceSoa(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(ReplaceSoa)) b: z.infer<typeof ReplaceSoa>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.replaceSoa(id, b)); }
+
+  @Post("/quality-events/:id\\:sae-reported") @Operation("reportSaeSubmitted")
+  saeReported(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(SaeReported)) b: z.infer<typeof SaeReported>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.markSaeReported(id, b)); }
 
   @Post("/quality-events/:id\\:close") @Operation("closeQualityEvent")
   closeQuality(

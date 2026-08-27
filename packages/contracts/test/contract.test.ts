@@ -6,6 +6,7 @@ import path from "node:path";
 import * as yaml from "js-yaml";
 import { allEndpoints, COMMON_ERRORS } from "../src/kernel/registry.js";
 import { ERRORS } from "../src/kernel/errors.js";
+import { QueryBool } from "../src/kernel/primitives.js";
 import "../src/index.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -88,6 +89,43 @@ describe("契约约定（不是风格偏好，每条对应一次事故）", () =
     execFileSync("npx", ["tsx", "scripts/gen-openapi.ts"], { cwd: ROOT, stdio: "pipe" });
     const now = fs.readFileSync(SPEC, "utf8");
     expect(yaml.load(now)).toEqual(doc);
+  });
+});
+
+describe("查询串里的布尔：?flag=false 必须真的是 false", () => {
+  /* 这条曾经在整个仓库里错着。`z.coerce.boolean()` 走 `Boolean(v)`，
+     而 `Boolean("false") === true` —— 于是 `?includeVoided=false`
+     和 `?includeVoided=true` 是一个意思。
+     只传 true 的地方看不出问题，所以它安静地待了很多个阶段。 */
+  it("认 true/1/yes 和 false/0/no，两边都对", () => {
+    for (const v of ["true", "1", "yes", "on", true])
+      expect(QueryBool.parse(v), `${String(v)} 应当是 true`).toBe(true);
+    for (const v of ["false", "0", "no", "off", false])
+      expect(QueryBool.parse(v), `${String(v)} 应当是 false`).toBe(false);
+  });
+
+  it("拼错的值报错，而不是猜一个", () => {
+    /* 把 ?flag=ture 当成 false 也是在猜；猜错时同样是安静的。 */
+    for (const v of ["ture", "", "2", "y"])
+      expect(() => QueryBool.parse(v), `${v} 应当被拒`).toThrow();
+  });
+
+  it("契约里所有布尔查询参数都用它 —— 不能再有 z.coerce.boolean()", () => {
+    /* 光修一处没有意义：下一个人照着旁边那行写，就又回去了。 */
+    const src = path.join(import.meta.dirname, "..", "src");
+    const bad: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const f = path.join(dir, e.name);
+        if (e.isDirectory()) walk(f);
+        /* primitives.ts 是定义 QueryBool 的地方，它的注释里写着这个反例 */
+        else if (e.name.endsWith(".ts") && e.name !== "primitives.ts"
+                 && fs.readFileSync(f, "utf8").includes("coerce.boolean"))
+          bad.push(path.relative(src, f));
+      }
+    };
+    walk(src);
+    expect(bad, "这些文件还在用 z.coerce.boolean()，?flag=false 会被读成 true").toEqual([]);
   });
 });
 

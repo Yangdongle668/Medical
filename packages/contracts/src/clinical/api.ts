@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { define } from "../kernel/registry.js";
-import { Uuid, DateOnly } from "../kernel/primitives.js";
+import { Uuid, DateOnly, Timestamp, QueryBool } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
 import {
   Subject, SubjectState, SubjectVisit, VisitStatus, SiteFunnel,
   ScreenFailReason, WithdrawReason,
-  QualityEvent, QualityKind, QualityState, SubjectPayment
+  QualityEvent, QualityKind, QualityState, SubjectPayment, SaeLedger,
+  Soa, SoaVisit
 } from "./model.js";
 
 const CTX = "clinical";
@@ -25,7 +26,7 @@ define({
   query: PageQuery.extend({
     studySiteId: Uuid.optional(),
     state: z.array(SubjectState).optional(),
-    outOfWindow: z.coerce.boolean().optional().describe("只看已超窗或今日到期的"),
+    outOfWindow: QueryBool.optional().describe("只看已超窗或今日到期的"),
     q: z.string().max(64).optional()
   }),
   response: page(Subject)
@@ -61,8 +62,8 @@ define({
     studySiteId: Uuid.optional(),
     subjectId: Uuid.optional(),
     status: z.array(VisitStatus).optional(),
-    outOfWindow: z.coerce.boolean().optional(),
-    pendingPi: z.coerce.boolean().optional().describe("只看待 PI 确认的")
+    outOfWindow: QueryBool.optional(),
+    pendingPi: QueryBool.optional().describe("只看待 PI 确认的")
   }),
   response: page(SubjectVisit)
 });
@@ -80,13 +81,62 @@ define({
 });
 
 define({
+  id: "listSaeEvents", method: "get", path: "/v1/study-sites/{id}/sae",
+  layer: "L1", context: CTX,
+  summary: "SAE 台账与 24 小时及时率",
+  description:
+    "及时率由台账**算出来**（`@sitedesk/calc`），不是写死的常量 —— " +
+    "这正是计算引擎独立成一层的原因。\n" +
+    "超过 24 小时仍未上报的直接计入迟报：否则一条永远不上报的 SAE " +
+    "就永远不进分母，越拖越好看。",
+  params: z.object({ id: Uuid }),
+  query: PageQuery,
+  response: SaeLedger
+});
+
+define({
+  id: "reportSae", method: "post", path: "/v1/study-sites/{id}/sae",
+  layer: "L1", context: CTX, status: 201,
+  summary: "登记一条 SAE",
+  description:
+    "`occurredAt` 是**发生（或研究者知悉）**的时刻，不是录入时刻 —— " +
+    "两者混为一谈，及时率就永远是 100%。\n" +
+    "登记时可以一并填上报时刻；也可以先记事件、上报之后再补（见 reportSaeSubmitted）。",
+  action: "subjWrite",
+  params: z.object({ id: Uuid }),
+  body: z.object({
+    subjectId: Uuid.optional(),
+    title: z.string().trim().min(1).max(200),
+    detail: z.string().trim().min(4).max(2000),
+    occurredAt: Timestamp,
+    reportedAt: Timestamp.optional()
+  }),
+  response: QualityEvent,
+  errors: ["invariant-violated"]
+});
+
+define({
+  id: "reportSaeSubmitted", method: "post", path: "/v1/quality-events/{id}:sae-reported",
+  layer: "L2", context: CTX,
+  summary: "登记 SAE 已上报",
+  description:
+    "**超过 24 小时的，这一步会同时自动生成一条 `sae_late` 质量事件**（I6）—— " +
+    "在同一个事务里写，不是事后补录。它不可跳过，也不能人工删除，只能整改关闭。",
+  action: "subjWrite",
+  params: ById,
+  body: z.object({ reportedAt: Timestamp }),
+  response: commandResult(QualityEvent),
+  errors: ["invariant-violated", "conflict-version", "idempotency-key-reused"]
+});
+
+define({
   id: "listSubjectPayments", method: "get", path: "/v1/subject-payments",
   layer: "L1", context: CTX,
   summary: "受试者补偿台账",
   action: "subjRead",
   query: PageQuery.extend({
     studySiteId: Uuid.optional(),
-    unpaid: z.coerce.boolean().optional()
+    unpaid: QueryBool.optional()
   }),
   response: page(SubjectPayment)
 });
@@ -266,4 +316,34 @@ define({
   body: z.object({ paidOn: DateOnly, receiptRef: z.string().trim().min(1).max(64) }),
   response: commandResult(SubjectPayment),
   errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+/* ── SOA 配置（欠账 D2） ───────────────────────────────────────────── */
+
+define({
+  id: "getSoa", method: "get", path: "/v1/studies/{id}/visit-template",
+  layer: "L1", context: CTX,
+  summary: "项目的访视计划表（SOA）",
+  description: "每一条带上「已经按它排出去多少次访视」—— 那个数大于 0 就删不掉。",
+  params: z.object({ id: Uuid }),
+  response: Soa
+});
+
+define({
+  id: "replaceSoa", method: "post", path: "/v1/studies/{id}/visit-template\\:replace",
+  layer: "L2", context: CTX,
+  summary: "修订访视计划表",
+  description:
+    "整份替换。**只影响此后才排出来的访视**，已排的不动。\n" +
+    "已经排出去的 seq 不能删，也不能改锚点 —— " +
+    "那会让已存在的访视指向一个不存在的定义。\n" +
+    "改 SOA 对应的是一次方案修订，必须写原因，前后快照进变更史。",
+  action: "manage",
+  params: z.object({ id: Uuid }),
+  body: z.object({
+    visits: z.array(SoaVisit.omit({ scheduledCount: true })).min(1).max(80),
+    reason: z.string().trim().min(4).max(500)
+  }),
+  response: commandResult(Soa),
+  errors: ["validation-failed", "invariant-violated", "idempotency-key-reused"]
 });

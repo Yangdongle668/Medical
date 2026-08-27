@@ -42,10 +42,20 @@ export const VISIT_COMPLETED_SUBSCRIBERS: readonly Subscriber[] = [
   { name: "PostVisitTimesheet", what: "按费率卡生成工时与成本快照（I1 / I2）",
     context: "Timesheet & Cost", effect: "TimesheetPosted", delivered: true },
 
-  /* 以下一条尚未交付。**它不是被遗忘的，是被记着的。** */
+  /* 这一条挂了五个阶段，而它其实**一直是成立的** —— 只是没有人去确认。
+     入组漏斗（getSiteFunnel）与单中心损益（getSitePnl）都是**读时计算**：
+     直接从 subject / subject_visit / timesheet_entry 聚合，
+     没有物化视图、没有投影表、没有缓存。于是"刷新"这个动作没有对象：
+     事务一提交，下一次查询看到的就是新数字。
+
+     这不等于可以把它从册子上划掉。两件事让它继续有意义：
+     ① 下面的测试**实测**完成一次访视之后漏斗与损益真的动了 ——
+        "读时计算所以自动刷新"如果没人验，它和一个 pending 标记一样空；
+     ② 另一条测试断言库里**没有物化视图**。哪天有人为了性能加了一张
+        投影表，这一条就重新变成真活 —— 而那时测试会先红，
+        不会等到某个月的驾驶舱数字对不上才被发现。 */
   { name: "RefreshProjections", what: "刷新入组漏斗、单中心 P&L、驾驶舱投影",
-    context: "Analytics", effect: null,
-    delivered: false, pendingPhase: "Phase 6" }
+    context: "Analytics", effect: null, delivered: true }
 ];
 
 /** 完成访视时，尚未接上的订阅者 —— 进响应的 `pending` 字段，一线看得到。 */

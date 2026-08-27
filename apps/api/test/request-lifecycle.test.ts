@@ -5,6 +5,7 @@ import { of } from "rxjs";
 import { RequestMiddleware } from "../src/infra/request.middleware.js";
 import { TxInterceptor } from "../src/infra/tx.interceptor.js";
 import { runInCtx, type RequestCtx } from "../src/infra/ctx.js";
+import { EMPTY_SCOPE } from "@sitedesk/policy";
 
 /* ════════════════════════════════════════════════════════════════════
    请求生命周期 —— 连接什么时候可以收回去。
@@ -137,7 +138,7 @@ describe("事务收尾：响应和 COMMIT 谁先谁后", () => {
     };
     return {
       requestId: "t", client, principal: null,
-      scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
+      scope: EMPTY_SCOPE,
       operationId: null, finalized: false, inFlight: false, afterCommit: []
     } as unknown as RequestCtx;
   }

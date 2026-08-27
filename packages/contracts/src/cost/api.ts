@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { define } from "../kernel/registry.js";
-import { Uuid, DateOnly, CentsNonNeg } from "../kernel/primitives.js";
+import { Uuid, DateOnly, CentsNonNeg, QueryBool } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
 import { RateCard, RoleKindForRate, TimesheetEntry, WorkType, SitePnl } from "./model.js";
@@ -21,7 +21,7 @@ define({
     accountId: Uuid.optional(),
     workType: z.array(WorkType).optional(),
     from: DateOnly.optional(), to: DateOnly.optional(),
-    includeVoided: z.coerce.boolean().optional().describe("默认不含已作废")
+    includeVoided: QueryBool.optional().describe("默认不含已作废")
   }),
   response: page(TimesheetEntry)
 });
