@@ -112,6 +112,9 @@ export class ClinicalController {
     return this.svc.listVisits(q);
   }
 
+  @Get("/subject-visits/:id") @Operation("getSubjectVisit")
+  getVisit(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.visit(id); }
+
   @Get("/quality-events") @Operation("listQualityEvents")
   listQuality(@Query(new ZodPipe(QualityQ)) q: z.infer<typeof QualityQ>) {
     return this.svc.listQualityEvents(q);

@@ -92,7 +92,10 @@ const me = () => {
     permissions: {
       rowRule: r.rowRule, fields: [...r.fields],
       actions: [...r.actions], modules: [...r.modules]
-    }
+    },
+    /* mock 里的人是用一次性链接进来的，没有口令 —— 于是也不会挂那条红条。
+       要看红条长什么样，把 passwordIsInitial 改成 true。 */
+    credentials: { hasPassword: false, passwordIsInitial: false }
   };
 };
 
@@ -116,6 +119,20 @@ export const scenarioHandlers = [
   http.post(pathToRegExp("/v1/auth/dev-session"), () =>
     HttpResponse.json({ token: "mock-token", expiresAt: new Date(Date.now() + 8 * 3600e3).toISOString() })),
 
+  /* 口令登录。**不能落到兜底处理器上** —— 那一层照契约回一份示例，
+     于是"随便打个口令都能登进去"，而这个端点存在的全部意义就是拦住那件事。
+     mock 里认一对：admin/admin（出厂管理员）。其余一律 401，
+     且**三种失败一个说法** —— 和真后端一致，否则前端会照着 mock 的
+     区分去写提示文案，上真库就对不上。 */
+  http.post(pathToRegExp("/v1/auth/password-session"), async ({ request }) => {
+    const b = await request.json() as { login: string; password: string };
+    if (b.login === "admin" && b.password === "admin")
+      return HttpResponse.json(
+        { token: "mock-token", expiresAt: new Date(Date.now() + 8 * 3600e3).toISOString() });
+    return HttpResponse.json(
+      problem("unauthenticated", 401, "登录名或口令不对"), { status: 401 });
+  }),
+
   http.get(pathToRegExp("/v1/subject-visits"), ({ request }) => {
     const q = new URL(request.url).searchParams;
     let items = scenario.visits.map(withDaysLeft);
@@ -126,6 +143,15 @@ export const scenarioHandlers = [
     if (status.length) items = items.filter(v => status.includes(v.status));
     items.sort(byWindow);
     return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  /* 详情页取的是**这一条**。放在列表处理器后面没关系：
+     pathToRegExp 结尾锚了 `(\?|$)`，`/v1/subject-visits` 那条匹配不到带 id 的路径。 */
+  http.get(pathToRegExp("/v1/subject-visits/{id}"), ({ request }) => {
+    const [, id] = new URL(request.url).pathname.match(/\/subject-visits\/([^/?]+)/) ?? [];
+    const v = scenario.visits.find(x => x.id === id);
+    if (!v) return HttpResponse.json(problem("not-found", 404, "访视不存在"), { status: 404 });
+    return HttpResponse.json(withDaysLeft(v));
   }),
 
   http.post(pathToRegExp("/v1/subject-visits/{id}/tasks/{seq}:done"), ({ request }) => {

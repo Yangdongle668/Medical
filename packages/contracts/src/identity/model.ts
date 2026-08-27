@@ -85,6 +85,15 @@ export const Principal = z.object({
     fields: z.array(FieldKey),
     actions: z.array(ActionKey),
     modules: z.array(z.string())
+  }),
+  /** 本人的登录方式现状。**只描述自己**，不泄漏别人有没有设口令。 */
+  credentials: z.object({
+    hasPassword: z.boolean()
+      .describe("设过口令没有。false 是正常状态 —— 多数人只用一次性链接。"),
+    passwordIsInitial: z.boolean()
+      .describe(
+        "还在用出厂口令（admin）。界面据此挂红条。" +
+        "这个标记只能从 true 变 false —— 能被重新点亮的报警灯等于没有报警灯。")
   })
 }).meta({ id: "Principal" });
 

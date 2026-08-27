@@ -69,6 +69,22 @@ define({
 });
 
 define({
+  id: "getSubjectVisit", method: "get", path: "/v1/subject-visits/{id}",
+  layer: "L1", context: CTX,
+  summary: "一次访视",
+  description:
+    "详情页要的是**这一条**，不是「列表的前 200 条里碰巧有它」。\n" +
+    "后者在种子只有 10 条访视时看不出区别，访视上了几百条之后，\n" +
+    "点开一条历史访视就永远停在「加载中…」—— 没有报错，没有空态，\n" +
+    "因为客户端 find 不到只会得到 undefined，而 undefined 和「还没加载完」长得一模一样。\n\n" +
+    "范围外与不存在同样是 404。",
+  action: "subjRead",
+  params: z.object({ id: Uuid }),
+  response: SubjectVisit,
+  errors: ["not-found"]
+});
+
+define({
   id: "listQualityEvents", method: "get", path: "/v1/quality-events",
   layer: "L1", context: CTX,
   summary: "质量事件",

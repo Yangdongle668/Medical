@@ -33,11 +33,42 @@ const grants = async code => (await o.query(GRANTS, [code])).rows;
 describe("app.provision_tenant：开一个新租户", () => {
   const CODE = "t_" + Math.random().toString(36).slice(2, 8);
 
-  it("开得出来，且拿到八个标准角色", async () => {
+  it("开得出来，且拿到九个标准角色", async () => {
     const { rows } = await o.query("SELECT app.provision_tenant($1, $2) AS id", [CODE, "测试租户"]);
     expect(rows[0].id).toMatch(/^[0-9a-f-]{36}$/);
     const g = await grants(CODE);
-    expect(g.map(r => r.role)).toEqual(["boss", "cra", "crc", "dm", "inst", "pi", "pm", "qa"]);
+    expect(g.map(r => r.role))
+      .toEqual(["admin", "boss", "cra", "crc", "dm", "inst", "pi", "pm", "qa"]);
+  });
+
+  it("开完就有一个能登进去的管理员 —— 这才是「开户」这个词的意思", async () => {
+    /* 在此之前开户只到角色为止：租户有了、权限矩阵有了、**零个账号**。
+       而建账号要求调用方先登录 —— 一次干净开户的结果是没人进得去。
+       这条测试钉的就是那个洞。 */
+    const { rows } = await o.query(
+      `SELECT a.login, a.display_name, r.code AS role, p.is_initial
+         FROM account a
+         JOIN role r ON r.id = a.role_id
+         JOIN tenant t ON t.id = a.tenant_id
+         LEFT JOIN auth_password p ON p.account_id = a.id
+        WHERE t.code = $1`, [CODE]);
+    expect(rows).toEqual([{
+      login: "admin", display_name: "系统管理员", role: "admin", is_initial: true
+    }]);
+  });
+
+  it("重复开户不重置管理员口令 —— 否则每次重新开户都是一把万能钥匙", async () => {
+    const hash = async () => (await o.query(
+      `SELECT p.hash FROM auth_password p JOIN account a ON a.id = p.account_id
+         JOIN tenant t ON t.id = a.tenant_id WHERE t.code = $1`, [CODE])).rows[0].hash;
+    /* 先把口令改掉，模拟"客户装完第一件事就改了密" */
+    await o.query(
+      `SELECT app.set_password(a.id, $2, false) FROM account a
+         JOIN tenant t ON t.id = a.tenant_id WHERE t.code = $1`,
+      [CODE, "scrypt$16384$8$1$dGVzdC1zYWx0$dGVzdC1oYXNo"]);
+    const changed = await hash();
+    await o.query("SELECT app.provision_tenant($1, $2)", [CODE, "测试租户"]);
+    expect(await hash()).toBe(changed);
   });
 
   it("新租户的行/列/动作/模块授予与演示租户逐条一致", async () => {

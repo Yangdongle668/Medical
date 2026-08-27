@@ -44,6 +44,7 @@ const WINDOW_MS = 10 * 60_000;
 export class RateLimitService {
   readonly link: RateLimiter;
   readonly redeem: RateLimiter;
+  readonly password: RateLimiter;
 
   constructor(@Inject(POOL) pool: Pool) {
     /* 默认走共享。留一个关掉的开关，是给"只有一台机器、且不希望未认证
@@ -60,5 +61,12 @@ export class RateLimitService {
       positiveInt("SITEDESK_LINK_LIMIT", 5), WINDOW_MS, shared);
     this.redeem = new RateLimiter("auth:redeem",
       positiveInt("SITEDESK_REDEEM_LIMIT", 10), WINDOW_MS, shared);
+    /* 口令登录**同时**有库里的账号锁定（auth_password.locked_until）。
+       两层不重复：账号锁定按账号，防的是撞这一个号；
+       这里按 login 计数，防的是拿一个账号试一整本口令表 ——
+       后者在锁定生效之前就已经打了几十个请求。
+       配额比链接申请松一点：打错口令是日常，收不到链接不是。 */
+    this.password = new RateLimiter("auth:password",
+      positiveInt("SITEDESK_PASSWORD_LIMIT", 20), WINDOW_MS, shared);
   }
 }

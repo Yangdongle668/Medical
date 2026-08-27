@@ -180,9 +180,14 @@ describe("动作维度：看得到不等于能操作", () => {
 });
 
 describe("account 表：外部方只看得到自己", () => {
-  it("内部员工看得到全部账号", async () => {
+  it("内部员工看得到全部账号 —— 含那个出厂管理员", async () => {
     const r = await C.linmin!.get("/v1/accounts?limit=200");
-    expect(r.body.items.length).toBe(20);
+    /* 20 个演示账号 + admin（迁移 0026 建的，不在种子里）。
+       这条断言的重点是"全部"，所以顺带钉住 admin 确实在里面 ——
+       只数个数的话，管理员账号哪天从迁移里掉出去也不会有人发现。 */
+    const logins = r.body.items.map((a: { login: string }) => a.login);
+    expect(logins).toContain("admin");
+    expect(logins.length).toBe(21);
   });
   it("机构办只看得到自己", async () => {
     const r = await C.zhanghm!.get("/v1/accounts?limit=200");

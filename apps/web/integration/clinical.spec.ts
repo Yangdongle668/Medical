@@ -22,8 +22,12 @@ async function rowCodes(page: Page): Promise<string[]> {
 async function loginAs(page: Page, testid: string) {
   await page.goto("/login");
   /* <details> 要点 <summary> 才会展开 —— 点 role=group（也就是 details 本身）
-     不会切换它，于是里面的按钮一直不可见。 */
-  await page.locator("details summary").click();
+     不会切换它，于是里面的按钮一直不可见。
+     **按 testid 定位而不是 `details summary`**：登录页现在有两块折叠区
+     （口令登录、开发登录），裸选择器取的是第一块，于是这里会去展开口令表单，
+     然后在里面找不到 dev-* 按钮 —— 报错说的是"元素不存在"，
+     而真正的原因是"展开错了那一块"。 */
+  await page.getByTestId("dev-panel").locator("summary").click();
   await page.getByTestId(testid).click();
   await expect(page).toHaveURL(/\/today$/);
 }

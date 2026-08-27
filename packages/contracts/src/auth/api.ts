@@ -68,3 +68,50 @@ define({
   summary: "登出（撤销本人全部会话）",
   description: "会话可撤销是外部方场景的硬要求：机构老师离职、PI 换人都要能立刻断开。"
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   口令。
+
+   上面那段注释说「外部方不用密码」——那句话现在仍然成立，
+   这里加的不是给机构老师用的第二条路，是**开机的那把钥匙**：
+   一次干净的部署跑完，库里零个账号，而建账号要求先登录。
+   要登录得先有账号，要有账号得先登录 —— 装完了打不开门。
+
+   所以口令的定位是"内部账号可选、出厂管理员必需"，
+   不是"所有人都改用密码"。`hasPassword` 为 false 是正常状态。
+   ════════════════════════════════════════════════════════════════════ */
+
+define({
+  id: "passwordLogin", method: "post", path: "/v1/auth/password-session",
+  layer: "L1", context: CTX,
+  summary: "口令登录",
+  description:
+    "**账号不存在、账号没设口令、口令不对，返回的是同一个 401，且耗时相同。**\n" +
+    "三者任一被区分出来，这个接口就成了账号枚举器；\n" +
+    "耗时不同也一样能读出来 —— 所以验证失败时服务端照样烧掉一次 scrypt。\n\n" +
+    "连续失败会锁定，锁定时长随失败次数指数增长（封顶 15 分钟）。\n" +
+    "固定阈值对撞库没用而对本人很痛：打错三次的人被关半小时，脚本换个账号继续跑。",
+  body: z.object({
+    login: z.string().min(1).max(64),
+    password: z.string().min(1).max(200)
+  }),
+  response: SessionGranted,
+  errors: ["unauthenticated", "rate-limited"]
+});
+
+define({
+  id: "changePassword", method: "post", path: "/v1/auth/password",
+  layer: "L1", context: CTX, status: 204,
+  summary: "改自己的口令",
+  description:
+    "要验旧口令 —— 会话被偷走时，改密是攻击者第一件想做的事。\n" +
+    "没有旧口令的账号（只用一次性链接登录的人）传空串即可：\n" +
+    "他是靠一个真实会话进来的，那本身就是身份证明。\n\n" +
+    "改完**撤销本人其余会话**，只留当前这一个：改密的常见理由就是「号可能被人拿了」，\n" +
+    "而改完不踢掉别的会话，等于把这件事做了一半。",
+  body: z.object({
+    currentPassword: z.string().max(200),
+    newPassword: z.string().min(8).max(200)
+  }),
+  errors: ["unauthenticated", "validation-failed"]
+});

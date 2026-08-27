@@ -51,12 +51,21 @@ export class IdentityService {
       : p.rowRule === "none" ? "无数据范围"
       : `${nSites} 个中心 · ${nStudies} 个项目`;
 
+    /* 自己那一行。RLS 已经把它限在本人 —— 这里不必再带 account_id 条件，
+       但还是带上：策略是防线，条件是意图，两者说的是同一件事时才对得起读者。 */
+    const { rows: pw } = await c.client.query<{ is_initial: boolean }>(
+      `SELECT is_initial FROM auth_password WHERE account_id = $1`, [p.accountId]);
+
     return {
       account: toAccount(rows[0]!),
       scopeLabel: label,
       permissions: {
         rowRule: p.rowRule, fields: [...p.fields],
         actions: [...p.actions], modules: [...p.modules]
+      },
+      credentials: {
+        hasPassword: pw.length > 0,
+        passwordIsInitial: pw[0]?.is_initial ?? false
       }
     };
   }

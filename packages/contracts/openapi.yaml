@@ -668,6 +668,190 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/auth/password:
+    post:
+      operationId: changePassword
+      tags:
+        - auth
+      summary: 改自己的口令
+      description: |-
+        要验旧口令 —— 会话被偷走时，改密是攻击者第一件想做的事。
+        没有旧口令的账号（只用一次性链接登录的人）传空串即可：
+        他是靠一个真实会话进来的，那本身就是身份证明。
+
+        改完**撤销本人其余会话**，只留当前这一个：改密的常见理由就是「号可能被人拿了」，
+        而改完不踢掉别的会话，等于把这件事做了一半。
+      x-layer: L1
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: 改自己的口令
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/auth/password-session:
+    post:
+      operationId: passwordLogin
+      tags:
+        - auth
+      summary: 口令登录
+      description: |-
+        **账号不存在、账号没设口令、口令不对，返回的是同一个 401，且耗时相同。**
+        三者任一被区分出来，这个接口就成了账号枚举器；
+        耗时不同也一样能读出来 —— 所以验证失败时服务端照样烧掉一次 scrypt。
+
+        连续失败会锁定，锁定时长随失败次数指数增长（封顶 15 分钟）。
+        固定阈值对撞库没用而对本人很痛：打错三次的人被关半小时，脚本换个账号继续跑。
+      x-layer: L1
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordLoginRequest'
+      responses:
+        '200':
+          description: 口令登录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionGranted'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/auth/session:
     get:
       operationId: currentSession
@@ -5659,6 +5843,103 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/subject-visits/{id}:
+    get:
+      operationId: getSubjectVisit
+      tags:
+        - clinical
+      summary: 一次访视
+      description: |-
+        详情页要的是**这一条**，不是「列表的前 200 条里碰巧有它」。
+        后者在种子只有 10 条访视时看不出区别，访视上了几百条之后，
+        点开一条历史访视就永远停在「加载中…」—— 没有报错，没有空态，
+        因为客户端 find 不到只会得到 undefined，而 undefined 和「还没加载完」长得一模一样。
+
+        范围外与不存在同样是 404。
+      x-layer: L1
+      x-required-action: subjRead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        '200':
+          description: 一次访视
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectVisit'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/subject-visits/{id}:complete:
     post:
       operationId: completeSubjectVisit
@@ -7842,10 +8123,24 @@ components:
             - actions
             - modules
           additionalProperties: false
+        credentials:
+          type: object
+          properties:
+            hasPassword:
+              type: boolean
+              description: 设过口令没有。false 是正常状态 —— 多数人只用一次性链接。
+            passwordIsInitial:
+              type: boolean
+              description: 还在用出厂口令（admin）。界面据此挂红条。这个标记只能从 true 变 false —— 能被重新点亮的报警灯等于没有报警灯。
+          required:
+            - hasPassword
+            - passwordIsInitial
+          additionalProperties: false
       required:
         - account
         - scopeLabel
         - permissions
+        - credentials
       additionalProperties: false
     AuditEntry:
       type: object
@@ -10035,6 +10330,35 @@ components:
           maxLength: 128
       required:
         - login
+      additionalProperties: false
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          maxLength: 200
+        newPassword:
+          type: string
+          minLength: 8
+          maxLength: 200
+      required:
+        - currentPassword
+        - newPassword
+      additionalProperties: false
+    PasswordLoginRequest:
+      type: object
+      properties:
+        login:
+          type: string
+          minLength: 1
+          maxLength: 64
+        password:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+        - login
+        - password
       additionalProperties: false
     CurrentSessionResponse:
       type: object

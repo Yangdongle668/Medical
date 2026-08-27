@@ -1,9 +1,16 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
+import type { Pool } from "pg";
+import { POOL } from "../infra/db.js";
 import { randomBytes, createHash } from "node:crypto";
 import { ctx } from "../infra/ctx.js";
 import { ProblemException } from "../infra/problem.js";
 import { emit } from "../infra/log.js";
 import { LoginDelivery, type Channel } from "../infra/login-delivery.js";
+import { hashPassword, verifyPassword, passwordProblem } from "./password.js";
+
+/** 三种失败一个说法。区分开来，这个端点就是账号枚举器。 */
+const wrongPassword = () =>
+  new ProblemException("unauthenticated", { detail: "登录名或口令不对" });
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 /** 台的公开地址 —— 链接就是拿它拼的。填错了，链接点开会落到别处。 */
@@ -41,7 +48,11 @@ const SESSION_TTL_H = () => intEnv("SITEDESK_SESSION_TTL_H", 8, 1, 24 * 30);
    ════════════════════════════════════════════════════════════════════ */
 @Injectable()
 export class AuthService {
-  constructor(private readonly delivery: LoginDelivery) {}
+  constructor(
+    private readonly delivery: LoginDelivery,
+    /** 口令失败计数要活过业务回滚，所以得有一条不属于本次事务的连接。 */
+    @Inject(POOL) private readonly pool: Pool
+  ) {}
 
   /** 签发一次性登录链接，并**交给通道送给本人**。
    *
@@ -122,6 +133,88 @@ export class AuthService {
       [accountId, sha256(token), String(SESSION_TTL_H()), userAgent]);
     await c.client.query(`UPDATE account SET last_login_at = now() WHERE id = $1`, [accountId]);
     return { token, expiresAt: rows[0]!.expires_at.toISOString() };
+  }
+
+  /* ── 口令 ───────────────────────────────────────────────────────
+     成功与三种失败（账号不存在 / 没设口令 / 口令不对）返回的东西完全一样，
+     **而且耗时也要一样** —— 见 password.ts 里那段「照样烧掉一次 scrypt」。 */
+  async passwordLogin(login: string, password: string, userAgent: string | null) {
+    const c = ctx();
+    const { rows } = await c.client.query<{
+      account_id: string; hash: string | null; is_initial: boolean;
+      locked_until: Date | null;
+    }>(`SELECT account_id, hash, is_initial, locked_until
+          FROM app.password_challenge($1)`, [login]);
+    const r = rows[0];
+
+    /* 账号不存在：**也要走一次验证**再拒。直接 return 的话，
+       "这个登录名在不在"就能用秒表读出来。 */
+    if (!r) {
+      await verifyPassword(password, null);
+      emit("info", "password-login", "口令登录失败：账号不存在或已停用", {});
+      throw wrongPassword();
+    }
+
+    if (r.locked_until && r.locked_until > new Date()) {
+      const sec = Math.ceil((r.locked_until.getTime() - Date.now()) / 1000);
+      emit("warn", "password-login", "口令登录被账号锁定挡下", { login });
+      /* 这里**说得出**锁定还剩多久 —— 能走到这一步的人已经证明了
+         这个账号存在（他触发过锁定），瞒着他只会让本人打不开门还不知道为什么。 */
+      throw new ProblemException("rate-limited", {
+        detail: `连续失败次数过多，账号已被临时锁定，请在 ${sec} 秒后重试。` });
+    }
+
+    const ok = await verifyPassword(password, r.hash);
+    if (!ok) {
+      /* **走池子，不走请求那条连接。**
+         这里马上要抛 401，抛错就回滚 —— 记在请求连接上的失败次数
+         会跟着一起没掉。也就是说：猜错的每一次都不算数，
+         锁定永远不会生效，而 auth_password.failed_count 会一直是 0，
+         看上去像"从来没人猜错过"。
+
+         同样的坑 PgSharedCounter 里已经栽过一次并写在注释里了
+         （"限流的计数必须活过业务的回滚"）—— 这是第二处。 */
+      await this.pool.query(`SELECT app.password_login_failed($1)`, [r.account_id]);
+      emit("info", "password-login",
+        r.hash ? "口令登录失败：口令不对" : "口令登录失败：该账号没有设过口令", {});
+      throw wrongPassword();
+    }
+
+    await c.client.query(`SELECT app.password_login_ok($1)`, [r.account_id]);
+    if (r.is_initial)
+      emit("warn", "password-login",
+        `账号 ${login} 用出厂口令登录成功 —— 请立刻改密`, { login });
+    return this.openSession(r.account_id, userAgent);
+  }
+
+  /** 改自己的口令。改完只留当前这一个会话。 */
+  async changePassword(currentPassword: string, newPassword: string, sessionToken: string | null) {
+    const c = ctx(), p = c.principal!;
+    const bad = passwordProblem(newPassword);
+    if (bad) throw new ProblemException("validation-failed", { detail: bad });
+
+    const { rows } = await c.client.query<{ hash: string }>(
+      `SELECT hash FROM auth_password WHERE account_id = $1`, [p.accountId]);
+    const existing = rows[0]?.hash ?? null;
+
+    /* 有口令就必须验旧的。会话被偷走时，改密是攻击者第一件想做的事 ——
+       只凭一个会话就能换掉口令，等于会话一旦泄漏账号就永久失守。
+       没口令的人（只用一次性链接登录）不必验：他手上那个真实会话
+       本身就是身份证明，而"输入你没有的旧口令"是一条走不通的路。 */
+    if (existing && !await verifyPassword(currentPassword, existing))
+      throw new ProblemException("unauthenticated", { detail: "当前口令不对" });
+
+    await c.client.query(`SELECT app.set_password($1, $2, false)`,
+      [p.accountId, await hashPassword(newPassword)]);
+
+    /* 改密的常见理由就是「号可能被人拿了」。
+       不踢掉别的会话，这件事就只做了一半 —— 对方那个会话还开着。
+       **留下当前这一个**：把自己一起踢掉，人改完密码就被弹回登录页，
+       会以为改失败了。 */
+    await c.client.query(
+      `UPDATE auth_session SET revoked_at = now(), revoke_reason = $1
+        WHERE account_id = $2 AND revoked_at IS NULL AND token_hash <> $3`,
+      ["改密后清场", p.accountId, sha256(sessionToken ?? "")]);
   }
 
   async revoke(reason: string): Promise<void> {

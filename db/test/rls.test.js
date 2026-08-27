@@ -171,7 +171,15 @@ describe("account 表：外部方只看得到自己", () => {
     return rows.map(r => r.login);
   });
   it("内部员工看得到全部账号", async () => {
-    expect((await visibleAccounts(ID.linmin)).length).toBe(20);
+    /* 20 个演示账号 + 出厂管理员（迁移 0026）。
+       断言的是"全部"，所以拿库里真实的总数比 —— 写死 21 的话，
+       下次种子里多一个人，这条测试会以"RLS 挡住了谁"的样子失败，
+       而那正是最容易查错方向的一种失败。 */
+    const all = (await o.query("SELECT count(*)::int AS n FROM account")).rows[0].n;
+    expect((await visibleAccounts(ID.linmin)).length).toBe(all);
+    /* 顺带钉住管理员确实在里面 —— "看得到全部"在库里只有一个账号时
+       也成立，那句话就没有内容了。 */
+    expect(await visibleAccounts(ID.linmin)).toContain("admin");
   });
   it("机构办只看得到自己", async () => {
     expect(await visibleAccounts(ID.zhanghm)).toEqual(["zhanghm"]);

@@ -110,6 +110,21 @@ export async function redeem(token: string): Promise<SessionGranted> {
   return s;
 }
 
+/** 口令登录。三种失败（账号不存在 / 没设口令 / 口令不对）拿到的是同一句话。 */
+export async function passwordLogin(login: string, password: string): Promise<SessionGranted> {
+  const s = await call<SessionGranted>("passwordLogin", { body: { login, password } });
+  saveToken(s.token);
+  return s;
+}
+
+/** 改自己的口令。改完服务端只留当前这个会话，所以**不必**重新登录。 */
+export async function changePassword(currentPassword: string, newPassword: string) {
+  await call("changePassword", { body: { currentPassword, newPassword } });
+  /* 缓存的 /v1/me 里带着 credentials.passwordIsInitial —— 改完那条红条要下去，
+     而它下不去的话，人会以为改密没生效，然后再改一遍。 */
+  forgetMe();
+}
+
 export async function logout() {
   try { await call("logout"); } finally { saveToken(null); }
 }

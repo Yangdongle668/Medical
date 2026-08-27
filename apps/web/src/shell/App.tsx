@@ -4,8 +4,9 @@ import { ApiError, setQueueOwner } from "../api/client.js";
 import { subscribe } from "../api/outbox.js";
 import { startReplay } from "../api/replay.js";
 import { loadToken, logout, recallWho, type CachedWho } from "../features/login/session.js";
-import { loadMe, type Me } from "../features/login/me.js";
+import { loadMe, forgetMe, type Me } from "../features/login/me.js";
 import { ErrorBoundary } from "./ErrorBoundary.js";
+import { FactoryPasswordBanner } from "./FactoryPasswordBanner.js";
 
 const NAV = [
   { to: "/today", label: "今天" },
@@ -24,6 +25,10 @@ export function App() {
   const [pending, setPending] = useState(0);
   const loc = useLocation();
   const nav = useNavigate();
+
+  /* 改完口令要把身份重新拉一遍 —— 红条的开关就在 /v1/me 里。
+     不重拉的话，改成功了红条还挂着，人会以为没生效然后再改一次。 */
+  const reload = () => loadMe().then(setMe).catch(() => { /* 失败就留着红条，比错误地撤下它安全 */ });
 
   useEffect(() => {
     loadToken();
@@ -120,6 +125,11 @@ export function App() {
           人还能换一页、还能看见待发条数、还能登出。
           key 用路径：换一页就是一次新的尝试，不必手动点重试。 */}
       <main className="main">
+        {/* 出厂口令那条红条在**边界之外**：某一页炸了，警报不该跟着消失。
+            也在 key 之外 —— 换页不该把它重置成"没看过"。 */}
+        {me?.credentials.passwordIsInitial && (
+          <FactoryPasswordBanner login={me.account.login} onDone={() => { forgetMe(); void reload(); }} />
+        )}
         <ErrorBoundary scope={`page:${loc.pathname}`} key={loc.pathname}>
           <Outlet />
         </ErrorBoundary>

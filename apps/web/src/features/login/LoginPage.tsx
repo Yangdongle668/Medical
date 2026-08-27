@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { requestLink, redeem, devLogin } from "./session.js";
+import { requestLink, redeem, devLogin, passwordLogin } from "./session.js";
 import { ApiError } from "../../api/client.js";
 
-/* 登录只有一条路径：**一次性链接**。没有密码，也就没有「密码写在便利贴上」。
-   链接 15 分钟有效、只能用一次、兑换在数据库里原子完成。
+/* 登录有两条路径，各有各的用处，谁也不是谁的备份：
+
+   ① **一次性链接** —— 面向机构老师与 PI 这类一周登录两次的人。
+      15 分钟有效、只能用一次、兑换在数据库里原子完成。
+
+   ② **口令** —— 面向内部账号，尤其是**出厂管理员**。
+      它存在的理由很窄：一次干净部署跑完，库里零个账号，
+      而建账号要求调用方先登录 —— 装完了没人打得开门。
+      口令是那把开机的钥匙（见迁移 0025 / 0026）。
+
+   界面上链接在前、口令折叠在后，是因为对大多数人来说前者才是常态；
+   反过来摆的话，人人都会去设一个密码，而那正是当初不做密码的原因。
 
    开发登录是另一条，且刻意不进公开契约：它只在后端
    SITEDESK_DEV_LOGIN=1 时存在，生产环境直接 404。
@@ -34,6 +44,16 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   /* 「这条链接不能用了」和「你还没申请过链接」是两回事，页面上要分得开。 */
   const [linkDead, setLinkDead] = useState(false);
+  const [pwLogin, setPwLogin] = useState("");
+  const [pw, setPw] = useState("");
+
+  const doPasswordLogin = () => go(async () => {
+    await passwordLogin(pwLogin.trim(), pw);
+    /* **口令留在 state 里没有好处。** 清掉再跳 —— 跳转失败时页面还在，
+       而一个填着口令的表单会一直躺在那里等着被下一个人看到。 */
+    setPw("");
+    nav("/today", { replace: true });
+  });
 
   async function go(fn: () => Promise<unknown>) {
     setBusy(true); setErr(null);
@@ -69,7 +89,8 @@ export function LoginPage() {
     <div style={{ maxWidth: 420, margin: "12vh auto", padding: "0 20px" }}>
       <h1 style={{ fontSize: 20, marginBottom: 6 }}>临床中心台</h1>
       <p className="muted" style={{ marginTop: 0 }}>
-        登录只用一次性链接 —— 没有密码，也就没有写在便利贴上的密码。
+        常规入口是一次性链接 —— 不必记密码，也就没有写在便利贴上的密码。
+        内部账号也可以用口令登录（下面那一栏）。
       </p>
 
       {/* 从一条已经失效的链接进来时的引导。
@@ -118,7 +139,34 @@ export function LoginPage() {
         )}
       </div>
 
-      <details style={{ marginTop: 16 }}>
+      <details style={{ marginTop: 16 }} data-testid="password-panel">
+        <summary className="muted" style={{ cursor: "pointer" }}>用口令登录</summary>
+        <div className="card stack" style={{ marginTop: 10 }}>
+          <p className="muted" style={{ margin: 0 }}>
+            内部账号可以设口令。出厂管理员是 <b className="mono">admin</b>，
+            初始口令也是 <b className="mono">admin</b> —— <b>登进去第一件事就是改掉它</b>。
+          </p>
+          <label className="field">
+            <span>登录名</span>
+            <input value={pwLogin} data-testid="pw-login" autoComplete="username"
+              onChange={e => setPwLogin(e.target.value)} placeholder="admin" />
+          </label>
+          <label className="field">
+            <span>口令</span>
+            <input type="password" value={pw} data-testid="pw-password"
+              autoComplete="current-password"
+              onChange={e => setPw(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && pwLogin.trim() && pw) void doPasswordLogin(); }} />
+          </label>
+          <button className="btn primary" data-testid="pw-submit"
+            disabled={busy || !pwLogin.trim() || !pw}
+            onClick={() => void doPasswordLogin()}>
+            登录
+          </button>
+        </div>
+      </details>
+
+      <details style={{ marginTop: 16 }} data-testid="dev-panel">
         <summary className="muted" style={{ cursor: "pointer" }}>开发登录（生产不存在）</summary>
         <div className="stack" style={{ marginTop: 10 }}>
           {DEV_LOGINS.map(d => (

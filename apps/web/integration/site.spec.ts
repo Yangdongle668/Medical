@@ -15,7 +15,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function devLogin(page: Page, testid: string) {
   await page.goto("/login");
-  await page.locator("details summary").click();
+  await page.getByTestId("dev-panel").locator("summary").click();
   await page.getByTestId(testid).click();
   await expect(page).toHaveURL(/\/today$/);
 }
@@ -115,11 +115,17 @@ test.describe("交接：签了字但受试者没交底，等于没交接", () =>
   test("未逐项确认时点完成 → 逐条列出还差哪几项", async ({ page }) => {
     await linkLogin(page, "fengle");                 // 他是这笔交接的接手人
 
-    /* 前置：此刻他还看不到 SS-13 —— 否则下一条测试的"派工转过来了"
-       就是一句空话（那个断言在交接前后都会成立）。 */
+    /* 前置：**交接进行中，他已经看得到 SS-13 了**（迁移 0021）。
+       这条断言曾经是 `toHaveCount(0)` —— 那是 0021 之前的行为，
+       而它恰好是"接手人勾『逐例交底』时其实一张名单都对不上"的根源。
+
+       写成断言而不是删掉，是因为这条通道有边界：它只在
+       `handover.status = 'pending'` 时成立。下面那条测试证明的
+       正是边界的另一半 —— 单子一离开 pending，这条通道就关了，
+       而 SS-13 仍然在，说明真派工确实转过来了。 */
     await page.goto("/sites");
     await expect(page.getByTestId("site-row").first()).toBeVisible();
-    await expect(page.getByRole("link", { name: "SS-13", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "SS-13", exact: true })).toBeVisible();
 
     await page.goto("/handovers");
     const card = page.getByTestId("handover").first();
@@ -172,9 +178,17 @@ test.describe("交接：签了字但受试者没交底，等于没交接", () =>
     await card.getByTestId("finish-handover").click();
     await expect(page.getByTestId("handover-effects")).toContainText("派工已由");
 
-    /* **闭环**：交接完成会把派工从原负责人转到接手人，
-       于是这个人的行范围当场变宽 —— SS-13 出现在他的中心台账里。
-       「完成成功」不等于「派工转过去了」，这一步才是证明。 */
+    /* **闭环**，而且是**关掉另一条路之后**的闭环。
+
+       "完成之后他看得到 SS-13"这句话单独拿出来证明不了任何事：
+       交接期间他本来就看得到（迁移 0021 的预览通道）。
+       要让它成为证明，得先确认那条预览通道已经关上 ——
+       它的条件是 `status = 'pending'`，所以先断言单子不再是待接手。
+
+       两条合起来才是那句话：预览没了，SS-13 还在，
+       那它只能来自真的派工。 */
+    await expect(card.getByText("已完成")).toBeVisible();
+
     await page.goto("/sites");
     await expect(page.getByTestId("site-row").first()).toBeVisible();
     await expect(page.getByRole("link", { name: "SS-13", exact: true })).toBeVisible();

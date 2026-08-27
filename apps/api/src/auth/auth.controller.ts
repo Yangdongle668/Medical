@@ -10,6 +10,14 @@ import { RateLimitService } from "../infra/rate-limit.service.js";
 
 const LinkBody   = z.object({ login: z.string().min(1).max(64), sentTo: z.string().max(128).optional() });
 const RedeemBody = z.object({ token: z.string().min(16).max(256) });
+const PasswordBody = z.object({
+  login: z.string().min(1).max(64),
+  password: z.string().min(1).max(200)
+});
+const ChangeBody = z.object({
+  currentPassword: z.string().max(200),
+  newPassword: z.string().min(8).max(200)
+});
 
 /** 仅开发与测试可用。生产环境未设 SITEDESK_DEV_LOGIN 时这两个端点直接 404。 */
 const devEnabled = () => process.env.SITEDESK_DEV_LOGIN === "1";
@@ -63,6 +71,30 @@ export class AuthController {
     const id = rows[0]?.id ?? null;
     if (!id) throw new ProblemException("unauthenticated", { detail: "账号不存在或已停用" });
     return this.auth.openSession(id, ua ?? null);
+  }
+
+  @Post("/password-session") @Public() @Operation("passwordLogin")
+  async passwordLogin(
+    @Body(new ZodPipe(PasswordBody)) b: z.infer<typeof PasswordBody>,
+    @Headers("user-agent") ua?: string
+  ) {
+    /* 计数在验证之前。放在后面的话，被限住的是"记一笔"，
+       而 scrypt 已经烧过了 —— 那正是这个端点最贵的部分，
+       于是限流反而成了最省事的打法（每次请求都让服务端算一遍 scrypt）。 */
+    await gate(this.limits.password, b.login.toLowerCase(), "口令登录");
+    return this.auth.passwordLogin(b.login, b.password, ua ?? null);
+  }
+
+  @Post("/password") @Operation("changePassword") @HttpCode(204)
+  async changePassword(
+    @Body(new ZodPipe(ChangeBody)) b: z.infer<typeof ChangeBody>,
+    @Headers("authorization") auth?: string
+  ) {
+    /* 当前会话的令牌 —— 改完要留下的就是它。
+       从 Authorization 头上取而不是从 ctx 里：ctx 只记住"你是谁"，
+       不记"你是拿哪一个会话进来的"，而这里恰恰要区分同一个人的多个会话。 */
+    const token = /^Bearer\s+(.+)$/i.exec(auth ?? "")?.[1] ?? null;
+    await this.auth.changePassword(b.currentPassword, b.newPassword, token);
   }
 
   @Post("/logout") @Operation("logout") @HttpCode(204)
