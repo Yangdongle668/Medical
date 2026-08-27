@@ -70,9 +70,22 @@ export class IdempotencyService {
       return { status: row.response_status ?? 200, body: row.response_body };
     }
 
-    await c.client.query(
+    /* ── 上面那次 SELECT 到这次 INSERT 之间有一道缝 ────────────────
+       离线重放最真实的形状就是踩在这道缝上：CRC 恢复网络的那一刻，
+       发件箱里同一条命令被重发几次，而它们**几乎同时到达**。
+       两个请求都查到"没有这把键"，然后都来插 —— 后到的那个撞主键。
+
+       在此之前那次撞击是一个未捕获的异常，对外是 **500**。
+       而 500 对客户端的含义是"服务端坏了，可以重试" —— 于是它再重放一次。
+       ON CONFLICT DO NOTHING 把这道缝收掉：插不进去就说明**别人正在做**，
+       那和"同一请求正在处理中"是同一件事，回同一个 409。 */
+    const ins = await c.client.query(
       `INSERT INTO idempotency_key (key, account_id, endpoint, request_hash)
-       VALUES ($1,$2,$3,$4)`, [key, p.accountId, endpoint, h]);
+       VALUES ($1,$2,$3,$4) ON CONFLICT (key, account_id) DO NOTHING`,
+      [key, p.accountId, endpoint, h]);
+    if (!ins.rowCount)
+      throw new ProblemException("conflict-version", {
+        detail: "同一请求正在处理中，请稍后重试" });
     return null;
   }
 

@@ -27,6 +27,7 @@
  */
 import { emit } from "./log.js";
 import { sendMail } from "./smtp.js";
+import { withRetry, loginLinkPlan, noticePlan, type RetryPlan } from "./retry.js";
 
 export type Channel = "email" | "sms";
 
@@ -222,13 +223,17 @@ export class LoginDelivery {
     return channel === "email" ? this.email : this.sms;
   }
 
-  /** 送。失败就抛 —— 由调用方决定怎么记，但它绝不会变成响应的一部分。 */
+  /** 送。失败就抛 —— 由调用方决定怎么记，但它绝不会变成响应的一部分。
+   *
+   *  暂时性失败会重试（欠账 G6），窗口不超过链接自己有效期的三分之一：
+   *  在第 20 分钟送到一条第 15 分钟就过期的链接，比彻底失败更糟 ——
+   *  用户点开它看到"链接无效"，然后不知道该怪谁。 */
   async deliver(m: LoginLink): Promise<"sent" | "no-transport"> {
     return this.send({
       channel: m.channel, to: m.to,
       subject: subjectOf(m.ttlMin),
       text: m.channel === "sms" ? smsOf(m) : bodyOf(m)
-    }, "登录链接已投递");
+    }, "登录链接已投递", {}, loginLinkPlan(m.ttlMin));
   }
 
   /** 送一条**普通通知**（交接、到期提醒……）。
@@ -240,15 +245,27 @@ export class LoginDelivery {
    *  但两者有一处必须分开：**登录链接的正文绝不进日志**（它就是凭证），
    *  而普通通知的标题进日志是有用的 —— 排查"他说没收到"时要靠它。 */
   async notify(m: Message): Promise<"sent" | "no-transport"> {
-    return this.send(m, "通知已投递", { subject: m.subject });
+    return this.send(m, "通知已投递", { subject: m.subject }, noticePlan());
   }
 
   private async send(
-    m: Message, what: string, extra: Record<string, unknown> = {}
+    m: Message, what: string, extra: Record<string, unknown> = {}, plan?: RetryPlan
   ): Promise<"sent" | "no-transport"> {
     const t = this.transportFor(m.channel);
     if (!t) return "no-transport";
-    await t.send(m);
+
+    if (plan) {
+      await withRetry(() => t.send(m), plan, a =>
+        /* 逐次记一条。"第 2 次也失败了"比"发送失败"更能说明
+           是网关在抖还是配置错了 —— 而那两件事的处置完全不同。
+           **收件地址仍然掩码，正文与链接一个字都不进日志。** */
+        emit(a.willRetry ? "warn" : "error", "login-delivery",
+          a.willRetry ? `第 ${a.n} 次投递失败，${a.waitMs}ms 后重试` : `第 ${a.n} 次投递失败，不再重试`,
+          { channel: m.channel, via: t.kind, to: mask(m.to),
+            err: a.err instanceof Error ? a.err.message : String(a.err) }));
+    } else {
+      await t.send(m);
+    }
     /* 只记掩码后的地址与通道。登录链接绝不进日志 —— 那等于把登录权限
        交给所有能读日志的人。 */
     emit("info", "login-delivery", what,

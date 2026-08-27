@@ -442,9 +442,18 @@ describe("预压缩产物 —— 450 kB 的 js 不该走明文", () => {
    只有真正发响应的这一层知道该不该发它，而"该不该"取决于
    这一跳是不是真的在 TLS 后面。
 
-   两个开关都默认关，因为**打开它们的破坏是不可回滚的**：
-   对着一个没有证书的域名发一次 HSTS，浏览器会把它锁到 max-age 过期。
-   所以这一组里有一半是在验"默认情况下什么都不发"。
+   两个开关的默认值**不一样**，而那个区别是这一组的正题：
+
+   · HSTS 默认**开**。它只在 `X-Forwarded-Proto` 的最左段是 https 时
+     才发得出去 —— 纯 http 的部署永远走不到那一行，默认打开伤不到它。
+     而默认关的代价是真实的：绝大多数部署不会去读一遍 .env.example，
+     于是一个已经在 TLS 后面的系统白白少了一层保护。
+     `includeSubDomains` 例外，仍然是 opt-in：它锁的是这套部署
+     **并不拥有**的那些子域名，是这里唯一会误伤别人且无法回滚的部分。
+
+   · 强制 https 默认**关**。它把明文请求 308 走，而纯 http 的部署
+     （README 的快速开始就是）会当场变得打不开。
+     失败方式是"整个站点无法访问"，那不能靠默认值去赌。
    ════════════════════════════════════════════════════════════════════ */
 describe("HSTS / 强制 https —— 归 ingress 的那一半和不归它的那一半", () => {
   let srv: ReturnType<typeof createServer>, port: number, at: string;
@@ -460,15 +469,52 @@ describe("HSTS / 强制 https —— 归 ingress 的那一半和不归它的那�
   const get = (p: string, headers: Record<string, string> = {}, method = "GET") =>
     fetch(`${at}${p}`, { headers, method, redirect: "manual" });
 
-  it("默认那台什么都不发 —— 没配就是没配", async () => {
+  it("**默认就发** —— 只要这次请求确实是经 TLS 到达的", async () => {
+    /* 它曾经默认关，理由是"打开的前提是前面真有一层在做 TLS"。
+       那个理由对强制 https 成立，对 HSTS 不成立：这个头只在
+       forwardedProto === "https" 时才发得出去，纯 http 的部署
+       永远走不到那一行。而默认关的代价是真实的 ——
+       绝大多数部署不会去读一遍 .env.example。 */
     const r = await fetch(`${base}/`, { headers: { "x-forwarded-proto": "https" } });
-    expect(r.headers.get("strict-transport-security")).toBeNull();
+    expect(r.headers.get("strict-transport-security")).toBe("max-age=63072000");
+  });
+
+  it("默认**不带** includeSubDomains —— 那是唯一会误伤别人的部分", async () => {
+    /* 它锁的是这套部署并不拥有的那些子域名，而且无法回滚。 */
+    const r = await fetch(`${base}/`, { headers: { "x-forwarded-proto": "https" } });
+    expect(r.headers.get("strict-transport-security")).not.toContain("includeSubDomains");
+  });
+
+  it("显式配 0 就是关掉 —— 决定要能被表达出来", async () => {
+    const off = createServer({ root, api: "http://127.0.0.1:1", hstsMaxAge: 0 });
+    await new Promise<void>(r => off.listen(0, "127.0.0.1", () => r()));
+    const port = (off.address() as { port: number }).port;
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/`,
+        { headers: { "x-forwarded-proto": "https" } });
+      expect(r.headers.get("strict-transport-security")).toBeNull();
+    } finally { await new Promise(r => off.close(r)); }
   });
 
   it("这一跳确实在 TLS 后面 → 发 HSTS", async () => {
     const r = await get("/", { "x-forwarded-proto": "https" });
-    expect(r.headers.get("strict-transport-security"))
-      .toBe("max-age=63072000; includeSubDomains");
+    expect(r.headers.get("strict-transport-security")).toBe("max-age=63072000");
+  });
+
+  it("显式打开才带 includeSubDomains", async () => {
+    process.env["SITEDESK_HSTS_INCLUDE_SUBDOMAINS"] = "1";
+    const sub = createServer({ root, api: "http://127.0.0.1:1" });
+    await new Promise<void>(r => sub.listen(0, "127.0.0.1", () => r()));
+    const p = (sub.address() as AddressInfo).port;
+    try {
+      const r = await fetch(`http://127.0.0.1:${p}/`,
+        { headers: { "x-forwarded-proto": "https" } });
+      expect(r.headers.get("strict-transport-security"))
+        .toBe("max-age=63072000; includeSubDomains");
+    } finally {
+      delete process.env["SITEDESK_HSTS_INCLUDE_SUBDOMAINS"];
+      await new Promise(r => sub.close(r));
+    }
   });
 
   it("多层代理时看最左那一段", async () => {

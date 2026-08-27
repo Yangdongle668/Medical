@@ -217,9 +217,15 @@ git clone <仓库地址> && cd Medical
 - **预压缩**：构建期就把 br / gz 压好（452 kB 的 js → **117 kB**），
   按 `Accept-Encoding` 协商。前面有 ingress 时它看到 `Content-Encoding: br`
   直接透传，省掉的正是它自己那次压缩。
-- **HSTS / 强制 https**：默认关。确认 ingress 真的在做 TLS、且会带
-  `X-Forwarded-Proto` 之后，用 `SITEDESK_HSTS_MAX_AGE` / `SITEDESK_FORCE_HTTPS` 打开。
-  HSTS 只是一个响应头，而只有真正发响应的这一层知道该不该发它。
+- **HSTS 默认开**（两年），因为它只在这次请求**确实经 TLS 到达**时才发得出去
+  （看 `X-Forwarded-Proto` 的最左段）—— 纯 http 的部署根本走不到那一行。
+  想关就显式写 `SITEDESK_HSTS_MAX_AGE=0`。
+  `includeSubDomains` 仍是 opt-in（`SITEDESK_HSTS_INCLUDE_SUBDOMAINS=1`）：
+  它锁的是这套部署**并不拥有**的那些子域名，是唯一会误伤别人且无法回滚的部分。
+- **强制 https 默认关**，而且应该保持关着，除非你确定前面有 TLS：
+  它把明文请求 308 走，纯 http 的部署会当场变得打不开。
+  TLS 握手本身仍然归 ingress；HSTS 只是一个响应头，
+  而只有真正发响应的这一层知道该不该发它。
 - **限流**：两个 `@Public()` 登录端点上，**跨实例共享**（进程内计数器挡洪水，
   数据库计数器定阈值）。**即使**跑成 3 个副本，阈值仍然是那一个阈值，
   不会跟着乘以副本数 —— 而这个 compose 本身仍然是单副本的（见第七节）。
@@ -239,7 +245,8 @@ git clone <仓库地址> && cd Medical
 | `SITEDESK_SMTP_URL` | 未设 | `smtp://用户:口令@主机:587`。配了就走邮件通道 |
 | `SITEDESK_MAIL_FROM` | 未设 | 发件人。配了 SMTP 却没配它 → **拒绝启动** |
 | `SITEDESK_SMS_WEBHOOK_URL` | 未设 | 短信网关，POST `{to, text}` + Bearer |
-| `SITEDESK_HSTS_MAX_AGE` | 未设（关） | 秒。只在 `X-Forwarded-Proto: https` 时发 |
+| `SITEDESK_HSTS_MAX_AGE` | `63072000`（两年） | 秒。只在 `X-Forwarded-Proto: https` 时发；`0` = 关 |
+| `SITEDESK_HSTS_INCLUDE_SUBDOMAINS` | 未设（关） | `1` 打开。锁的是本部署不拥有的子域名，确认它们都有证书再开 |
 | `SITEDESK_FORCE_HTTPS` | 未设（关） | 明文请求 308 到 https（探针除外） |
 | `SITEDESK_LOG_LEVEL` | `info` | `debug` 会把静态产物与探针的访问日志也打出来 |
 | `POSTGRES_PASSWORD` 等三个口令 | 随机生成 | **请备份 `deploy/.env`** —— 数据卷还在而口令丢了，库就打不开了 |
@@ -367,8 +374,9 @@ node docs/render.mjs docs/03-开发需求与技术架构.md out/spec.html "中�
    在这里长出一张厂商清单比一个十行的适配器贵得多。
 4. **SMTP 客户端是自己写的最小实现**：纯文本、单收件人、PLAIN / LOGIN 认证。
    附件、DKIM 签名、连接复用都没有，也不打算有 —— 它只发一种信。
-5. **HSTS / 强制 https 默认关**，需要确认前面那层真的在做 TLS 之后再打开。
-   TLS 握手本身仍然归 ingress。
+5. **强制 https 默认关**（HSTS 已经默认开了，见 §四）。它把明文请求 308 走，
+   而纯 http 的部署会当场打不开 —— 这条的失败方式是"整个站点无法访问"，
+   不能靠默认值去赌。TLS 握手本身仍然归 ingress。
 6. **收件地址只能由运维登记**（`./deploy/login-address.sh`），本人不能自助改。
    自助改要先回答"改地址要不要二次确认"—— 那是产品决定，不是存储问题。
 7. **投递失败只进日志，不重试。** 链接 15 分钟就过期了，重试的窗口很窄；

@@ -233,6 +233,8 @@ P(``);
 /* ── 受试者：把漏斗计数展开成行 ── */
 P(`-- ── 受试者：漏斗由明细聚合，不存计数 ──────────────────────────`);
 const site = id => SITES.find(x => x.id === id);
+/** 按漏斗补出来的在组受试者 —— 访视在下面按 SOA 铺开（欠账 F2）。 */
+const COHORT = [];
 const dropsOf = id => DROPS.filter(x => x.ss === id);
 /* 逐日回推一个稳定的日期，避免种子每次生成都不同 */
 const dayBefore = (base, n) =>
@@ -278,9 +280,17 @@ for (const ss of SITES) {
                                    - drops.length);
   for (let i = 0; i < enrolledLeft; i++) {
     const no = nextNo(), icf = dayBefore(TODAY, 200 + i * 7);
-    P(`INSERT INTO subject (study_site_id, screening_no, randomization_no, state,` +
-      ` icf_signed_on, enrolled_on, crc_account_id) VALUES ('${sid}', ${q(no)}, ` +
-      `${q("R" + no.slice(2))}, 'enrolled', ${d(icf)}, ${d(dayBefore(TODAY, 186 + i * 7))}, ${crc});`);
+    const enrolledOn = dayBefore(TODAY, 186 + i * 7);
+    /* 显式给 id：下面铺访视时要按 uuid5("subj:"+筛选号) 找回这一行。
+       让数据库随机生成的话，访视就挂不上去 —— 而那会表现成
+       "插入成功但外键对不上"，只有跑完种子才看得见。 */
+    P(`INSERT INTO subject (id, study_site_id, screening_no, randomization_no, state,` +
+      ` icf_signed_on, enrolled_on, crc_account_id) VALUES ('${uuid5("subj:" + no)}', '${sid}', ${q(no)}, ` +
+      `${q("R" + no.slice(2))}, 'enrolled', ${d(icf)}, ${d(enrolledOn)}, ${crc});`);
+    /* 记下来，稍后给他们铺访视（欠账 F2）——
+       只有状态没有访视的话，漏斗是真的而访视清单是空的，
+       于是"今天要做什么"这一页在演示里永远只有十来行。 */
+    COHORT.push({ ss: ss.id, sid: ss.sid, no, enrolledOn, crc, pi: ss.pi });
     subjRows++;
   }
   /* 筛败：按原型给出的原因分布逐条展开 —— 筛败也是收入（I8'） */
@@ -329,6 +339,79 @@ for (const x of SUBJ) {
       `'${vid}', ${k}, ${q(t[0])}, ${t[1] ? `'${x.lastVisit}T10:00:00+08'::timestamptz` : "NULL"}, ` +
       `${t[1] ? acc(x.crc) : "NULL"});`));
   visitRows++;
+}
+
+/* ── 在组受试者的访视史（欠账 F2） ────────────────────────────────
+   在此之前只有 10 位具名受试者有访视行，其余 500 多位**只有状态**。
+   漏斗因此是真的，而访视清单是空的 —— 演示里"今天要做什么"永远只有
+   十来行，谁也看不出这一页在几百例的中心上长什么样。
+
+   按 SOA 铺：入组日 + offset 落在今天之前的，是已经做完并锁定的；
+   第一个落在今天之后的，是**下一次**，画成 planned。
+   全部在窗口内、无超窗 —— 偏离是刻意造的那几条（原型里的 DROPS 与
+   QUERIES），不该被这里的批量数据淹掉。 */
+P(``);
+P(`-- ── 在组受试者的访视史：按 SOA 铺开（欠账 F2） ────────────────`);
+/** 这一次是不是"最近一次已经做完的"访视 —— 用来给没有 PI 的中心
+ *  只留一条待确认，而不是把整条 SOA 都变成积压。 */
+function isLastPast(so, enrolled, today, seq) {
+  for (let k = seq + 1; k <= so.last; k++) {
+    const t = new Date(enrolled);
+    t.setDate(t.getDate() + (k - 1) * so.cycle);
+    if (t < today) return false;
+  }
+  return true;
+}
+
+for (const c of COHORT) {
+  const so = soaOf(c.sid);
+  const piAcc = USERS.find(u => u.n === c.pi && u.role === "pi");
+  const enrolled = new Date(c.enrolledOn);
+  const today = new Date(TODAY);
+  let scheduled = 0;
+  for (let seq = 1; seq <= so.last; seq++) {
+    const target = new Date(enrolled);
+    target.setDate(target.getDate() + (seq - 1) * so.cycle);
+    const targetStr = target.toISOString().slice(0, 10);
+    const past = target < today;
+    /* 已过去的全部锁定，未来的只铺**第一次** —— 把整条 SOA 都铺成
+       planned 的话，"今天要做什么"会被几百条一年后的访视淹掉。 */
+    if (!past && scheduled > 0) break;
+    /* 没有 PI 账号的中心，做完的访视只能停在 done_pending_pi。
+       全铺的话演示库里会有一千多条卡着的访视 —— 而「待 PI 确认」
+       是一个**信号**：85% 都是它的时候，它就什么也不说明了。
+       所以这些中心只留最近一次做完的，其余不铺。 */
+    if (past && !piAcc && !isLastPast(so, enrolled, today, seq)) continue;
+    const vid = uuid5("cvisit:" + c.no + ":" + seq);
+    const code = (so.label(seq).match(/^([A-Za-z]+\d*[A-Za-z]*\d*)/) || [, `V${seq}`])[1];
+    /* locked 必须带 PI 的签字与时间（I3，visit_locked_needs_pi），
+       entered 必须带录入日（visit_edc_entered_needs_date）——
+       两条约束都在库里，绕不过去。这是好事：**演示数据不能比
+       真实数据更宽松**，否则界面在演示上走得通、在真库上走不通。
+
+       没有 PI 账号的中心（原型里有几个），做完的访视只能停在
+       `done_pending_pi` —— 而那恰恰是 I3 想让人看见的那个积压：
+       「访视做完了，但没有 PI 确认，所以它不算已完成」。 */
+    const locked = past && !!piAcc;
+    const status = !past ? "planned" : locked ? "locked" : "done_pending_pi";
+    P(`INSERT INTO subject_visit (id, subject_id, study_site_id, seq, visit_code, visit_label,` +
+      ` target_date, window_days, status, actual_date, out_of_window, hours,` +
+      ` pi_confirmed_by, pi_confirmed_at, edc_status, edc_entered_on) VALUES (` +
+      `'${vid}', '${uuid5("subj:" + c.no)}', '${uuid5("site:" + c.ss)}', ${seq}, ` +
+      `${q(code + "-" + seq)}, ${q(so.label(seq))}, ${d(targetStr)}, ${so.win}, ` +
+      `${q(status)}, ${past ? d(targetStr) : "NULL"}, false, ` +
+      `${past ? "3.0" : "NULL"}, ` +
+      `${locked ? `'${uuid5("account:" + piAcc.u)}'` : "NULL"}, ` +
+      `${locked ? `'${targetStr}T18:00:00+08'::timestamptz` : "NULL"}, ` +
+      `${locked ? "'entered'" : "'pending'"}, ${locked ? d(targetStr) : "NULL"});`);
+    so.tasks(seq).forEach((t, k) =>
+      P(`INSERT INTO subject_visit_task (visit_id, seq, task, done_at, done_by) VALUES (` +
+        `'${vid}', ${k}, ${q(t)}, ` +
+        `${past ? `'${targetStr}T10:00:00+08'::timestamptz` : "NULL"}, ` +
+        `${past ? c.crc : "NULL"});`));
+    visitRows++;
+    if (!past) scheduled++;
+  }
 }
 P(``);
 
@@ -407,8 +490,38 @@ P(`UPDATE study SET screen_fail_fee_rate = 0.350, overhead_rate = ${RATE.overhea
 P(``);
 P(`COMMIT;`);
 
+const OUT = "db/seeds/001_demo.sql";
+const text = L.join("\n") + "\n";
+
+/* ── --check：只比不写（欠账 F1） ──────────────────────────────────
+   原型是**冻结的需求基线**，不是运行时依赖 —— 这一点没有变。
+   变的是"漂了没有人知道"：在此之前，改一次 prototype/index.html
+   而不重跑这个生成器，种子就和需求基线悄悄分了家，
+   而分家的表现是几个月后有人问"系统里这个数为什么和当初谈的不一样"。
+
+   `--check` 把那件事变成一次 CI 失败，并且直接说出该跑哪条命令。
+   它**不自动重跑** —— 重新生成会覆盖 001_demo.sql，那应该是一次
+   看得见的提交，不是构建的副作用。 */
+if (process.argv.includes("--check")) {
+  const cur = fs.existsSync(OUT) ? fs.readFileSync(OUT, "utf8") : "";
+  if (cur === text) {
+    console.log(`✓ ${OUT} 与 prototype/index.html 一致`);
+    process.exit(0);
+  }
+  const curLines = cur.split("\n"), newLines = text.split("\n");
+  const at = curLines.findIndex((l, i) => l !== newLines[i]);
+  console.error(
+    `✗ ${OUT} 与 prototype/index.html 不一致（第 ${at + 1} 行起）\n` +
+    `    已提交：${JSON.stringify(curLines[at] ?? "（文件到此结束）").slice(0, 120)}\n` +
+    `    原型生成：${JSON.stringify(newLines[at] ?? "（文件到此结束）").slice(0, 120)}\n\n` +
+    `  原型是需求基线，改了它就要重跑生成器：\n` +
+    `    node tools/gen-seed.mjs\n` +
+    `  然后把 ${OUT} 一起提交 —— 那次提交本身就是"需求变了"的记录。`);
+  process.exit(1);
+}
+
 fs.mkdirSync("db/seeds", { recursive: true });
-fs.writeFileSync("db/seeds/001_demo.sql", L.join("\n") + "\n");
+fs.writeFileSync(OUT, text);
 console.log(`db/seeds/001_demo.sql 已生成（${L.length} 行）` +
   `｜角色 ${Object.keys(ROLE_DEF).length} · 账号 ${USERS.length} · 分组 ${GROUPS.length}` +
   ` · 项目 ${STUDIES.length} · 中心 ${SITES.length} · 受试者 ${subjRows} · 访视 ${visitRows}` +
