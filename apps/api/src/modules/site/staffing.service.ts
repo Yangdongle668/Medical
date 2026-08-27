@@ -91,8 +91,23 @@ export class StaffingService {
     if (before.done_at) throw new ProblemException("conflict-version", {
       detail: `「${before.item}」已于 ${iso(before.done_at)} 被标记完成` });
 
-    await c.client.query(
-      `UPDATE startup_item SET done_at = now(), done_by = $2 WHERE id = $1`, [id, p.accountId]);
+    /* ── 判定与写入之间有一道缝 ────────────────────────────────────
+       上面那句 `if (before.done_at)` 是**读**出来的，而 UPDATE 是另一次
+       往返。两个请求同时进来，都读到"还没完成"，然后都去写 ——
+       在此之前两个都返回 201，清单项被"完成"了两次，
+       审计里也就有了两条说同一件事的记录。
+
+       把条件挪进 UPDATE 的 WHERE：谁抢到那一行谁写，
+       另一个 rowCount = 0，当场变成冲突。
+       上面那句读**留着**：它给的是一句说得清的话
+       （「已于 X 被 Y 标记完成」），而这里只知道"没抢到"。 */
+    const won = await c.client.query(
+      `UPDATE startup_item SET done_at = now(), done_by = $2
+        WHERE id = $1 AND done_at IS NULL`, [id, p.accountId]);
+    if (!won.rowCount)
+      throw new ProblemException("conflict-version", {
+        detail: `「${before.item}」刚刚被另一个人标记完成了` });
+
     await this.audit.write({
       action: "完成启动清单项", targetType: "startup_item", targetId: before.item,
       before: { doneAt: null }, after: { doneAt: new Date().toISOString() },

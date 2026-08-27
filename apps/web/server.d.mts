@@ -11,7 +11,8 @@ export interface WebServer extends Server {
 export function createServer(opts: {
   root: string;
   api: string | URL;
-  /** HSTS 的 max-age（秒）。0 / 省略 = 不发。默认读 SITEDESK_HSTS_MAX_AGE。 */
+  /** HSTS 的 max-age（秒）。0 = 不发。省略则读 SITEDESK_HSTS_MAX_AGE，
+   *  再没有就用默认的两年 —— 它只在请求确实经 TLS 到达时才发得出去。 */
   hstsMaxAge?: number;
   /** 明文请求 308 到 https（按 X-Forwarded-Proto 判定）。默认读 SITEDESK_FORCE_HTTPS=1。 */
   forceHttps?: boolean;

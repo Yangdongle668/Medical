@@ -42,28 +42,35 @@ describe("SOA：可配置，但已排出去的访视不动", () => {
        那个人的行程、床位、伴随用药全部作废 —— 而系统不会知道。 */
     const st = await firstStudy();
     const soa = (await boss.get(`/v1/studies/${st.id}/visit-template`)).body;
-    const v0 = soa.visits[0];
 
-    const before = (await crc.get("/v1/subject-visits?limit=200")).body.items
-      .filter((v: { seq: number }) => v.seq === v0.seq);
+    /* 挑一个**确实已经排出去过**的 seq，而不是写死 visits[0]：
+       种子里访视有几百条，写死一个 seq 再去第一页里找它，
+       翻页一变这条用例就红，而报错说的是"没有已排的访视"。 */
+    const page = (await crc.get("/v1/subject-visits?limit=200")).body.items;
+    expect(page.length, "种子里应当有访视").toBeGreaterThan(0);
+    const seq = page[0].seq;
+    const v0 = soa.visits.find((v: { seq: number }) => v.seq === seq);
+    expect(v0, `SOA 里没有第 ${seq} 次访视`).toBeTruthy();
+
+    const before = page.filter((v: { seq: number }) => v.seq === seq);
     expect(before.length).toBeGreaterThan(0);
     const beforeWindows = before.map((v: { id: string; windowDays: number }) =>
       [v.id, v.windowDays]);
 
     const next = asBody(soa.visits);
-    next[0]!.windowDays = v0.windowDays + 5;
+    next.find((v: { seq: number }) => v.seq === seq)!.windowDays = v0.windowDays + 5;
     const r = await boss.post(`/v1/studies/${st.id}/visit-template:replace`,
       { visits: next, reason: "方案修订 V1.3：首次访视窗口放宽 5 天" }, K());
     expect(r.status, JSON.stringify(r.body)).toBe(201);
     expect(r.body.sideEffects[0].summary).toContain("不动");
 
     const after = (await crc.get("/v1/subject-visits?limit=200")).body.items
-      .filter((v: { seq: number }) => v.seq === v0.seq)
+      .filter((v: { seq: number }) => v.seq === seq)
       .map((v: { id: string; windowDays: number }) => [v.id, v.windowDays]);
     expect(after).toEqual(beforeWindows);
     /* 而模板本身确实改了 */
-    expect((await boss.get(`/v1/studies/${st.id}/visit-template`)).body.visits[0].windowDays)
-      .toBe(v0.windowDays + 5);
+    expect((await boss.get(`/v1/studies/${st.id}/visit-template`)).body.visits
+      .find((v: { seq: number }) => v.seq === seq).windowDays).toBe(v0.windowDays + 5);
   });
 
   it("删掉一条已经排出去的访视 → 422，且说得出它排给了几个人", async () => {

@@ -132,6 +132,10 @@ function forwardedProto(req) {
  *  塞进 CRLF 就是响应拆分，塞进别的域名就是一次开放重定向。 */
 const SAFE_HOST = /^[A-Za-z0-9._-]+(:\d{1,5})?$/;
 
+/** HSTS 的默认 max-age：两年。preload 列表的门槛是一年，取两年是留余量。
+ *  它只在这次请求确实经 TLS 到达时才发得出去，所以对纯 http 的部署无害。 */
+const HSTS_DEFAULT_MAX_AGE = 63_072_000;
+
 /* ── 预压缩产物 ───────────────────────────────────────────────────────
    构建期已经压好了 `x.js.br` / `x.js.gz`（scripts/precompress.mjs）。
    这里只做协商：客户端接受哪个就发哪个，都不接受就发原文。
@@ -302,22 +306,39 @@ function proxy(api, requestId, req, res) {
  * 建一个服务器实例。
  * @param root        静态目录（vite build 的产物）
  * @param api         API 源站，/v1 反代到它
- * @param hstsMaxAge  HSTS 的 max-age（秒）。0 = 不发。默认读 SITEDESK_HSTS_MAX_AGE。
- * @param forceHttps  收到明文请求时 308 到 https。默认读 SITEDESK_FORCE_HTTPS=1。
+ * @param hstsMaxAge  HSTS 的 max-age（秒）。0 = 不发。默认读 SITEDESK_HSTS_MAX_AGE，
+ *                    没配就是 HSTS_DEFAULT_MAX_AGE（两年）。
+ * @param forceHttps  收到明文请求时 308 到 https。默认读 SITEDESK_FORCE_HTTPS=1，**默认关**。
  *
- * 后两个参数**默认关**，而且是刻意的：打开它们的前提是前面真有一层
- * 在做 TLS。对着一个没有证书的域名发 HSTS，等于把它锁死到 max-age 过期
- * 为止 —— 那是这两行代码唯一能造成的、且无法回滚的破坏。
+ * ── 两个开关的默认值不一样，而这个区别是这一条的全部内容 ──────────
+ * 它们曾经都默认关，理由是"打开的前提是前面真有一层在做 TLS"。
+ * 那个理由对**强制 https** 成立，对 **HSTS** 不成立：
+ *
+ *   · HSTS 只在 `forwardedProto(req) === "https"` 时才发 —— 也就是说，
+ *     只有当这次请求**确实是**经 TLS 到达的，才会发出这个头。
+ *     一个纯 http 的部署永远走不到那一行，默认打开伤不到它。
+ *     而默认关的代价是真实的：绝大多数部署不会去读一遍 .env.example，
+ *     于是一个**已经在 TLS 后面**的系统白白少了一层保护。
+ *
+ *   · 强制 https 会把明文请求 308 走。纯 http 的部署（README 的
+ *     快速开始就是）会当场变得打不开。所以它必须保持默认关 ——
+ *     它的失败方式是"整个站点无法访问"，那不能靠默认值去赌。
+ *
+ * `includeSubDomains` 单独拿出来做成 opt-in（SITEDESK_HSTS_INCLUDE_SUBDOMAINS=1）：
+ * 它锁的是这套部署**并不拥有**的那些子域名，而那正是 HSTS 里唯一
+ * 真的会误伤别人、且无法回滚的部分。
  */
 export function createServer({ root, api, hstsMaxAge, forceHttps } = {}) {
   const ROOT = path.resolve(root);
   const API = api instanceof URL ? api : new URL(api);
   /* 在这里读环境变量，不在模块顶层读：顶层读的话，测试没法用两份不同配置
      跑同一个模块 —— 于是这两个开关就只剩"上线之后再看"这一条验证路径。 */
-  const rawHsts = hstsMaxAge ?? process.env["SITEDESK_HSTS_MAX_AGE"] ?? 0;
+  const rawHsts = hstsMaxAge ?? process.env["SITEDESK_HSTS_MAX_AGE"] ?? HSTS_DEFAULT_MAX_AGE;
   const HSTS_MAX_AGE = Number(String(rawHsts).trim() || 0);
   const HSTS = Number.isSafeInteger(HSTS_MAX_AGE) && HSTS_MAX_AGE > 0
-    ? `max-age=${HSTS_MAX_AGE}; includeSubDomains` +
+    ? `max-age=${HSTS_MAX_AGE}` +
+      /* 子域名要显式打开：它锁的是这套部署并不拥有的那些名字。 */
+      (process.env["SITEDESK_HSTS_INCLUDE_SUBDOMAINS"] === "1" ? "; includeSubDomains" : "") +
       (process.env["SITEDESK_HSTS_PRELOAD"] === "1" ? "; preload" : "")
     : null;
   /* 填了但填错了，和没填是两回事：后者是决定，前者是事故。

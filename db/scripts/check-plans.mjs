@@ -62,6 +62,52 @@ const CASES = [
     sql: `SELECT s.id FROM study_site s ORDER BY s.code LIMIT 51`,
     mustNotSeqScan: "study_site",
     why: "分页游标的排序键必须索引可用"
+  },
+
+  /* ── 以下四条是欠账 C3 / C1 补的 ────────────────────────────────
+     原来只覆盖访视、受试者、中心三条路径，而"目前没有 N+1、
+     计划也没退化"这句话被当成了对**全部**查询的结论。
+     它当时只对量过的那三条成立。 */
+  {
+    name: "工时台账：按中心 + 未作废（损益的成本侧）",
+    sql: (ctx) => `SELECT t.id FROM timesheet_entry t
+                    WHERE t.study_site_id = '${ctx.site}' AND t.voided_at IS NULL
+                    ORDER BY t.work_date DESC, t.id DESC LIMIT 51`,
+    mustNotSeqScan: "timesheet_entry",
+    why: "单中心损益每次都要把这个中心的未作废工时全读一遍 —— 扫全表就是把所有中心的工时读一遍"
+  },
+  {
+    name: "工时：只看待审（D4 的审批页）",
+    sql: (ctx) => `SELECT t.id FROM timesheet_entry t
+                    WHERE t.study_site_id = '${ctx.site}'
+                      AND t.approved_at IS NULL AND t.voided_at IS NULL
+                    ORDER BY t.work_date LIMIT 51`,
+    mustUse: "timesheet_unapproved_idx",
+    why: "审批页每次都问「还有哪些没审」，而待审的永远只占全量的一小部分 —— 那正是部分索引存在的理由"
+  },
+  {
+    name: "审计轨迹：按对象反查",
+    sql: `SELECT a.id FROM audit_entry a
+           WHERE a.target_type = 'study_site' AND a.target_id LIKE 'PERF-%'
+           ORDER BY a.at DESC LIMIT 51`,
+    mustNotSeqScan: "audit_entry",
+    why: "审计表只增不删，是全库最大的一张 —— 「这条记录都被谁动过」如果要扫全表，它会随时间线性变慢，而且没人会注意到"
+  },
+  {
+    name: "受试者补偿：按中心筛未发放（关闭闸门的一项）",
+    sql: (ctx) => `SELECT p.id FROM subject_payment p
+                    WHERE p.study_site_id = '${ctx.site}' AND p.paid_on IS NULL
+                    ORDER BY p.due_on LIMIT 51`,
+    mustNotSeqScan: "subject_payment",
+    why: "关闭闸门每次都要问这一句，而它在中心关闭那一刻最需要快"
+  },
+  {
+    name: "质量事件：按中心筛未关闭",
+    sql: (ctx) => `SELECT q.id FROM quality_event q
+                    WHERE q.study_site_id = '${ctx.site}' AND q.state <> 'closed'
+                    ORDER BY q.raised_on DESC LIMIT 51`,
+    mustUse: "quality_event_open_idx",
+    why: "同上：关闭闸门有两项看的是它。已关闭的会越堆越多，而没人再查它们 —— 部分索引正是为此"
   }
 ];
 
