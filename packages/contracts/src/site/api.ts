@@ -150,7 +150,11 @@ define({
   description: "外部方看不到员工名册 —— 那与机构履行监管职责无关。",
   query: PageQuery.extend({
     roleKind: RoleKind.optional(),
-    successionGap: QueryBool.optional().describe("只看「带多个中心却无继任者」的人")
+    successionGap: QueryBool.optional().describe("只看「带多个中心却无继任者」的人"),
+    /** 只看在职的。发起交接的候选人列表用它 ——
+     *  停用的人出现在下拉里，选中之后是一次白跑：后端会拒，
+     *  而界面上什么也说不出来。 */
+    activeOnly: QueryBool.optional()
   }),
   response: page(Staff)
 });

@@ -17,7 +17,11 @@ export function canSeeSite(p: Principal, ctx: ScopeContext, site: SiteFacts): bo
     case "all":      return true;
     case "none":     return false;
     case "team":     return p.teamId !== null && ctx.teamStudyIds.has(site.studyId);
-    case "assigned": return ctx.assignedSiteIds.has(site.id);
+    /* 正式派工，或者**正在接手** —— 后者是一段会自己过期的可见性：
+       交接单完成/作废之后 handoverSiteIds 就空了（见迁移 0021）。
+       与 app.site_visible() 的 'assigned' 分支一一对应。 */
+    case "assigned": return ctx.assignedSiteIds.has(site.id)
+                          || ctx.handoverSiteIds.has(site.id);
     case "hospital": return p.orgRef !== null && site.hospital === p.orgRef;
     case "pi":       return site.piAccountId !== null && site.piAccountId === p.accountId;
     default:         return false;
@@ -52,10 +56,18 @@ export function siteScopeSql(p: Principal, alias = "s", start = 1): ScopeSql {
       if (!p.teamId) return { sql: "false", params: [] };
       return { sql: `${tenant} AND EXISTS (SELECT 1 FROM team_study ts
         WHERE ts.study_id = ${alias}.study_id AND ts.team_id = ${$(p.teamId)})`, params: P };
-    case "assigned":
-      return { sql: `${tenant} AND EXISTS (SELECT 1 FROM site_assignment sa
-        WHERE sa.study_site_id = ${alias}.id AND sa.account_id = ${$(p.accountId)}
-          AND sa.effective @> CURRENT_DATE)`, params: P };
+    case "assigned": {
+      /* 两段，与 app.site_visible() 的 'assigned' 分支同一条判定：
+         正式派工，或者正在接手（交接单还没完成）。 */
+      const me = $(p.accountId);
+      return { sql: `${tenant} AND (EXISTS (SELECT 1 FROM site_assignment sa
+        WHERE sa.study_site_id = ${alias}.id AND sa.account_id = ${me}
+          AND sa.effective @> CURRENT_DATE)
+        OR EXISTS (SELECT 1 FROM handover h
+             JOIN handover_site hs ON hs.handover_id = h.id
+            WHERE hs.study_site_id = ${alias}.id AND h.to_account_id = ${me}
+              AND h.status = 'pending'))`, params: P };
+    }
     case "hospital":
       if (!p.orgRef) return { sql: "false", params: [] };
       return { sql: `${tenant} AND ${alias}.hospital = ${$(p.orgRef)}`, params: P };

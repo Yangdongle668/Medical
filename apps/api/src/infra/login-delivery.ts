@@ -39,9 +39,22 @@ export interface LoginLink {
   ttlMin: number;
 }
 
+/** 一条要送出去的消息。通道只认这个形状 ——
+ *  登录链接、交接通知、以后别的什么，都先变成它再交给通道。
+ *
+ *  分出这一层是为了**别让第二种通知去复制一遍 SMTP 客户端**：
+ *  两套投递逻辑必然漂移，而漂移的表现是"有的通知发得出去，有的发不出去"。 */
+export interface Message {
+  channel: Channel;
+  to: string;
+  /** 邮件主题。短信没有主题，通道会忽略它。 */
+  subject: string;
+  text: string;
+}
+
 export interface Transport {
   readonly kind: "smtp" | "webhook" | "console";
-  send(m: LoginLink): Promise<void>;
+  send(m: Message): Promise<void>;
 }
 
 /** 日志里的收件地址一律掩码。留头留尾是为了让运维认得出"是不是那个人"，
@@ -81,9 +94,9 @@ export const smsOf = (m: LoginLink) =>
 class SmtpTransport implements Transport {
   readonly kind = "smtp" as const;
   constructor(private readonly url: string, private readonly from: string) {}
-  async send(m: LoginLink) {
+  async send(m: Message) {
     await sendMail({ url: this.url, from: this.from },
-      { to: m.to, subject: subjectOf(m.ttlMin), text: bodyOf(m) });
+      { to: m.to, subject: m.subject, text: m.text });
   }
 }
 
@@ -94,14 +107,14 @@ class SmtpTransport implements Transport {
 class WebhookTransport implements Transport {
   readonly kind = "webhook" as const;
   constructor(private readonly url: string, private readonly token: string | null) {}
-  async send(m: LoginLink) {
+  async send(m: Message) {
     const res = await fetch(this.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(this.token ? { Authorization: `Bearer ${this.token}` } : {})
       },
-      body: JSON.stringify({ to: m.to, text: smsOf(m) }),
+      body: JSON.stringify({ to: m.to, text: m.text }),
       signal: AbortSignal.timeout(10_000)
     });
     if (!res.ok)
@@ -112,11 +125,11 @@ class WebhookTransport implements Transport {
 /** 开发用：把链接打在自己的日志里。**生产环境拒绝启动**（见 preflight）。 */
 class ConsoleTransport implements Transport {
   readonly kind = "console" as const;
-  send(m: LoginLink) {
+  send(m: Message) {
     /* info 而不是 warn：这是开发环境下**唯一**拿到链接的办法，属于正常输出。
        真正该刺耳的地方在 preflight —— 它在生产环境直接拒绝启动。 */
     emit("info", "login-delivery",
-      `【开发通道】给 ${m.to} 的登录链接：${m.link}`, { channel: m.channel });
+      `【开发通道】给 ${m.to}：${m.text}`, { channel: m.channel });
     return Promise.resolve();
   }
 }
@@ -211,13 +224,35 @@ export class LoginDelivery {
 
   /** 送。失败就抛 —— 由调用方决定怎么记，但它绝不会变成响应的一部分。 */
   async deliver(m: LoginLink): Promise<"sent" | "no-transport"> {
+    return this.send({
+      channel: m.channel, to: m.to,
+      subject: subjectOf(m.ttlMin),
+      text: m.channel === "sms" ? smsOf(m) : bodyOf(m)
+    }, "登录链接已投递");
+  }
+
+  /** 送一条**普通通知**（交接、到期提醒……）。
+   *
+   *  与登录链接共用同一批通道，是刻意的：两套投递逻辑必然漂移，
+   *  而漂移的表现是"有的通知发得出去，有的发不出去"，
+   *  且只有收不到的那个人知道。
+   *
+   *  但两者有一处必须分开：**登录链接的正文绝不进日志**（它就是凭证），
+   *  而普通通知的标题进日志是有用的 —— 排查"他说没收到"时要靠它。 */
+  async notify(m: Message): Promise<"sent" | "no-transport"> {
+    return this.send(m, "通知已投递", { subject: m.subject });
+  }
+
+  private async send(
+    m: Message, what: string, extra: Record<string, unknown> = {}
+  ): Promise<"sent" | "no-transport"> {
     const t = this.transportFor(m.channel);
     if (!t) return "no-transport";
     await t.send(m);
-    /* 只记掩码后的地址与通道。链接绝不进日志 —— 那等于把登录权限
+    /* 只记掩码后的地址与通道。登录链接绝不进日志 —— 那等于把登录权限
        交给所有能读日志的人。 */
-    emit("info", "login-delivery", "登录链接已投递",
-      { channel: m.channel, via: t.kind, to: mask(m.to) });
+    emit("info", "login-delivery", what,
+      { channel: m.channel, via: t.kind, to: mask(m.to), ...extra });
     return "sent";
   }
 }

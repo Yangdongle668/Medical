@@ -69,3 +69,16 @@ SELECT 'SAE-2026-0002', s.id, 'sae', 'critical', 'open',
        false, 'cra', (now() - interval '52 hours')::date,
        now() - interval '52 hours', NULL
   FROM study_site s WHERE s.code = 'SS-01';
+
+/* ── 一个已离职的 CRC 留在名册上（欠账 E3） ────────────────────────
+   周琦 2026-07-15 离职（account.status = 'disabled'）。她**必须**在
+   staff 名册里有一行：
+   · 「谁离职了、他的中心谁接的」是交接台账要回答的问题，
+     把人从名册上抹掉等于抹掉那段历史；
+   · 而发起交接的候选人列表要能把她**筛掉** —— 在此之前这件事
+     只是碰巧成立（种子里没有任何一个停用账号有 staff 行），
+     没有任何一条测试会因为它坏掉而红。 */
+INSERT INTO staff (account_id, role_kind, level, city, gcp_expires_on,
+                   mentor_account_id, successor_account_id)
+VALUES ('53b40017-03d4-500d-8aaa-3070d25c4f7e', 'CRC', '高级', '北京', '2027-05-30',
+        '1c8425f6-c481-5938-b156-8caddcc5239c', NULL);

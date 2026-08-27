@@ -10,7 +10,8 @@ import { command, idempotent } from "../../infra/command.js";
 
 const StaffQ = PageQuery.extend({
   roleKind: RoleKind.optional(),
-  successionGap: QueryBool.optional()
+  successionGap: QueryBool.optional(),
+  activeOnly: QueryBool.optional()
 });
 const HandoverQ = PageQuery.extend({ status: HandoverStatus.optional() });
 const CreateHandover = z.object({

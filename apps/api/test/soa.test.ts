@@ -51,7 +51,7 @@ describe("SOA：可配置，但已排出去的访视不动", () => {
       [v.id, v.windowDays]);
 
     const next = asBody(soa.visits);
-    next[0].windowDays = v0.windowDays + 5;
+    next[0]!.windowDays = v0.windowDays + 5;
     const r = await boss.post(`/v1/studies/${st.id}/visit-template:replace`,
       { visits: next, reason: "方案修订 V1.3：首次访视窗口放宽 5 天" }, K());
     expect(r.status, JSON.stringify(r.body)).toBe(201);
@@ -95,7 +95,7 @@ describe("SOA：可配置，但已排出去的访视不动", () => {
     const st = await firstStudy();
     const soa = (await boss.get(`/v1/studies/${st.id}/visit-template`)).body;
     const next = asBody(soa.visits);
-    next[0].anchor = "enroll";
+    next[0]!.anchor = "enroll";
     const r = await boss.post(`/v1/studies/${st.id}/visit-template:replace`,
       { visits: next, reason: "试着把第 0 次访视改成锚定入组日" }, K());
     expect(r.status).toBe(422);

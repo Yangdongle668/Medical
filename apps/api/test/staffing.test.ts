@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { INestApplication } from "@nestjs/common";
 import { boot, resetDb, as, type Caller } from "./harness.js";
 import { randomUUID } from "node:crypto";
+import pg from "pg";
+import { LoginDelivery } from "../src/infra/login-delivery.js";
 import { DEFAULT_STARTUP_ITEMS } from "@sitedesk/contracts";
 
 /* ════════════════════════════════════════════════════════════════════
@@ -262,10 +264,46 @@ describe("人员：account 之外的作业属性", () => {
   it("列出工种、司职、GCP 剩余天数与带教/继任者", async () => {
     const r = await boss.get("/v1/staff?limit=50");
     expect(r.status).toBe(200);
-    expect(r.body.items.length).toBe(14);
+    /* 15 = 14 在职 + 1 已离职。**离职的人留在名册里**：
+       「谁离职了、他的中心谁接的」是交接台账要回答的问题，
+       把人从名册上抹掉等于抹掉那段历史。 */
+    expect(r.body.items.length).toBe(15);
     const wt = r.body.items.find((s: { login: string }) => s.login === "wutong");
-    expect(wt).toMatchObject({ roleKind: "CRC", level: "高级", city: "北京" });
+    expect(wt).toMatchObject({ roleKind: "CRC", level: "高级", city: "北京", active: true });
     expect(wt.gcpDaysLeft).toBeTypeOf("number");
+  });
+
+  it("已离职的人留在名册里，但带着停用原因 —— 而 activeOnly 能把他们筛掉", async () => {
+    /* 在此之前这件事只是**碰巧**成立：种子里没有任何一个停用账号有
+       staff 行，于是"发起交接不会选到离职的人"没有任何测试守着。 */
+    const all = await boss.get("/v1/staff?limit=50");
+    const gone = all.body.items.find((s: { login: string }) => s.login === "zhouqi");
+    expect(gone, "名册里应当留着已离职的周琦").toBeTruthy();
+    expect(gone.active).toBe(false);
+    expect(gone.disabledReason).toContain("离职");
+
+    const onlyActive = await boss.get("/v1/staff?limit=50&activeOnly=true");
+    expect(onlyActive.body.items.map((s: { login: string }) => s.login))
+      .not.toContain("zhouqi");
+    for (const s of onlyActive.body.items) expect(s.active).toBe(true);
+  });
+
+  it("activeOnly=false 是「两种都要」，不是被读成 true", async () => {
+    /* QueryBool 之前，?activeOnly=false 会被 Boolean("false") 读成 true。 */
+    const r = await boss.get("/v1/staff?limit=50&activeOnly=false");
+    expect(r.body.items.map((s: { login: string }) => s.login)).toContain("zhouqi");
+  });
+
+  it("把中心交给一个已离职的人 → 被拒", async () => {
+    const mine = (await crcWu.get("/v1/study-sites?limit=10")).body.items[0];
+    const gone = (await boss.get("/v1/staff?limit=50")).body.items
+      .find((s: { login: string }) => s.login === "zhouqi");
+    const r = await crcWu.post("/v1/handovers", {
+      toAccountId: gone.accountId, studySiteIds: [mine.id],
+      reason: "交给一个已经离职的人", plannedOn: "2026-09-10"
+    });
+    /* 交给一个登不进来的人，等于把中心交给一个没人的位置 */
+    expect(r.status).toBe(422);
   });
 
   it("「带 3 个以上中心却没有继任者」可以直接筛出来", async () => {
@@ -326,6 +364,53 @@ describe("交接：中心不会因为人休假就停下", () => {
     hid = r.body.id;
   });
 
+  it("发起交接会**通知接手人** —— 在此之前他完全不知道有这回事", async () => {
+    /* 交接是发起人单方面做的动作：他填表、勾清单、点发起。
+       没有通知的话，"交接"实际发生在微信群里，系统只是事后记账。
+
+       盯住通道本身，而不是日志：日志格式会变，"这条通知有没有发出去"
+       不会。投递在提交之后异步发生，所以下面要等一个事件循环回合。 */
+    const sent = vi.spyOn(LoginDelivery.prototype, "notify");
+    try {
+      const mine = (await crcWu.get("/v1/study-sites?limit=10")).body.items[1];
+      const to = (await boss.get("/v1/staff?limit=50")).body.items
+        .find((s: { login: string }) => s.login === "shenyilin");
+      const r = await crcWu.post("/v1/handovers", {
+        toAccountId: to.accountId, studySiteIds: [mine.id],
+        reason: "通知验证：发起之后接手人应当收到消息", plannedOn: "2026-09-25"
+      });
+      expect(r.status, JSON.stringify(r.body)).toBe(201);
+      await new Promise(res => setTimeout(res, 100));
+
+      expect(sent, "发起交接没有通知任何人").toHaveBeenCalled();
+      const m = sent.mock.calls[0]![0];
+      expect(m.subject).toContain("交接给你");
+      /* 正文要说得出**是哪几个中心**，否则收信人还得再登进来查 */
+      expect(m.text).toContain("SS-");
+      /* 收件地址只认库里登记的那个 —— 与登录链接同一条规矩 */
+      expect(m.to).toContain("@");
+    } finally { sent.mockRestore(); }
+  });
+
+  it("通知发不出去，交接照样成立 —— 拿小问题去制造大问题是最坏的选择", async () => {
+    const boom = vi.spyOn(LoginDelivery.prototype, "notify")
+      .mockRejectedValue(new Error("SMTP 网关超时"));
+    try {
+      const mine = (await crcWu.get("/v1/study-sites?limit=10")).body.items[0];
+      const to = (await boss.get("/v1/staff?limit=50")).body.items
+        .find((s: { login: string }) => s.login === "shenyilin");
+      const r = await crcWu.post("/v1/handovers", {
+        toAccountId: to.accountId, studySiteIds: [mine.id],
+        reason: "通知失败不该让一笔已经写进库的交接回滚", plannedOn: "2026-09-26"
+      });
+      expect(r.status, JSON.stringify(r.body)).toBe(201);
+      await new Promise(res => setTimeout(res, 100));
+      /* 单子确实在库里 */
+      const got = await crcWu.get(`/v1/handovers?limit=50`);
+      expect(got.body.items.map((x: { id: string }) => x.id)).toContain(r.body.id);
+    } finally { boom.mockRestore(); }
+  });
+
   it("清单未逐项确认不得完成 —— 签了字但受试者没交底，等于没交接", async () => {
     const r = await crcWu.post(`/v1/handovers/${hid}:complete`, {}, K());
     expect(r.status).toBe(422);
@@ -342,10 +427,30 @@ describe("交接：中心不会因为人休假就停下", () => {
     expect(last.body.sideEffects[0].summary).toContain("可以完成这笔交接");
   });
 
-  it("完成交接会真的转移派工 —— 双方的行范围随即改变", async () => {
+  it("交接进行中，接手人**已经**看得到那几个中心 —— 交底之前要能自己核对", async () => {
+    /* 清单里最要命的一项是「在组受试者逐例交底」。在此之前接手人
+       连一张名单都对不上：他勾"已确认"的时候，确认的是自己听懂了，
+       不是自己核对过。 */
+    const shen = await as(app, "shenyilin");
+    const h = (await crcWu.get(`/v1/handovers?limit=50`)).body.items
+      .find((x: { id: string }) => x.id === hid);
+    const siteId = h.sites[0].id;
+
+    const seen = (await shen.get("/v1/study-sites?limit=50")).body.items
+      .map((x: { id: string }) => x.id);
+    expect(seen, "交接进行中，接手人应当看得到这个中心").toContain(siteId);
+
+    /* 而受试者也看得到 —— 只看得到中心而看不到人，等于没解决问题 */
+    const subs = await shen.get(`/v1/subjects?studySiteId=${siteId}&limit=5`);
+    expect(subs.status).toBe(200);
+  });
+
+  it("完成交接会真的转移派工 —— 原负责人随即看不到了", async () => {
     const beforeWu = (await crcWu.get("/v1/study-sites?limit=50")).body.items.length;
     const shen = await as(app, "shenyilin");
-    const beforeShen = (await shen.get("/v1/study-sites?limit=50")).body.items.length;
+    const h = (await crcWu.get(`/v1/handovers?limit=50`)).body.items
+      .find((x: { id: string }) => x.id === hid);
+    const siteId = h.sites[0].id;
 
     const r = await crcWu.post(`/v1/handovers/${hid}:complete`, {}, K());
     expect(r.status).toBe(201);
@@ -353,7 +458,47 @@ describe("交接：中心不会因为人休假就停下", () => {
     expect(r.body.sideEffects[0].summary).toContain("派工已由 吴桐 转至 沈亦琳");
 
     expect((await crcWu.get("/v1/study-sites?limit=50")).body.items.length).toBe(beforeWu - 1);
-    expect((await shen.get("/v1/study-sites?limit=50")).body.items.length).toBe(beforeShen + 1);
+    /* 接手人这边**数目不变** —— 他在交接期间就看得到了。
+       变的是性质：从一段会过期的临时可见性，变成正式派工。
+       重开会话才看得出这一点：临时那段是按 status='pending' 算的。 */
+    const shenAfter = await as(app, "shenyilin");
+    expect((await shenAfter.get("/v1/study-sites?limit=50")).body.items
+      .map((x: { id: string }) => x.id)).toContain(siteId);
+  });
+
+  it("单子一不是 pending，那段临时可见性立刻没了 —— 它自己过期，不用谁回收", async () => {
+    const mine = (await crcWu.get("/v1/study-sites?limit=10")).body.items[0];
+    const to = (await boss.get("/v1/staff?limit=50")).body.items
+      .find((s: { login: string }) => s.login === "shenyilin");
+    const made = await crcWu.post("/v1/handovers", {
+      toAccountId: to.accountId, studySiteIds: [mine.id],
+      reason: "临时可见性到期验证：发起之后置为已取消", plannedOn: "2026-09-20"
+    });
+    expect(made.status, JSON.stringify(made.body)).toBe(201);
+
+    const during = await as(app, "shenyilin");
+    expect((await during.get("/v1/study-sites?limit=50")).body.items
+      .map((x: { id: string }) => x.id)).toContain(mine.id);
+
+    /* 直接改库：**目前还没有"取消交接"这个端点**（`cancelled` 是
+       schema 允许但没人设置的状态）。这条用例验的是可见性跟着 status 走，
+       不是那个端点 —— 补端点是另一件事，不该顺手长在这里。
+
+       前面几条用例也给这个中心排过交接单，所以要把**这个中心的**
+       在途单子全部收掉：只改自己那一笔的话，别的单子还开着，
+       可见性照样成立，而报错会说成"过期没生效"。 */
+    const db = new pg.Client({ connectionString: process.env["TEST_DATABASE_URL"] });
+    await db.connect();
+    try {
+      await db.query(
+        `UPDATE handover SET status = 'cancelled'
+          WHERE status = 'pending' AND id IN (
+            SELECT handover_id FROM handover_site WHERE study_site_id = $1)`, [mine.id]);
+    } finally { await db.end(); }
+
+    const after = await as(app, "shenyilin");
+    expect((await after.get("/v1/study-sites?limit=50")).body.items
+      .map((x: { id: string }) => x.id)).not.toContain(mine.id);
   });
 
   it("由**接手人**收单，派工同样要真的转移 —— 这条曾经静默失败", async () => {

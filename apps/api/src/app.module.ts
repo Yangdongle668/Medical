@@ -10,6 +10,7 @@ import { AuditService } from "./infra/audit.service.js";
 import { IdempotencyService } from "./infra/idempotency.service.js";
 import { RateLimitService } from "./infra/rate-limit.service.js";
 import { LoginDelivery } from "./infra/login-delivery.js";
+import { NotifyService } from "./infra/notify.js";
 import { startGc } from "./infra/gc.js";
 import { AuthGuard, ActionGuard } from "./auth/guards.js";
 import { AuthService } from "./auth/auth.service.js";
@@ -53,8 +54,10 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
       }
     },
     AuthService, AuditService, IdempotencyService, RateLimitService,
-    /* 投递通道按环境变量决定走哪一种；没配就是不发，见 infra/login-delivery.ts */
-    LoginDelivery,
+    /* 投递通道按环境变量决定走哪一种；没配就是不发，见 infra/login-delivery.ts。
+       NotifyService 复用同一批通道 —— 两套投递逻辑必然漂移，
+       而漂移的表现是"有的通知发得出去，有的发不出去"。 */
+    LoginDelivery, NotifyService,
     IdentityService, SiteService, StaffingService,
     ClinicalService, AccountabilityService, CostService,
     /* 跨上下文装配：ClinicalOps 只认 ports.ts 里的接口，不 import CostService */

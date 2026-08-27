@@ -29,6 +29,15 @@ export async function loadPrincipal(
   const assigned = await client.query<{ study_site_id: string }>(
     `SELECT study_site_id FROM site_assignment
       WHERE account_id = $1 AND effective @> CURRENT_DATE`, [accountId]);
+  /* 正在接手的中心 —— 交接单还没完成，正式派工还没转过来。
+     交接清单里最要命的一项是「在组受试者逐例交底」，而在此之前
+     接手人连一张名单都对不上：他勾"已确认"的时候，确认的是自己听懂了，
+     不是自己核对过。这段可见性**自己会过期**（status 一变就没了）。 */
+  const handover = await client.query<{ study_site_id: string }>(
+    `SELECT hs.study_site_id FROM handover h
+       JOIN handover_site hs ON hs.handover_id = h.id
+      WHERE h.to_account_id = $1 AND h.status = 'pending'`, [accountId]);
+
   const teamStudies = a.team_id
     ? await client.query<{ study_id: string }>(
         `SELECT study_id FROM team_study WHERE team_id = $1`, [a.team_id])
@@ -46,7 +55,8 @@ export async function loadPrincipal(
     },
     scope: {
       assignedSiteIds: new Set(assigned.rows.map(r => r.study_site_id)),
-      teamStudyIds: new Set(teamStudies.rows.map(r => r.study_id))
+      teamStudyIds: new Set(teamStudies.rows.map(r => r.study_id)),
+      handoverSiteIds: new Set(handover.rows.map(r => r.study_site_id))
     }
   };
 }

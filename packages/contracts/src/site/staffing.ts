@@ -77,7 +77,11 @@ export const Staff = z.object({
   successorName: z.string().nullable(),
   siteCount: z.int().describe("当前有效派工的中心数"),
   /** 无继任者且带 3 个以上中心 —— 一旦离职就断档 */
-  successionGap: z.boolean()
+  successionGap: z.boolean(),
+  /** 在职状态。**发起交接时只能选在职的人** ——
+   *  停用的账号登不进来，交接给他等于把中心交给一个没人的位置。 */
+  active: z.boolean(),
+  disabledReason: z.string().nullable().describe("停用原因，如「离职 —— 转甲方 CRA」")
 }).meta({
   id: "Staff",
   description: "account 回答「谁能登录、看得到什么」；staff 回答「他是什么工种、带谁、谁接他」。"

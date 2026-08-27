@@ -59,6 +59,13 @@ beforeAll(async () => {
 
   const assigns = await owner.query<AssignRow>(`
     SELECT account_id, study_site_id FROM site_assignment WHERE effective @> CURRENT_DATE`);
+  /* 交接进行中，接手人提前看得到（迁移 0021）。装进 ctx 才谈得上等价：
+     漏掉它，TS 判定会说"看不见"，而数据库说"看得见"—— 那正是这套测试
+     要抓的那种分歧，只不过分歧出在测试自己身上。 */
+  const handovers = await owner.query<AssignRow>(`
+    SELECT h.to_account_id AS account_id, hs.study_site_id
+      FROM handover h JOIN handover_site hs ON hs.handover_id = h.id
+     WHERE h.status = 'pending'`);
   const teamStudies = await owner.query<TeamStudyRow>(`SELECT team_id, study_id FROM team_study`);
 
   principals = new Map();
@@ -75,7 +82,9 @@ beforeAll(async () => {
         assignedSiteIds: new Set(
           assigns.rows.filter(x => x.account_id === a.id).map(x => x.study_site_id)),
         teamStudyIds: new Set(
-          teamStudies.rows.filter(x => x.team_id === a.team_id).map(x => x.study_id))
+          teamStudies.rows.filter(x => x.team_id === a.team_id).map(x => x.study_id)),
+        handoverSiteIds: new Set(
+          handovers.rows.filter(x => x.account_id === a.id).map(x => x.study_site_id))
       }
     });
   }
@@ -113,8 +122,9 @@ describe("行范围：三处实现必须逐一致", () => {
     expect([...rules].sort()).toEqual(["all", "assigned", "hospital", "pi", "team"]);
     /* none 没有账号使用，单独构造验证 */
     const fake: Principal = { ...[...principals.values()][0]!.p, rowRule: "none" };
-    expect(visibleSites(fake, { assignedSiteIds: new Set(), teamStudyIds: new Set() }, sites))
-      .toEqual([]);
+    expect(visibleSites(fake, {
+      assignedSiteIds: new Set(), teamStudyIds: new Set(), handoverSiteIds: new Set()
+    }, sites)).toEqual([]);
   });
 
   it("每个账号 × 每个中心：TS 判定 === 数据库 RLS 判定", async () => {

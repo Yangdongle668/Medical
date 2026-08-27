@@ -2662,6 +2662,25 @@ paths:
                   - 'false'
                   - 'no'
                   - 'off'
+        - name: activeOnly
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
       responses:
         '200':
           description: 人员与派工
@@ -8046,6 +8065,12 @@ components:
           description: 当前有效派工的中心数
         successionGap:
           type: boolean
+        active:
+          type: boolean
+        disabledReason:
+          nullable: true
+          description: 停用原因，如「离职 —— 转甲方 CRA」
+          type: string
       required:
         - accountId
         - login
@@ -8059,6 +8084,8 @@ components:
         - successorName
         - siteCount
         - successionGap
+        - active
+        - disabledReason
       additionalProperties: false
       description: account 回答「谁能登录、看得到什么」；staff 回答「他是什么工种、带谁、谁接他」。
     HandoverStatus:

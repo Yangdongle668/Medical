@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { emit, JsonLogger } from "../src/infra/log.js";
 import { runInCtx, type RequestCtx } from "../src/infra/ctx.js";
 import type { PoolClient } from "pg";
+import { EMPTY_SCOPE } from "@sitedesk/policy";
 
 /* ════════════════════════════════════════════════════════════════════
    结构化日志。
@@ -52,7 +53,7 @@ afterEach(() => {
 
 const fakeCtx = (over: Partial<RequestCtx> = {}): RequestCtx => ({
   requestId: "req-1", client: {} as PoolClient, principal: null,
-  scope: { assignedSiteIds: new Set(), teamStudyIds: new Set() },
+  scope: EMPTY_SCOPE,
   operationId: null, finalized: false, inFlight: false,
   queryCount: 0, dbless: false, afterCommit: [], ...over
 });

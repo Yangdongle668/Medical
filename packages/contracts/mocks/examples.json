@@ -1068,21 +1068,25 @@
           "mentorName": "示例",
           "successorName": "示例",
           "siteCount": 15,
-          "successionGap": true
+          "successionGap": true,
+          "active": false,
+          "disabledReason": "示例文本（由契约生成，非真实数据）"
         },
         {
-          "accountId": "1ddb4214-c3fb-5f2b-3fcc-fc18a99917df",
+          "accountId": "db4214c3-fb5f-2b3f-ccfc-18a99917dfc6",
           "login": "hanxue",
-          "displayName": "林敏",
+          "displayName": "韩雪",
           "roleKind": "CRA",
           "level": "示例",
-          "city": "广州",
-          "gcpExpiresOn": "2026-08-10",
-          "gcpDaysLeft": 13,
-          "mentorName": "示例",
-          "successorName": "示例",
-          "siteCount": 6,
-          "successionGap": false
+          "city": "北京",
+          "gcpExpiresOn": "2026-08-25",
+          "gcpDaysLeft": 16,
+          "mentorName": null,
+          "successorName": null,
+          "siteCount": 22,
+          "successionGap": true,
+          "active": true,
+          "disabledReason": "示例文本（由契约生成，非真实数据）"
         }
       ],
       "nextCursor": "示例"
