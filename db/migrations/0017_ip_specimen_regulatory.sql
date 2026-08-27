@@ -184,6 +184,11 @@ DROP TABLE IF EXISTS ip_movement;
 ALTER TABLE quality_event DROP CONSTRAINT IF EXISTS quality_event_sae_order;
 ALTER TABLE quality_event DROP COLUMN IF EXISTS occurred_at;
 ALTER TABLE quality_event DROP COLUMN IF EXISTS reported_at;
+/* 收窄取值之前先清掉只有这一支迁移才可能造出来的行。
+   不清的话 down 直接失败（"is violated by some row"），
+   而那条报错指不到这里 —— 它只说约束不满足，不说是谁写进去的。
+   down 只在本地用（生产只进不退），删掉的正是 up 让它存在的那些行。 */
+DELETE FROM quality_event WHERE kind = 'sae';
 ALTER TABLE quality_event DROP CONSTRAINT IF EXISTS quality_event_kind_check;
 ALTER TABLE quality_event ADD CONSTRAINT quality_event_kind_check
   CHECK (kind IN ('deviation','query','ip_discrepancy','sae_late','other'));

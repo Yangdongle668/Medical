@@ -107,7 +107,8 @@ define({
 /* ════════════════════════════════════════════════════════════════════
    启动清单 · 人员 · 交接
    ════════════════════════════════════════════════════════════════════ */
-import { StartupChecklist, StartupItem, Staff, Handover, RoleKind, HandoverStatus }
+import { StartupChecklist, StartupItem, Staff, Handover, RoleKind, HandoverStatus,
+  StartupTemplate, StartupTemplateItem }
   from "./staffing.js";
 
 define({
@@ -204,4 +205,29 @@ define({
   body: z.object({}),
   response: commandResult(Handover),
   errors: ["gate-not-satisfied", "invariant-violated", "idempotency-key-reused"]
+});
+
+/* ── 启动清单模板（可配置，见迁移 0019） ─────────────────────────── */
+define({
+  id: "getStartupTemplate", method: "get", path: "/v1/startup-template",
+  layer: "L1", context: "site",
+  summary: "启动清单模板（当前版本）",
+  response: StartupTemplate
+});
+
+define({
+  id: "replaceStartupTemplate", method: "post", path: "/v1/startup-template\\:replace",
+  layer: "L2", context: "site",
+  summary: "发布新一版启动清单模板",
+  description:
+    "**整份替换，版本号加一，旧版本不删** —— 中心的 `startupTemplateVersion` " +
+    "要指得回去，否则「这个中心当初是照着什么铺的」就没有答案。\n" +
+    "只对**此后建档**的中心生效。",
+  action: "manage",
+  body: z.object({
+    items: z.array(StartupTemplateItem).min(1).max(60),
+    reason: z.string().trim().min(4).max(500)
+  }),
+  response: commandResult(StartupTemplate),
+  errors: ["validation-failed", "idempotency-key-reused"]
 });

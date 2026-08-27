@@ -6,7 +6,7 @@ import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
 import { ProblemException } from "../../infra/problem.js";
-import { idempotent } from "../../infra/command.js";
+import { command, idempotent } from "../../infra/command.js";
 
 const ListQ = PageQuery.extend({
   studyId: Uuid.optional(),
@@ -15,6 +15,17 @@ const ListQ = PageQuery.extend({
   hospital: z.string().optional(),
   q: z.string().max(64).optional(),
   startupInvalidated: QueryBool.optional()
+});
+const TemplateItem = z.object({
+  sortOrder: z.coerce.number().int().min(0),
+  category: z.enum(["ethics","contract","isf","training","ip","lab","systems","meeting"]),
+  item: z.string().trim().min(1).max(200),
+  isBlocking: z.boolean(),
+  dueOffset: z.coerce.number().int().min(-365).max(365)
+});
+const ReplaceTemplate = z.object({
+  items: z.array(TemplateItem).min(1).max(60),
+  reason: z.string().trim().min(4).max(500)
 });
 const CreateBody = z.object({
   studyId: Uuid, code: z.string().min(1).max(64),
@@ -42,6 +53,17 @@ export class SiteController {
 
   @Get("/study-sites") @Operation("listStudySites")
   list(@Query(new ZodPipe(ListQ)) q: z.infer<typeof ListQ>) { return this.svc.list(q); }
+
+  /* 模板路由排在 `/study-sites/:id` 之前不是必需的（路径不冲突），
+     但它和下面那条命令要挨着 —— 读和写分开两处，改的时候容易只改一处。 */
+  @Get("/startup-template") @Operation("getStartupTemplate")
+  startupTemplate() { return this.svc.startupTemplate(); }
+
+  @Post("/startup-template\\:replace") @Operation("replaceStartupTemplate")
+  replaceTemplate(
+    @Body(new ZodPipe(ReplaceTemplate)) b: z.infer<typeof ReplaceTemplate>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.replaceStartupTemplate(b)); }
 
   @Get("/study-sites/:id") @Operation("getStudySite")
   get(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.get(id); }

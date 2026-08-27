@@ -156,11 +156,15 @@ export const SiteFunnel = z.object({
 
 /* ── 质量事件 ────────────────────────────────────────────────────── */
 export const QUALITY_KINDS = [
-  "deviation", "query", "ip_discrepancy", "sae_late", "other"
+  "deviation", "query", "ip_discrepancy", "sae", "sae_late", "other"
 ] as const;
 export const QualityKind = z.enum(QUALITY_KINDS).meta({
   id: "QualityKind",
-  description: "方案偏离 / 数据质疑 / 药品数量不平衡 / SAE 超时上报 / 其他"
+  description:
+    "方案偏离 / 数据质疑 / 药品数量不平衡 / 严重不良事件 / SAE 超时上报 / 其他。\n" +
+    "`sae` 与 `sae_late` 是**两条记录**，不是一条的两个状态：" +
+    "前者是事件本身（台账、及时率的分母），后者是「这一条晚报了」这件事" +
+    "自动生成的质量事件（I6），要走整改与关闭流程。"
 });
 
 export const QUALITY_SEVERITIES = ["minor", "major", "critical"] as const;
@@ -191,7 +195,19 @@ export const QualityEvent = z.object({
   raisedBy: z.enum(["system", "cra", "qa", "institution"]),
   raisedOn: DateOnly,
   closedAt: Timestamp.nullable(),
-  ageDays: z.int().describe("从提出到关闭（或到今天）的天数")
+  ageDays: z.int().describe("从提出到关闭（或到今天）的天数"),
+
+  /* ── 以下三项只在 kind = 'sae' 时有值（I6） ─────────────────────── */
+  /** 事件发生（或研究者知悉）的时刻 */
+  occurredAt: Timestamp.nullable(),
+  /** 向申办方 / 伦理上报的时刻；尚未上报为 null */
+  reportedAt: Timestamp.nullable(),
+  /** 从发生到上报经过的小时数。**不四舍五入** ——
+   *  把 24.4 小时显示成 24 小时是在替人开脱。未上报为 null。 */
+  reportHours: z.number().nullable(),
+  /** 自动生成的事件因哪条质量事件而生成。`sae_late` 指向它所说的那条 SAE。
+   *  自动记录必须答得出「凭什么存在」—— 数据库上有约束（迁移 0018）。 */
+  sourceEventId: Uuid.nullable()
 }).meta({
   id: "QualityEvent",
   description:
@@ -216,4 +232,70 @@ export const SubjectPayment = z.object({
 }).meta({
   id: "SubjectPayment",
   description: "受试者补偿未发放或缺签收凭证，中心关不掉 —— 这是关闭闸门的七项之一。"
+});
+
+/* ── SAE 台账与 24 小时及时率（I6） ─────────────────────────────────
+   这一条是 packages/calc/src/kernel.ts 开头点名的原罪：
+   原型里「SAE 24h 及时率」是个写死的常量，而同一个页面下方就摆着
+   一条超窗的 SAE。所以这里的每一个数字都由 @sitedesk/calc 算出来，
+   并带 calcVersion —— 报表要能标出「按哪版口径算的」。 */
+export const SaeTimeliness = z.object({
+  total: z.int(),
+  onTime: z.int(),
+  late: z.int(),
+  /** 发生不足 24 小时且尚未上报 —— 还在计时，不进及时率 */
+  pending: z.int(),
+  /** 及时率 = onTime / (onTime + late)。
+   *  分母为 0 时**不出现该字段** —— 「还没有 SAE」不等于「及时率 0%」，
+   *  而显示成 100% 更糟：那是在用一个没有分母的数字给人安全感。 */
+  rate: z.number().min(0).max(1).nullable(),
+  /** 最长的一次超时（小时）。未上报的按「到现在为止」算 —— 它还在变大。
+   *  及时率是 92% 还是 100%，远不如「最坏的那一条晚了 9 天」更能让人动起来。 */
+  worstLateHours: z.number().nullable(),
+  calcVersion: z.string()
+}).meta({
+  id: "SaeTimeliness",
+  description:
+    "**不能靠「不上报」把这个数做好看。** 超过 24 小时仍未上报的直接计入迟报，" +
+    "而不是留在分母之外等着 —— 那样越拖越好看。"
+});
+
+export const SaeLedger = z.object({
+  items: z.array(QualityEvent),
+  nextCursor: z.string().nullable(),
+  timeliness: SaeTimeliness
+}).meta({ id: "SaeLedger" });
+
+/* ── SOA（访视计划表），可配置：见迁移 0020 ────────────────────────── */
+export const SoaVisit = z.object({
+  seq: z.int().min(0),
+  visitCode: Code,
+  visitLabel: z.string().min(1).max(120),
+  /** 只有 seq 0 锚定知情日 —— 入组之前唯一确定的日期就是它 */
+  anchor: z.enum(["icf", "enroll"]),
+  offsetDays: z.int().min(-365).max(3650),
+  windowDays: z.int().min(0).max(120),
+  compensationCents: z.int().min(0),
+  tasks: z.array(z.string().min(1).max(120)).max(30)
+    .describe("这次访视要做哪几项 —— 不该靠 CRC 记忆"),
+  /** 已经按这一条排出去的访视数。**大于 0 就删不掉**：
+   *  删掉它，那些访视就指向了一个不存在的定义 ——
+   *  报表里它们还在，SOA 上它们不存在。 */
+  scheduledCount: z.int().min(0)
+}).meta({ id: "SoaVisit" });
+
+export const Soa = z.object({
+  studyId: Uuid,
+  visits: z.array(SoaVisit),
+  lastChangedAt: Timestamp.nullable(),
+  lastChangedByName: z.string().nullable(),
+  lastReason: z.string().nullable()
+}).meta({
+  id: "Soa",
+  description:
+    "访视计划表。**改它不影响已排出去的访视** —— " +
+    "访视在排期那一刻从模板落成行（连 visitCode、windowDays 一起抄下来），" +
+    "此后与模板无关。\n" +
+    "一个受试者的 C4D1 已经排在下周三，模板一改就跳到下周五，" +
+    "那个人的行程、床位、伴随用药全部作废，而系统不会知道自己做了这件事。"
 });

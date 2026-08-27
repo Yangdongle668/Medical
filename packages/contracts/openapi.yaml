@@ -1777,6 +1777,121 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/quality-events/{id}:sae-reported:
+    post:
+      operationId: reportSaeSubmitted
+      tags:
+        - clinical
+      summary: 登记 SAE 已上报
+      description: '**超过 24 小时的，这一步会同时自动生成一条 `sae_late` 质量事件**（I6）—— 在同一个事务里写，不是事后补录。它不可跳过，也不能人工删除，只能整改关闭。'
+      x-layer: L2
+      x-required-action: subjWrite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportSaeSubmittedRequest'
+      responses:
+        '200':
+          description: 登记 SAE 已上报
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportSaeSubmittedResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 版本冲突：资源已被他人修改
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/conflict-version
+                title: 版本冲突：资源已被他人修改
+                status: 409
+                code: conflict-version
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/rate-cards:
     get:
       operationId: listRateCards
@@ -2850,6 +2965,196 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/startup-template:
+    get:
+      operationId: getStartupTemplate
+      tags:
+        - site
+      summary: 启动清单模板（当前版本）
+      x-layer: L1
+      parameters: []
+      responses:
+        '200':
+          description: 启动清单模板（当前版本）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartupTemplate'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/startup-template\:replace:
+    post:
+      operationId: replaceStartupTemplate
+      tags:
+        - site
+      summary: 发布新一版启动清单模板
+      description: |-
+        **整份替换，版本号加一，旧版本不删** —— 中心的 `startupTemplateVersion` 要指得回去，否则「这个中心当初是照着什么铺的」就没有答案。
+        只对**此后建档**的中心生效。
+      x-layer: L2
+      x-required-action: manage
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceStartupTemplateRequest'
+      responses:
+        '200':
+          description: 发布新一版启动清单模板
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplaceStartupTemplateResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/studies:
     get:
       operationId: listStudies
@@ -2920,6 +3225,214 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/studies/{id}/visit-template:
+    get:
+      operationId: getSoa
+      tags:
+        - clinical
+      summary: 项目的访视计划表（SOA）
+      description: 每一条带上「已经按它排出去多少次访视」—— 那个数大于 0 就删不掉。
+      x-layer: L1
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        '200':
+          description: 项目的访视计划表（SOA）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Soa'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/studies/{id}/visit-template\:replace:
+    post:
+      operationId: replaceSoa
+      tags:
+        - clinical
+      summary: 修订访视计划表
+      description: |-
+        整份替换。**只影响此后才排出来的访视**，已排的不动。
+        已经排出去的 seq 不能删，也不能改锚点 —— 那会让已存在的访视指向一个不存在的定义。
+        改 SOA 对应的是一次方案修订，必须写原因，前后快照进变更史。
+      x-layer: L2
+      x-required-action: manage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceSoaRequest'
+      responses:
+        '200':
+          description: 修订访视计划表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplaceSoaResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -4033,6 +4546,218 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegulatorySubmission'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/study-sites/{id}/sae:
+    get:
+      operationId: listSaeEvents
+      tags:
+        - clinical
+      summary: SAE 台账与 24 小时及时率
+      description: |-
+        及时率由台账**算出来**（`@sitedesk/calc`），不是写死的常量 —— 这正是计算引擎独立成一层的原因。
+        超过 24 小时仍未上报的直接计入迟报：否则一条永远不上报的 SAE 就永远不进分母，越拖越好看。
+      x-layer: L1
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: SAE 台账与 24 小时及时率
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaeLedger'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+    post:
+      operationId: reportSae
+      tags:
+        - clinical
+      summary: 登记一条 SAE
+      description: |-
+        `occurredAt` 是**发生（或研究者知悉）**的时刻，不是录入时刻 —— 两者混为一谈，及时率就永远是 100%。
+        登记时可以一并填上报时刻；也可以先记事件、上报之后再补（见 reportSaeSubmitted）。
+      x-layer: L1
+      x-required-action: subjWrite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 幂等键（uuid）。可选；带上之后 24 小时内重放同一键返回首次结果，离线重放因此不会写两笔。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportSaeRequest'
+      responses:
+        '201':
+          description: 登记一条 SAE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityEvent'
         '401':
           description: 未认证
           content:
@@ -7085,6 +7810,11 @@ components:
         startupInvalidated:
           type: boolean
           description: 已过 SIV，但启动清单仍有未完成的阻塞项 —— 当初的启动条件现在不成立
+        startupTemplateVersion:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
       required:
         - id
         - code
@@ -7101,6 +7831,7 @@ components:
         - sivPlannedOn
         - fpiOn
         - startupInvalidated
+        - startupTemplateVersion
       additionalProperties: false
       description: 项目 × 中心。带 x-gated-by 的字段在无权限时**从响应中消失**，不是返回 null。
     SiteGate:
@@ -7447,6 +8178,66 @@ components:
         - totalCount
       additionalProperties: false
       description: 清单里最容易漏也最要命的一项是「在组受试者逐例交底」：哪个依从性差、哪个家属有顾虑、哪个只能周三来 —— 这些不在 EDC 里，只在上一个 CRC 脑子里。
+    StartupTemplateItem:
+      type: object
+      properties:
+        sortOrder:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        category:
+          $ref: '#/components/schemas/StartupCategory'
+        item:
+          type: string
+          minLength: 1
+          maxLength: 200
+        isBlocking:
+          type: boolean
+        dueOffset:
+          type: integer
+          minimum: -365
+          maximum: 365
+          description: 相对计划 SIV 日的天数，负数 = SIV 之前几天
+      required:
+        - sortOrder
+        - category
+        - item
+        - isBlocking
+        - dueOffset
+      additionalProperties: false
+    StartupTemplate:
+      type: object
+      properties:
+        version:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StartupTemplateItem'
+        updatedAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        updatedByName:
+          nullable: true
+          type: string
+        reason:
+          nullable: true
+          type: string
+      required:
+        - version
+        - items
+        - updatedAt
+        - updatedByName
+        - reason
+      additionalProperties: false
+      description: |-
+        决定每个**新**中心怎么启动的那份清单。
+        **改它不影响在途中心**：清单在建档那一刻铺开成行，此后与模板无关。一个已经做到第 12 项的中心，模板改一次就多出三项从来没人见过的阻塞 —— 没有人会认为那是「配置生效了」。
     SubjectState:
       type: string
       enum:
@@ -7901,9 +8692,12 @@ components:
         - deviation
         - query
         - ip_discrepancy
+        - sae
         - sae_late
         - other
-      description: 方案偏离 / 数据质疑 / 药品数量不平衡 / SAE 超时上报 / 其他
+      description: |-
+        方案偏离 / 数据质疑 / 药品数量不平衡 / 严重不良事件 / SAE 超时上报 / 其他。
+        `sae` 与 `sae_late` 是**两条记录**，不是一条的两个状态：前者是事件本身（台账、及时率的分母），后者是「这一条晚报了」这件事自动生成的质量事件（I6），要走整改与关闭流程。
     QualitySeverity:
       type: string
       enum:
@@ -7991,6 +8785,27 @@ components:
           minimum: -9007199254740991
           maximum: 9007199254740991
           description: 从提出到关闭（或到今天）的天数
+        occurredAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        reportedAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        reportHours:
+          nullable: true
+          type: number
+        sourceEventId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
       required:
         - id
         - code
@@ -8008,6 +8823,10 @@ components:
         - raisedOn
         - closedAt
         - ageDays
+        - occurredAt
+        - reportedAt
+        - reportHours
+        - sourceEventId
       additionalProperties: false
       description: 访视超窗**必须**生成方案偏离（I4），不可跳过 —— 在事务内与访视完成一起写，不是事后补录。
     SubjectPayment:
@@ -8083,6 +8902,152 @@ components:
         - ageDays
       additionalProperties: false
       description: 受试者补偿未发放或缺签收凭证，中心关不掉 —— 这是关闭闸门的七项之一。
+    SaeTimeliness:
+      type: object
+      properties:
+        total:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        onTime:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        late:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        pending:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        rate:
+          nullable: true
+          type: number
+          minimum: 0
+          maximum: 1
+        worstLateHours:
+          nullable: true
+          type: number
+        calcVersion:
+          type: string
+      required:
+        - total
+        - onTime
+        - late
+        - pending
+        - rate
+        - worstLateHours
+        - calcVersion
+      additionalProperties: false
+      description: '**不能靠「不上报」把这个数做好看。** 超过 24 小时仍未上报的直接计入迟报，而不是留在分母之外等着 —— 那样越拖越好看。'
+    SaeLedger:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/QualityEvent'
+        nextCursor:
+          nullable: true
+          type: string
+        timeliness:
+          $ref: '#/components/schemas/SaeTimeliness'
+      required:
+        - items
+        - nextCursor
+        - timeliness
+      additionalProperties: false
+    SoaVisit:
+      type: object
+      properties:
+        seq:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        visitCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        visitLabel:
+          type: string
+          minLength: 1
+          maxLength: 120
+        anchor:
+          type: string
+          enum:
+            - icf
+            - enroll
+        offsetDays:
+          type: integer
+          minimum: -365
+          maximum: 3650
+        windowDays:
+          type: integer
+          minimum: 0
+          maximum: 120
+        compensationCents:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        tasks:
+          maxItems: 30
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 120
+          description: 这次访视要做哪几项 —— 不该靠 CRC 记忆
+        scheduledCount:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+        - seq
+        - visitCode
+        - visitLabel
+        - anchor
+        - offsetDays
+        - windowDays
+        - compensationCents
+        - tasks
+        - scheduledCount
+      additionalProperties: false
+    Soa:
+      type: object
+      properties:
+        studyId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        visits:
+          type: array
+          items:
+            $ref: '#/components/schemas/SoaVisit'
+        lastChangedAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        lastChangedByName:
+          nullable: true
+          type: string
+        lastReason:
+          nullable: true
+          type: string
+      required:
+        - studyId
+        - visits
+        - lastChangedAt
+        - lastChangedByName
+        - lastReason
+      additionalProperties: false
+      description: |-
+        访视计划表。**改它不影响已排出去的访视** —— 访视在排期那一刻从模板落成行（连 visitCode、windowDays 一起抄下来），此后与模板无关。
+        一个受试者的 C4D1 已经排在下周三，模板一改就跳到下周五，那个人的行程、床位、伴随用药全部作废，而系统不会知道自己做了这件事。
     IpMovement:
       type: object
       properties:
@@ -8855,6 +9820,31 @@ components:
         - data
         - sideEffects
       additionalProperties: false
+    ReportSaeSubmittedRequest:
+      type: object
+      properties:
+        reportedAt:
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+      required:
+        - reportedAt
+      additionalProperties: false
+    ReportSaeSubmittedResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/QualityEvent'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
     ListRateCardsResponse:
       type: object
       properties:
@@ -9091,6 +10081,37 @@ components:
         - data
         - sideEffects
       additionalProperties: false
+    ReplaceStartupTemplateRequest:
+      type: object
+      properties:
+        items:
+          minItems: 1
+          maxItems: 60
+          type: array
+          items:
+            $ref: '#/components/schemas/StartupTemplateItem'
+        reason:
+          type: string
+          minLength: 4
+          maxLength: 500
+      required:
+        - items
+        - reason
+      additionalProperties: false
+    ReplaceStartupTemplateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/StartupTemplate'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
     ListStudiesResponse:
       type: object
       properties:
@@ -9107,6 +10128,86 @@ components:
       required:
         - items
         - nextCursor
+      additionalProperties: false
+    ReplaceSoaRequest:
+      type: object
+      properties:
+        visits:
+          minItems: 1
+          maxItems: 80
+          type: array
+          items:
+            type: object
+            properties:
+              seq:
+                type: integer
+                minimum: 0
+                maximum: 9007199254740991
+              visitCode:
+                type: string
+                minLength: 1
+                maxLength: 64
+                pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+              visitLabel:
+                type: string
+                minLength: 1
+                maxLength: 120
+              anchor:
+                type: string
+                enum:
+                  - icf
+                  - enroll
+              offsetDays:
+                type: integer
+                minimum: -365
+                maximum: 3650
+              windowDays:
+                type: integer
+                minimum: 0
+                maximum: 120
+              compensationCents:
+                type: integer
+                minimum: 0
+                maximum: 9007199254740991
+              tasks:
+                maxItems: 30
+                type: array
+                items:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                description: 这次访视要做哪几项 —— 不该靠 CRC 记忆
+            required:
+              - seq
+              - visitCode
+              - visitLabel
+              - anchor
+              - offsetDays
+              - windowDays
+              - compensationCents
+              - tasks
+            additionalProperties: false
+        reason:
+          type: string
+          minLength: 4
+          maxLength: 500
+      required:
+        - visits
+        - reason
+      additionalProperties: false
+    ReplaceSoaResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Soa'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
       additionalProperties: false
     ListStudySitesResponse:
       type: object
@@ -9296,6 +10397,37 @@ components:
       required:
         - kind
         - submittedOn
+      additionalProperties: false
+    ReportSaeRequest:
+      type: object
+      properties:
+        subjectId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        detail:
+          type: string
+          minLength: 4
+          maxLength: 2000
+        occurredAt:
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        reportedAt:
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+      required:
+        - title
+        - detail
+        - occurredAt
       additionalProperties: false
     ListSpecimensResponse:
       type: object

@@ -66,7 +66,12 @@ export const StudySite = z.object({
    *  让这种中心在台账上有一处能被筛出来 —— 否则撤销之后，
    *  唯一的痕迹是一条转瞬即逝的 sideEffect 文案。 */
   startupInvalidated: z.boolean()
-    .describe("已过 SIV，但启动清单仍有未完成的阻塞项 —— 当初的启动条件现在不成立")
+    .describe("已过 SIV，但启动清单仍有未完成的阻塞项 —— 当初的启动条件现在不成立"),
+
+  /** 建档时按第几版启动清单模板铺的清单。
+   *  模板改版**不回溯**已建档的中心，所以要有这个戳来答
+   *  「这个中心当初是照着什么铺的」。 */
+  startupTemplateVersion: z.int().nullable()
 }).meta({
   id: "StudySite",
   description:

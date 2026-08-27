@@ -122,7 +122,7 @@ export const DEFAULT_HANDOVER_ITEMS = [
   "样本暂存与转运待办"
 ] as const;
 
-/** 新中心建档时自动铺开的标准启动清单。
+/** 新中心建档时自动铺开的标准启动清单 —— **这份常量现在只是种子**。
  *
  *  为什么要自动铺开：闸门查的是「阻塞项是否清零」。若建档时清单为空，
  *  这个条件天然成立 —— 闸门看起来在把关，实际对每一个新中心都放行。
@@ -131,9 +131,17 @@ export const DEFAULT_HANDOVER_ITEMS = [
  *  `dueOffset` 是相对计划 SIV 日的天数（负数 = SIV 之前几天）。
  *  建档时未填计划 SIV 日的，到期日留空，等排期确定后再回填。
  *
- *  这里先用常量而非模板表：模板一旦可配置就要回答「谁能改、改了对
- *  在途中心是否生效、历史清单如何追溯」，那是 Phase 5 管理后台的事。
- *  届时模板表拿这份常量做初始数据即可，不影响已铺开的清单。 */
+ *  ── 它曾经是唯一的那一份 ────────────────────────────────────────
+ *  这里原本写着「模板一旦可配置就要回答『谁能改、改了对在途中心是否生效、
+ *  历史清单如何追溯』，那是 Phase 5 管理后台的事」。三个问题都有答案了
+ *  （见迁移 0019），模板搬进了 `startup_template_item` 表：
+ *
+ *    · 谁能改 —— `manage` 动作，必须写原因，逐条进审计；
+ *    · 在途中心 —— **不生效**。清单在建档那一刻铺开成行，此后与模板无关；
+ *    · 追溯 —— 中心自己的 startup_item 行，加上 `startupTemplateVersion` 戳。
+ *
+ *  这份常量留下来做**第一版模板的种子**，以及新租户开户时的初始数据。
+ *  运行时的建档流程读的是表，不是它 —— 两处不能同时是"事实来源"。 */
 export const DEFAULT_STARTUP_ITEMS: ReadonlyArray<{
   category: (typeof STARTUP_CATEGORIES)[number];
   item: string; blocking: boolean; dueOffset: number;
@@ -155,3 +163,28 @@ export const DEFAULT_STARTUP_ITEMS: ReadonlyArray<{
   { category: "systems",  item: "EDC / IWRS 账号开通与权限确认",               blocking: true,  dueOffset: -4 },
   { category: "meeting",  item: "SIV 议程、参会人确认、会议室预订",             blocking: false, dueOffset: -5 }
 ];
+
+/* ── 启动清单模板（可配置，见迁移 0019） ───────────────────────────── */
+export const StartupTemplateItem = z.object({
+  sortOrder: z.int().min(0),
+  category: StartupCategory,
+  item: z.string().min(1).max(200),
+  isBlocking: z.boolean(),
+  dueOffset: z.int().min(-365).max(365)
+    .describe("相对计划 SIV 日的天数，负数 = SIV 之前几天")
+}).meta({ id: "StartupTemplateItem" });
+
+export const StartupTemplate = z.object({
+  version: z.int(),
+  items: z.array(StartupTemplateItem),
+  updatedAt: Timestamp.nullable(),
+  updatedByName: z.string().nullable(),
+  reason: z.string().nullable()
+}).meta({
+  id: "StartupTemplate",
+  description:
+    "决定每个**新**中心怎么启动的那份清单。\n" +
+    "**改它不影响在途中心**：清单在建档那一刻铺开成行，此后与模板无关。" +
+    "一个已经做到第 12 项的中心，模板改一次就多出三项从来没人见过的阻塞 —— " +
+    "没有人会认为那是「配置生效了」。"
+});

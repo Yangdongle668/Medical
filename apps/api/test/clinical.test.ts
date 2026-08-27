@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { INestApplication } from "@nestjs/common";
 import { boot, resetDb, as, type Caller } from "./harness.js";
 import { randomUUID } from "node:crypto";
+import pg from "pg";
 import { VISIT_COMPLETED_SUBSCRIBERS } from "../src/modules/clinical/visit-completed.js";
 
 /* ════════════════════════════════════════════════════════════════════
@@ -399,7 +400,7 @@ describe("完成访视：一次调用，一串后果", () => {
     expect(one.billable).toBe(true);
   });
 
-  it("只剩一个订阅者尚未接上，且留在明面上", async () => {
+  it("七个订阅者全接上了，pending 是空的", async () => {
     const s = await siteByCode(crc, "SS-01");
     const { id } = await freshSubject(crc, s.id);
     const v = (await crc.get(`/v1/subject-visits?subjectId=${id}`)).body.items[0];
@@ -408,8 +409,49 @@ describe("完成访视：一次调用，一串后果", () => {
     const r = await crc.post(`/v1/subject-visits/${v.id}:complete`,
       { actualDate: v.targetDate, hours: 4 }, K());
 
-    expect(r.body.pending.map((p: { name: string }) => p.name)).toEqual(["RefreshProjections"]);
-    expect(r.body.pending[0].phase).toBeTruthy();
+    expect(r.body.pending).toEqual([]);
+  });
+
+  it("RefreshProjections：完成一次访视之后，漏斗与损益**真的动了**", async () => {
+    /* 这一条挂了五个阶段。它其实一直成立 —— 漏斗与损益都是读时计算，
+       没有投影表可刷新 —— 但"一直成立"如果没人验，
+       和一个 pending 标记一样空。所以这里实测。 */
+    const s = await siteByCode(boss, "SS-01");
+    const before = {
+      funnel: (await boss.get(`/v1/study-sites/${s.id}/funnel`)).body,
+      pnl: (await boss.get(`/v1/study-sites/${s.id}/pnl`)).body
+    };
+
+    const { id } = await freshSubject(crc, s.id);
+    const v = (await crc.get(`/v1/subject-visits?subjectId=${id}`)).body.items[0];
+    for (const t of v.tasks)
+      await crc.post(`/v1/subject-visits/${v.id}/tasks/${t.seq}:done`, {}, K());
+    expect((await crc.post(`/v1/subject-visits/${v.id}:complete`,
+      { actualDate: v.targetDate, hours: 4 }, K())).status).toBe(201);
+
+    const after = {
+      funnel: (await boss.get(`/v1/study-sites/${s.id}/funnel`)).body,
+      pnl: (await boss.get(`/v1/study-sites/${s.id}/pnl`)).body
+    };
+    /* 漏斗：多了一个预筛的人 */
+    expect(after.funnel.prescreened).toBe(before.funnel.prescreened + 1);
+    /* 损益：那 4 小时的工时按费率卡折成了成本（PostVisitTimesheet 自动生成的
+       那一条），成本侧一定变大 —— 而这正是"投影跟着事实走"的意思。 */
+    expect(after.pnl.cost.totalCostCents)
+      .toBeGreaterThan(before.pnl.cost.totalCostCents);
+  });
+
+  it("没有物化视图 —— 这是「读时计算」这个说法成立的前提", async () => {
+    /* 哪天有人为了性能加了一张投影表，RefreshProjections 就重新变成真活。
+       那时这条测试先红，而不是等某个月的驾驶舱数字对不上才被发现。 */
+    const db = new pg.Client({ connectionString: process.env["TEST_DATABASE_URL"] });
+    await db.connect();
+    try {
+      const { rows } = await db.query<{ n: string }>(
+        "SELECT count(*) AS n FROM pg_matviews");
+      expect(Number(rows[0]!.n),
+        "库里出现了物化视图 —— RefreshProjections 需要真的实现一次刷新了").toBe(0);
+    } finally { await db.end(); }
   });
 
   it("架构文档 §5.1 的七个订阅者一个不少地登记在册", () => {
@@ -441,6 +483,132 @@ describe("完成访视：一次调用，一串后果", () => {
     const devs = a.body.sideEffects.filter((e: { type: string }) => e.type === "DeviationDetected");
     expect(devs.length).toBe(1);
     expect(b.body.sideEffects).toEqual(a.body.sideEffects);
+  });
+});
+
+describe("SAE 台账与 24 小时及时率（I6）—— 这个数不能是写死的", () => {
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+
+  it("按时上报：不生成 sae_late，及时率把它算进分子", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const before = (await crc.get(`/v1/study-sites/${s.id}/sae`)).body.timeliness;
+
+    const r = await crc.post(`/v1/study-sites/${s.id}/sae`, {
+      title: "受试者出现 III 度中性粒细胞减少", detail: "住院治疗，已通知申办方医学监查",
+      occurredAt: hoursAgo(30), reportedAt: hoursAgo(20)      // 10 小时内上报
+    });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.reportHours).toBeCloseTo(10, 1);
+
+    const after = (await crc.get(`/v1/study-sites/${s.id}/sae`)).body.timeliness;
+    expect(after.onTime).toBe(before.onTime + 1);
+    expect(after.late).toBe(before.late);
+    /* 及时率带口径版本号：报表要能标出「按哪版口径算的」 */
+    expect(after.calcVersion).toBeTruthy();
+  });
+
+  it("超过 24 小时上报 → **必须**自动生成一条 sae_late，且在同一个事务里", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const r = await crc.post(`/v1/study-sites/${s.id}/sae`, {
+      title: "受试者因肝功能异常住院", detail: "研究者判定与试验药物可能相关",
+      occurredAt: hoursAgo(80)
+    });
+    expect(r.status).toBe(201);
+    expect(r.body.reportedAt).toBeNull();
+
+    const done = await crc.post(`/v1/quality-events/${r.body.id}:sae-reported`,
+      { reportedAt: hoursAgo(2) }, K());                      // 78 小时后才报
+    expect(done.status).toBe(201);
+    expect(done.body.sideEffects[0].type).toBe("SaeReportedLate");
+    /* 消息里要说得出晚了多少 —— 「超时上报」四个字促不成任何动作 */
+    expect(done.body.sideEffects[0].summary).toMatch(/晚了 5[0-9]\.\d 小时/);
+
+    const late = await crc.get(`/v1/quality-events?studySiteId=${s.id}&kind=sae_late`);
+    const one = late.body.items.find((q: { detail: string }) => q.detail.includes("78.0 小时"));
+    expect(one, "sae_late 记录没写出实际耗时").toBeTruthy();
+    expect(one.autoGenerated).toBe(true);
+    expect(one.raisedBy).toBe("system");
+  });
+
+  it("不上报**不能**换来好看的及时率：超时未报的直接算迟报", async () => {
+    /* 这是整个口径的关键。若只算"已上报的里面按时的占比"，
+       一条永远不上报的 SAE 就永远不进分母 —— 越拖越好看。 */
+    const s = await siteByCode(crc, "SS-07");
+    const base = (await crc.get(`/v1/study-sites/${s.id}/sae`)).body.timeliness;
+
+    expect((await crc.post(`/v1/study-sites/${s.id}/sae`, {
+      title: "受试者死亡", detail: "尚在调查中，未向申办方上报",
+      occurredAt: hoursAgo(200)
+    })).status).toBe(201);
+
+    const t = (await crc.get(`/v1/study-sites/${s.id}/sae`)).body.timeliness;
+    expect(t.late).toBe(base.late + 1);
+    expect(t.pending).toBe(base.pending);
+    /* 最坏的那一条晾了多久 —— 未上报的按"到现在为止"算，它还在变大 */
+    expect(t.worstLateHours).toBeGreaterThan(199);
+  });
+
+  it("发生不足 24 小时且未上报的是未决，既不算按时也不算迟", async () => {
+    const s = await siteByCode(crc, "SS-07");
+    const base = (await crc.get(`/v1/study-sites/${s.id}/sae`)).body.timeliness;
+    expect((await crc.post(`/v1/study-sites/${s.id}/sae`, {
+      title: "受试者过敏反应", detail: "已对症处理，正在整理上报材料",
+      occurredAt: hoursAgo(3)
+    })).status).toBe(201);
+
+    const t = (await crc.get(`/v1/study-sites/${s.id}/sae`)).body.timeliness;
+    expect(t.pending).toBe(base.pending + 1);
+    expect(t.onTime).toBe(base.onTime);
+    expect(t.late).toBe(base.late);
+  });
+
+  it("没有 SAE 的中心：及时率是 null，不是 0，更不是 100%", async () => {
+    /* 「还没有 SAE」和「及时率 0%」是两回事；显示成 100% 更糟 ——
+       那是在用一个没有分母的数字给人安全感。 */
+    const s = await siteByCode(boss, "SS-15");     // 这个用例里没人碰过它
+    const t = (await boss.get(`/v1/study-sites/${s.id}/sae`)).body.timeliness;
+    expect(t).toMatchObject({ total: 0, onTime: 0, late: 0, pending: 0 });
+    expect(t.rate).toBeNull();
+  });
+
+  it("发生时刻不能填在未来 —— 那是 24 小时的起算点", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const r = await crc.post(`/v1/study-sites/${s.id}/sae`, {
+      title: "测试", detail: "把起算点推到明天，迟报就变按时了",
+      occurredAt: new Date(Date.now() + 86_400_000).toISOString()
+    });
+    expect(r.status).toBe(422);
+  });
+
+  it("上报时刻不能就地覆盖 —— 改它等于改核查看的那个数", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const r = await crc.post(`/v1/study-sites/${s.id}/sae`, {
+      title: "受试者晕厥", detail: "已恢复，按流程上报",
+      occurredAt: hoursAgo(10), reportedAt: hoursAgo(9)
+    });
+    expect(r.status).toBe(201);
+    const again = await crc.post(`/v1/quality-events/${r.body.id}:sae-reported`,
+      { reportedAt: hoursAgo(9.5) }, K());
+    expect(again.status).toBe(409);
+  });
+
+  it("及时率的分母是这个中心的全部 SAE，不是当前这一页", async () => {
+    /* 翻到第二页时及时率跟着变，那个数字就没有任何意义。 */
+    const s = await siteByCode(crc, "SS-01");
+    const all = (await crc.get(`/v1/study-sites/${s.id}/sae?limit=50`)).body;
+    expect(all.timeliness.total).toBeGreaterThan(1);
+    const first = await crc.get(`/v1/study-sites/${s.id}/sae?limit=1`);
+    expect(first.body.items).toHaveLength(1);
+    expect(first.body.timeliness).toEqual(all.timeliness);
+  });
+
+  it("范围外的中心问 SAE 台账，得到 404 而不是 403", async () => {
+    /* 区分 403 和 404 就是在确认「它存在」—— 那本身就是一次泄漏。 */
+    const s = await siteByCode(boss, "SS-02");
+    const mine = (await cra.get("/v1/study-sites?limit=50")).body.items
+      .map((x: { id: string }) => x.id);
+    expect(mine, "种子改了：这个用例需要一个 CRA 看不见的中心").not.toContain(s.id);
+    expect((await cra.get(`/v1/study-sites/${s.id}/sae`)).status).toBe(404);
   });
 });
 

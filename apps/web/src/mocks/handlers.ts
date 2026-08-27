@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { allEndpoints, SITE_STATES, DEFAULT_HANDOVER_ITEMS } from "@sitedesk/contracts";
-import { siteRevenue, siteCost, siteMargin, CALC_VERSION, type CostEntry }
-  from "@sitedesk/calc";
+import { siteRevenue, siteCost, siteMargin, CALC_VERSION,
+  saeTimeliness, saeReportHours, type CostEntry } from "@sitedesk/calc";
 import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
@@ -217,11 +217,46 @@ export const scenarioHandlers = [
       summary: `已排下一次访视：${next.visitLabel}，目标日 ${next.targetDate}，` +
         `窗口 ±${v.windowDays} 天` });
 
+    /* pending 现在是空的：七个订阅者全接上了。
+       这个字段**没有删** —— 下一个"暂时接不上"的订阅者出现时，
+       界面上那块地方还在，不用重新长一遍。 */
     return HttpResponse.json({
-      data: withDaysLeft(v), sideEffects: effects,
-      pending: [{ name: "RefreshProjections", what: "刷新入组漏斗与驾驶舱投影",
-        phase: "Phase 6" }]
+      data: withDaysLeft(v), sideEffects: effects, pending: []
     }, { status: 201 });
+  }),
+
+  /* ── SAE 台账与 24 小时及时率（I6） ────────────────────────────
+     及时率**在 mock 里也由 @sitedesk/calc 算**，不写一个好看的常数：
+     那正是这条不变量当初被违反的方式。 */
+  http.get(pathToRegExp("/v1/study-sites/{id}/sae"), ({ request }) => {
+    const id = seg(request.url, /\/study-sites\/([^/]+)\/sae/);
+    const rows = scenario.qualityEvents.filter(
+      q => q.kind === "sae" && q.studySiteId === id);
+    const now = new Date();
+    const t = saeTimeliness(
+      rows.map(r => ({ occurredAt: r.occurredAt!, reportedAt: r.reportedAt ?? null })), now);
+    return HttpResponse.json({
+      items: rows.map(r => ({
+        ...r,
+        reportHours: saeReportHours({
+          occurredAt: r.occurredAt!, reportedAt: r.reportedAt ?? null })
+      })),
+      nextCursor: null,
+      timeliness: { ...t, calcVersion: CALC_VERSION }
+    });
+  }),
+
+  http.get(pathToRegExp("/v1/study-sites/{id}/ip-movements"), ({ request }) => {
+    const id = seg(request.url, /\/study-sites\/([^/]+)\/ip-movements/);
+    const items = scenario.ipMovements.filter(m => m.studySiteId === id);
+    /* 与后端 app.ip_balance() 同一条口径：收进来的加，发出去的减。
+       **算出来的，不存** —— mock 里存一个 balance，界面就会在两种数据源下
+       显示两个数，而那种差别正是集成测试之外没人会发现的。 */
+    const balance = items.reduce(
+      (n, m) => n + (["receipt", "return"].includes(m.kind) ? m.quantity : -m.quantity), 0);
+    return HttpResponse.json({
+      items, nextCursor: null, balance, blocksClose: balance !== 0
+    });
   }),
 
   http.get(pathToRegExp("/v1/quality-events"), () =>
