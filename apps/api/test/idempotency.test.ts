@@ -144,3 +144,66 @@ describe("幂等键不能跨端点复用", () => {
     expect(b.body).toEqual(a.body);
   });
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   L1 写入的幂等 —— 键可有可无（欠账 B11）
+
+   在此之前只有 L2 命令有这一层，于是 L1 的那几个创建端点在断网时
+   进不了发件箱：人在地下室填的那条工时，抛个错就没了。
+   要让它们排队，就必须能带幂等键 —— 重放意味着同一个请求可能发两次，
+   没有键的话那是**实实在在的两笔工时**。
+
+   用 CRC 填工时，不用经营层：成本要按当日生效的费率卡算，
+   而费率卡是挂在员工身上的（经营层没有员工记录，会撞 no-effective-rate-card）。
+   ════════════════════════════════════════════════════════════════════ */
+describe("L1 创建端点的幂等（键可选）", () => {
+  let crc: Caller, siteId: string;
+  const today = () => new Date().toISOString().slice(0, 10);
+
+  beforeAll(async () => {
+    crc = await as(app, "wutong");
+    siteId = (await crc.get("/v1/study-sites?limit=1")).body.items[0].id;
+  });
+
+  it("带同一把键发两次，只写一笔，第二次返回首次的结果", async () => {
+    const key = randomUUID();
+    const body = {
+      studySiteId: siteId, workDate: today(), workType: "visit_support",
+      hours: 3.5, note: "L1 幂等测试"
+    };
+    const a = await crc.post("/v1/timesheets", body, { "Idempotency-Key": key });
+    expect(a.status, JSON.stringify(a.body)).toBe(201);
+    const b = await crc.post("/v1/timesheets", body, { "Idempotency-Key": key });
+    expect(b.status).toBe(201);
+    expect(b.body.id).toBe(a.body.id);          // 同一条，不是第二条
+
+    const list = await crc.get("/v1/timesheets?limit=200");
+    const mine = list.body.items.filter((t: { note?: string }) => t.note === "L1 幂等测试");
+    expect(mine).toHaveLength(1);
+  });
+
+  it("不带键就照旧执行 —— 旧客户端不带也照发，这不是破坏性变更", async () => {
+    const body = {
+      studySiteId: siteId, workDate: today(), workType: "training",
+      hours: 1, note: "无键两次"
+    };
+    const a = await crc.post("/v1/timesheets", body);
+    const b = await crc.post("/v1/timesheets", body);
+    expect(a.status).toBe(201);
+    expect(b.status).toBe(201);
+    expect(b.body.id).not.toBe(a.body.id);      // 没有键，就是两笔 —— 如实如此
+  });
+
+  it("同一把键换了请求体 → 拒绝，而不是静默返回上一次的结果", async () => {
+    const key = randomUUID();
+    const first = await crc.post("/v1/timesheets",
+      { studySiteId: siteId, workDate: today(), workType: "training", hours: 2 },
+      { "Idempotency-Key": key });
+    expect(first.status).toBe(201);
+    const second = await crc.post("/v1/timesheets",
+      { studySiteId: siteId, workDate: today(), workType: "training", hours: 8 },
+      { "Idempotency-Key": key });
+    expect(second.status).toBe(409);
+    expect(second.body.code).toBe("idempotency-key-reused");
+  });
+});

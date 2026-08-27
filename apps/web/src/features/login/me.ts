@@ -1,4 +1,5 @@
 import { call } from "../../api/client.js";
+import { rememberWho } from "./session.js";
 
 /* ════════════════════════════════════════════════════════════════════
    当前身份 —— 一次取，多处用。
@@ -25,7 +26,11 @@ export interface Me {
 let inflight: Promise<Me> | null = null;
 
 export function loadMe(): Promise<Me> {
-  inflight ??= call<Me>("getMe").catch(e => { inflight = null; throw e; });
+  inflight ??= call<Me>("getMe")
+    /* 成功一次就把「我是谁」记下来 —— 下次冷启动就算没网，
+       发件箱也知道该把活记在谁头上（只此一个用途，见 session.ts）。 */
+    .then(m => { rememberWho(m.account.id, m.account.displayName); return m; })
+    .catch(e => { inflight = null; throw e; });
   return inflight;
 }
 

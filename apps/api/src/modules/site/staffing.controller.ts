@@ -6,7 +6,7 @@ import { StaffingService } from "./staffing.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
-import { command } from "../../infra/command.js";
+import { command, idempotent } from "../../infra/command.js";
 
 const StaffQ = PageQuery.extend({
   roleKind: RoleKind.optional(),
@@ -57,9 +57,15 @@ export class StaffingController {
     return this.svc.listHandovers(q);
   }
 
+  /* 幂等键在这里是**可选**的：带了就走幂等那条路（重放返回首次结果），
+     没带就照旧。断网时这些创建请求要能排进发件箱，而重放意味着同一个
+     请求可能发两次 —— 没有键的话，那就是实实在在的两笔。 */
   @Post("/handovers") @Operation("createHandover") @HttpCode(201)
-  createHandover(@Body(new ZodPipe(CreateHandover)) b: z.infer<typeof CreateHandover>) {
-    return this.svc.createHandover(b);
+  createHandover(
+    @Body(new ZodPipe(CreateHandover)) b: z.infer<typeof CreateHandover>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    return idempotent(this.idem, key, b, () => this.svc.createHandover(b));
   }
 
   @Post("/handovers/:id/items/:seq\\:done") @Operation("completeHandoverItem")

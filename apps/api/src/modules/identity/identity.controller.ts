@@ -6,6 +6,7 @@ import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
 import { ProblemException } from "../../infra/problem.js";
+import { idempotent } from "../../infra/command.js";
 
 const ListQ = PageQuery.extend({
   status: z.enum(["active", "disabled"]).optional(),
@@ -45,9 +46,15 @@ export class IdentityController {
   @Get("/accounts") @Operation("listAccounts")
   list(@Query(new ZodPipe(ListQ)) q: z.infer<typeof ListQ>) { return this.svc.listAccounts(q); }
 
+  /* 幂等键在这里是**可选**的：带了就走幂等那条路（重放返回首次结果），
+     没带就照旧。断网时这些创建请求要能排进发件箱，而重放意味着同一个
+     请求可能发两次 —— 没有键的话，那就是实实在在的两笔。 */
   @Post("/accounts") @Operation("createAccount") @HttpCode(201)
-  create(@Body(new ZodPipe(CreateBody)) b: z.infer<typeof CreateBody>) {
-    return this.svc.createAccount(b);
+  create(
+    @Body(new ZodPipe(CreateBody)) b: z.infer<typeof CreateBody>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    return idempotent(this.idem, key, b, () => this.svc.createAccount(b));
   }
 
   @Post("/accounts/:id\\:disable") @Operation("disableAccount")

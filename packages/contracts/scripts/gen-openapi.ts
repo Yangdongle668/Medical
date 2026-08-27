@@ -99,9 +99,19 @@ for (const e of eps) {
     parameters: [
       ...params(e.params, "path"),
       ...params(e.query, "query"),
+      /* L2 命令**必须**带幂等键；L1 的写入可以带。
+         为什么 L1 也要能带：断网时人做的活要能排进发件箱，
+         而重放意味着同一个请求可能发两次 —— 没有幂等键的话，
+         那就是实实在在的两笔。带上它，重放才是安全的。
+         保持可选，是因为它不该成为一次破坏性变更（旧客户端不带也照发）。 */
       ...(e.layer === "L2" ? [{
         name: "Idempotency-Key", in: "header", required: true,
         description: "幂等键（uuid）。24 小时内重放同一键返回首次结果。",
+        schema: { type: "string", format: "uuid" }
+      }] : e.method !== "get" && e.context !== "auth" ? [{
+        name: "Idempotency-Key", in: "header", required: false,
+        description: "幂等键（uuid）。可选；带上之后 24 小时内重放同一键返回首次结果，"
+          + "离线重放因此不会写两笔。",
         schema: { type: "string", format: "uuid" }
       }] : [])
     ],

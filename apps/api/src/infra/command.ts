@@ -43,3 +43,20 @@ export async function command<T>(
   await idem.complete(key, declared, out);
   return out;
 }
+
+/**
+ * L1 写入的幂等外壳 —— **键可有可无**。
+ *
+ * L2 命令必须带键（那是契约里写死的）。L1 的创建类端点原来完全没有这一层，
+ * 于是它们在断网时也进不了发件箱：重放一个没有幂等键的创建请求，
+ * 就是实实在在的两笔工时、两个受试者。
+ *
+ * 带了键就走和 L2 一样的那条路（同键同体返回首次结果）；
+ * 没带就照旧执行 —— 旧客户端不带也照发，这不是一次破坏性变更。
+ */
+export async function idempotent<T>(
+  idem: IdempotencyService, key: string | undefined, body: unknown, run: () => Promise<T>
+): Promise<T> {
+  if (!key) return run();
+  return command(idem, key, body, run);
+}

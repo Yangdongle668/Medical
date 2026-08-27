@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import { App } from "./shell/App.js";
+import { ErrorBoundary } from "./shell/ErrorBoundary.js";
 import { TodayPage } from "./features/today/TodayPage.js";
 import { VisitPage } from "./features/visit/VisitPage.js";
 import { SitesPage } from "./features/sites/SitesPage.js";
@@ -64,7 +65,11 @@ async function boot() {
     await worker.start({ onUnhandledRequest: "bypass", quiet: true });
   }
   createRoot(document.getElementById("root")!).render(
-    <StrictMode><RouterProvider router={router} /></StrictMode>
+    <StrictMode>
+      <ErrorBoundary scope="root">
+        <RouterProvider router={router} />
+      </ErrorBoundary>
+    </StrictMode>
   );
 }
 void boot();

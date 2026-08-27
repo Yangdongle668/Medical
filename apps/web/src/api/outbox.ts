@@ -34,7 +34,19 @@ import { allEndpoints } from "@sitedesk/contracts";
 
 const KEY = "sitedesk.outbox";
 /** 只有 L2 才允许入队 —— 由契约判定，不靠调用方自觉。 */
-const L2 = new Set(allEndpoints().filter(e => e.layer === "L2").map(e => e.id));
+/* 能进发件箱的端点。
+ *
+ *  判据不是"是不是 L2"，是**能不能带幂等键** —— 那才是重放安全的前提。
+ *  原来这里只放 L2，于是 L1 的那几个创建端点（填工时、建受试者、
+ *  建交接单）在断网时进不了队列：人做的活抛个错就没了。
+ *  现在它们也带键了（服务端那侧是可选的幂等外壳，见 infra/command.ts），
+ *  所以一起放进来。
+ *
+ *  auth 的几个端点除外：排一次登录没有意义，而且登录**本来就不该**被重放。
+ *  GET 也不在里面 —— 读操作重放的是读，不需要队列。 */
+const QUEUEABLE = new Set(allEndpoints()
+  .filter(e => e.layer === "L2" || (e.method !== "get" && e.context !== "auth"))
+  .map(e => e.id));
 
 export interface OutboxItem {
   /** 单调递增，决定重放顺序。先勾任务再完成访视，顺序错了就不是同一件事。 */
@@ -51,8 +63,15 @@ export interface OutboxItem {
   label: string;
   createdAt: string;
   attempts: number;
-  /** 服务端明确拒绝（4xx）时记下来，并从待发队列挪进"需要处理" */
-  failure?: { code: string; title: string; detail?: string; at: string };
+  /** 服务端明确拒绝（4xx）时记下来，并从待发队列挪进"需要处理"。
+   *
+   *  `hint` 是**针对离线这件事**的一句话。服务端的原话（title/detail）
+   *  说的是"版本冲突"，它不知道这条命令在队列里躺了两个小时 ——
+   *  而那两个小时才是用户需要的上下文：不是他填错了，是这中间有人动过。 */
+  failure?: {
+    code: string; title: string; detail?: string; at: string;
+    hint?: string; queuedMs?: number;
+  };
 }
 
 interface Snapshot { pending: OutboxItem[]; failed: OutboxItem[] }
@@ -114,12 +133,19 @@ function sameCommand(a: Pick<OutboxItem, "accountId" | "operationId" | "params" 
     && j(a.body) === j(b.body);
 }
 
-/** 待发队列里这条命令的那一项（给界面用：行上要显示"待发"）。 */
+/** 待发队列里这条命令的那一项（给界面用：行上要显示"待发"）。
+ *
+ *  `accountId` 不是可选的装饰：共用电脑上队列里可能躺着**上一个人**的活，
+ *  把它显示成"你刚勾的"是骗人 —— 而他会以为自己已经做过了。
+ *  给了就只认那个人的，不给就不过滤（调用方自己清楚为什么）。 */
 export function pendingCommand(
-  operationId: string, params?: Record<string, string | number>
+  operationId: string,
+  params?: Record<string, string | number>,
+  accountId?: string
 ): OutboxItem | undefined {
   return read().pending.find(i =>
     i.operationId === operationId
+    && (accountId === undefined || i.accountId === accountId)
     && JSON.stringify(i.params ?? null) === JSON.stringify(params ?? null));
 }
 
@@ -144,9 +170,9 @@ export function enqueue(input: {
   body?: unknown;
   idempotencyKey: string;
 }): OutboxItem {
-  if (!L2.has(input.operationId))
-    throw new Error(`${input.operationId} 不是 L2 命令，不能进发件箱 —— ` +
-      "没有幂等键的请求重放一次就可能记两笔");
+  if (!QUEUEABLE.has(input.operationId))
+    throw new Error(`${input.operationId} 不能进发件箱 —— ` +
+      "只有带得了幂等键的写入才能重放，否则一次重放就可能记两笔");
 
   const s = read();
   const dup = s.pending.find(i => sameCommand(i, input));

@@ -14,6 +14,8 @@ import { forgetMe } from "./me.js";
    ════════════════════════════════════════════════════════════════════ */
 
 const KEY = "sitedesk.token";
+/** 上一次成功拿到的身份。**只用来认领发件箱里的活，不用来判权限。** */
+const WHO = "sitedesk.who";
 
 export function loadToken(): string | null {
   try {
@@ -30,6 +32,42 @@ export function saveToken(t: string | null) {
   forgetMe();
   try { t ? sessionStorage.setItem(KEY, t) : sessionStorage.removeItem(KEY); }
   catch { /* 存不下就只在内存里活着，刷新即失效 —— 可以接受 */ }
+  /* 换令牌 = 换人：缓存的身份必须跟着走，否则冷启动时会用上一个人的
+     名字去认领队列里的活。 */
+  if (!t) { try { sessionStorage.removeItem(WHO); } catch { /* 同上 */ } }
+}
+
+/* ── 冷启动就离线的那种情况 ────────────────────────────────────────
+   队列归属由 `/v1/me` 之后设置。打开应用时就没有网络的话，
+   loadMe() 失败 → 没有归属 → **L2 命令根本入不了队**，
+   于是那次在地下室做的活直接抛错丢掉了。主场景（进了地下室才断网）
+   是覆盖住的，冷启动这一条不是。
+
+   补法只能缓存身份，而那立刻牵出一个权限问题：
+   **缓存的身份算不算一次有效登录？**
+
+   这里的答案是**不算**：
+     · 它只回答"发件箱里这条活是谁排的"，让人做的事不至于凭空消失；
+     · 它**不**用来渲染权限（能看哪些中心、点得动哪些按钮）——
+       那些一律等真正的 /v1/me 回来；离线时界面明说自己不知道。
+     · 它存在 sessionStorage，和令牌同一个生命周期：关掉标签页就没了。
+   换句话说：它能替你**排队**，不能替你**放行**。 */
+export interface CachedWho { accountId: string; accountName: string; at: string }
+
+export function rememberWho(accountId: string, accountName: string) {
+  try {
+    sessionStorage.setItem(WHO, JSON.stringify(
+      { accountId, accountName, at: new Date().toISOString() } satisfies CachedWho));
+  } catch { /* 存不下就退回原来的行为：冷启动离线时不入队 */ }
+}
+
+export function recallWho(): CachedWho | null {
+  try {
+    const raw = sessionStorage.getItem(WHO);
+    if (!raw) return null;
+    const w = JSON.parse(raw) as CachedWho;
+    return w && typeof w.accountId === "string" && w.accountId ? w : null;
+  } catch { return null; }
 }
 
 export interface SessionGranted { token: string; expiresAt: string }

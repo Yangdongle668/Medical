@@ -22,6 +22,8 @@ import { StaffingService } from "./modules/site/staffing.service.js";
 import { StaffingController } from "./modules/site/staffing.controller.js";
 import { ClinicalService } from "./modules/clinical/clinical.service.js";
 import { ClinicalController } from "./modules/clinical/clinical.controller.js";
+import { AccountabilityService } from "./modules/clinical/accountability.service.js";
+import { AccountabilityController } from "./modules/clinical/accountability.controller.js";
 import { CostService } from "./modules/cost/cost.service.js";
 import { CostController } from "./modules/cost/cost.controller.js";
 import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
@@ -31,7 +33,7 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
    MaskInterceptor 紧贴处理器，对**所有**出口统一脱敏。 */
 @Module({
   controllers: [HealthController, AuthController, IdentityController, SiteController, StaffingController,
-                ClinicalController, CostController],
+                ClinicalController, AccountabilityController, CostController],
   providers: [
     /* 池子必须能被关掉。`enableShutdownHooks()` 会调 `app.close()`，
        而 `app.close()` 只会去调 provider 的 onModuleDestroy ——
@@ -54,7 +56,7 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
     /* 投递通道按环境变量决定走哪一种；没配就是不发，见 infra/login-delivery.ts */
     LoginDelivery,
     IdentityService, SiteService, StaffingService,
-    ClinicalService, CostService,
+    ClinicalService, AccountabilityService, CostService,
     /* 跨上下文装配：ClinicalOps 只认 ports.ts 里的接口，不 import CostService */
     { provide: VISIT_TIMESHEET_PORT, useExisting: CostService },
     { provide: APP_FILTER, useClass: ProblemFilter },

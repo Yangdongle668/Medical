@@ -22,15 +22,23 @@ const 摘掉地址 = (login: string) => db((c) => c.query(
   `DELETE FROM auth_identity i USING account a
     WHERE i.account_id = a.id AND a.login = $1 AND i.provider = 'magic-link'`, [login]));
 
-let app: INestApplication, boss: Caller;
+let app: INestApplication, boss: Caller, pm: Caller;
 beforeAll(async () => {
-  resetDb(); app = await boot(); boss = await as(app, "lingyuan");
+  resetDb(); app = await boot();
+  boss = await as(app, "lingyuan");
+  /* 关闭前的三本台账（药品 / 样本 / 伦理）是一线在记，
+     经营层没有 subjWrite / ethics —— 拿 boss 去写会得到 403，
+     而那个 403 是对的：它说明动作权限确实在把关。 */
+  pm = await as(app, "hanxue");
 }, 120_000);
 afterAll(async () => { await app?.close(); });
 
 let seq = 0;
 async function freshSite() {
-  const studies = await boss.get("/v1/studies?limit=1");
+  /* 项目取**PM 看得见的那个**：PM 的行范围是 team，
+     建档只有经营层做得了（manage），但建出来的中心得落在 PM 的范围里，
+     否则后面用 PM 写台账会撞上 404（不在范围 = 不存在，不是 403）。 */
+  const studies = await pm.get("/v1/studies?limit=1");
   expect(studies.status, `取项目失败：${JSON.stringify(studies.body)}`).toBe(200);
   const study = studies.body.items[0];
   const r = await boss.post("/v1/study-sites", {
@@ -91,18 +99,98 @@ describe("闸门：推进不是给字段赋值，是断言一组事实成立", (
     expect(g.body.unmet.map((u: { module: string }) => u.module)).toContain("startup");
   });
 
-  it("关闭闸门：已交付的检查真查库，未交付的保持 fail-closed", async () => {
+  it("关闭闸门：八项全是真查询，一个占位都不剩", async () => {
     const s = await freshSite();                      // 无受试者、无质疑、无补偿
     const g = await boss.get(`/v1/study-sites/${s.id}/gate?to=closed`);
     expect(g.body.satisfied).toBe(false);
 
-    /* ClinicalOps 交付后，八项里有四项是真查询，且在空中心上应当通过 ——
-       它们不再出现在 unmet 里。剩下四项依赖未交付模块，保持 unavailable。 */
-    const codes = g.body.unmet.map((u: { code: string }) => u.code);
-    expect(codes.sort()).toEqual(
-      ["closeout-report", "ip-imbalance", "ip-not-destroyed", "specimen-open"]);
-    /* 这是刻意的 fail-closed：查不了不等于通过 */
-    for (const u of g.body.unmet) expect(u.message).toContain("尚未交付");
+    /* 空中心上七项自然成立，只剩「没递交结题报告」——
+       而它给的是一句人话，不是「该模块尚未交付」。 */
+    expect(g.body.unmet.map((u: { code: string }) => u.code)).toEqual(["closeout-report"]);
+    expect(g.body.unmet[0].message).toContain("尚未向伦理递交结题报告");
+
+    /* 这一条是这次改动的整个意义所在：闸门里**不能再有占位项**。
+       它们曾经挂了五个阶段，效果是"没有任何一个中心关得掉" ——
+       看起来在把关，实际是一堵墙，而墙教会用户的是绕过它。
+       下面四个用例逐条把新接上的检查推到 unmet 再推回 ok，
+       "不是占位"这件事由那四条证明，这里守住的是措辞。 */
+    for (const u of g.body.unmet) expect(u.message).not.toContain("尚未交付");
+  });
+
+  it("药品发出去了没收回来，就关不掉 —— 而且它说得出差多少", async () => {
+    const s = await freshSite();
+    const ip = (b: object) => pm.post(`/v1/study-sites/${s.id}/ip-movements`, b);
+
+    expect((await ip({ kind: "receipt", quantity: 30 })).status).toBe(201);
+    expect((await ip({ kind: "dispense", quantity: 12, subjectRef: "S-001" })).status).toBe(201);
+
+    const g1 = await boss.get(`/v1/study-sites/${s.id}/gate?to=closed`);
+    const stock = g1.body.unmet.find((u: { code: string }) => u.code === "ip-not-destroyed");
+    expect(stock, `unmet=${JSON.stringify(g1.body.unmet)}`).toBeTruthy();
+    /* 30 收 - 12 发 = 18 在手。数目要出现在消息里：
+       只说"还有药品未处置"，人得自己去翻台账算一遍。 */
+    expect(stock.message).toContain("18");
+
+    /* 退回申办方要有单号 —— 没有单号的"退回"在核查面前等于没退 */
+    const noRef = await ip({ kind: "ship_back", quantity: 18 });
+    expect(noRef.status).toBe(422);
+
+    expect((await ip({ kind: "ship_back", quantity: 18, refNo: "SF-77" })).status).toBe(201);
+    const g2 = await boss.get(`/v1/study-sites/${s.id}/gate?to=closed`);
+    expect(g2.body.unmet.map((u: { code: string }) => u.code)).toEqual(["closeout-report"]);
+  });
+
+  it("台账记反了会被闸门指出来：算出来是负数 = 记账错了，不是少了几盒", async () => {
+    const s = await freshSite();
+    expect((await pm.post(`/v1/study-sites/${s.id}/ip-movements`,
+      { kind: "dispense", quantity: 5, subjectRef: "S-002" })).status).toBe(201);
+
+    const g = await boss.get(`/v1/study-sites/${s.id}/gate?to=closed`);
+    const bad = g.body.unmet.find((u: { code: string }) => u.code === "ip-imbalance");
+    expect(bad, `unmet=${JSON.stringify(g.body.unmet)}`).toBeTruthy();
+    expect(bad.message).toContain("不平");
+  });
+
+  it("样本寄出去没人确认收到，中心就关不掉", async () => {
+    const s = await freshSite();
+    const sp = await pm.post(`/v1/study-sites/${s.id}/specimens`,
+      { subjectRef: "S-003", kind: "血样", collectedOn: "2026-01-05" });
+    expect(sp.status, JSON.stringify(sp.body)).toBe(201);
+
+    const g1 = await boss.get(`/v1/study-sites/${s.id}/gate?to=closed`);
+    expect(g1.body.unmet.map((u: { code: string }) => u.code)).toContain("specimen-open");
+
+    const adv = (b: object) => pm.post(`/v1/specimens/${sp.body.id}:advance`, b,
+      { "Idempotency-Key": randomUUID() });
+    expect((await adv({ stage: "shipped", on: "2026-01-06" })).status).toBe(201);
+    /* 寄出**不是**闭环：在路上不知去向恰恰是最该拦的那种 */
+    const g2 = await boss.get(`/v1/study-sites/${s.id}/gate?to=closed`);
+    expect(g2.body.unmet.map((u: { code: string }) => u.code)).toContain("specimen-open");
+
+    expect((await adv({ stage: "received", on: "2026-01-08" })).status).toBe(201);
+    const g3 = await boss.get(`/v1/study-sites/${s.id}/gate?to=closed`);
+    expect(g3.body.unmet.map((u: { code: string }) => u.code)).toEqual(["closeout-report"]);
+  });
+
+  it("递交了不等于批下来了 —— 闸门看的是批复", async () => {
+    const s = await freshSite();
+    const sub = await pm.post(`/v1/study-sites/${s.id}/regulatory-submissions`,
+      { kind: "closeout", submittedOn: "2026-02-01", refNo: "EC-2026-88" });
+    expect(sub.status, JSON.stringify(sub.body)).toBe(201);
+
+    const g1 = await boss.get(`/v1/study-sites/${s.id}/gate?to=closed`);
+    const still = g1.body.unmet.find((u: { code: string }) => u.code === "closeout-report");
+    expect(still, "递交完就放行的话，这道闸门等于没有").toBeTruthy();
+    expect(still.message).toContain("尚未批复");
+
+    const d = await pm.post(`/v1/regulatory-submissions/${sub.body.id}:decide`,
+      { decision: "approved", decidedOn: "2026-02-20" }, { "Idempotency-Key": randomUUID() });
+    expect(d.status, JSON.stringify(d.body)).toBe(201);
+
+    /* 八项全绿：这是这套闸门第一次真的能放行一个中心 */
+    const g2 = await boss.get(`/v1/study-sites/${s.id}/gate?to=closed`);
+    expect(g2.body.unmet, JSON.stringify(g2.body.unmet)).toEqual([]);
+    expect(g2.body.satisfied).toBe(true);
   });
 });
 

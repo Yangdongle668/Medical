@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import type { Visit } from "../today/TodayPage.js";
+import { usePending } from "../../api/pending.js";
 
 /* 完成一次访视 —— 系统里最重要的一个动作。
    界面要做对两件事：
@@ -28,6 +29,8 @@ export function VisitPage() {
   const [result, setResult] = useState<CompleteResult | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [busy, setBusy] = useState(false);
+  /* 断网时勾一下、点一下，进的是发件箱 —— 行上要说出来，否则人会再点一次。 */
+  const pending = usePending();
 
   const load = () =>
     call<{ items: Visit[] }>("listSubjectVisits", { query: { limit: 200 } })
@@ -84,10 +87,15 @@ export function VisitPage() {
           <ul className="tasks">
             {visit.tasks.map(t => (
               <li key={t.seq} className={t.doneAt ? "done" : ""}>
-                <input type="checkbox" checked={!!t.doneAt} disabled={!!t.doneAt || done}
+                <input type="checkbox"
+                  checked={!!t.doneAt || !!pending("completeVisitTask", { id, seq: t.seq })}
+                  disabled={!!t.doneAt || done || !!pending("completeVisitTask", { id, seq: t.seq })}
                   onChange={() => void tick(t.seq)}
                   aria-label={t.task} style={{ width: "auto" }} />
                 <span>{t.task}</span>
+                {/* 「待发」不是「已完成」：勾是人的意思，落库还没发生。 */}
+                {pending("completeVisitTask", { id, seq: t.seq }) &&
+                  <span className="chip flat" data-testid="queued-chip">待发</span>}
               </li>
             ))}
           </ul>
@@ -128,10 +136,14 @@ export function VisitPage() {
 
             <div className="row">
               <button className="btn primary" data-testid="submit"
-                disabled={busy || open.length > 0 || (outOfWindow && reason.trim().length < 4)}
+                disabled={busy || open.length > 0 || !!pending("completeSubjectVisit", { id })
+                  || (outOfWindow && reason.trim().length < 4)}
                 onClick={() => void submit()}>
-                {busy ? "提交中…" : "完成访视"}
+                {pending("completeSubjectVisit", { id }) ? "已排进发件箱"
+                  : busy ? "提交中…" : "完成访视"}
               </button>
+              {pending("completeSubjectVisit", { id }) &&
+                <span className="chip flat" data-testid="queued-chip">待发</span>}
               {outOfWindow && <span className="chip crit">超窗提交</span>}
             </div>
           </section>

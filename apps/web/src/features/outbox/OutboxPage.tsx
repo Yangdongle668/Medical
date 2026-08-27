@@ -110,6 +110,12 @@ export function OutboxPage() {
               <div key={i.seq} className="problem" data-testid="failed-item">
                 <strong>{i.label}</strong>
                 <div>{i.failure?.title}：{i.failure?.detail}</div>
+                {/* 服务端的原话不知道这条排了多久 —— 而那往往才是原因。 */}
+                {i.failure?.hint && (
+                  <div className="muted" data-testid="offline-hint" style={{ marginTop: 6 }}>
+                    {i.failure.hint}
+                  </div>
+                )}
                 <div className="row" style={{ marginTop: 8 }}>
                   <button className="btn" data-testid="requeue"
                     onClick={() => requeue(i.seq)}>补好了，重新发送</button>

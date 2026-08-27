@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import { ApiError, setQueueOwner } from "../api/client.js";
 import { subscribe } from "../api/outbox.js";
 import { startReplay } from "../api/replay.js";
-import { loadToken, logout } from "../features/login/session.js";
+import { loadToken, logout, recallWho, type CachedWho } from "../features/login/session.js";
 import { loadMe, type Me } from "../features/login/me.js";
+import { ErrorBoundary } from "./ErrorBoundary.js";
 
 const NAV = [
   { to: "/today", label: "今天" },
@@ -17,6 +18,8 @@ const NAV = [
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
+  /** 冷启动就没网时，从缓存认出来的"上次是谁"。**只用来认领队列**，不判权限。 */
+  const [offlineWho, setOfflineWho] = useState<CachedWho | null>(null);
   const [ready, setReady] = useState(false);
   const [pending, setPending] = useState(0);
   const loc = useLocation();
@@ -38,7 +41,20 @@ export function App() {
         setReady(true);
         /* 401 才跳登录。其它错误留在页面上 ——
            把网络故障也当成「未登录」，会让人一直在登录页打转。 */
-        if (e instanceof ApiError && e.problem.status === 401) nav("/login", { replace: true });
+        if (e instanceof ApiError && e.problem.status === 401) {
+          nav("/login", { replace: true });
+          return;
+        }
+        /* 拿不到 /v1/me，但上一次登录还记得是谁 —— **冷启动就离线**的那种。
+           在此之前这里什么也不做：没有归属人 → L2 命令入不了队 →
+           人在地下室做的活直接抛错丢掉。
+           现在把归属人立起来，让活能排进发件箱；**权限一律不给** ——
+           me 仍然是 null，界面明说自己不知道你能做什么。 */
+        const who = recallWho();
+        if (who) {
+          setQueueOwner({ accountId: who.accountId, accountName: who.accountName });
+          setOfflineWho(who);
+        }
       });
   }, []);
 
@@ -46,11 +62,14 @@ export function App() {
      侧栏要看得见还有多少没发出去。 */
   useEffect(() => subscribe(s => setPending(s.pending.length)), []);
   useEffect(() => {
-    if (!me) return;
-    const stop = startReplay(() => ({ accountId: me.account.id }));
+    /* 离线认出来的身份也要能重放 —— 网一回来，队列自己就发出去了，
+       不必等人再登录一次。 */
+    const accountId = me?.account.id ?? offlineWho?.accountId;
+    if (!accountId) return;
+    const stop = startReplay(() => ({ accountId }));
     /* 换人或卸载时把归属清掉：没有身份就不入队，也就没法冒名。 */
     return () => { setQueueOwner(null); stop(); };
-  }, [me]);
+  }, [me, offlineWho]);
 
   if (!ready) return <div className="main"><p className="muted">加载中…</p></div>;
 
@@ -74,6 +93,18 @@ export function App() {
           </NavLink>
         )}
 
+        {/* 离线：说清楚"我知道你是谁"和"我不知道你能做什么"是两件事。
+            不这么说的话，界面看起来就像权限被收走了。 */}
+        {!me && offlineWho && (
+          <div className="problem" data-testid="offline-banner" style={{ margin: "8px 0" }}>
+            <strong>离线</strong>
+            <div className="muted">
+              连不上服务端，拿不到你的权限。上次登录的是 <b>{offlineWho.accountName}</b> ——
+              现在做的事会记在他名下排进发件箱，联网后自动发出去。
+            </div>
+          </div>
+        )}
+
         <div className="who">
           {me ? <>
             <div data-testid="who">{me.account.displayName} · {me.account.role.name}</div>
@@ -85,7 +116,14 @@ export function App() {
           </> : "未登录"}
         </div>
       </aside>
-      <main className="main"><Outlet /></main>
+      {/* 边界在这里，不在更外面：一个页面炸掉时侧栏要还在 ——
+          人还能换一页、还能看见待发条数、还能登出。
+          key 用路径：换一页就是一次新的尝试，不必手动点重试。 */}
+      <main className="main">
+        <ErrorBoundary scope={`page:${loc.pathname}`} key={loc.pathname}>
+          <Outlet />
+        </ErrorBoundary>
+      </main>
     </div>
   );
 }
