@@ -220,7 +220,7 @@ define({
 });
 
 define({
-  id: "replaceStartupTemplate", method: "post", path: "/v1/startup-template\\:replace",
+  id: "replaceStartupTemplate", method: "post", path: "/v1/startup-template:replace",
   layer: "L2", context: "site",
   summary: "发布新一版启动清单模板",
   description:

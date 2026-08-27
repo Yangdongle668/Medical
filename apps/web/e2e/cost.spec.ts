@@ -135,3 +135,72 @@ test("CRC 看得到费率卡的存在，看不到单价，也改不了", async (
   /* 人天单价那一列整列消失 */
   await expect(page.locator("th", { hasText: "人天单价" })).toHaveCount(0);
 });
+
+/* ── 分月损益（欠账 D6） ─────────────────────────────────────────── */
+
+test("分月：负毛利的那个月要一眼看得出来", async ({ page }) => {
+  await page.goto("/sites/s1/pnl?as=boss");
+  const trend = page.getByTestId("pnl-trend");
+  await expect(trend).toBeVisible();
+  await expect(trend.getByTestId("trend-row")).toHaveCount(12);
+
+  /* 启动那几个月成本先出去、收入还没进来 —— 负毛利是这一页
+     最该被看见的东西，所以它必须画得出来。 */
+  await expect(trend.getByTestId("bar-negative").first()).toBeVisible();
+  await expect(trend.getByTestId("bar-positive").first()).toBeVisible();
+});
+
+test("分月说清口径：按事件发生的月份归属，且各月之和不等于累计", async ({ page }) => {
+  await page.goto("/sites/s1/pnl?as=boss");
+  const trend = page.getByTestId("pnl-trend");
+  await expect(trend).toContainText("按事件发生的那个月归属");
+  /* 这句话是有人问「为什么加起来对不上」时唯一的答案 */
+  await expect(trend).toContainText("不一定");
+});
+
+test("一线在分月上也只看得到例数", async ({ page }) => {
+  await page.goto("/sites/s1/pnl?as=crc");
+  const trend = page.getByTestId("pnl-trend");
+  await expect(trend.getByTestId("trend-counts-only")).toBeVisible();
+  await expect(trend.getByTestId("trend-gp")).toHaveCount(0);
+});
+
+/* ── 工时审批（欠账 D4） ─────────────────────────────────────────── */
+
+test("审批状态是角标：已审 / 待审，而且不影响任何金额", async ({ page }) => {
+  await page.goto("/timesheets?as=boss");
+  await expect(page.getByTestId("timesheet-row").first()).toBeVisible();
+  const chips = page.getByTestId("approve-chip");
+  /* 两种状态都要有 —— 全是"已审"的话，那个角标写没写对没人知道 */
+  await expect(chips.filter({ hasText: "已审" }).first()).toBeVisible();
+  await expect(chips.filter({ hasText: "待审" }).first()).toBeVisible();
+});
+
+test("审批一条：成本不变，角标翻成「已审」", async ({ page }) => {
+  await page.goto("/timesheets?as=boss");
+  await expect(page.getByTestId("timesheet-row").first()).toBeVisible();
+  const before = await page.getByTestId("cost-cell").allTextContents();
+  expect(before.length).toBeGreaterThan(0);
+
+  await page.getByTestId("approve").first().click();
+  await expect(page.getByTestId("timesheet-effects")).toContainText("成本没有变化");
+
+  /* 金额一个都不该动 —— 审批只说这一笔被第二个人看过了 */
+  await expect(page.getByTestId("cost-cell")).toHaveText(before);
+});
+
+test("只看待审：筛掉已审的与已作废的", async ({ page }) => {
+  await page.goto("/timesheets?as=boss");
+  await page.getByTestId("unapproved-only").check();
+  const chips = page.getByTestId("approve-chip");
+  await expect(chips.filter({ hasText: "已审" })).toHaveCount(0);
+  await expect(chips.filter({ hasText: "待审" }).first()).toBeVisible();
+});
+
+test("损益上说得出「其中多少还没审」，且它已经在合计里", async ({ page }) => {
+  await page.goto("/sites/s1/pnl?as=boss");
+  const note = page.getByTestId("unapproved-cost");
+  await expect(note).toBeVisible();
+  /* 关键是这句话：把它从合计里剔掉才是错的 */
+  await expect(note).toContainText("已经计入上面的合计");
+});

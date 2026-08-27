@@ -92,6 +92,30 @@ describe("契约约定（不是风格偏好，每条对应一次事故）", () =
   });
 });
 
+describe("路径是原样写的，不能带转义", () => {
+  /* 这条是被咬了两次才加的。NestJS 的路由里 `:` 要写成 `\\:`
+     （否则被当成路径参数），而顺手把那个反斜杠也抄进**契约**的话：
+
+       契约说 /v1/timesheets/{id}\:approve
+       服务器实际服务 /v1/timesheets/{id}:approve
+
+     两边永远对不上，而 arch:check 只比 operationId，测试用的是自己写死的
+     路径字符串 —— 于是整条链路全绿，只有真正走契约生成客户端的前端会 404。
+     那个 404 在界面上表现成"上游不可用"，指不到任何地方。 */
+  it("没有一条路径带反斜杠", () => {
+    const bad = allEndpoints().filter(e => e.path.includes("\\"));
+    expect(bad.map(e => `${e.id}: ${e.path}`),
+      "契约里的路径是**原样**的 URL；NestJS 装饰器里的转义不该抄进来").toEqual([]);
+  });
+
+  it("每条路径都长得像一个 URL", () => {
+    /* 只放行真实出现过的字符：段、路径参数、以及 L2 命令的 `:动词`。 */
+    const shape = /^\/v1\/[A-Za-z0-9/{}:_-]*$/;
+    const bad = allEndpoints().filter(e => !shape.test(e.path));
+    expect(bad.map(e => `${e.id}: ${e.path}`)).toEqual([]);
+  });
+});
+
 describe("查询串里的布尔：?flag=false 必须真的是 false", () => {
   /* 这条曾经在整个仓库里错着。`z.coerce.boolean()` 走 `Boolean(v)`，
      而 `Boolean("false") === true` —— 于是 `?includeVoided=false`

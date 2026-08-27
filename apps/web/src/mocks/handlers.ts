@@ -369,6 +369,8 @@ export const scenarioHandlers = [
     const q = new URL(request.url).searchParams;
     const items = scenario.timesheets
       .filter(t => q.get("includeVoided") === "true" || !t.voidedAt)
+      /* 已作废的不该出现在待审里 —— 它已经不在成本里了 */
+      .filter(t => q.get("unapprovedOnly") !== "true" || (!t.approvedAt && !t.voidedAt))
       .map(stripCost);
     return HttpResponse.json({ items, nextCursor: null });
   }),
@@ -392,6 +394,34 @@ export const scenarioHandlers = [
       { travel: b.travelCents ?? 0, ...(b.note ? { note: b.note } : {}) });
     scenario.timesheets.unshift(t);
     return HttpResponse.json(stripCost(t), { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/timesheets/{id}:approve"), ({ request }) => {
+    const id = seg(request.url, /\/timesheets\/([^/:]+):approve/);
+    const t = scenario.timesheets.find(x => x.id === id);
+    if (!t) return HttpResponse.json(
+      problem("not-found", 404, "工时不存在"), { status: 404 });
+    if (t.voidedAt) return HttpResponse.json(
+      { ...problem("invariant-violated", 422,
+          "这条工时已作废 —— 它已经不在成本里了，不需要审"),
+        invariant: "timesheet-voided-needs-no-approval" }, { status: 422 });
+    if (t.approvedAt) return HttpResponse.json(
+      problem("conflict-version", 409, "这条工时已经审过"), { status: 409 });
+    /* 不能审自己填的 —— 这条是**契约声明的 invariant**，
+       前端要能在 mock 上就看到它长什么样。 */
+    if (t.accountId === me().account.id) return HttpResponse.json(
+      { ...problem("invariant-violated", 422,
+          "不能审自己填的工时 —— 审批的全部价值在于第二个人看过"),
+        invariant: "timesheet-no-self-approve" }, { status: 422 });
+
+    t.approvedAt = new Date().toISOString();
+    t.approvedByName = me().account.displayName;
+    return HttpResponse.json({
+      data: stripCost(t),
+      sideEffects: [{ type: "TimesheetApproved", ref: t.id, studySiteId: t.studySiteId,
+        summary: `${t.personName} ${t.workDate} 的 ${t.hours} 小时已审 —— ` +
+          "**成本没有变化**：审批只是说这一笔被第二个人看过了" }]
+    }, { status: 201 });
   }),
 
   http.post(pathToRegExp("/v1/timesheets/{id}:void"), async ({ request }) => {
@@ -460,6 +490,17 @@ export const scenarioHandlers = [
        测试还会照着它写断言 —— 于是 mock 绿、真库红。
        收口的反馈来自数据本身：那一行的生效区间不再是「至今」。 */
     return HttpResponse.json({ data: mask(c), sideEffects: [] }, { status: 201 });
+  }),
+
+  /* 分月要排在通配的 `/pnl` 前面：`[^/]+` 跨不过斜杠，所以严格说
+     不排也匹配不上，但顺序是一眼能看出来的，那条推理不是。 */
+  http.get(pathToRegExp("/v1/study-sites/{id}/pnl/monthly"), ({ request }) => {
+    const id = seg(request.url, /\/study-sites\/([^/]+)\/pnl\/monthly/);
+    const dto = siteDto(id);
+    if (!dto) return HttpResponse.json(
+      problem("not-found", 404, "中心不存在"), { status: 404 });
+    const n = Number(new URL(request.url).searchParams.get("months") ?? 12);
+    return HttpResponse.json(trendFor(id, dto, n));
   }),
 
   http.get(pathToRegExp("/v1/study-sites/{id}/pnl"), ({ request }) => {
@@ -681,6 +722,11 @@ function pnlFor(siteId: string, dto: NonNullable<ReturnType<typeof siteDto>>) {
       nonBillableCostCents: cost.nonBillableCents,
       overheadCents: cost.overheadCents,
       totalCostCents: cost.totalCents,
+      /* 待审的那一部分**已经在合计里了**（D4）：这一栏只说
+         "其中有多少还没被第二个人看过"。 */
+      unapprovedCostCents: scenario.timesheets
+        .filter(t => t.studySiteId === siteId && !t.voidedAt && !t.approvedAt)
+        .reduce((n, t) => n + t.costCents, 0),
       personDays: cost.personDays,
       /* 「没有分母」时省略，与"无权限时消失"用同一种表达 ——
          客户端只需要处理"它不在"这一种情况。 */
@@ -732,3 +778,41 @@ export const contractHandlers = allEndpoints().map(e => {
 });
 
 export const handlers = [...scenarioHandlers, ...contractHandlers];
+
+/** 分月损益的 mock。**要有一个亏钱的月份** ——
+ *  负毛利是这一页最该被看见的东西，而只摆赚钱的月份，
+ *  那根往左长的柱子就永远画不出来，也就没人会发现它其实没写对。 */
+function trendFor(id: string, dto: { code: string; hospital: string }, months: number) {
+  const now = new Date();
+  const axis: string[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    axis.push(d.toISOString().slice(0, 7));
+  }
+  /* 一条编出来但形状真实的曲线：启动那两个月成本先出去、收入还没进来
+     （负毛利），入组起来之后转正。 */
+  const shape = [
+    { enrolled: 0, rev: 0,        cost: 4_20_000 },
+    { enrolled: 0, rev: 17_60_000, cost: 9_80_000 },
+    { enrolled: 2, rev: 11_60_000, cost: 8_40_000 },
+    { enrolled: 3, rev: 17_40_000, cost: 9_20_000 },
+    { enrolled: 1, rev: 5_80_000,  cost: 7_60_000 },
+    { enrolled: 4, rev: 23_20_000, cost: 10_40_000 }
+  ];
+  return {
+    studySiteId: id, siteCode: dto.code, hospital: dto.hospital,
+    months: axis.map((month, i) => {
+      const k = shape[i % shape.length]!;
+      const base = {
+        month, enrolled: k.enrolled, screenFailed: 0, withdrawn: 0
+      };
+      /* 与真实后端同一套列权限：一线看得到例数，看不到钱 */
+      return mockRole === "boss" ? {
+        ...base, revenueCents: k.rev, costCents: k.cost,
+        personDays: k.cost / 2_11_200,
+        grossProfitCents: k.rev - k.cost
+      } : base;
+    }),
+    calcVersion: CALC_VERSION
+  };
+}
