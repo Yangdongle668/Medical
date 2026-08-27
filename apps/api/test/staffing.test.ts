@@ -78,8 +78,11 @@ describe("启动清单", () => {
     expect(r.status).toBe(409);
   });
 
-  it("撤销必须写原因，且会警示该中心当初的启动条件已不成立", async () => {
+  it("撤销必须写原因、会警示，而且这个中心在台账上筛得出来", async () => {
     const s = await siteByCode(boss, "SS-05");          // 已处于 siv 阶段
+    expect((await boss.get(`/v1/study-sites/${s.id}`)).body.startupInvalidated,
+      "前置条件：这个中心一开始应当是正常的").toBe(false);
+
     const items = (await boss.get(`/v1/study-sites/${s.id}/startup-items`)).body.items;
     const doneBlocking = items.find((i: any) => i.doneAt && i.isBlocking);
 
@@ -91,6 +94,29 @@ describe("启动清单", () => {
     expect(r.status).toBe(201);
     expect(r.body.data.doneAt).toBeNull();
     expect(r.body.sideEffects[0].summary).toContain("当初的启动条件现在不成立");
+
+    /* 状态机**没有**被回退 —— 那是刻意的：一个已入组的中心被推回
+       「合同签署」，那些访视就挂在了一个不存在的状态上。 */
+    const after = await boss.get(`/v1/study-sites/${s.id}`);
+    expect(after.body.state).toBe("siv");
+    /* 但不回退不等于不记账：在此之前，撤销留下的唯一痕迹是上面那句
+       转瞬即逝的 sideEffect 文案 —— 关掉页面就再也找不回来了。 */
+    expect(after.body.startupInvalidated).toBe(true);
+
+    const only = await boss.get("/v1/study-sites?limit=50&startupInvalidated=true");
+    expect(only.body.items.map((x: { id: string }) => x.id)).toContain(s.id);
+    /* 三态：传 false 才是"只看正常的"；不传是两种都要。 */
+    const normal = await boss.get("/v1/study-sites?limit=50&startupInvalidated=false");
+    expect(normal.body.items.map((x: { id: string }) => x.id)).not.toContain(s.id);
+    const all = await boss.get("/v1/study-sites?limit=50");
+    expect(all.body.items.map((x: { id: string }) => x.id)).toContain(s.id);
+
+    /* 补做完，这一栏自己就消失了 —— 因为它是**算出来的**，不是存出来的。
+       存一个布尔位就要在两处维护（撤销时置位、补做完时清位），
+       漏掉任何一处，台账上就是一笔假账；而假的"没问题"比没有这一栏更糟。 */
+    expect((await boss.post(`/v1/startup-items/${doneBlocking.id}:complete`,
+      { note: "已重新取得批件并归档" }, K())).status).toBe(201);
+    expect((await boss.get(`/v1/study-sites/${s.id}`)).body.startupInvalidated).toBe(false);
   });
 });
 

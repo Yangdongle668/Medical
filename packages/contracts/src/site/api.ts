@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { define } from "../kernel/registry.js";
-import { Uuid, DateOnly, CentsNonNeg } from "../kernel/primitives.js";
+import { Uuid, DateOnly, CentsNonNeg, QueryBool } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
 import { Study, StudySite, SiteState, SiteGate } from "./model.js";
@@ -27,7 +27,10 @@ define({
     studyId: Uuid.optional(),
     state: z.array(SiteState).optional(),
     hospital: z.string().optional(),
-    q: z.string().max(64).optional()
+    q: z.string().max(64).optional(),
+    /** 只看「事后失效」的中心。见 StudySite.startupInvalidated —— 
+     *  这是撤销启动清单项之后，那件事在台账上留下的唯一可查痕迹。 */
+    startupInvalidated: QueryBool.optional()
   }),
   response: page(StudySite)
 });
@@ -146,7 +149,7 @@ define({
   description: "外部方看不到员工名册 —— 那与机构履行监管职责无关。",
   query: PageQuery.extend({
     roleKind: RoleKind.optional(),
-    successionGap: z.coerce.boolean().optional().describe("只看「带多个中心却无继任者」的人")
+    successionGap: QueryBool.optional().describe("只看「带多个中心却无继任者」的人")
   }),
   response: page(Staff)
 });

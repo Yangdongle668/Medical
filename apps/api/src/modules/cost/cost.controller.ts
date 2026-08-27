@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
 import {
-  PageQuery, Uuid, DateOnly, CentsNonNeg, WithReason, WorkType, RoleKindForRate
+  PageQuery, Uuid, DateOnly, CentsNonNeg, WithReason, WorkType, RoleKindForRate, QueryBool
 } from "@sitedesk/contracts";
 import { CostService } from "./cost.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
@@ -17,7 +17,7 @@ const TimesheetQ = PageQuery.extend({
   accountId: Uuid.optional(),
   workType: arr(WorkType),
   from: DateOnly.optional(), to: DateOnly.optional(),
-  includeVoided: z.coerce.boolean().optional()
+  includeVoided: QueryBool.optional()
 });
 const CreateTimesheet = z.object({
   studySiteId: Uuid,

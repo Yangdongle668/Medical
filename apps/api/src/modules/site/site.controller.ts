@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, Headers, HttpCode } from "@nestjs/common";
 import { z } from "zod";
-import { PageQuery, Uuid, CentsNonNeg, DateOnly, SiteState } from "@sitedesk/contracts";
+import { PageQuery, Uuid, CentsNonNeg, DateOnly, SiteState, QueryBool } from "@sitedesk/contracts";
 import { SiteService } from "./site.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
@@ -13,7 +13,8 @@ const ListQ = PageQuery.extend({
   state: z.union([SiteState, z.array(SiteState)]).optional()
     .transform(v => v === undefined ? undefined : Array.isArray(v) ? v : [v]),
   hospital: z.string().optional(),
-  q: z.string().max(64).optional()
+  q: z.string().max(64).optional(),
+  startupInvalidated: QueryBool.optional()
 });
 const CreateBody = z.object({
   studyId: Uuid, code: z.string().min(1).max(64),

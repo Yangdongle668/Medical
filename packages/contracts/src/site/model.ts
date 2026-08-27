@@ -53,7 +53,20 @@ export const StudySite = z.object({
   irbApprovedOn: DateOnly.nullable(),
   sivOn:         DateOnly.nullable(),
   sivPlannedOn:  DateOnly.nullable(),
-  fpiOn:         DateOnly.nullable().describe("首例入组日")
+  fpiOn:         DateOnly.nullable().describe("首例入组日"),
+
+  /** 「事后失效」：中心已经过了 SIV，但启动清单里还挂着未完成的阻塞项。
+   *
+   *  出现它的路径只有一条 —— 有人把一个已完成的阻塞项**撤销**了。
+   *  系统**刻意不自动回退状态机**：一个已经入组了 12 例的中心，
+   *  把它推回「合同签署」会让那 12 例的访视挂在一个不存在的状态上，
+   *  比不回退危险得多。
+   *
+   *  但不回退不等于不记账。这个字段算出来（不存），
+   *  让这种中心在台账上有一处能被筛出来 —— 否则撤销之后，
+   *  唯一的痕迹是一条转瞬即逝的 sideEffect 文案。 */
+  startupInvalidated: z.boolean()
+    .describe("已过 SIV，但启动清单仍有未完成的阻塞项 —— 当初的启动条件现在不成立")
 }).meta({
   id: "StudySite",
   description:

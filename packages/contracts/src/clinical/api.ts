@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { define } from "../kernel/registry.js";
-import { Uuid, DateOnly } from "../kernel/primitives.js";
+import { Uuid, DateOnly, QueryBool } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
 import {
@@ -25,7 +25,7 @@ define({
   query: PageQuery.extend({
     studySiteId: Uuid.optional(),
     state: z.array(SubjectState).optional(),
-    outOfWindow: z.coerce.boolean().optional().describe("只看已超窗或今日到期的"),
+    outOfWindow: QueryBool.optional().describe("只看已超窗或今日到期的"),
     q: z.string().max(64).optional()
   }),
   response: page(Subject)
@@ -61,8 +61,8 @@ define({
     studySiteId: Uuid.optional(),
     subjectId: Uuid.optional(),
     status: z.array(VisitStatus).optional(),
-    outOfWindow: z.coerce.boolean().optional(),
-    pendingPi: z.coerce.boolean().optional().describe("只看待 PI 确认的")
+    outOfWindow: QueryBool.optional(),
+    pendingPi: QueryBool.optional().describe("只看待 PI 确认的")
   }),
   response: page(SubjectVisit)
 });
@@ -86,7 +86,7 @@ define({
   action: "subjRead",
   query: PageQuery.extend({
     studySiteId: Uuid.optional(),
-    unpaid: z.coerce.boolean().optional()
+    unpaid: QueryBool.optional()
   }),
   response: page(SubjectPayment)
 });

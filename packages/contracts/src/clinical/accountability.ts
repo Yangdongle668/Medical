@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { define } from "../kernel/registry.js";
-import { Uuid, DateOnly } from "../kernel/primitives.js";
+import { Uuid, DateOnly, QueryBool } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult } from "../kernel/command.js";
 
@@ -100,7 +100,7 @@ define({
   layer: "L1", context: CTX,
   summary: "中心生物样本",
   params: ById,
-  query: PageQuery.extend({ openOnly: z.coerce.boolean().optional() }),
+  query: PageQuery.extend({ openOnly: QueryBool.optional() }),
   response: page(Specimen)
 });
 

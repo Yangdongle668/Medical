@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { define } from "../kernel/registry.js";
-import { Uuid } from "../kernel/primitives.js";
+import { Uuid, QueryBool } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
 import { Account, Principal, Role, AuditEntry, RowRule, ActionKey } from "./model.js";
@@ -92,7 +92,7 @@ define({
     actorLogin: z.string().optional(),
     targetType: z.string().optional(),
     targetId: z.string().optional(),
-    sensitiveOnly: z.coerce.boolean().optional().describe("只看权限类变更"),
+    sensitiveOnly: QueryBool.optional().describe("只看权限类变更"),
     since: z.iso.datetime({ offset: true }).optional()
   }),
   response: page(AuditEntry)

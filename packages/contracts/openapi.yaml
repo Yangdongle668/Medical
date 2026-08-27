@@ -404,7 +404,20 @@ paths:
           required: false
           description: 只看权限类变更
           schema:
-            type: boolean
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
         - name: since
           in: query
           required: false
@@ -2520,7 +2533,20 @@ paths:
           required: false
           description: 只看「带多个中心却无继任者」的人
           schema:
-            type: boolean
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
       responses:
         '200':
           description: 人员与派工
@@ -2979,6 +3005,25 @@ paths:
           schema:
             type: string
             maxLength: 64
+        - name: startupInvalidated
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
       responses:
         '200':
           description: 中心台账
@@ -4088,8 +4133,22 @@ paths:
         - name: openOnly
           in: query
           required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
           schema:
-            type: boolean
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
       responses:
         '200':
           description: 中心生物样本
@@ -4392,8 +4451,22 @@ paths:
         - name: unpaid
           in: query
           required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
           schema:
-            type: boolean
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
       responses:
         '200':
           description: 受试者补偿台账
@@ -4635,14 +4708,41 @@ paths:
         - name: outOfWindow
           in: query
           required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
           schema:
-            type: boolean
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
         - name: pendingPi
           in: query
           required: false
           description: 只看待 PI 确认的
           schema:
-            type: boolean
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
       responses:
         '200':
           description: 访视清单
@@ -5242,7 +5342,20 @@ paths:
           required: false
           description: 只看已超窗或今日到期的
           schema:
-            type: boolean
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
         - name: q
           in: query
           required: false
@@ -6043,7 +6156,20 @@ paths:
           required: false
           description: 默认不含已作废
           schema:
-            type: boolean
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
       responses:
         '200':
           description: 工时台账
@@ -6956,6 +7082,9 @@ components:
           format: date
           pattern: >-
             ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        startupInvalidated:
+          type: boolean
+          description: 已过 SIV，但启动清单仍有未完成的阻塞项 —— 当初的启动条件现在不成立
       required:
         - id
         - code
@@ -6971,6 +7100,7 @@ components:
         - sivOn
         - sivPlannedOn
         - fpiOn
+        - startupInvalidated
       additionalProperties: false
       description: 项目 × 中心。带 x-gated-by 的字段在无权限时**从响应中消失**，不是返回 null。
     SiteGate:

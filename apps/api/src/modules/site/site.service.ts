@@ -6,10 +6,26 @@ import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { evaluateGate, nextState } from "./gate.js";
 
+/** 「事后失效」的判定式：已过 SIV，却还挂着未完成的阻塞项。
+ *
+ *  **算出来，不存**。存一个布尔位就要在两个地方维护它
+ *  （撤销时置位、补做完时清位），而漏掉任何一处，台账上就是一个假账 ——
+ *  假的"没问题"比没有这一栏更糟。这里多一次 EXISTS 子查询，
+ *  换的是"它永远等于事实"。
+ *
+ *  注意 `EXISTS` 不受列权限影响，也不需要额外的 RLS：
+ *  startup_item 的策略跟着 study_site 走，看不见中心就看不见它的清单项。 */
+const INVALIDATED = `(
+  s.state IN ('siv','enrolling','enrolled','followup','closed')
+  AND EXISTS (SELECT 1 FROM startup_item i
+               WHERE i.study_site_id = s.id AND i.is_blocking AND i.done_at IS NULL)
+)`;
+
 const SITE_COLS = `
   s.id, s.code, s.hospital, s.dept, s.city, s.pi_name, s.pi_account_id, s.state,
   s.contracted, s.unit_price_cents, s.startup_fee_cents,
   s.irb_approved_on, s.siv_on, s.siv_planned_on, s.fpi_on,
+  ${INVALIDATED} AS startup_invalidated,
   st.id AS study_uid, st.code AS study_code, st.short_name AS study_short`;
 
 interface SiteRow {
@@ -18,6 +34,7 @@ interface SiteRow {
   unit_price_cents: number; startup_fee_cents: number;
   irb_approved_on: Date | null; siv_on: Date | null;
   siv_planned_on: Date | null; fpi_on: Date | null;
+  startup_invalidated: boolean;
   study_uid: string; study_code: string; study_short: string;
 }
 const d = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
@@ -29,7 +46,8 @@ const toSite = (r: SiteRow) => ({
   state: r.state, contracted: r.contracted,
   unitPriceCents: r.unit_price_cents, startupFeeCents: r.startup_fee_cents,
   irbApprovedOn: d(r.irb_approved_on), sivOn: d(r.siv_on),
-  sivPlannedOn: d(r.siv_planned_on), fpiOn: d(r.fpi_on)
+  sivPlannedOn: d(r.siv_planned_on), fpiOn: d(r.fpi_on),
+  startupInvalidated: r.startup_invalidated
 });
 
 @Injectable()
@@ -61,7 +79,8 @@ export class SiteService {
     return { items, nextCursor: rows.length > limit ? items.at(-1)!.code : null };
   }
 
-  async list(q: { limit: number; cursor?: string; studyId?: string; state?: string[]; hospital?: string; q?: string }) {
+  async list(q: { limit: number; cursor?: string; studyId?: string; state?: string[];
+                  hospital?: string; q?: string; startupInvalidated?: boolean }) {
     const c = ctx();
     const sc = this.scope(1);
     const params: unknown[] = [...sc.params];
@@ -71,6 +90,10 @@ export class SiteService {
     if (q.state?.length) conds.push(`s.state = ANY(${add(q.state)})`);
     if (q.hospital) conds.push(`s.hospital = ${add(q.hospital)}`);
     if (q.q)        conds.push(`(s.hospital ILIKE ${add("%" + q.q + "%")} OR s.code ILIKE $${params.length})`);
+    /* 只在**显式传了**的时候加条件：传 false 是"只看正常的"，
+       不传是"两种都要" —— 三态，不是布尔。 */
+    if (q.startupInvalidated !== undefined)
+      conds.push(q.startupInvalidated ? INVALIDATED : `NOT ${INVALIDATED}`);
     if (q.cursor)   conds.push(`s.code > ${add(q.cursor)}`);
     const { rows } = await c.client.query<SiteRow>(
       `SELECT ${SITE_COLS} FROM study_site s JOIN study st ON st.id = s.study_id

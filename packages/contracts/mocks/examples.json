@@ -1136,29 +1136,31 @@
           "irbApprovedOn": "2026-08-24",
           "sivOn": "2026-08-14",
           "sivPlannedOn": "2026-08-13",
-          "fpiOn": "2026-08-19"
+          "fpiOn": "2026-08-19",
+          "startupInvalidated": false
         },
         {
-          "id": "7d37e033-81e5-f9b6-651f-51fa5344cd42",
+          "id": "d37e0338-1e5f-9b66-51f5-1fa5344cd424",
           "code": "SS-05",
           "study": {
-            "id": "4af98782-cc5d-1efb-c92f-ad3a37033b20",
+            "id": "af98782c-c5d1-efbc-92fa-d3a37033b203",
             "code": "HJ-2024-017",
-            "shortName": "艾瑞替尼 III"
+            "shortName": "CoroFlex 器械"
           },
           "hospital": "天津医科大学肿瘤医院",
-          "dept": "心内科",
-          "city": "天津",
-          "piName": "韩雪",
-          "piAccountId": null,
+          "dept": "内分泌科",
+          "city": "广州",
+          "piName": "吴桐",
+          "piAccountId": "b7d084a3-219c-5092-4303-cb2beeac73c5",
           "state": "intake",
-          "contracted": 23,
-          "unitPriceCents": 7500000,
-          "startupFeeCents": 5260000,
+          "contracted": 32,
+          "unitPriceCents": 3950000,
+          "startupFeeCents": 7920000,
           "irbApprovedOn": "2026-08-10",
-          "sivOn": "2026-08-14",
-          "sivPlannedOn": "2026-08-13",
-          "fpiOn": null
+          "sivOn": "2026-08-16",
+          "sivPlannedOn": "2026-08-25",
+          "fpiOn": "2026-08-20",
+          "startupInvalidated": false
         }
       ],
       "nextCursor": null
@@ -1183,27 +1185,29 @@
           "irbApprovedOn": "2026-08-13",
           "sivOn": "2026-08-24",
           "sivPlannedOn": "2026-08-14",
-          "fpiOn": "2026-08-13"
+          "fpiOn": "2026-08-13",
+          "startupInvalidated": true
         },
         {
-          "id": "a87d37e0-3381-e5f9-b665-1f51fa5344cd",
-          "code": "SS-04",
+          "id": "87d37e03-381e-5f9b-6651-f51fa5344cd4",
+          "code": "SS-03",
           "study": {
-            "id": "244af987-82cc-5d1e-fbc9-2fad3a37033b",
+            "id": "44af9878-2cc5-d1ef-bc92-fad3a37033b2",
             "code": "HJ-2024-017",
             "shortName": "艾瑞替尼 III"
           },
           "hospital": "北京协和医院",
-          "dept": "肝胆外科",
+          "dept": "心内科",
           "city": "广州",
-          "piName": "韩雪",
-          "piAccountId": "c09b7d08-4a32-19c5-0924-303cb2beeac7",
+          "piName": "廖梦然",
+          "piAccountId": "09b7d084-a321-9c50-9243-03cb2beeac73",
           "state": "intake",
-          "contracted": 9,
-          "irbApprovedOn": "2026-08-16",
-          "sivOn": "2026-08-15",
-          "sivPlannedOn": "2026-08-21",
-          "fpiOn": null
+          "contracted": 31,
+          "irbApprovedOn": "2026-08-24",
+          "sivOn": "2026-08-23",
+          "sivPlannedOn": "2026-08-10",
+          "fpiOn": "2026-08-16",
+          "startupInvalidated": true
         }
       ],
       "nextCursor": "示例"
@@ -1233,7 +1237,8 @@
       "irbApprovedOn": "2026-08-25",
       "sivOn": "2026-08-12",
       "sivPlannedOn": "2026-08-26",
-      "fpiOn": null
+      "fpiOn": null,
+      "startupInvalidated": false
     },
     "bodyWithoutFieldPermission": {
       "id": "eb4e7205-879c-266a-a252-22eaa855aa72",
@@ -1253,7 +1258,8 @@
       "irbApprovedOn": null,
       "sivOn": "2026-08-25",
       "sivPlannedOn": "2026-08-21",
-      "fpiOn": null
+      "fpiOn": null,
+      "startupInvalidated": true
     }
   },
   "getStudySite": {
@@ -1280,7 +1286,8 @@
       "irbApprovedOn": "2026-08-18",
       "sivOn": "2026-08-10",
       "sivPlannedOn": "2026-08-20",
-      "fpiOn": "2026-08-26"
+      "fpiOn": "2026-08-26",
+      "startupInvalidated": true
     },
     "bodyWithoutFieldPermission": {
       "id": "3c2c8090-3b7d-d2e0-afa4-d5c7036368c6",
@@ -1300,7 +1307,8 @@
       "irbApprovedOn": "2026-08-16",
       "sivOn": "2026-08-18",
       "sivPlannedOn": "2026-08-10",
-      "fpiOn": "2026-08-20"
+      "fpiOn": "2026-08-20",
+      "startupInvalidated": true
     }
   },
   "advanceStudySite": {
@@ -1328,21 +1336,23 @@
         "irbApprovedOn": "2026-08-27",
         "sivOn": "2026-08-21",
         "sivPlannedOn": "2026-08-24",
-        "fpiOn": "2026-08-27"
+        "fpiOn": "2026-08-27",
+        "startupInvalidated": false
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "d8aa4eb3-cf5a-b2d5-6478-d52bc9c5a37c",
-          "amountCents": 7840000,
-          "studySiteId": "e8583370-4f9f-3986-9132-51feb706d9f6"
+          "ref": "8aa4eb3c-f5ab-2d56-478d-52bc9c5a37cd",
+          "amountCents": 4420000,
+          "studySiteId": "85833704-f9f3-9869-1325-1feb706d9f69"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "4116d1f1-8da1-2ffd-81a5-32a308105a22",
-          "studySiteId": "f645f1dc-6dd8-f96a-0524-1525de6ba0dc"
+          "ref": "116d1f18-da12-ffd8-1a53-2a308105a221",
+          "amountCents": 9480000,
+          "studySiteId": "45f1dc6d-d8f9-6a05-2415-25de6ba0dcb0"
         }
       ]
     },
@@ -1365,20 +1375,21 @@
         "irbApprovedOn": "2026-08-15",
         "sivOn": "2026-08-27",
         "sivPlannedOn": "2026-08-21",
-        "fpiOn": "2026-08-24"
+        "fpiOn": "2026-08-24",
+        "startupInvalidated": false
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "f6d8aa4e-b3cf-5ab2-d564-78d52bc9c5a3",
-          "amountCents": 7950000,
-          "studySiteId": "c6e85833-704f-9f39-8691-3251feb706d9"
+          "ref": "6d8aa4eb-3cf5-ab2d-5647-8d52bc9c5a37",
+          "amountCents": 8600000,
+          "studySiteId": "6e858337-04f9-f398-6913-251feb706d9f"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "694116d1-f18d-a12f-fd81-a532a308105a"
+          "ref": "94116d1f-18da-12ff-d81a-532a308105a2"
         }
       ]
     }

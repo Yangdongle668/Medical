@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   PageQuery, Uuid, DateOnly, WithReason,
   SubjectState, VisitStatus, ScreenFailReason, WithdrawReason,
-  QualityKind, QualityState
+  QualityKind, QualityState, QueryBool
 } from "@sitedesk/contracts";
 import { ClinicalService } from "./clinical.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
@@ -18,15 +18,15 @@ const arr = <T extends z.ZodType>(t: T) =>
 const SubjectQ = PageQuery.extend({
   studySiteId: Uuid.optional(),
   state: arr(SubjectState),
-  outOfWindow: z.coerce.boolean().optional(),
+  outOfWindow: QueryBool.optional(),
   q: z.string().max(64).optional()
 });
 const VisitQ = PageQuery.extend({
   studySiteId: Uuid.optional(),
   subjectId: Uuid.optional(),
   status: arr(VisitStatus),
-  outOfWindow: z.coerce.boolean().optional(),
-  pendingPi: z.coerce.boolean().optional()
+  outOfWindow: QueryBool.optional(),
+  pendingPi: QueryBool.optional()
 });
 const QualityQ = PageQuery.extend({
   studySiteId: Uuid.optional(),
@@ -35,7 +35,7 @@ const QualityQ = PageQuery.extend({
 });
 const PaymentQ = PageQuery.extend({
   studySiteId: Uuid.optional(),
-  unpaid: z.coerce.boolean().optional()
+  unpaid: QueryBool.optional()
 });
 
 const CreateSubject = z.object({

@@ -35,6 +35,21 @@ export const Ratio = z.number().min(0).max(1);
 /** 游标。不用 offset —— 数据一直在变，翻页会重复或漏掉。 */
 export const Cursor = z.string().min(1).max(512);
 
+/** 查询串里的布尔。
+ *
+ *  **不要用 `z.coerce.boolean()`** —— 它走的是 `Boolean(v)`，
+ *  于是 `?flag=false` 会被解析成 `true`（非空字符串一律为真）。
+ *  只传 `?flag=true` 的地方看不出问题，但只要有一处让人传 false，
+ *  它就会安静地做反 —— 而"筛选器点了没反应"是最难被报上来的一种 bug。
+ *
+ *  这里认三种写法（`true` / `1` / `yes`，及其反面），其余一律报错：
+ *  把 `?flag=ture` 当成 false 也是在猜，而猜错时同样是安静的。 */
+export const QueryBool = z.union([
+  z.boolean(),
+  z.enum(["true", "1", "yes", "on"]).transform(() => true),
+  z.enum(["false", "0", "no", "off"]).transform(() => false)
+]).describe("布尔查询参数：true/1/yes 或 false/0/no");
+
 /** 幂等键。所有 L2 命令必填，见 kernel/command.ts。 */
 export const IdempotencyKey = z.uuid()
   .describe("幂等键。24 小时内重放同一键返回首次结果。CRC 离线重放的生命线。");

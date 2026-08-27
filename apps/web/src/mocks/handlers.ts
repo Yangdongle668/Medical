@@ -227,8 +227,12 @@ export const scenarioHandlers = [
   http.get(pathToRegExp("/v1/quality-events"), () =>
     HttpResponse.json({ items: scenario.qualityEvents, nextCursor: null })),
 
-  http.get(pathToRegExp("/v1/study-sites"), () =>
-    HttpResponse.json({ items: SITES_LIST.map(s => siteDto(s.id)!), nextCursor: null })),
+  http.get(pathToRegExp("/v1/study-sites"), ({ request }) => {
+    const only = new URL(request.url).searchParams.get("startupInvalidated");
+    const items = SITES_LIST.map(s => siteDto(s.id)!)
+      .filter(s => only === null || s.startupInvalidated === (only === "true"));
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
 
   /* ── 中心详情 · 闸门 · 推进 ─────────────────────────────────────
      具体路径排在 `/v1/study-sites/{id}` 前面。
@@ -314,7 +318,15 @@ export const scenarioHandlers = [
     if (!it?.doneAt) return HttpResponse.json(
       problem("conflict-version", 409, "该项本来就未完成"), { status: 409 });
     it.doneAt = null; it.doneByName = null;
-    return HttpResponse.json({ data: it, sideEffects: [] }, { status: 201 });
+    /* 撤销一个阻塞项，且中心已经过了 SIV —— 后端会警告"当初的启动条件
+       现在不成立"，mock 不跟着做的话，这条提示只有集成测试见得到。 */
+    const site = siteDto(it.studySiteId);
+    const sideEffects = it.isBlocking && site?.startupInvalidated
+      ? [{ type: "SiteStateChanged", ref: it.studySiteId, studySiteId: it.studySiteId,
+           summary: `注意：${site.code} 已处于「${site.state}」，` +
+             "但一个启动阻塞项被撤回 —— 该中心当初的启动条件现在不成立" }]
+      : [];
+    return HttpResponse.json({ data: it, sideEffects }, { status: 201 });
   }),
 
   /* ── 工时 · 费率卡 · 损益 ────────────────────────────────────── */
@@ -528,10 +540,19 @@ function siteDto(id: string) {
     sivPlannedOn: scenario.startupItems.some(i => i.studySiteId === s.id)
       ? scenario.sivPlannedOn : null,
     fpiOn: scenario.fpiOn[s.id] ?? null,
+    /* 与后端 INVALIDATED 同一条判定式：已过 SIV，却还挂着未完成的阻塞项。
+       mock 里也**算出来**而不是写死 —— 撤销一个阻塞项之后，
+       这一栏要立刻跟着变，否则界面在两种数据源下长得不一样。 */
+    startupInvalidated: PAST_SIV.includes(scenario.siteState[s.id] ?? s.state)
+      && scenario.startupItems.some(
+        i => i.studySiteId === s.id && i.isBlocking && !i.doneAt),
     ...(mockRole === "boss"
       ? { unitPriceCents: 5800000, startupFeeCents: 17600000 } : {})
   };
 }
+
+/** 「已经启动过了」的那几个状态 —— 与后端 site.service.ts 的 INVALIDATED 同源。 */
+const PAST_SIV = ["siv", "enrolling", "enrolled", "followup", "closed"];
 
 function checklistFor(siteId: string) {
   const items = scenario.startupItems.filter(i => i.studySiteId === siteId);

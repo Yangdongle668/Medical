@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Headers, HttpCode } from "@nestjs/common";
 import { z } from "zod";
-import { PageQuery, Uuid, WithReason, RowRule, ActionKey, FieldKey } from "@sitedesk/contracts";
+import { PageQuery, Uuid, WithReason, RowRule, ActionKey, FieldKey, QueryBool } from "@sitedesk/contracts";
 import { IdentityService } from "./identity.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
@@ -29,7 +29,7 @@ const RoleBody = z.object({
 const AuditQ = PageQuery.extend({
   studySiteId: Uuid.optional(), actorLogin: z.string().optional(),
   targetType: z.string().optional(), targetId: z.string().optional(),
-  sensitiveOnly: z.coerce.boolean().optional(),
+  sensitiveOnly: QueryBool.optional(),
   since: z.iso.datetime({ offset: true }).optional()
 });
 
