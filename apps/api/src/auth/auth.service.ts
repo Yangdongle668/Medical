@@ -9,8 +9,25 @@ const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 /** 台的公开地址 —— 链接就是拿它拼的。填错了，链接点开会落到别处。 */
 const publicOrigin = () =>
   (process.env["SITEDESK_PUBLIC_ORIGIN"] ?? "http://localhost:8080").replace(/\/+$/, "");
-const LINK_TTL_MIN = 15;
-const SESSION_TTL_H = 8;
+/* 有效期。两个都曾经是写死的常量 —— 而"链接 15 分钟够不够"这件事
+   取决于客户的邮件网关排队多久，不取决于我们。
+
+   上限是数据库那一侧管的（login_token_max_ttl，60 分钟，见迁移 0016）：
+   在这里放宽而不改约束的话，配大了会撞在一句 CHECK 违反上，
+   而那句话指不到是谁配错了。 */
+const intEnv = (name: string, dflt: number, lo: number, hi: number) => {
+  const raw = process.env[name]?.trim();
+  if (!raw) return dflt;
+  const n = /^\d+$/.test(raw) ? Number(raw) : NaN;
+  if (!Number.isSafeInteger(n) || n < lo || n > hi) {
+    emit("warn", "auth",
+      `${name}=${JSON.stringify(raw)} 不在 ${lo}–${hi} 之间，改用默认值 ${dflt}`);
+    return dflt;
+  }
+  return n;
+};
+const LINK_TTL_MIN = () => intEnv("SITEDESK_LINK_TTL_MIN", 15, 1, 60);
+const SESSION_TTL_H = () => intEnv("SITEDESK_SESSION_TTL_H", 8, 1, 24 * 30);
 
 /* ════════════════════════════════════════════════════════════════════
    认证。
@@ -44,7 +61,7 @@ export class AuthService {
       destination: string | null; display_name: string | null;
     }>(`SELECT issued, reason, channel, destination, display_name
           FROM app.issue_login_link($1,$2,$3)`,
-      [login, sha256(token), LINK_TTL_MIN]);
+      [login, sha256(token), LINK_TTL_MIN()]);
     const r = rows[0];
 
     if (!r?.issued) {
@@ -70,7 +87,7 @@ export class AuthService {
     const link = `${publicOrigin()}/login?token=${encodeURIComponent(token)}`;
     c.afterCommit.push(() => this.delivery.deliver({
       channel: r.channel ?? "email", to: r.destination!,
-      displayName: r.display_name, link, ttlMin: LINK_TTL_MIN
+      displayName: r.display_name, link, ttlMin: LINK_TTL_MIN()
     }).then((how) => {
       if (how === "no-transport")
         emit("warn", "login-delivery",
@@ -102,7 +119,7 @@ export class AuthService {
     const { rows } = await c.client.query<{ expires_at: Date }>(
       `INSERT INTO auth_session (account_id, token_hash, expires_at, user_agent)
        VALUES ($1,$2, now() + ($3 || ' hours')::interval, $4) RETURNING expires_at`,
-      [accountId, sha256(token), String(SESSION_TTL_H), userAgent]);
+      [accountId, sha256(token), String(SESSION_TTL_H()), userAgent]);
     await c.client.query(`UPDATE account SET last_login_at = now() WHERE id = $1`, [accountId]);
     return { token, expiresAt: rows[0]!.expires_at.toISOString() };
   }

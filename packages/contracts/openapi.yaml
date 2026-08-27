@@ -5505,6 +5505,7 @@ components:
             - gate-not-satisfied
             - rate-limited
             - service-unavailable
+            - request-timeout
             - internal
         detail:
           type: string
@@ -5823,14 +5824,6 @@ components:
           $ref: '#/components/schemas/Account'
         scopeLabel:
           type: string
-        visibleSiteIds:
-          type: array
-          items:
-            type: string
-            format: uuid
-            pattern: >-
-              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-          description: 当前可见的中心 id 全集。前端用于本地过滤；**服务端仍会独立强制一次**。
         permissions:
           type: object
           properties:
@@ -5863,7 +5856,6 @@ components:
       required:
         - account
         - scopeLabel
-        - visibleSiteIds
         - permissions
       additionalProperties: false
     AuditEntry:

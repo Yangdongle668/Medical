@@ -52,6 +52,10 @@ export class ProblemFilter implements ExceptionFilter {
     }
 
     const { status, title } = ERRORS[code];
+    /* 响应已经发出去了 —— 只可能是请求被截止时间收尾之后，卡住的处理器
+       才醒过来抛了个错。再写一次会得到 ERR_HTTP_HEADERS_SENT，
+       而那个异常抛在一个没人接的回调里，比原来的错误更难查。 */
+    if (res.headersSent) return;
     res.status(status).type("application/problem+json").json({
       type: ERROR_BASE + code, title, status, code,
       ...(extra.detail ? { detail: extra.detail } : {}),

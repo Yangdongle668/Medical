@@ -89,7 +89,6 @@ const me = () => {
       lastLoginAt: new Date().toISOString()
     },
     scopeLabel: `${SITES_LIST.length} 个中心 · 1 个项目`,
-    visibleSiteIds: SITES_LIST.map(s => s.id),
     permissions: {
       rowRule: r.rowRule, fields: [...r.fields],
       actions: [...r.actions], modules: [...r.modules]

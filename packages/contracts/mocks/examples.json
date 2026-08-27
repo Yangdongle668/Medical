@@ -494,10 +494,6 @@
         "lastLoginAt": "2026-08-22T09:15:00+08:00"
       },
       "scopeLabel": "示例标识",
-      "visibleSiteIds": [
-        "927ca69d-e538-6bab-b2e5-b0be1c3ce5c7",
-        "f5070d20-30ad-ae51-ad2a-9494f0a469f4"
-      ],
       "permissions": {
         "rowRule": "all",
         "fields": [

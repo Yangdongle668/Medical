@@ -65,6 +65,8 @@ export class IdempotencyService {
       if (!row.completed_at)
         throw new ProblemException("conflict-version", {
           detail: "同一请求正在处理中，请稍后重试" });
+      /* status 交给调用方去比对（见 infra/command.ts）：响应码本身由路由
+         元数据决定，这里返回它是为了让"端点改过状态码"这件事被发现。 */
       return { status: row.response_status ?? 200, body: row.response_body };
     }
 

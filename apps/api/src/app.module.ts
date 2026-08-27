@@ -10,6 +10,7 @@ import { AuditService } from "./infra/audit.service.js";
 import { IdempotencyService } from "./infra/idempotency.service.js";
 import { RateLimitService } from "./infra/rate-limit.service.js";
 import { LoginDelivery } from "./infra/login-delivery.js";
+import { startGc } from "./infra/gc.js";
 import { AuthGuard, ActionGuard } from "./auth/guards.js";
 import { AuthService } from "./auth/auth.service.js";
 import { AuthController } from "./auth/auth.controller.js";
@@ -41,8 +42,11 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
       provide: POOL,
       useFactory: () => {
         const pool = makePool();
+        /* 过期数据的清理跟着池子一起活、一起死 —— 它要用池子，
+           而停机时必须先停它再关池子，否则最后一轮会打在一个关掉的池上。 */
+        const gc = startGc(pool);
         return Object.assign(pool, {
-          async onModuleDestroy() { await pool.end(); }
+          async onModuleDestroy() { gc.stop(); await pool.end(); }
         });
       }
     },

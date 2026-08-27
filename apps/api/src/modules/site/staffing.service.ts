@@ -176,9 +176,18 @@ export class StaffingService {
   }
 
   /* ── 交接 ─────────────────────────────────────────────────────── */
-  private async handover(id: string) {
+
+  /** 一批交接单的完整装配 —— **固定 3 条 SQL，与条数无关**。
+   *
+   *  原来列表是 `for (const r of rows) await this.handover(r.id)`：
+   *  每行再发三条查询，20 行就是 61 条。它不报错、不变红，
+   *  只是随数据量线性变慢 —— 而 Phase 8b 立的那条守卫
+   *  （limit 1 与 limit 50 必须发同样多的 SQL）当时没有覆盖这个端点，
+   *  于是"目前没有 N+1"这句话把它漏掉了。现在它也在守卫里。 */
+  private async assemble(ids: string[]) {
+    if (!ids.length) return [];
     const c = ctx();
-    const { rows } = await c.client.query<{
+    const heads = await c.client.query<{
       id: string; from_account_id: string; from_name: string;
       to_account_id: string; to_name: string; reason: string;
       planned_on: Date; status: string; completed_at: Date | null;
@@ -187,30 +196,56 @@ export class StaffingService {
                h.reason, h.planned_on, h.status, h.completed_at
           FROM handover h JOIN account f ON f.id = h.from_account_id
                           JOIN account t ON t.id = h.to_account_id
-         WHERE h.id = $1`, [id]);
-    const h = rows[0];
-    if (!h) throw notFound("交接单");
-    const sites = await c.client.query<{ id: string; code: string; hospital: string }>(
-      `SELECT s.id, s.code, s.hospital FROM handover_site hs
-         JOIN study_site s ON s.id = hs.study_site_id
-        WHERE hs.handover_id = $1 ORDER BY s.code`, [id]);
+         WHERE h.id = ANY($1::uuid[])`, [ids]);
+
+    const sites = await c.client.query<{
+      handover_id: string; id: string; code: string; hospital: string;
+    }>(`SELECT hs.handover_id, s.id, s.code, s.hospital
+          FROM handover_site hs JOIN study_site s ON s.id = hs.study_site_id
+         WHERE hs.handover_id = ANY($1::uuid[]) ORDER BY s.code`, [ids]);
+
     const items = await c.client.query<{
-      seq: number; item: string; done_at: Date | null; done_by_name: string | null;
-    }>(`SELECT hi.seq, hi.item, hi.done_at, a.display_name AS done_by_name
+      handover_id: string; seq: number; item: string;
+      done_at: Date | null; done_by_name: string | null;
+    }>(`SELECT hi.handover_id, hi.seq, hi.item, hi.done_at, a.display_name AS done_by_name
           FROM handover_item hi LEFT JOIN account a ON a.id = hi.done_by
-         WHERE hi.handover_id = $1 ORDER BY hi.seq`, [id]);
-    return {
-      id: h.id,
-      fromAccountId: h.from_account_id, fromName: h.from_name,
-      toAccountId: h.to_account_id, toName: h.to_name,
-      reason: h.reason, plannedOn: day(h.planned_on)!, status: h.status,
-      completedAt: iso(h.completed_at),
-      sites: sites.rows,
-      items: items.rows.map(i => ({
-        seq: i.seq, item: i.item, doneAt: iso(i.done_at), doneByName: i.done_by_name })),
-      doneCount: items.rows.filter(i => i.done_at).length,
-      totalCount: items.rows.length
+         WHERE hi.handover_id = ANY($1::uuid[]) ORDER BY hi.seq`, [ids]);
+
+    /* 按 handover_id 分组。**RLS 可能把某几条挡在外面** —— 那时 heads
+       里就没有那一行，而不是给一个空壳：范围之外一律当作不存在。 */
+    const byId = <T extends { handover_id: string }>(rs: T[]) => {
+      const m = new Map<string, T[]>();
+      for (const r of rs) (m.get(r.handover_id) ?? m.set(r.handover_id, []).get(r.handover_id)!).push(r);
+      return m;
     };
+    const siteMap = byId(sites.rows), itemMap = byId(items.rows);
+    const headMap = new Map(heads.rows.map(h => [h.id, h]));
+
+    /* 按传入的 ids 顺序还原 —— 列表的排序在上游那条查询里，
+       这里用 Map 取回来的话顺序就丢了。 */
+    return ids.flatMap((id) => {
+      const h = headMap.get(id);
+      if (!h) return [];
+      const its = itemMap.get(id) ?? [];
+      return [{
+        id: h.id,
+        fromAccountId: h.from_account_id, fromName: h.from_name,
+        toAccountId: h.to_account_id, toName: h.to_name,
+        reason: h.reason, plannedOn: day(h.planned_on)!, status: h.status,
+        completedAt: iso(h.completed_at),
+        sites: (siteMap.get(id) ?? []).map(s => ({ id: s.id, code: s.code, hospital: s.hospital })),
+        items: its.map(i => ({
+          seq: i.seq, item: i.item, doneAt: iso(i.done_at), doneByName: i.done_by_name })),
+        doneCount: its.filter(i => i.done_at).length,
+        totalCount: its.length
+      }];
+    });
+  }
+
+  private async handover(id: string) {
+    const one = (await this.assemble([id]))[0];
+    if (!one) throw notFound("交接单");
+    return one;
   }
 
   async listHandovers(q: { limit: number; cursor?: string; status?: string }) {
@@ -223,8 +258,7 @@ export class StaffingService {
     const { rows } = await c.client.query<{ id: string }>(
       `SELECT h.id FROM handover h WHERE ${conds.join(" AND ")}
         ORDER BY h.planned_on DESC, h.id DESC LIMIT ${add(q.limit + 1)}`, params);
-    const items = [];
-    for (const r of rows.slice(0, q.limit)) items.push(await this.handover(r.id));
+    const items = await this.assemble(rows.slice(0, q.limit).map(r => r.id));
     return { items, nextCursor: rows.length > q.limit ? items.at(-1)?.id ?? null : null };
   }
 
