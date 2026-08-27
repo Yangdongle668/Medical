@@ -330,7 +330,7 @@ define({
 });
 
 define({
-  id: "replaceSoa", method: "post", path: "/v1/studies/{id}/visit-template\\:replace",
+  id: "replaceSoa", method: "post", path: "/v1/studies/{id}/visit-template:replace",
   layer: "L2", context: CTX,
   summary: "修订访视计划表",
   description:

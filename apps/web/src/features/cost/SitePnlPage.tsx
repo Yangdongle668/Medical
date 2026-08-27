@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { PnlTrend } from "./PnlTrend.js";
 import { useParams, Link } from "react-router-dom";
 import { call } from "../../api/client.js";
 import { SITE_STATE_LABEL } from "../site/states.js";
@@ -35,7 +36,7 @@ interface Revenue {
 interface Cost {
   directCostCents?: number; billableCostCents?: number;
   nonBillableCostCents?: number; overheadCents?: number;
-  totalCostCents?: number; personDays?: number;
+  totalCostCents?: number; unapprovedCostCents?: number; personDays?: number;
   nonBillableShare?: number; costPerEnrolledCents?: number;
 }
 interface Pnl {
@@ -159,6 +160,17 @@ export function SitePnlPage() {
                 </tr>
               </tbody>
             </table>
+            {!!p.cost.unapprovedCostCents && (
+              /* 待审的那一部分**已经在合计里了**。这一行只说"其中有多少
+                 还没被第二个人看过" —— 把它从合计里剔掉才是错的：
+                 毛利会比实际好看，等审批补上又突然掉一截，
+                 而那时没人说得清是经营变差了还是审批积压了。 */
+              <p className="muted" style={{ margin: "10px 0 0", fontSize: 12 }}
+                data-testid="unapproved-cost">
+                其中 <b className="num">{yuan(p.cost.unapprovedCostCents)}</b> 还没审
+                —— 已经计入上面的合计，这一行只说它还没被第二个人看过。
+              </p>
+            )}
             <dl className="kv" style={{ marginTop: 12 }}>
               {p.cost.personDays !== undefined && <>
                 <dt>投入人天</dt><dd className="num">{days(p.cost.personDays)}</dd></>}
@@ -195,6 +207,9 @@ export function SitePnlPage() {
             </span>
           </section>
         )}
+
+        {/* 分月：累计回答不了「这个月比上个月差在哪」 */}
+        <PnlTrend studySiteId={id} />
       </div>
     </>
   );

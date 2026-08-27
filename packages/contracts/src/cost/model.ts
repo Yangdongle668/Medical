@@ -67,7 +67,17 @@ export const TimesheetEntry = z.object({
   voidedAt: Timestamp.nullable(),
   voidedByName: z.string().nullable(),
   voidReason: z.string().nullable(),
-  createdAt: Timestamp
+  createdAt: Timestamp,
+
+  /* ── 审批（D4） ───────────────────────────────────────────────
+     审批**不影响任何金额**：人已经干了活，成本已经发生。
+     它只回答一个问题：**这笔工时有没有被第二个人看过。**
+
+     不算进成本才是错的那条路 —— 毛利会比实际好看，
+     等审批补上又突然掉一截，而那时没人说得清是经营变差了
+     还是审批积压了。 */
+  approvedAt: Timestamp.nullable(),
+  approvedByName: z.string().nullable()
 }).meta({
   id: "TimesheetEntry",
   description:
@@ -99,6 +109,10 @@ export const CostBreakdown = z.object({
   nonBillableCostCents: gated(CentsNonNeg, "cost"),
   overheadCents: gated(CentsNonNeg, "cost"),
   totalCostCents: gated(CentsNonNeg, "cost"),
+  /** 总成本里**还没被第二个人看过**的那一部分（D4）。
+   *  它已经计入 totalCostCents —— 这一栏只说"其中有多少是待审的"。
+   *  数字大而且一直不降，说明审批积压了，而不是成本失控。 */
+  unapprovedCostCents: gated(CentsNonNeg, "cost"),
   personDays: gated(z.number(), "cost"),
   nonBillableShare: gated(Ratio, "cost")
     .describe("不可计费占比。它高，说明人力花在了卖不出去的事情上"),
@@ -125,4 +139,46 @@ export const SitePnl = z.object({
     "单中心损益。所有数字来自 `@sitedesk/calc`，视图层不做算术。\n" +
     "三层列权限在这里同时生效：一线看得到中心，看不到价；\n" +
     "看得到自己填的工时，看不到它折成多少钱；毛利只有经营层看得到。"
+});
+
+/* ── 分月损益（欠账 D6） ────────────────────────────────────────────
+   `SitePnl` 只有"到今天为止"的累计：看不出趋势，也回答不了
+   「这个月比上个月差在哪」。而那正是经营层每个月要问的那一句。
+
+   ── 分月的口径不是把累计除以月数 ──────────────────────────────────
+   收入与成本都按**事件发生的那个月**归属：
+
+     启动费      → SIV 当月（还没 SIV 就还没确认）
+     入组收入    → 每一例的入组月
+     筛败费      → 每一例的筛败月
+     脱落扣减    → 每一例的退出月（负数）
+     成本        → 工时的**工作日期**所在月，管理费按当月直接成本计提
+
+   这不是唯一可能的口径，但它是**说得清**的那一种：
+   每一笔钱都指得出"因为哪件事、在哪个月发生"。
+   按录入时间归属会让补录的工时落在错误的月份，而那正是月度对不上的
+   最常见来源。 */
+export const PnlPeriod = z.object({
+  /** `YYYY-MM` */
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  enrolled: z.int(), screenFailed: z.int(), withdrawn: z.int(),
+  revenueCents: gated(Cents, "price"),
+  costCents: gated(CentsNonNeg, "cost"),
+  personDays: gated(z.number(), "cost"),
+  grossProfitCents: gated(Cents, "margin")
+}).meta({ id: "PnlPeriod" });
+
+export const SitePnlTrend = z.object({
+  studySiteId: Uuid,
+  siteCode: Code,
+  hospital: z.string(),
+  months: z.array(PnlPeriod),
+  calcVersion: z.string()
+}).meta({
+  id: "SitePnlTrend",
+  description:
+    "按月拆开的损益。每一笔钱按**事件发生的那个月**归属，不是按录入时间 —— " +
+    "补录的工时落在错误的月份，是月度对不上最常见的来源。\n" +
+    "把各月加起来不一定等于累计口径：累计里的脱落扣减是按**当前**访视完成度算的，" +
+    "而它会随时间变化。两个数字回答的不是同一个问题。"
 });

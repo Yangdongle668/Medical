@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { INestApplication } from "@nestjs/common";
 import { boot, resetDb, as, type Caller } from "./harness.js";
 import { randomUUID } from "node:crypto";
+import pg from "pg";
 import { siteRevenue, entryCostCents, CALC_VERSION } from "@sitedesk/calc";
 
 /* ════════════════════════════════════════════════════════════════════
@@ -15,7 +16,7 @@ import { siteRevenue, entryCostCents, CALC_VERSION } from "@sitedesk/calc";
    ════════════════════════════════════════════════════════════════════ */
 
 let app: INestApplication;
-let boss: Caller, crc: Caller, cra: Caller, inst: Caller, pm: Caller;
+let boss: Caller, crc: Caller, cra: Caller, inst: Caller, pm: Caller, pmHan: Caller;
 const K = () => ({ "Idempotency-Key": randomUUID() });
 const w = (v: number) => Math.round(v * 10000 * 100);
 
@@ -26,6 +27,9 @@ beforeAll(async () => {
   cra  = await as(app, "linmin");
   inst = await as(app, "zhanghm");
   pm   = await as(app, "cendi");
+  /* SS-01 归 hanxue 那个组：PM 的行范围是 team，
+     拿另一个组的 PM 去审 SS-01 的工时会得到 404（不在范围 = 不存在）。 */
+  pmHan = await as(app, "hanxue");
 }, 180_000);
 afterAll(async () => { await app?.close(); });
 
@@ -211,6 +215,208 @@ describe("列权限：一线填工时，但看不到自己值多少钱", () => {
   it("外部方看不到任何工时 —— 知道我们投了多少人天，等于知道报价底线", async () => {
     const r = await inst.get("/v1/timesheets?limit=50");
     expect(r.body.items).toEqual([]);
+  });
+});
+
+describe("工时审批：全部价值在于「第二个人」", () => {
+  /** 填一条新的，返回它的 id */
+  async function file(): Promise<string> {
+    const s = await siteByCode(crc, "SS-01");
+    const r = await crc.post("/v1/timesheets", {
+      studySiteId: s.id, workDate: new Date().toISOString().slice(0, 10),
+      workType: "sdv", hours: 2, note: "审批用例" });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    return r.body.id as string;
+  }
+
+  it("新填的工时是**待审**的，但成本立刻计入 —— 人已经把活干了", async () => {
+    const s = await siteByCode(boss, "SS-01");
+    const before = (await boss.get(`/v1/study-sites/${s.id}/pnl`)).body.cost;
+    const id = await file();
+    const after = (await boss.get(`/v1/study-sites/${s.id}/pnl`)).body.cost;
+
+    /* 不算进成本才是错的那条路：毛利会比实际好看，
+       等审批补上又突然掉一截。 */
+    expect(after.totalCostCents).toBeGreaterThan(before.totalCostCents);
+    /* 而"其中有多少还没被第二个人看过"必须说得出来 */
+    expect(after.unapprovedCostCents).toBeGreaterThan(before.unapprovedCostCents);
+
+    const e = (await boss.get(`/v1/timesheets?limit=200`)).body.items
+      .find((x: { id: string }) => x.id === id);
+    expect(e.approvedAt).toBeNull();
+  });
+
+  it("**不能审自己填的** —— 自审等于没有审批流，只是多了一次点击", async () => {
+    const id = await file();
+    /* 用一个既有 approve 权限、又是填报人本人的身份来试。
+       PM 两样都有，所以让 PM 自己填一条再自己审。 */
+    const site = await siteByCode(pmHan, "SS-01");
+    const own = await pmHan.post("/v1/timesheets", {
+      studySiteId: site.id, workDate: new Date().toISOString().slice(0, 10),
+      workType: "monitoring", hours: 3, note: "PM 自己填的" });
+    expect(own.status, JSON.stringify(own.body)).toBe(201);
+
+    const r = await pmHan.post(`/v1/timesheets/${own.body.id}:approve`, {}, K());
+    expect(r.status).toBe(422);
+    expect(r.body.invariant).toBe("timesheet-no-self-approve");
+
+    /* 别人填的可以审 */
+    const ok = await pmHan.post(`/v1/timesheets/${id}:approve`,
+      { note: "周结抽查通过" }, K());
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    expect(ok.body.data.approvedByName).toBe("韩雪");
+  });
+
+  it("审批**不改变任何金额** —— 它只说这一笔被第二个人看过了", async () => {
+    const s = await siteByCode(boss, "SS-01");
+    const id = await file();
+    const before = (await boss.get(`/v1/study-sites/${s.id}/pnl`)).body.cost;
+
+    const r = await pmHan.post(`/v1/timesheets/${id}:approve`, {}, K());
+    expect(r.status).toBe(201);
+    expect(r.body.sideEffects[0].summary).toContain("成本没有变化");
+
+    const after = (await boss.get(`/v1/study-sites/${s.id}/pnl`)).body.cost;
+    expect(after.totalCostCents).toBe(before.totalCostCents);
+    /* 变的只有"待审的那一部分" */
+    expect(after.unapprovedCostCents).toBeLessThan(before.unapprovedCostCents);
+  });
+
+  it("重复审 → 409；已作废的不需要审 → 422", async () => {
+    const id = await file();
+    expect((await pmHan.post(`/v1/timesheets/${id}:approve`, {}, K())).status).toBe(201);
+    expect((await pmHan.post(`/v1/timesheets/${id}:approve`, {}, K())).status).toBe(409);
+
+    const other = await file();
+    expect((await crc.post(`/v1/timesheets/${other}:void`,
+      { reason: "填错了中心，重报" }, K())).status).toBe(201);
+    const r = await pmHan.post(`/v1/timesheets/${other}:approve`, {}, K());
+    expect(r.status).toBe(422);
+    expect(r.body.invariant).toBe("timesheet-voided-needs-no-approval");
+  });
+
+  it("审过不能撤回 —— 数据库拦，因为应用层会有第二个入口", async () => {
+    const id = await file();
+    expect((await pmHan.post(`/v1/timesheets/${id}:approve`, {}, K())).status).toBe(201);
+
+    const db = new pg.Client({ connectionString: process.env["TEST_DATABASE_URL"] });
+    await db.connect();
+    try {
+      await expect(db.query(
+        "UPDATE timesheet_entry SET approved_at = NULL, approved_by = NULL WHERE id = $1",
+        [id])).rejects.toThrow(/不能撤回审批/);
+    } finally { await db.end(); }
+  });
+
+  it("「还有哪些没审」筛得出来", async () => {
+    await file();
+    const r = await boss.get("/v1/timesheets?limit=200&unapprovedOnly=true");
+    expect(r.body.items.length).toBeGreaterThan(0);
+    for (const e of r.body.items) {
+      expect(e.approvedAt).toBeNull();
+      /* 已作废的不该出现在待审里 —— 它已经不在成本里了 */
+      expect(e.voidedAt).toBeNull();
+    }
+  });
+
+  it("没有 approve 权限的人审不了", async () => {
+    const id = await file();
+    const r = await crc.post(`/v1/timesheets/${id}:approve`, {}, K());
+    expect(r.status).toBe(403);
+  });
+});
+
+describe("分月损益：累计口径回答不了「这个月比上个月差在哪」", () => {
+  it("月份轴是**连续的**，空月份也画出来 —— 那个月一分钱都没有正是要看见的事", async () => {
+    const s = await siteByCode(boss, "SS-01");
+    const t = (await boss.get(`/v1/study-sites/${s.id}/pnl/monthly?months=6`)).body;
+    expect(t.months).toHaveLength(6);
+    /* 连续：相邻两个月相差一个自然月 */
+    for (let i = 1; i < t.months.length; i++) {
+      const prev = new Date(`${t.months[i - 1].month}-01T00:00:00Z`);
+      const cur = new Date(`${t.months[i].month}-01T00:00:00Z`);
+      prev.setUTCMonth(prev.getUTCMonth() + 1);
+      expect(cur.toISOString().slice(0, 7)).toBe(prev.toISOString().slice(0, 7));
+    }
+    /* 最后一个月是当月 */
+    expect(t.months.at(-1).month).toBe(new Date().toISOString().slice(0, 7));
+    expect(t.calcVersion).toBe(CALC_VERSION);
+  });
+
+  it("工时按**工作日期**归月，不是按录入时间", async () => {
+    /* 补录的工时落在错误的月份，是月度对不上最常见的来源。 */
+    const s = await siteByCode(crc, "SS-01");
+    const back = new Date(); back.setUTCMonth(back.getUTCMonth() - 1);
+    const workDate = `${back.toISOString().slice(0, 7)}-15`;
+    const month = workDate.slice(0, 7);
+
+    const before = (await boss.get(`/v1/study-sites/${s.id}/pnl/monthly?months=6`)).body
+      .months.find((m: { month: string }) => m.month === month);
+
+    const filed = await crc.post("/v1/timesheets", {
+      studySiteId: s.id, workDate, workType: "sdv", hours: 4,
+      note: "补录上个月的源数据核对"
+    });
+    expect(filed.status, JSON.stringify(filed.body)).toBe(201);
+
+    const after = (await boss.get(`/v1/study-sites/${s.id}/pnl/monthly?months=6`)).body
+      .months.find((m: { month: string }) => m.month === month);
+    expect(after.costCents, "补录的工时没有落在工作日期那个月")
+      .toBeGreaterThan(before.costCents);
+    expect(after.personDays).toBeCloseTo(before.personDays + 0.5, 5);
+
+    /* 而**本月**不该因此变化 —— 那正是"按录入时间归属"会犯的错 */
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    if (thisMonth !== month) {
+      const now = (await boss.get(`/v1/study-sites/${s.id}/pnl/monthly?months=6`)).body
+        .months.find((m: { month: string }) => m.month === thisMonth);
+      const prevNow = (await boss.get(`/v1/study-sites/${s.id}/pnl/monthly?months=6`)).body
+        .months.find((m: { month: string }) => m.month === thisMonth);
+      expect(now.costCents).toBe(prevNow.costCents);
+    }
+  });
+
+  it("没有任何事件的月份，收入是 0 —— 启动费不是每个月都算一遍", async () => {
+    /* 这是"按事件归属"最直接的检验：没有人入组、没有人筛败、没有人退出，
+       这个月就没有收入。而如果启动费被每个月都算一遍，
+       这些月份会各自带着一大笔钱。 */
+    const s = await siteByCode(boss, "SS-01");
+    const t = (await boss.get(`/v1/study-sites/${s.id}/pnl/monthly?months=60`)).body;
+    const sivMonth = s.sivOn ? s.sivOn.slice(0, 7) : null;
+
+    const quiet = t.months.filter((m: {
+      month: string; enrolled: number; screenFailed: number; withdrawn: number;
+    }) => m.month !== sivMonth && m.enrolled === 0 && m.screenFailed === 0
+        && m.withdrawn === 0);
+    expect(quiet.length, "60 个月里应当有几个什么都没发生的月份").toBeGreaterThan(0);
+    for (const m of quiet) expect(m.revenueCents, `${m.month} 无事件却有收入`).toBe(0);
+
+    /* 而 SIV 当月**确实**带着那笔启动费 */
+    if (sivMonth) {
+      const siv = t.months.find((m: { month: string }) => m.month === sivMonth);
+      if (siv) expect(siv.revenueCents).toBeGreaterThanOrEqual(s.startupFeeCents);
+    }
+  });
+
+  it("一线看得到例数，看不到钱 —— 分月页和累计页同一套列权限", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const t = (await crc.get(`/v1/study-sites/${s.id}/pnl/monthly?months=3`)).body;
+    expect(t.months.length).toBe(3);
+    for (const m of t.months) {
+      expect(m.enrolled).toBeTypeOf("number");
+      /* 无权限的字段**从响应里消失**，不是返回 null */
+      expect(m).not.toHaveProperty("revenueCents");
+      expect(m).not.toHaveProperty("costCents");
+      expect(m).not.toHaveProperty("grossProfitCents");
+    }
+  });
+
+  it("范围外的中心问分月损益 → 404", async () => {
+    const s = await siteByCode(boss, "SS-09");
+    const mine = (await crc.get("/v1/study-sites?limit=50")).body.items
+      .map((x: { id: string }) => x.id);
+    if (mine.includes(s.id)) return;
+    expect((await crc.get(`/v1/study-sites/${s.id}/pnl/monthly`)).status).toBe(404);
   });
 });
 

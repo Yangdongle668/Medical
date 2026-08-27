@@ -17,7 +17,8 @@ const TimesheetQ = PageQuery.extend({
   accountId: Uuid.optional(),
   workType: arr(WorkType),
   from: DateOnly.optional(), to: DateOnly.optional(),
-  includeVoided: QueryBool.optional()
+  includeVoided: QueryBool.optional(),
+  unapprovedOnly: QueryBool.optional()
 });
 const CreateTimesheet = z.object({
   studySiteId: Uuid,
@@ -61,6 +62,14 @@ export class CostController {
     return idempotent(this.idem, key, b, () => this.svc.createTimesheet(b));
   }
 
+  @Post("/timesheets/:id\\:approve") @Operation("approveTimesheet")
+  approve(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(z.object({ note: z.string().max(500).optional() })))
+      b: { note?: string },
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.approveTimesheet(id, b)); }
+
   @Post("/timesheets/:id\\:void") @Operation("voidTimesheet")
   void_(
     @Param("id", new ZodPipe(Uuid)) id: string,
@@ -87,6 +96,14 @@ export class CostController {
     @Body(new ZodPipe(z.object({ validTo: DateOnly }))) b: { validTo: string },
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.closeRateCard(id, b)); }
+
+  @Get("/study-sites/:id/pnl/monthly") @Operation("getSitePnlTrend")
+  pnlTrend(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Query(new ZodPipe(z.object({
+      months: z.coerce.number().int().min(1).max(60).optional()
+    }))) q: { months?: number }
+  ) { return this.svc.sitePnlTrend(id, q.months); }
 
   @Get("/study-sites/:id/pnl") @Operation("getSitePnl")
   pnl(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.sitePnl(id); }

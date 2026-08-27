@@ -3,7 +3,7 @@ import { define } from "../kernel/registry.js";
 import { Uuid, DateOnly, CentsNonNeg, QueryBool } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
-import { RateCard, RoleKindForRate, TimesheetEntry, WorkType, SitePnl } from "./model.js";
+import { RateCard, RoleKindForRate, TimesheetEntry, WorkType, SitePnl, SitePnlTrend } from "./model.js";
 
 const CTX = "cost";
 const ById = z.object({ id: Uuid });
@@ -21,7 +21,9 @@ define({
     accountId: Uuid.optional(),
     workType: z.array(WorkType).optional(),
     from: DateOnly.optional(), to: DateOnly.optional(),
-    includeVoided: QueryBool.optional().describe("默认不含已作废")
+    includeVoided: QueryBool.optional().describe("默认不含已作废"),
+    /** 只看还没审的 —— 审批页每次都要问的那一句 */
+    unapprovedOnly: QueryBool.optional()
   }),
   response: page(TimesheetEntry)
 });
@@ -116,4 +118,37 @@ define({
     "无权限的字段从响应里消失：一线拿到的是同一个接口，只是没有钱那几栏。",
   params: ById,
   response: SitePnl
+});
+
+define({
+  id: "getSitePnlTrend", method: "get", path: "/v1/study-sites/{id}/pnl/monthly",
+  layer: "L1", context: CTX,
+  summary: "单中心分月损益",
+  description:
+    "累计口径回答不了「这个月比上个月差在哪」。\n" +
+    "每一笔钱按**事件发生的那个月**归属（入组月、筛败月、退出月、工时的工作日期），" +
+    "不是按录入时间 —— 补录的工时落在错误的月份，是月度对不上最常见的来源。",
+  params: ById,
+  query: z.object({
+    /** 往回看几个月（含当月）。默认 12。 */
+    months: z.coerce.number().int().min(1).max(60).optional()
+  }),
+  response: SitePnlTrend
+});
+
+define({
+  id: "approveTimesheet", method: "post", path: "/v1/timesheets/{id}:approve",
+  layer: "L2", context: CTX,
+  summary: "审批一条工时",
+  description:
+    "**审批不改变任何金额** —— 人已经干了活，成本已经发生。\n" +
+    "它只回答一个问题：这笔工时有没有被第二个人看过。\n" +
+    "**不能审自己填的**：自审等于没有审批流，只是多了一次点击，" +
+    "而多出来的那次点击会让人以为这里已经有把关了。\n" +
+    "审过不能撤回：审错了请作废这一笔并重报。",
+  action: "approve",
+  params: ById,
+  body: z.object({ note: z.string().max(500).optional() }),
+  response: commandResult(TimesheetEntry),
+  errors: ["invariant-violated", "conflict-version", "idempotency-key-reused"]
 });
