@@ -5,7 +5,7 @@ import {
 } from "@sitedesk/contracts";
 import { CostService } from "./cost.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
-import { command } from "../../infra/command.js";
+import { command, idempotent } from "../../infra/command.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
 
@@ -50,9 +50,15 @@ export class CostController {
     return this.svc.listTimesheets(q);
   }
 
+  /* 幂等键在这里是**可选**的：带了就走幂等那条路（重放返回首次结果），
+     没带就照旧。断网时这些创建请求要能排进发件箱，而重放意味着同一个
+     请求可能发两次 —— 没有键的话，那就是实实在在的两笔。 */
   @Post("/timesheets") @Operation("createTimesheet") @HttpCode(201)
-  create(@Body(new ZodPipe(CreateTimesheet)) b: z.infer<typeof CreateTimesheet>) {
-    return this.svc.createTimesheet(b);
+  create(
+    @Body(new ZodPipe(CreateTimesheet)) b: z.infer<typeof CreateTimesheet>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    return idempotent(this.idem, key, b, () => this.svc.createTimesheet(b));
   }
 
   @Post("/timesheets/:id\\:void") @Operation("voidTimesheet")
@@ -68,8 +74,11 @@ export class CostController {
   }
 
   @Post("/rate-cards") @Operation("createRateCard") @HttpCode(201)
-  createRate(@Body(new ZodPipe(CreateRate)) b: z.infer<typeof CreateRate>) {
-    return this.svc.createRateCard(b);
+  createRate(
+    @Body(new ZodPipe(CreateRate)) b: z.infer<typeof CreateRate>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    return idempotent(this.idem, key, b, () => this.svc.createRateCard(b));
   }
 
   @Post("/rate-cards/:id\\:close") @Operation("closeRateCard")

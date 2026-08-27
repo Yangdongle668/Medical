@@ -32,6 +32,8 @@ export function LoginPage() {
   const [devToken, setDevToken] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /* 「这条链接不能用了」和「你还没申请过链接」是两回事，页面上要分得开。 */
+  const [linkDead, setLinkDead] = useState(false);
 
   async function go(fn: () => Promise<unknown>) {
     setBusy(true); setErr(null);
@@ -57,7 +59,7 @@ export function LoginPage() {
     redeeming.current = true;
     void go(async () => {
       try { await redeem(t); nav("/today", { replace: true }); }
-      catch (e) { nav("/login", { replace: true }); throw e; }
+      catch (e) { setLinkDead(true); nav("/login", { replace: true }); throw e; }
     });
     /* 只看首次进入时地址栏上的那个令牌 */
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,6 +72,20 @@ export function LoginPage() {
         登录只用一次性链接 —— 没有密码，也就没有写在便利贴上的密码。
       </p>
 
+      {/* 从一条已经失效的链接进来时的引导。
+          在此之前这里只有一句服务端原话（"链接无效、已过期或已被使用"），
+          没有下一步 —— 而链接是生产环境唯一的入口，
+          一个走到死胡同的人除了关掉页面没有别的事可做。 */}
+      {linkDead && (
+        <div className="problem stack" data-testid="link-expired" style={{ marginTop: 18 }}>
+          <strong>这条链接已经不能用了</strong>
+          <p className="muted" style={{ margin: 0 }}>
+            一次性链接 15 分钟有效、而且只能用一次 —— 已经点开过、或者放久了，
+            都会走到这里。<b>在下面填你的登录名，重新要一条。</b>
+          </p>
+        </div>
+      )}
+
       <div className="card stack" style={{ marginTop: 18 }}>
         <label className="field">
           <span>登录名</span>
@@ -81,9 +97,10 @@ export function LoginPage() {
           onClick={() => void go(async () => {
             const r = await requestLink(login.trim());
             setSent(r.message);
+            setLinkDead(false);
             setDevToken(r.devToken ?? null);
           })}>
-          发送登录链接
+          {linkDead ? "重新发一条登录链接" : "发送登录链接"}
         </button>
 
         {sent && <p className="muted" data-testid="link-sent">{sent}</p>}

@@ -5,13 +5,20 @@ import type { PoolClient } from "pg";
 
    推进不是给字段赋值，而是断言一组前置条件已经成立。
 
-   本阶段只有 study_site 一张业务表，因此七项关闭条件里的绝大多数
-   依赖尚未交付的模块。**这种情况下必须 fail-closed**：
-   把「查不了」当成「通过」，就等于允许在质疑挂着、药品差三盒的时候关闭中心 ——
-   而这正是原型里那个只有一句 `ss.st = next` 的按钮所犯的错。
+   ── 关于 fail-closed，以及它的代价 ────────────────────────────────
+   闸门早期有一半检查项背后的表还没建，那时它们以 `unavailable` 出现，
+   闸门不放行。**那是对的**：把「查不了」当成「通过」，就等于允许在
+   质疑挂着、药品差三盒的时候关闭中心 —— 正是原型里那个只有一句
+   `ss.st = next` 的按钮所犯的错。
 
-   因此未就绪的检查项以 `unavailable` 出现在 unmet 里，闸门不放行。
-   每个模块交付时把自己的检查项接进这张表。
+   但 fail-closed 只在**有人真的会去把它变成 ok** 的前提下才是把关。
+   四个占位挂了五个阶段之后，它的现实后果是「没有任何一个中心关得掉」：
+   闸门看起来在把关，实际是一堵墙 —— 而一堵墙教会用户的是绕过它。
+
+   迁移 0017 建起了药品流水、生物样本、伦理递交三张表，
+   最后四个占位换成了四条真查询。**现在这里没有占位了**：
+   八项关闭条件全部有数据出处，每一项都答得出「凭什么」。
+   再加检查项时，要么带着它的数据一起来，要么别加。
    ════════════════════════════════════════════════════════════════════ */
 
 export type GateStatus = "ok" | "unmet" | "unavailable";
@@ -19,14 +26,7 @@ export interface GateItem { code: string; message: string; module?: string; stat
 
 type Checker = (client: PoolClient, siteId: string) => Promise<GateItem>;
 
-/** 尚未交付的模块占位。交付时把这一行换成真实查询即可。 */
-const pending = (code: string, what: string, mod: string): Checker =>
-  async () => ({ code, module: mod, status: "unavailable",
-    message: `${what}（该检查由「${mod}」模块提供，尚未交付 —— 闸门保持关闭）` });
-
-/** 推进到「SIV启动」：启动清单的阻塞项必须清零。
- *  这一项曾是 pending 占位，Site & Staffing 交付后换成了真实查询 ——
- *  每个模块交付时都该这样把自己的检查项接进来。 */
+/** 推进到「SIV启动」：启动清单的阻塞项必须清零。 */
 const sivBlockers: Checker = async (client, siteId) => {
   const { rows } = await client.query<{ item: string }>(
     `SELECT item FROM startup_item
@@ -58,7 +58,7 @@ const counted = (
     : { code, module: mod, status: "unmet", message: unmet(n) };
 };
 
-/** 推进到「中心关闭」：八项前置条件。ClinicalOps 交付后四项变成真查询。 */
+/** 推进到「中心关闭」：八项前置条件，全部是真查询。 */
 const CLOSE_CHECKS: Checker[] = [
   counted("subjects-in-trial", "clinical", "全部受试者已出组",
     `SELECT count(*) AS n FROM subject
@@ -80,11 +80,54 @@ const CLOSE_CHECKS: Checker[] = [
       WHERE study_site_id = $1 AND paid_on IS NULL`,
     n => `仍有 ${n} 笔受试者补偿未发放或缺签收凭证`),
 
-  /* 以下四项依赖尚未交付的模块，保持 fail-closed */
-  pending("ip-imbalance",      "药品数量不平衡",             "clinical"),
-  pending("ip-not-destroyed",  "回收药品未完成销毁登记",     "clinical"),
-  pending("specimen-open",     "生物样本链未闭环",           "clinical"),
-  pending("closeout-report",   "未向伦理递交结题报告或尚未获批", "regulatory")
+  /* ── 以下四项由迁移 0017 的三张表支撑（原为占位，见文件头） ────── */
+
+  /* 账不平：发出去的比收到的多。这不是"少了几盒"，是**记账错了** ——
+     先查清楚再谈关闭，因为关了之后就再也查不清了。 */
+  async (client, siteId) => {
+    const { rows } = await client.query<{ n: string }>(
+      "SELECT app.ip_balance($1) AS n", [siteId]);
+    const n = Number(rows[0]?.n ?? 0);
+    return n >= 0
+      ? { code: "ip-imbalance", status: "ok", message: "药品台账平" }
+      : { code: "ip-imbalance", module: "clinical", status: "unmet",
+          message: `药品台账不平：算出来是 ${n}，发出去的比收到的多 ${-n} —— ` +
+            "先把流水补齐或找出差在哪，关了中心就查不清了" };
+  },
+
+  /* 还有药在中心手里。关闭前必须有个去处：退回申办方，或就地销毁并登记。 */
+  async (client, siteId) => {
+    const { rows } = await client.query<{ n: string }>(
+      "SELECT app.ip_balance($1) AS n", [siteId]);
+    const n = Number(rows[0]?.n ?? 0);
+    return n <= 0
+      ? { code: "ip-not-destroyed", status: "ok", message: "药品已清零（退回或销毁登记完毕）" }
+      : { code: "ip-not-destroyed", module: "clinical", status: "unmet",
+          message: `中心还有 ${n} 份药品在手 —— 退回申办方或登记销毁之后才能关闭` };
+  },
+
+  counted("specimen-open", "clinical", "生物样本链已闭环",
+    `SELECT count(*) AS n FROM specimen
+      WHERE study_site_id = $1 AND received_on IS NULL AND discarded_on IS NULL`,
+    n => `仍有 ${n} 管样本既没被实验室确认收到、也没有销毁登记 —— ` +
+         "中心一关，它们在哪就再也查不清了"),
+
+  /* 递交了但没批下来 ≠ 可以关。这一项看的是**批复**。 */
+  async (client, siteId) => {
+    const { rows } = await client.query<{ decision: string | null }>(
+      `SELECT decision FROM regulatory_submission
+        WHERE study_site_id = $1 AND kind = 'closeout'
+        ORDER BY submitted_on DESC LIMIT 1`, [siteId]);
+    const d = rows[0]?.decision ?? null;
+    if (d === "approved")
+      return { code: "closeout-report", status: "ok", message: "结题报告已获伦理批准" };
+    return {
+      code: "closeout-report", module: "regulatory", status: "unmet",
+      message: d === null ? "尚未向伦理递交结题报告"
+        : d === "pending" ? "结题报告已递交，伦理尚未批复 —— 批下来才能关"
+        : "结题报告被伦理退回，需要重新递交"
+    };
+  }
 ];
 
 const REGISTRY: Record<string, Checker[]> = { siv: SIV_CHECKS, closed: CLOSE_CHECKS };

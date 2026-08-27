@@ -17,8 +17,9 @@ import {
    所以这一条只能在这里直接验。
    ════════════════════════════════════════════════════════════════════ */
 
-const OK = "completeStartupItem";          // L2：契约里带幂等键
-const NOT_L2 = "createStudySite";          // L1：没有幂等键，重放会记两笔
+const OK = "completeStartupItem";          // L2：契约里必须带幂等键
+const L1_WRITE = "createStudySite";        // L1 写入：现在也带得了键，可以排队
+const NOT_QUEUEABLE = "redeemMagicLink";   // auth：排一次登录没有意义，也不该被重放
 
 const A = { accountId: "acc-a", accountName: "凌远" };
 const B = { accountId: "acc-b", accountName: "吴桐" };
@@ -29,16 +30,21 @@ const cmd = (over: Record<string, unknown> = {}) => ({
 
 beforeEach(() => localStorage.clear());
 
-describe("只有 L2 才进得了队列", () => {
+describe("能带幂等键的写入才进得了队列", () => {
   it("L2 命令可以入队", () => {
     expect(enqueue(cmd()).operationId).toBe(OK);
   });
 
-  it("非 L2 命令直接抛错 —— 由契约判定，不靠调用方自觉", () => {
-    /* L1 的 POST 没有幂等键，重放一次就可能记两笔。
-       这条线不是省事，是契约本来就画好的。 */
-    expect(() => enqueue(cmd({ operationId: NOT_L2 })))
-      .toThrow(/不是 L2 命令/);
+  it("**L1 的写入现在也能入队** —— 它们已经带得了幂等键", () => {
+    /* 这条线原来画在"是不是 L2"上，于是断网时填的那条工时、建的那个
+       受试者直接抛错丢掉。判据改成"能不能带幂等键"之后它们进得来了 ——
+       而重放安全仍然由那把键保证，不是由分层保证。 */
+    expect(enqueue(cmd({ operationId: L1_WRITE })).operationId).toBe(L1_WRITE);
+  });
+
+  it("登录相关的端点仍然进不去 —— 排一次登录没有意义，也不该被重放", () => {
+    expect(() => enqueue(cmd({ operationId: NOT_QUEUEABLE })))
+      .toThrow(/不能进发件箱/);
   });
 });
 
@@ -125,6 +131,16 @@ describe("界面要问得到的东西", () => {
     enqueue(cmd({ params: { id: "item-9" } }));
     expect(pendingCommand(OK, { id: "item-9" })).toBeTruthy();
     expect(pendingCommand(OK, { id: "item-8" })).toBeUndefined();
+  });
+
+  it("**只认本人排的那条** —— 共用电脑上队列里可能躺着上一个人的活", () => {
+    /* 把别人的活显示成"你刚勾的"，他会以为自己已经做过了。
+       医院示教室那台机器，上一个人是谁没人说得准。 */
+    enqueue({ ...B, operationId: OK, label: "别人的活",
+      idempotencyKey: "key-b", params: { id: "item-7" } });
+    expect(pendingCommand(OK, { id: "item-7" })).toBeTruthy();          // 不过滤时看得到
+    expect(pendingCommand(OK, { id: "item-7" }, A.accountId)).toBeUndefined();
+    expect(pendingCommand(OK, { id: "item-7" }, B.accountId)).toBeTruthy();
   });
 
   it("订阅时立刻收到一次当前快照", () => {

@@ -37,21 +37,23 @@ export class IdentityService {
     const c = ctx(), p = principal();
     const { rows } = await c.client.query<AccountRow>(
       `SELECT ${ACCOUNT_COLS} FROM ${ACCOUNT_FROM} WHERE a.id = $1`, [p.accountId]);
+    /* 一条查询把两个数一起数出来。原来是两条，而且第一条**把全部
+       中心 id 取了回来**只为了拿它的行数 —— 那正是 visibleSiteIds
+       那颗炸弹的引信：中心多了之后，这个请求既慢又大。 */
     const sc = siteScopeSql(p, "s");
-    const sites = await c.client.query<{ id: string }>(
-      `SELECT s.id FROM study_site s WHERE ${sc.sql}`, sc.params);
-    const studies = await c.client.query<{ n: string }>(
-      `SELECT count(DISTINCT s.study_id) AS n FROM study_site s WHERE ${sc.sql}`, sc.params);
+    const { rows: agg } = await c.client.query<{ sites: string; studies: string }>(
+      `SELECT count(*) AS sites, count(DISTINCT s.study_id) AS studies
+         FROM study_site s WHERE ${sc.sql}`, sc.params);
+    const nSites = Number(agg[0]!.sites), nStudies = Number(agg[0]!.studies);
 
     const label = p.rowRule === "all"
-      ? `全公司 ${studies.rows[0]!.n} 个项目 · ${sites.rowCount} 个中心`
+      ? `全公司 ${nStudies} 个项目 · ${nSites} 个中心`
       : p.rowRule === "none" ? "无数据范围"
-      : `${sites.rowCount} 个中心 · ${studies.rows[0]!.n} 个项目`;
+      : `${nSites} 个中心 · ${nStudies} 个项目`;
 
     return {
       account: toAccount(rows[0]!),
       scopeLabel: label,
-      visibleSiteIds: sites.rows.map(r => r.id),
       permissions: {
         rowRule: p.rowRule, fields: [...p.fields],
         actions: [...p.actions], modules: [...p.modules]

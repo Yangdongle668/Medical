@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
+import { usePending } from "../../api/pending.js";
 
 /* ════════════════════════════════════════════════════════════════════
    交接。
@@ -68,6 +69,9 @@ export function HandoverPage() {
       else throw e;
     } finally { setBusy(null); }
   }
+
+  /* 断网时确认一项、点一次完成，进的是发件箱 —— 行上要看得见。 */
+  const pending = usePending();
 
   const confirmItem = (h: Handover, seq: number) => run(`${h.id}:${seq}`, () =>
     call<{ sideEffects: SideEffect[] }>("completeHandoverItem",
@@ -144,15 +148,20 @@ export function HandoverPage() {
             <ul className="tasks">
               {h.items.map(it => (
                 <li key={it.seq} className={it.doneAt ? "done" : ""}>
-                  <input type="checkbox" checked={!!it.doneAt}
+                  <input type="checkbox"
+                    checked={!!it.doneAt
+                      || !!pending("completeHandoverItem", { id: h.id, seq: it.seq })}
                     disabled={!!it.doneAt || h.status !== "pending"
-                      || busy === `${h.id}:${it.seq}`}
+                      || busy === `${h.id}:${it.seq}`
+                      || !!pending("completeHandoverItem", { id: h.id, seq: it.seq })}
                     aria-label={it.item} style={{ width: "auto" }}
                     onChange={() => void confirmItem(h, it.seq)} />
                   <span className="grow">
                     {it.item}
                     {it.doneByName && <div className="muted">由 {it.doneByName} 确认</div>}
                   </span>
+                  {pending("completeHandoverItem", { id: h.id, seq: it.seq }) &&
+                    <span className="chip flat" data-testid="queued-chip">待发</span>}
                   {it.item.includes(CRITICAL) && !it.doneAt &&
                     <span className="chip crit" data-testid="critical-item">最要命的一项</span>}
                 </li>
@@ -162,8 +171,10 @@ export function HandoverPage() {
             {h.status === "pending" && (
               <div className="row">
                 <button className="btn primary" data-testid="finish-handover"
-                  disabled={busy === h.id}
-                  onClick={() => void finish(h)}>确认交接完成</button>
+                  disabled={busy === h.id || !!pending("completeHandover", { id: h.id })}
+                  onClick={() => void finish(h)}>
+                  {pending("completeHandover", { id: h.id }) ? "已排进发件箱" : "确认交接完成"}
+                </button>
                 {h.doneCount < h.totalCount && (
                   /* 按钮**不**禁用 —— 这里和中心详情页的推进按钮不一样，值得说清楚：
                      推进有 `GET /gate` 这个**服务端预检**，它的全部意义就是

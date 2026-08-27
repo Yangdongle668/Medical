@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { yuan, days } from "./money.js";
+import { usePending } from "../../api/pending.js";
 
 /* ════════════════════════════════════════════════════════════════════
    工时台账。
@@ -65,6 +66,10 @@ export function TimesheetPage() {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  /* 作废是 L2 命令，断网时进发件箱 —— 那一行要说出来。
+     **必须和别的 hook 排在一起**：放到下面 `if (!rows) return` 之后的话，
+     两次渲染的 hook 数量就不一样了（React #310）—— 而它表现成整页白屏。 */
+  const pending = usePending();
 
   const load = useCallback(async () => {
     const r = await call<{ items: Entry[] }>("listTimesheets",
@@ -235,6 +240,8 @@ export function TimesheetPage() {
                           onChange={e => setReason(e.target.value)} />
                       </label>
                       <div className="row">
+                        {pending("voidTimesheet", { id: t.id }) &&
+                          <span className="chip flat" data-testid="queued-chip">待发</span>}
                         <button className="btn" data-testid="void-confirm"
                           disabled={reason.trim().length < 4 || busy === t.id}
                           onClick={() => void voidEntry(t.id)}>确认作废</button>

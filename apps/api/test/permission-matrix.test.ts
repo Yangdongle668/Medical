@@ -56,10 +56,18 @@ describe("行维度：每个角色只看得到自己该看的中心", () => {
     });
 
   it("GET /v1/me 报告的范围与实际返回的一致", async () => {
+    /* 这条不变量原来是拿 `me.visibleSiteIds.length` 去比的 —— 而那个字段
+       已经删掉了（它随中心数线性变长，是 /v1/me 上的一颗定时炸弹）。
+       不变量本身没变、也仍然值得守：**服务端自己报的范围，必须和它
+       真的给出来的行数对得上**。两者不一致意味着 scopeLabel 是编的，
+       而那是用户唯一能看到的"我能看见多少"。
+       现在从 scopeLabel 里把数取出来比 —— 那正是它对外承诺的东西。 */
     for (const login of LOGINS) {
       const me = await C[login]!.get("/v1/me");
       const list = await C[login]!.get("/v1/study-sites?limit=200");
-      expect(me.body.visibleSiteIds.length, login).toBe(list.body.items.length);
+      const said = /(\d+)\s*个中心/.exec(me.body.scopeLabel as string)?.[1];
+      expect(said, `${login} 的 scopeLabel 里没有中心数：${me.body.scopeLabel}`).toBeTruthy();
+      expect(Number(said), login).toBe(list.body.items.length);
     }
   });
 

@@ -108,7 +108,12 @@ export async function call<T = unknown>(
      服务端看到的是两条不同的命令，于是记两笔。
      先生成、再尝试、入队时连它一起存，重放时原样带上：
      这一条是整个离线队列能成立的前提。 */
-  const idem = e.layer === "L2"
+  /* L2 命令必须带键。**L1 的写入现在也带** —— 在此之前只有 L2 进队列，
+     L1 的那几个 POST（填工时、建受试者、建交接单）断网时直接抛错：
+     人做的事就这么没了。要让它们排队，就必须有幂等键，
+     因为重放意味着同一个请求可能发两次 —— 没有键的话那是两笔工时。
+     auth 的几个端点除外：排一次登录没有意义（而且它们也不该被重放）。 */
+  const idem = e.layer === "L2" || (e.method !== "get" && e.context !== "auth")
     ? (opts.idempotencyKey ?? crypto.randomUUID()) : undefined;
   if (e.method !== "get") {
     headers["Content-Type"] = "application/json";

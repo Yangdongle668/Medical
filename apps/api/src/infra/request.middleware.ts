@@ -41,6 +41,18 @@ const stats = () => !!process.env["SITEDESK_QUERY_STATS"];
  *  和请求事务是两回事。 */
 const DBLESS = new Set(["/v1/health", "/v1/health/ready"]);
 
+/** 超时之后留给处理器的"连接"：碰一下就炸，并说清它为什么炸。
+ *  给它一条真连接（或 null）都不行 —— 前者会让一个已经被放弃的请求
+ *  写进别人的事务，后者只会得到一句 "Cannot read properties of null"。 */
+function timedOutClient(): PoolClient {
+  const boom = () => {
+    throw new Error(
+      "这个请求已经超过截止时间被收尾，它的数据库连接已经归还。" +
+      "处理器还在往下跑说明它卡在了数据库之外 —— 看这条之前的 timeout 日志。");
+  };
+  return new Proxy({} as PoolClient, { get: boom, apply: boom });
+}
+
 /** dbless 请求拿到的"连接"：碰一下就炸。
  *  给 null 的话，误用会得到一句 "Cannot read properties of null"，
  *  指不出是哪里错了；这样至少它自己说得清。 */
@@ -88,6 +100,22 @@ const traceIdOf = (req: Request): string => {
 const STATEMENT_TIMEOUT_MS = Number(process.env["SITEDESK_STATEMENT_TIMEOUT_MS"] ?? 30_000);
 /** 事务开着却没人动它的上限 —— 比语句上限宽一点，免得误伤慢查询之间的间隙。 */
 const IDLE_TX_TIMEOUT_MS = Number(process.env["SITEDESK_IDLE_TX_TIMEOUT_MS"] ?? 60_000);
+/** 整个请求的截止时间。**必须比语句上限长** —— 卡在数据库上的请求应当由
+ *  数据库自己那条超时先报出来（它的报错指得到是哪条 SQL），
+ *  这一道只兜住"卡在数据库之外"的那种：处理器 await 了一个永远不来的 promise。
+ *
+ *  没有这一道的时候，那条连接要等 idle_in_transaction 的 60 秒才回得来，
+ *  而客户端那头是无限期地挂着。
+ *
+ *  **按次读取，不做成模块级常量。** 常量在 import 那一刻就定死了，
+ *  而测试是在 beforeAll 里设这个变量的 —— 那时模块早就加载完了，
+ *  于是那条测试只有在命令行上预先设了变量时才绿。这个坑
+ *  SITEDESK_QUERY_STATS 已经踩过一次，不必再踩第二次。 */
+const requestTimeoutMs = () => {
+  const raw = process.env["SITEDESK_REQUEST_TIMEOUT_MS"]?.trim();
+  if (!raw) return 45_000;
+  return /^\d+$/.test(raw) ? Number(raw) : 45_000;
+};
 
 @Injectable()
 export class RequestMiddleware implements NestMiddleware {
@@ -215,6 +243,36 @@ export class RequestMiddleware implements NestMiddleware {
       client.query("ROLLBACK").catch(() => {}).finally(() => client.release());
     };
     res.on("close", release);
+
+    /* ── 截止时间：处理器卡住时，连接不该陪着一起卡 ────────────────
+       Phase 7 学到的那一课在这里仍然成立：**不能把连接从一个还在跑的
+       处理器脚下抽走**，否则它接下来的每一条 SQL 都打在一条已经还给
+       池子、可能已被下一个请求领走的连接上。
+
+       所以这里不是"抢回来"，是**先下毒再收走**：把 c.client 换成一个
+       碰一下就抛的代理。卡住的处理器如果哪天醒过来，它的下一条查询
+       会当场炸掉并写进日志 —— 而不是安静地污染别人的事务。 */
+    const timeoutMs = requestTimeoutMs();
+    const deadline = timeoutMs > 0 ? setTimeout(() => {
+      if (c.finalized) return;
+      c.finalized = true;
+      c.inFlight = false;
+      c.client = timedOutClient();
+      runInCtx(c, () => emit("error", "timeout",
+        `请求超过 ${timeoutMs}ms 未完成，已收回连接并回 504`,
+        { method: req.method, path }));
+      client.query("ROLLBACK").catch(() => {}).finally(() => client.release());
+      if (!res.headersSent)
+        res.status(504).type("application/problem+json").json({
+          type: "https://sitedesk.dev/problems/request-timeout",
+          title: "请求处理超时", status: 504, code: "request-timeout",
+          detail: "服务端在截止时间内没有完成这个请求，已经放弃。可以重试。",
+          ...(c.requestId ? { traceId: c.requestId } : {})
+        });
+      else res.destroy();
+    }, timeoutMs) : null;
+    deadline?.unref?.();
+    res.on("close", () => { if (deadline) clearTimeout(deadline); });
 
     try {
       await client.query("BEGIN");

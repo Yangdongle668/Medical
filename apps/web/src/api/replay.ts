@@ -24,6 +24,35 @@ import { head, markSent, markRetry, markFailed, snapshot } from "./outbox.js";
    所以"我到底发出去没有"这个问题，不需要用户来判断。
    ════════════════════════════════════════════════════════════════════ */
 
+/** 离线重放被拒时的针对性说明。
+ *
+ *  服务端说的是"发生了什么"（版本冲突、前置条件不满足），
+ *  而用户需要知道的是"**为什么偏偏是我这条**" —— 答案通常是
+ *  "你离线的这段时间里，别人动过它"。没有这句话的时候，
+ *  界面上只有一句服务端原话，看起来像是他自己填错了。 */
+const OFFLINE_HINT: Record<string, string> = {
+  "conflict-version":
+    "你离线期间，这条被别人改过 —— 服务端上的版本已经不是你当时看到的那个。" +
+    "打开它看一眼现在的样子，再决定要不要重做一次。",
+  "gate-not-satisfied":
+    "离线期间前置条件变了：你排队的时候满足，现在不满足了。",
+  "invariant-violated":
+    "服务端按业务规则拒绝了它。离线期间相关的数据可能已经变了 —— 先看一眼现状。",
+  "not-found":
+    "这条记录在服务端已经不存在了，或者已经不在你的范围里（离线期间被删、被交接走都可能）。",
+  "forbidden-action":
+    "你现在没有这个动作的权限了 —— 离线期间角色或指派可能变过。"
+};
+
+/** 排了多久。"两小时前排的"和"刚刚排的"，处置完全不同。 */
+function howLong(ms: number): string {
+  const m = Math.round(ms / 60_000);
+  if (m < 1) return "不到一分钟";
+  if (m < 60) return `${m} 分钟`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h} 小时 ${m % 60} 分钟` : `${Math.floor(h / 24)} 天`;
+}
+
 let running = false;
 
 /** 把队列尽量清空。返回本轮成功发出的条数。
@@ -52,10 +81,14 @@ export async function drain(me: { accountId: string } | null): Promise<number> {
         sent++;
       } catch (e) {
         if (e instanceof ApiError && e.problem.status >= 400 && e.problem.status < 500) {
+          const queuedMs = Date.now() - new Date(item.createdAt).getTime();
+          const hint = OFFLINE_HINT[e.problem.code];
           markFailed(item.seq, {
             code: e.problem.code, title: e.problem.title,
             ...(e.problem.detail ? { detail: e.problem.detail } : {}),
-            at: new Date().toISOString()
+            at: new Date().toISOString(),
+            queuedMs,
+            ...(hint ? { hint: `这条在发件箱里排了 ${howLong(queuedMs)}。${hint}` } : {})
           });
           continue;                       // 挪走了，接着发后面的
         }

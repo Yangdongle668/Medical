@@ -53,7 +53,11 @@ describe("列表端点：SQL 条数不随取回的行数增长", () => {
     ["访视列表",   "/v1/subject-visits"],
     ["质量事件",   "/v1/quality-events"],
     ["工时台账",   "/v1/timesheets"],
-    ["审计轨迹",   "/v1/audit-entries"]
+    ["审计轨迹",   "/v1/audit-entries"],
+    /* 这一条是补上的：交接台账原来不在这张表里，而它恰恰是唯一一个
+       真的在按行查库的端点（每行三条）。守卫没覆盖到的地方，
+       "目前没有 N+1"这句话就不成立 —— 而它当时被当成了全局结论。 */
+    ["交接台账",   "/v1/handovers"]
   ];
 
   for (const [name, path] of cases)
