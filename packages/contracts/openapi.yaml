@@ -235,6 +235,116 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/accounts/{id}:
+    patch:
+      operationId: updateAccount
+      tags:
+        - identity
+      summary: 改账号的角色 / 分组 / 所属机构
+      description: |-
+        **改角色是权限变更**，写审计且 isSensitive=true —— 「谁把谁调成了什么」是核查必查项。
+
+        改成 `row_rule=hospital` 的角色而没有 orgRef，会被拦下：
+        那种账号登得进来却一行数据都看不到，而界面上没有任何东西说得出为什么。
+
+        登录名与姓名不在这里改：登录名是审计轨迹里的那个标识，改掉等于把历史记录指向别人。
+      x-layer: L1
+      x-required-action: manage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 幂等键（uuid）。可选；带上之后 24 小时内重放同一键返回首次结果，离线重放因此不会写两笔。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountRequest'
+      responses:
+        '200':
+          description: 改账号的角色 / 分组 / 所属机构
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/accounts/{id}:disable:
     post:
       operationId: disableAccount
@@ -319,6 +429,234 @@ paths:
                 title: 版本冲突：资源已被他人修改
                 status: 409
                 code: conflict-version
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/accounts/{id}:enable:
+    post:
+      operationId: enableAccount
+      tags:
+        - identity
+      summary: 启用账号
+      description: |-
+        停用是可逆的 —— 请长假、借调、误停都会走到这里。
+        **但派工不会自己回来**：停用时交接出去的中心仍然在接手人名下，
+        要还回去得再发起一次交接。这条不是遗漏，是刻意的：
+        让派工随启用自动回滚，会把接手人这段时间做的事变成无主的。
+      x-layer: L2
+      x-required-action: manage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisableAccountRequest'
+      responses:
+        '200':
+          description: 启用账号
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnableAccountResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 版本冲突：资源已被他人修改
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/conflict-version
+                title: 版本冲突：资源已被他人修改
+                status: 409
+                code: conflict-version
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/accounts/{id}:set-password:
+    post:
+      operationId: setAccountPassword
+      tags:
+        - identity
+      summary: 给账号设一个初始口令
+      description: |-
+        新建的内部账号需要一条进得来的路。一次性链接要求先登记收件地址
+        （那要有人上服务器跑脚本），在通道配好之前，管理员当面给一个初始口令更实际。
+
+        设出来的口令**标成初始口令**：本人登录后顶上会挂一条改不掉的红条，
+        改掉之后才消失，而且翻不回去。管理员知道别人的口令是个短期状态，
+        这个标记是让它保持短期的唯一办法。
+
+        改自己的口令走 `changePassword`，那条要验旧口令；这条是管理员对别人，
+        验的是 `manage` 权限。**不能对自己用** —— 那等于绕过验旧口令那道门。
+      x-layer: L1
+      x-required-action: manage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 幂等键（uuid）。可选；带上之后 24 小时内重放同一键返回首次结果，离线重放因此不会写两笔。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetAccountPasswordRequest'
+      responses:
+        '204':
+          description: 给账号设一个初始口令
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
         '422':
           description: 请求校验未通过
           content:
@@ -7210,6 +7548,184 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/teams:
+    get:
+      operationId: listTeams
+      tags:
+        - identity
+      summary: 分组
+      description: |-
+        PM 的行范围（`team`）就是从这里推导的 —— 分组不是通讯录上的标签，
+        是「这个人看得到哪些项目」的来源。所以建账号那一步必须挑得到它。
+      x-layer: L1
+      parameters: []
+      responses:
+        '200':
+          description: 分组
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListTeamsResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+    post:
+      operationId: createTeam
+      tags:
+        - identity
+      summary: 新建分组
+      x-layer: L1
+      x-required-action: manage
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 幂等键（uuid）。可选；带上之后 24 小时内重放同一键返回首次结果，离线重放因此不会写两笔。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTeamRequest'
+      responses:
+        '201':
+          description: 新建分组
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Team'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/timesheets:
     get:
       operationId: listTimesheets
@@ -8025,6 +8541,54 @@ components:
         - id
         - code
         - name
+      additionalProperties: false
+    Team:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        name:
+          type: string
+        lead:
+          nullable: true
+          description: 组长。为空是正常状态：新建的组还没定人。
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+              pattern: >-
+                ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            displayName:
+              type: string
+          required:
+            - id
+            - displayName
+          additionalProperties: false
+        memberCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        studyCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+          description: 本组承接的项目数 —— 组员的行范围就是这些项目下的中心
+      required:
+        - id
+        - code
+        - name
+        - lead
+        - memberCount
+        - studyCount
       additionalProperties: false
     Account:
       type: object
@@ -10273,6 +10837,32 @@ components:
         - displayName
         - roleId
       additionalProperties: false
+    UpdateAccountRequest:
+      type: object
+      properties:
+        roleId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        teamId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        orgRef:
+          nullable: true
+          type: string
+          maxLength: 128
+        reason:
+          type: string
+          minLength: 4
+          maxLength: 500
+          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
+      required:
+        - reason
+      additionalProperties: false
     DisableAccountRequest:
       type: object
       properties:
@@ -10297,6 +10887,36 @@ components:
       required:
         - data
         - sideEffects
+      additionalProperties: false
+    EnableAccountResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Account'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    SetAccountPasswordRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          minLength: 8
+          maxLength: 200
+        reason:
+          type: string
+          minLength: 4
+          maxLength: 500
+          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
+      required:
+        - password
+        - reason
       additionalProperties: false
     ListAuditEntriesResponse:
       type: object
@@ -11459,6 +12079,36 @@ components:
       required:
         - data
         - sideEffects
+      additionalProperties: false
+    ListTeamsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Team'
+      required:
+        - items
+      additionalProperties: false
+    CreateTeamRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          pattern: ^[A-Za-z0-9-]{2,16}$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        leadAccountId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      required:
+        - code
+        - name
       additionalProperties: false
     ListTimesheetsResponse:
       type: object

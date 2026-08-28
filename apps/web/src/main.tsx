@@ -15,7 +15,32 @@ import { RateCardPage } from "./features/cost/RateCardPage.js";
 import { OutboxPage } from "./features/outbox/OutboxPage.js";
 import { QualityPage } from "./features/quality/QualityPage.js";
 import { LoginPage } from "./features/login/LoginPage.js";
+import { OrgPage } from "./features/org/OrgPage.js";
+import { ComingSoon } from "./shell/ComingSoon.js";
+import { MODULES } from "./shell/modules.js";
 import "./shell/styles.css";
+
+/* 已经建好的页 —— 按路径登记。
+   模块登记表（shell/modules.ts）里凡是没出现在这张表里的路径，
+   都落到 ComingSoon：**导航照出、路由照通、页面说清自己还没建**。
+   三者缺一样，"库里给了这个模块"和"界面上有这个模块"就会对不上。 */
+const BUILT: Record<string, React.ReactElement> = {
+  "/today": <TodayPage />,
+  "/sites": <SitesPage />,
+  "/handovers": <HandoverPage />,
+  "/timesheets": <TimesheetPage />,
+  "/quality": <QualityPage />,
+  "/org": <OrgPage />
+};
+
+/* 45 个模块的路由。同一个路径被几个模块共用是正常的
+   （crc 与 cra 都是 /today，mysite / mysites / sites 都是 /sites）——
+   去重，否则 react-router 会拿到重复的 path。 */
+const moduleRoutes = [...new Map(MODULES.map(m => [m.path, m])).values()]
+  .map(m => ({
+    path: m.path.replace(/^\//, ""),
+    element: BUILT[m.path] ?? <ComingSoon />
+  }));
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -23,17 +48,17 @@ const router = createBrowserRouter([
     path: "/", element: <App />,
     children: [
       { index: true, element: <Navigate to="/today" replace /> },
-      { path: "today", element: <TodayPage /> },
+      ...moduleRoutes,
+      /* 详情页与不进导航的那几页。它们不属于任何模块 ——
+         详情页从列表点进去，发件箱由侧栏那个角标进去。 */
       { path: "visits/:id", element: <VisitPage /> },
-      { path: "sites", element: <SitesPage /> },
       { path: "sites/:id", element: <SiteDetailPage /> },
       { path: "sites/:id/startup", element: <StartupChecklistPage /> },
       { path: "sites/:id/pnl", element: <SitePnlPage /> },
-      { path: "handovers", element: <HandoverPage /> },
-      { path: "timesheets", element: <TimesheetPage /> },
       { path: "rate-cards", element: <RateCardPage /> },
       { path: "outbox", element: <OutboxPage /> },
-      { path: "quality", element: <QualityPage /> }
+      /* 兜底：手敲了一个不存在的路径。回首页比留在一张白页上有用。 */
+      { path: "*", element: <Navigate to="/today" replace /> }
     ]
   }
 ]);

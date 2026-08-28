@@ -115,8 +115,34 @@ function mkVisit(
 }
 
 /** 可变状态。每次 resetScenario() 回到已知起点 —— 测试要从确定处出发。 */
+export interface MockRole {
+  id: string; code: string; name: string; isExternal: boolean; rowRule: string;
+  visibleFields: string[]; allowedActions: string[]; modules: string[];
+}
+export interface MockTeam {
+  id: string; code: string; name: string;
+  lead: { id: string; displayName: string } | null;
+  memberCount: number; studyCount: number;
+}
+export interface MockAccount {
+  id: string; login: string; displayName: string;
+  role: { id: string; code: string; name: string; isExternal: boolean };
+  team: { id: string; code: string; name: string } | null;
+  isExternal: boolean; orgRef: string | null;
+  status: "active" | "disabled";
+  joinedOn: string | null; disabledAt: string | null; disabledReason: string | null;
+  lastLoginAt: string | null;
+}
+
 export interface Scenario {
   visits: MockVisit[];
+  /* ── 组织与权限 ────────────────────────────────────────────────
+     这三份是**可变的**：mock 模式下建号、改角色、勾权限都要当场看得见。
+     取值与迁移 0026 的开户目录一致 —— 两处对不上的话，
+     mock 上调通的界面到了真库会发现角色代号根本没有那一个。 */
+  roles: MockRole[];
+  teams: MockTeam[];
+  accounts: MockAccount[];
   /** 中心的当前阶段。推进会改它，所以不能从 SITES 常量上读。 */
   siteState: Record<string, string>;
   /** 计划 SIV 日 —— 清单项的到期日全是相对它算的，两处必须同源 */
@@ -145,8 +171,107 @@ export interface Scenario {
   rateCards: MockRateCard[];
 }
 
+
+/* 角色目录 —— 与迁移 0026 的开户目录逐条对应。
+   照抄不是重复：两处对不上的话，mock 上调通的界面到了真库会发现
+   角色代号根本没有那一个，而那种错在 e2e 上永远看不出来。 */
+const ROLE_CATALOGUE: Omit<MockRole, "id">[] = [
+  { code: "admin", name: "系统管理员", isExternal: false, rowRule: "all",
+    visibleFields: ["cost", "margin", "price", "staff"],
+    allowedActions: ["advance", "approve", "bid", "closeQ", "closeQA", "ethics", "manage",
+      "piConfirm", "raiseQ", "rateWrite", "subjRead", "subjWrite", "timeWrite"],
+    modules: ["org", "dash", "sites", "intake", "enr", "screen", "client", "cash",
+      "feas", "price", "bid", "change", "staff", "people", "time", "pnl", "bill",
+      "qa", "mon", "audit", "capa", "trail", "pm", "team", "approve", "cra", "mysites",
+      "crc", "mysite", "sched", "subj", "query", "startup", "prescreen", "ethics",
+      "handover", "isf", "material", "pay", "dm", "inst", "instac", "instqc",
+      "instreg", "pi"] },
+  { code: "boss", name: "经营层", isExternal: false, rowRule: "all",
+    visibleFields: ["cost", "margin", "price", "staff"],
+    allowedActions: ["advance", "approve", "bid", "manage", "rateWrite", "subjRead", "timeWrite"],
+    modules: ["dash", "intake", "sites", "enr", "screen", "client", "cash", "bid", "change",
+      "staff", "people", "time", "pnl", "bill", "qa", "mon", "price", "org", "trail"] },
+  { code: "pm", name: "项目总监 PM", isExternal: false, rowRule: "team",
+    visibleFields: ["cost", "margin", "price", "subject"],
+    allowedActions: ["advance", "approve", "bid", "ethics", "raiseQ", "subjRead",
+      "subjWrite", "timeWrite"],
+    modules: ["pm", "team", "approve", "intake", "feas", "sites", "enr", "screen",
+      "mon", "change", "qa", "pnl", "trail"] },
+  { code: "cra", name: "临床监查员 CRA", isExternal: false, rowRule: "assigned",
+    visibleFields: ["subject"], allowedActions: ["raiseQ", "subjRead", "timeWrite"],
+    modules: ["cra", "mysites", "mon", "query", "screen", "feas", "material", "time",
+      "qa", "capa", "trail"] },
+  { code: "crc", name: "临床协调员 CRC", isExternal: false, rowRule: "assigned",
+    visibleFields: ["subject"],
+    allowedActions: ["ethics", "subjRead", "subjWrite", "timeWrite"],
+    modules: ["crc", "mysite", "startup", "sched", "subj", "prescreen", "ethics",
+      "query", "capa", "isf", "material", "pay", "handover", "time"] },
+  { code: "dm", name: "数据管理 DM", isExternal: false, rowRule: "all",
+    visibleFields: ["subject"], allowedActions: ["closeQ", "raiseQ", "subjRead"],
+    modules: ["dm", "query", "screen", "trail"] },
+  { code: "qa", name: "质量保证 QA", isExternal: false, rowRule: "all",
+    visibleFields: ["subject"], allowedActions: ["closeQA", "raiseQ"],
+    modules: ["audit", "qa", "screen", "mon", "trail"] },
+  { code: "inst", name: "机构办（外部）", isExternal: true, rowRule: "hospital",
+    visibleFields: ["subject"], allowedActions: ["closeQA"],
+    modules: ["inst", "instac", "instqc", "instreg"] },
+  { code: "pi", name: "研究者 PI（外部）", isExternal: true, rowRule: "pi",
+    visibleFields: ["subject"], allowedActions: ["piConfirm", "subjRead"],
+    modules: ["pi", "qa"] }
+];
+
+const mkRoles = (): MockRole[] =>
+  ROLE_CATALOGUE.map(r => ({ id: `r-${r.code}`, ...r,
+    visibleFields: [...r.visibleFields], allowedActions: [...r.allowedActions],
+    modules: [...r.modules] }));
+
+const mkTeams = (): MockTeam[] => [
+  { id: "t1", code: "G-01", name: "华东华南组",
+    lead: { id: "a-hanxue", displayName: "韩雪" }, memberCount: 0, studyCount: 2 },
+  { id: "t2", code: "G-02", name: "华北西南组",
+    lead: { id: "a-cendi", displayName: "岑迪" }, memberCount: 0, studyCount: 2 },
+  { id: "t3", code: "G-00", name: "职能组", lead: null, memberCount: 0, studyCount: 0 }
+];
+
+const mkAccounts = (roles: MockRole[], teams: MockTeam[]): MockAccount[] => {
+  const ref = (code: string) => {
+    const r = roles.find(x => x.code === code)!;
+    return { id: r.id, code: r.code, name: r.name, isExternal: r.isExternal };
+  };
+  const team = (code: string) => {
+    const t = teams.find(x => x.code === code)!;
+    return { id: t.id, code: t.code, name: t.name };
+  };
+  const mk = (login: string, displayName: string, role: string,
+              opts: Partial<MockAccount> = {}): MockAccount => ({
+    id: `a-${login}`, login, displayName, role: ref(role), team: null,
+    isExternal: ref(role).isExternal, orgRef: null, status: "active",
+    joinedOn: "2024-03-01", disabledAt: null, disabledReason: null,
+    lastLoginAt: "2026-08-24T09:00:00.000Z", ...opts
+  });
+  return [
+    mk("admin", "系统管理员", "admin", { joinedOn: "2026-08-01", lastLoginAt: null }),
+    mk("lingyuan", "凌远", "boss", { team: team("G-00") }),
+    mk("hanxue", "韩雪", "pm", { team: team("G-01") }),
+    mk("cendi", "岑迪", "pm", { team: team("G-02") }),
+    mk("linmin", "林敏", "cra", { team: team("G-01") }),
+    mk("wutong", "吴桐", "crc", { team: team("G-01") }),
+    mk("liaomeng", "廖萌", "crc", { team: team("G-02") }),
+    mk("miaoqing", "苗青", "dm", { team: team("G-00") }),
+    mk("weilan", "韦岚", "qa", { team: team("G-00") }),
+    mk("zhanghm", "张慧敏", "inst", { orgRef: "北京协和医院" }),
+    mk("chenguod", "陈国栋", "pi"),
+    mk("zhouqi", "周琦", "cra", {
+      status: "disabled", disabledAt: "2026-05-12T02:00:00.000Z",
+      disabledReason: "离职，中心已交接给林敏" })
+  ];
+};
+
 export function makeScenario(): Scenario {
+  const roles = mkRoles();
+  const teams = mkTeams();
   return {
+    roles, teams, accounts: mkAccounts(roles, teams),
     visits: [
       /* 已超窗 3 天 —— 列表第一屏就该看见它 */
       mkVisit("v1", SITES[0]!, "S-0331", "u1", 4, "C4D1 第 4 周期给药",

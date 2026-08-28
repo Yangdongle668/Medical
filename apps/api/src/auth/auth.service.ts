@@ -211,10 +211,8 @@ export class AuthService {
        不踢掉别的会话，这件事就只做了一半 —— 对方那个会话还开着。
        **留下当前这一个**：把自己一起踢掉，人改完密码就被弹回登录页，
        会以为改失败了。 */
-    await c.client.query(
-      `UPDATE auth_session SET revoked_at = now(), revoke_reason = $1
-        WHERE account_id = $2 AND revoked_at IS NULL AND token_hash <> $3`,
-      ["改密后清场", p.accountId, sha256(sessionToken ?? "")]);
+    await c.client.query(`SELECT app.revoke_sessions($1, $2, $3)`,
+      [p.accountId, "改密后清场", sha256(sessionToken ?? "")]);
   }
 
   async revoke(reason: string): Promise<void> {

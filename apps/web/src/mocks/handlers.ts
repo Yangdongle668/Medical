@@ -64,7 +64,13 @@ const ROLE = {
     role: { id: "r-crc", code: "crc", name: "临床协调员 CRC" },
     rowRule: "assigned", fields: ["subject"],
     actions: ["ethics", "subjRead", "subjWrite", "timeWrite"],
-    modules: ["today", "sites", "subjects", "timesheets"]
+    /* **module_key，不是路径。** 这里曾经写的是 ["today","sites",…]，
+       而真接口给的是 role_module 里的键 —— 两者恰好长得像，
+       所以在导航还是写死数组的时候看不出区别。侧栏改成按模块出之后，
+       一份路径清单会让 mock 模式下的导航整个空掉。
+       取值与迁移 0026 里 crc 的授予一致。 */
+    modules: ["crc", "mysite", "startup", "sched", "subj", "prescreen", "ethics",
+      "query", "capa", "isf", "material", "pay", "handover", "time"]
   },
   boss: {
     id: "a-lingyuan", login: "lingyuan", name: "凌远",
@@ -72,7 +78,9 @@ const ROLE = {
     rowRule: "all", fields: ["cost", "margin", "price", "staff"],
     actions: ["advance", "approve", "bid", "manage", "rateWrite",
       "subjRead", "timeWrite"],
-    modules: ["today", "sites", "subjects", "timesheets", "pnl"]
+    modules: ["dash", "intake", "sites", "enr", "screen", "client", "cash", "bid",
+      "change", "staff", "people", "time", "pnl", "bill", "qa", "mon", "price",
+      "org", "trail"]
   }
 } as const;
 
@@ -131,6 +139,122 @@ export const scenarioHandlers = [
         { token: "mock-token", expiresAt: new Date(Date.now() + 8 * 3600e3).toISOString() });
     return HttpResponse.json(
       problem("unauthenticated", 401, "登录名或口令不对"), { status: 401 });
+  }),
+
+  /* ── 组织与权限 ────────────────────────────────────────────────
+     这几个**必须有场景处理器**，不能落到兜底层。兜底层照契约回一份示例，
+     于是这一页看起来能用、点什么都不生效 —— 建了账号列表不变、
+     勾了权限矩阵不动。那比一张空页更难看出问题。 */
+  http.get(pathToRegExp("/v1/accounts"), () =>
+    HttpResponse.json({ items: scenario.accounts, nextCursor: null })),
+
+  http.post(pathToRegExp("/v1/accounts"), async ({ request }) => {
+    const b = await request.json() as {
+      login: string; displayName: string; roleId: string;
+      teamId?: string | null; orgRef?: string | null };
+    if (scenario.accounts.some(a => a.login === b.login))
+      return HttpResponse.json(
+        problem("validation-failed", 422, `登录名 ${b.login} 已存在`), { status: 422 });
+    const role = scenario.roles.find(r => r.id === b.roleId)!;
+    const team = scenario.teams.find(t => t.id === b.teamId) ?? null;
+    const acc = {
+      id: `a-${b.login}`, login: b.login, displayName: b.displayName,
+      role: { id: role.id, code: role.code, name: role.name, isExternal: role.isExternal },
+      team: team ? { id: team.id, code: team.code, name: team.name } : null,
+      isExternal: role.isExternal, orgRef: b.orgRef ?? null,
+      status: "active" as const, joinedOn: todayStr(),
+      disabledAt: null, disabledReason: null, lastLoginAt: null
+    };
+    scenario.accounts.push(acc);
+    return HttpResponse.json(acc, { status: 201 });
+  }),
+
+  http.patch(pathToRegExp("/v1/accounts/{id}"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname.match(/\/accounts\/([^/?]+)/) ?? [];
+    const a = scenario.accounts.find(x => x.id === id);
+    if (!a) return HttpResponse.json(problem("not-found", 404, "账号不存在"), { status: 404 });
+    const b = await request.json() as {
+      roleId?: string; teamId?: string | null; orgRef?: string | null };
+    if (b.roleId) {
+      const role = scenario.roles.find(r => r.id === b.roleId)!;
+      a.role = { id: role.id, code: role.code, name: role.name, isExternal: role.isExternal };
+      a.isExternal = role.isExternal;
+      /* 和真后端同一条拦截：hospital 规则没有 orgRef，人登得进来一行都看不到 */
+      if (role.rowRule === "hospital" && !(b.orgRef ?? a.orgRef))
+        return HttpResponse.json(problem("invariant-violated", 422,
+          "该角色按「本院承接的项目」切行，必须同时给出 orgRef，" +
+          "否则这个账号登得进来却一行数据都看不到"), { status: 422 });
+    }
+    if (b.teamId !== undefined) {
+      const team = scenario.teams.find(t => t.id === b.teamId) ?? null;
+      a.team = team ? { id: team.id, code: team.code, name: team.name } : null;
+    }
+    if (b.orgRef !== undefined) a.orgRef = b.orgRef;
+    return HttpResponse.json(a);
+  }),
+
+  http.post(pathToRegExp("/v1/accounts/{id}:disable"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname.match(/\/accounts\/([^/:]+):disable/) ?? [];
+    const a = scenario.accounts.find(x => x.id === id);
+    if (!a) return HttpResponse.json(problem("not-found", 404, "账号不存在"), { status: 404 });
+    const b = await request.json() as { reason: string };
+    a.status = "disabled"; a.disabledAt = new Date().toISOString(); a.disabledReason = b.reason;
+    return HttpResponse.json({ data: a, sideEffects: [
+      { type: "AccountDisabled", summary: `${a.displayName} 已停用，历史记录与审计轨迹保留` }
+    ] }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/accounts/{id}:enable"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname.match(/\/accounts\/([^/:]+):enable/) ?? [];
+    const a = scenario.accounts.find(x => x.id === id);
+    if (!a) return HttpResponse.json(problem("not-found", 404, "账号不存在"), { status: 404 });
+    a.status = "active"; a.disabledAt = null; a.disabledReason = null;
+    return HttpResponse.json({ data: a, sideEffects: [
+      { type: "AccountEnabled",
+        summary: `${a.displayName} 已恢复登录 —— 停用时交接出去的中心不会自动回来` }
+    ] }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/accounts/{id}:set-password"), () =>
+    new HttpResponse(null, { status: 204 })),
+
+  http.get(pathToRegExp("/v1/teams"), () =>
+    HttpResponse.json({ items: scenario.teams.map(t => ({
+      ...t,
+      memberCount: scenario.accounts.filter(
+        a => a.team?.id === t.id && a.status === "active").length
+    })) })),
+
+  http.post(pathToRegExp("/v1/teams"), async ({ request }) => {
+    const b = await request.json() as
+      { code: string; name: string; leadAccountId?: string | null };
+    if (scenario.teams.some(t => t.code === b.code))
+      return HttpResponse.json(
+        problem("validation-failed", 422, `分组代号 ${b.code} 已存在`), { status: 422 });
+    const lead = scenario.accounts.find(a => a.id === b.leadAccountId);
+    const t = {
+      id: `t-${b.code}`, code: b.code, name: b.name,
+      lead: lead ? { id: lead.id, displayName: lead.displayName } : null,
+      memberCount: 0, studyCount: 0
+    };
+    scenario.teams.push(t);
+    return HttpResponse.json(t, { status: 201 });
+  }),
+
+  http.get(pathToRegExp("/v1/roles"), () => HttpResponse.json({ items: scenario.roles })),
+
+  http.patch(pathToRegExp("/v1/roles/{id}"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname.match(/\/roles\/([^/?]+)/) ?? [];
+    const r = scenario.roles.find(x => x.id === id);
+    if (!r) return HttpResponse.json(problem("not-found", 404, "角色不存在"), { status: 404 });
+    const b = await request.json() as {
+      rowRule?: string; visibleFields?: string[];
+      allowedActions?: string[]; modules?: string[] };
+    if (b.rowRule) r.rowRule = b.rowRule;
+    if (b.visibleFields) r.visibleFields = b.visibleFields;
+    if (b.allowedActions) r.allowedActions = b.allowedActions;
+    if (b.modules) r.modules = b.modules;
+    return HttpResponse.json(r);
   }),
 
   http.get(pathToRegExp("/v1/subject-visits"), ({ request }) => {

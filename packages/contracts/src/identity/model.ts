@@ -39,6 +39,15 @@ export const TeamRef = z.object({
   id: Uuid, code: Code, name: z.string()
 }).meta({ id: "TeamRef" });
 
+/** 分组的完整形态。**不是通讯录上的标签** —— PM 的行范围就是从它推导的，
+ *  所以「这个组承接哪些项目」和「组里有几个人」是它的正题，不是附注。 */
+export const Team = TeamRef.extend({
+  lead: z.object({ id: Uuid, displayName: z.string() }).nullable()
+    .describe("组长。为空是正常状态：新建的组还没定人。"),
+  memberCount: z.number().int(),
+  studyCount: z.number().int().describe("本组承接的项目数 —— 组员的行范围就是这些项目下的中心")
+}).meta({ id: "Team" });
+
 export const Account = z.object({
   id: Uuid,
   login: z.string(),
