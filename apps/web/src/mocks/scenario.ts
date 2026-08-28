@@ -336,16 +336,33 @@ function makeHandover(): MockHandover {
 }
 
 /** mock 人员名册。发起交接的表单要靠它把候选人缩到同工种。 */
+/* GCP 与在职状态是「派工与产能」那一页的正题，所以 mock 里要造得出
+   三种状态：已过期、快到期、还早。全填 null 的话那一页在 mock 上
+   永远是一片"未登记"，而它要盯的两件事一件都看不见。 */
+const gcp = (daysLeft: number | null) => daysLeft === null
+  ? { gcpExpiresOn: null, gcpDaysLeft: null }
+  : {
+      gcpExpiresOn: new Date(Date.now() + daysLeft * 86_400_000).toISOString().slice(0, 10),
+      gcpDaysLeft: daysLeft
+    };
+
 export const STAFF_LIST = [
   { accountId: "a-wutong",  login: "wutong",  displayName: "吴桐", roleKind: "CRC",
-    level: "P4", city: "北京", gcpExpiresOn: null, gcpDaysLeft: null,
-    mentorName: null, successorName: null, siteCount: 2, successionGap: false },
+    level: "P4", city: "北京", ...gcp(410),
+    mentorName: null, successorName: "唐延", siteCount: 2, successionGap: false,
+    active: true, disabledReason: null },
   { accountId: "a-tangyan", login: "tangyan", displayName: "唐延", roleKind: "CRC",
-    level: "P3", city: "西安", gcpExpiresOn: null, gcpDaysLeft: null,
-    mentorName: "吴桐", successorName: null, siteCount: 1, successionGap: false },
+    level: "P3", city: "西安", ...gcp(45),
+    mentorName: "吴桐", successorName: null, siteCount: 1, successionGap: false,
+    active: true, disabledReason: null },
   { accountId: "a-duan",    login: "duanzhiyu", displayName: "段志远", roleKind: "CRA",
-    level: "P5", city: "上海", gcpExpiresOn: null, gcpDaysLeft: null,
-    mentorName: null, successorName: null, siteCount: 4, successionGap: true }
+    level: "P5", city: "上海", ...gcp(-12),
+    mentorName: null, successorName: null, siteCount: 4, successionGap: true,
+    active: true, disabledReason: null },
+  { accountId: "a-zhouqi",  login: "zhouqi", displayName: "周琦", roleKind: "CRA",
+    level: "P4", city: "广州", ...gcp(120),
+    mentorName: null, successorName: null, siteCount: 0, successionGap: false,
+    active: false, disabledReason: "离职 —— 转甲方 CRA" }
 ];
 
 /** 工作类型 → 中文名与是否可计费。与库里的 work_type 表同一套口径：
@@ -459,3 +476,76 @@ function makeIpMovements(): Scenario["ipMovements"] {
     m("ip2", "dispense", 12, { movedOn: on(-14), subjectRef: "S-0331" })
   ];
 }
+
+/* ── 入组漏斗 ──────────────────────────────────────────────────────
+   三个中心刻意造成三种形状 —— 「入组慢」有三种完全不同的根因，
+   而这两页存在的理由就是把它们分开：
+     SS-01 预筛多、筛败高 → 要谈方案修订
+     SS-07 预筛少、转化好 → 要加招募渠道
+     SS-14 一例都没有     → 不是入组慢，是还没真正启动
+   三个中心给一样的数的话，页面画得出来，但它想说的话一句也说不出来。 */
+const ratio = (a: number, b: number) => b > 0 ? a / b : null;
+
+const mkFunnel = (
+  id: string, code: string, hospital: string, contracted: number,
+  n: { prescreened: number; icfSigned: number; inScreening: number;
+       enrolled: number; screenFailed: number; withdrawn: number; completed: number },
+  screenFailBreakdown: { reason: string; count: number }[],
+  withdrawBreakdown: { reason: string; count: number }[]
+) => ({
+  studySiteId: id, siteCode: code, hospital, contracted, ...n,
+  screenFailRate: ratio(n.screenFailed, n.icfSigned),
+  icfRate: ratio(n.icfSigned, n.prescreened),
+  yieldRate: ratio(n.enrolled, n.prescreened),
+  retentionRate: ratio(n.enrolled - n.withdrawn, n.enrolled),
+  screenFailBreakdown, withdrawBreakdown,
+  attainment: ratio(n.enrolled, contracted)
+});
+
+export const FUNNELS = [
+  mkFunnel("s1", "SS-01", "北京协和医院", 20,
+    { prescreened: 62, icfSigned: 41, inScreening: 4, enrolled: 24, screenFailed: 13,
+      withdrawn: 3, completed: 6 },
+    [{ reason: "imaging", count: 6 }, { reason: "lab", count: 4 },
+     { reason: "comorbidity", count: 2 }, { reason: "withdrew_icf", count: 1 }],
+    [{ reason: "adverse_event", count: 2 }, { reason: "lost_to_followup", count: 1 }]),
+  mkFunnel("s2", "SS-07", "中山大学肿瘤防治中心", 18,
+    { prescreened: 21, icfSigned: 16, inScreening: 2, enrolled: 12, screenFailed: 2,
+      withdrawn: 1, completed: 3 },
+    [{ reason: "lab", count: 2 }],
+    [{ reason: "withdrew_icf", count: 1 }]),
+  mkFunnel("s3", "SS-14", "江苏省人民医院", 12,
+    { prescreened: 0, icfSigned: 0, inScreening: 0, enrolled: 0, screenFailed: 0,
+      withdrawn: 0, completed: 0 },
+    [], [])
+];
+
+/* ── 审计轨迹 ──────────────────────────────────────────────────────
+   要造得出两类：权限变更（isSensitive）与日常写入。
+   全是敏感的话，"默认只看权限类变更"这个开关就看不出作用；
+   而那个开关正是这一页最重要的一个设计判断。 */
+const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+
+export const AUDIT_ENTRIES = [
+  { id: "au1", at: ago(2), actorLogin: "lingyuan", actorRoleCode: "boss",
+    action: "调整角色权限", targetType: "role", targetId: "cra",
+    before: { visibleFields: ["subject"] },
+    after: { visibleFields: ["subject", "price"] },
+    studySiteId: null, reason: "本季度中心谈判需要 CRA 看得到报价", isSensitive: true },
+  { id: "au2", at: ago(26), actorLogin: "lingyuan", actorRoleCode: "boss",
+    action: "停用账号", targetType: "account", targetId: "zhouqi",
+    before: { status: "active" }, after: { status: "disabled" },
+    studySiteId: null, reason: "离职 —— 中心已交接给段志远", isSensitive: true },
+  { id: "au3", at: ago(30), actorLogin: "admin", actorRoleCode: "admin",
+    action: "重设账号口令", targetType: "account", targetId: "tangyan",
+    before: null, after: { passwordIsInitial: true },
+    studySiteId: null, reason: "新人入职，通道尚未配置", isSensitive: true },
+  { id: "au4", at: ago(5), actorLogin: "wutong", actorRoleCode: "crc",
+    action: "完成访视", targetType: "subject_visit", targetId: "v1",
+    before: { status: "planned" }, after: { status: "done_pending_pi" },
+    studySiteId: "s1", reason: null, isSensitive: false },
+  { id: "au5", at: ago(9), actorLogin: "wutong", actorRoleCode: "crc",
+    action: "填报工时", targetType: "timesheet_entry", targetId: "t-1",
+    before: null, after: { hours: 3.5 },
+    studySiteId: "s1", reason: null, isSensitive: false }
+];

@@ -21,6 +21,10 @@ const SubjectQ = PageQuery.extend({
   outOfWindow: QueryBool.optional(),
   q: z.string().max(64).optional()
 });
+const EnrollmentQ = PageQuery.extend({
+  studyId: Uuid.optional(),
+  behindOnly: QueryBool.optional()
+});
 const VisitQ = PageQuery.extend({
   studySiteId: Uuid.optional(),
   subjectId: Uuid.optional(),
@@ -106,6 +110,11 @@ export class ClinicalController {
 
   @Get("/study-sites/:id/funnel") @Operation("getSiteFunnel")
   funnel(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.funnel(id); }
+
+  @Get("/enrollment") @Operation("listEnrollment")
+  listEnrollment(@Query(new ZodPipe(EnrollmentQ)) q: z.infer<typeof EnrollmentQ>) {
+    return this.svc.listEnrollment(q);
+  }
 
   @Get("/subject-visits") @Operation("listSubjectVisits")
   listVisits(@Query(new ZodPipe(VisitQ)) q: z.infer<typeof VisitQ>) {

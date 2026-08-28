@@ -85,10 +85,8 @@ export const MODULES: ModuleDef[] = [
   { key: "intake", title: "立项与建档", group: "经营", path: "/intake",
     todo: "待受理的立项申请：申办方、适应症、预算、要不要接。" },
   { key: "sites", title: "项目 · 中心台账", group: "经营", path: "/sites" },
-  { key: "enr", title: "入组进度", group: "经营", path: "/enr",
-    todo: "各项目的计划 vs 实际入组曲线，落后的项目排在前面。" },
-  { key: "screen", title: "筛选漏斗与筛败", group: "经营", path: "/screen",
-    todo: "预筛 → 筛选 → 入组的漏斗，以及筛败原因。接口已有 getSiteFunnel。" },
+  { key: "enr", title: "入组进度", group: "经营", path: "/enr" },
+  { key: "screen", title: "筛选漏斗与筛败", group: "经营", path: "/screen" },
   { key: "client", title: "客户", group: "经营", path: "/clients",
     todo: "申办方档案：在手项目、累计合同额、回款情况。" },
   { key: "cash", title: "现金流预测", group: "经营", path: "/cash",
@@ -105,8 +103,7 @@ export const MODULES: ModuleDef[] = [
     todo: "变更单：从提出到签署，以及它对合同额与毛利的影响。" },
 
   /* ── 资源 ─────────────────────────────────────────────────────── */
-  { key: "staff", title: "派工与产能", group: "资源", path: "/staff",
-    todo: "谁在哪几个中心、手上多少活、还接不接得动。接口已有 listStaff。" },
+  { key: "staff", title: "派工与产能", group: "资源", path: "/staff" },
   { key: "people", title: "人才梯队", group: "资源", path: "/people",
     todo: "在职情况、能力标签、离职风险 —— 高风险的要提前看见。" },
   { key: "time", title: "工时与差旅", group: "资源", path: "/timesheets" },
@@ -130,8 +127,7 @@ export const MODULES: ModuleDef[] = [
      没做完不写 todo，是因为 todo 会让整页变成一张说明页，
      而这一页现在是真的能用的；缺的那一层记在这里，别记在用户眼前。 */
   { key: "capa", title: "我的整改", group: "质量", path: "/quality" },
-  { key: "trail", title: "审计轨迹", group: "质量", path: "/trail",
-    todo: "谁在什么时候改了什么。接口已有 listAudit，含敏感操作过滤。" },
+  { key: "trail", title: "审计轨迹", group: "质量", path: "/trail" },
 
   /* ── 机构办公室（外部） ───────────────────────────────────────── */
   { key: "inst", title: "机构工作台", group: "机构办公室", path: "/inst",

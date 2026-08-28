@@ -5,7 +5,8 @@ import { siteRevenue, siteCost, siteMargin, CALC_VERSION,
 import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
-import { makeScenario, SITES_LIST, STAFF_LIST, mkTimesheet, WORK_TYPE_META,
+import { makeScenario, SITES_LIST, STAFF_LIST, FUNNELS, AUDIT_ENTRIES,
+  mkTimesheet, WORK_TYPE_META,
   type Scenario, type MockVisit, type MockHandover, type MockRateCard,
   type MockTimesheet } from "./scenario.js";
 
@@ -661,9 +662,43 @@ export const scenarioHandlers = [
     return HttpResponse.json(pnlFor(id, dto));
   }),
 
+  /* ── 入组漏斗 ────────────────────────────────────────────────────
+     三个中心造出三种形状，因为这两页要回答的正是"哪一种"：
+       SS-01 预筛多、筛败高 —— 要谈方案修订
+       SS-07 预筛少、转化好 —— 要加招募渠道
+       SS-14 一例都没有   —— 不是入组慢，是还没真正启动
+     全给一样的数的话，页面画得出来，但它想说的话一句也说不出来。 */
+  http.get(pathToRegExp("/v1/enrollment"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    const items = q.get("behindOnly") === "true"
+      ? FUNNELS.filter(f => f.enrolled < f.contracted) : FUNNELS;
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  /* ── 审计轨迹 ──────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/audit-entries"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = AUDIT_ENTRIES;
+    /* 显式比 "false" —— `q.get(...)` 拿到的是字符串，
+       而非空字符串一律为真：`if (q.get("sensitiveOnly"))` 会让
+       `?sensitiveOnly=false` 也去筛。这正是 QueryBool 那条欠账的形状。 */
+    if (q.get("sensitiveOnly") === "true") items = items.filter(e => e.isSensitive);
+    const actor = q.get("actorLogin");
+    if (actor) items = items.filter(e => e.actorLogin === actor);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
   /* ── 人员与交接 ──────────────────────────────────────────────── */
-  http.get(pathToRegExp("/v1/staff"), () =>
-    HttpResponse.json({ items: STAFF_LIST, nextCursor: null })),
+  http.get(pathToRegExp("/v1/staff"), ({ request }) => {
+    /* **activeOnly 要真的生效。** 不实现它的话，mock 上"发起交接"
+       的下拉里会出现已停用的人 —— 选中之后是一次白跑（真后端会拒），
+       而这正是 E3 那条欠账修掉的东西。mock 忽略一个筛选参数，
+       等于把已经修好的行为在开发环境里又退回去。 */
+    const q = new URL(request.url).searchParams;
+    const items = q.get("activeOnly") === "true"
+      ? STAFF_LIST.filter(s => s.active) : STAFF_LIST;
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
 
   http.get(pathToRegExp("/v1/handovers"), () =>
     HttpResponse.json({ items: scenario.handovers.map(handoverDto), nextCursor: null })),
