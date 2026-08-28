@@ -36,11 +36,18 @@ describe("开户：开完之后要真的能开始干活", () => {
       const n = async (sql: string) =>
         Number((await db.query<{ c: string }>(sql, [t])).rows[0]!.c);
 
-      expect(await n("SELECT count(*) AS c FROM role WHERE tenant_id = $1")).toBe(8);
+      expect(await n("SELECT count(*) AS c FROM role WHERE tenant_id = $1")).toBe(9);
       /* 这两项是这条欠账的正题：在此之前它们都是 0 */
       expect(await n("SELECT count(*) AS c FROM startup_template_item WHERE tenant_id = $1"))
         .toBe(16);
       expect(await n("SELECT count(*) AS c FROM rate_card WHERE tenant_id = $1")).toBe(5);
+      /* **开完之后要有人能登进去。** 在此之前这里是 0 个账号，
+         而建账号的接口要求调用方先登录 —— 开完户没人打得开门。
+         这一行是那句"要真的能开始干活"里最基本的一条。 */
+      expect(await n("SELECT count(*) AS c FROM account WHERE tenant_id = $1")).toBe(1);
+      expect(await n(`SELECT count(*) AS c FROM auth_password p
+                        JOIN account a ON a.id = p.account_id
+                       WHERE a.tenant_id = $1 AND p.is_initial`)).toBe(1);
     });
   });
 

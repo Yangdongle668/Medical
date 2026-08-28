@@ -31,7 +31,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 async function devLogin(page: Page, testid: string) {
   await page.goto("/login");
-  await page.locator("details summary").click();
+  await page.getByTestId("dev-panel").locator("summary").click();
   await page.getByTestId(testid).click();
   await expect(page).toHaveURL(/\/today$/);
 }

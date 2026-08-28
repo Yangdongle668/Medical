@@ -76,7 +76,10 @@ test("CRC 的一天：从今日清单走到方案偏离进台账", async ({ page
 
   /* ⑦ 去质量台账确认偏离真的在那儿。
         「提交成功」不等于「后果发生了」，这一步才是闭环。 */
-  await page.getByRole("link", { name: "质量台账" }).click();
+  /* CRC 的侧栏里这一页叫「我的整改」（原型的 capa），
+     经营层看到的同一页叫「质量事件与 CAPA」（qa）—— 同一本台账，
+     行范围把各人收在自己那几个中心上。 */
+  await page.getByRole("link", { name: "我的整改" }).click();
   const item = page.getByTestId("quality-item").first();
   await expect(item).toContainText("访视超窗");
   await expect(item).toContainText("系统自动生成");

@@ -51,6 +51,27 @@ define({
 });
 
 define({
+  id: "listEnrollment", method: "get", path: "/v1/enrollment",
+  layer: "L1", context: CTX,
+  summary: "全部中心的入组漏斗",
+  description:
+    "`getSiteFunnel` 的列表形态。**存在的理由是不让前端做 fan-out**：\n" +
+    "「入组进度」和「筛选漏斗」两页要的都是全部中心的同一组数，\n" +
+    "让前端按中心逐个去打 funnel，那就是把 N+1 从服务端搬到了浏览器上 ——\n" +
+    "15 个中心时看不出来，1500 个时那一页永远打不开。\n\n" +
+    "和 `getSiteFunnel` 一样**只返回计数，不返回受试者明细**，\n" +
+    "所以不需要 `subjRead`（I10）。行范围照常生效。\n\n" +
+    "排序：达成率升序 —— 落后的排在最前面。这是这两页唯一要回答的问题。",
+  query: PageQuery.extend({
+    studyId: Uuid.optional(),
+    /** 只看没达成合同例数的。**默认不筛** —— 达成了的也要看得见，
+     *  否则「我们一共接了多少」这个数在页面上就凑不齐。 */
+    behindOnly: QueryBool.optional()
+  }),
+  response: page(SiteFunnel)
+});
+
+define({
   id: "listSubjectVisits", method: "get", path: "/v1/subject-visits",
   layer: "L1", context: CTX,
   summary: "访视清单",
@@ -66,6 +87,22 @@ define({
     pendingPi: QueryBool.optional().describe("只看待 PI 确认的")
   }),
   response: page(SubjectVisit)
+});
+
+define({
+  id: "getSubjectVisit", method: "get", path: "/v1/subject-visits/{id}",
+  layer: "L1", context: CTX,
+  summary: "一次访视",
+  description:
+    "详情页要的是**这一条**，不是「列表的前 200 条里碰巧有它」。\n" +
+    "后者在种子只有 10 条访视时看不出区别，访视上了几百条之后，\n" +
+    "点开一条历史访视就永远停在「加载中…」—— 没有报错，没有空态，\n" +
+    "因为客户端 find 不到只会得到 undefined，而 undefined 和「还没加载完」长得一模一样。\n\n" +
+    "范围外与不存在同样是 404。",
+  action: "subjRead",
+  params: z.object({ id: Uuid }),
+  response: SubjectVisit,
+  errors: ["not-found"]
 });
 
 define({

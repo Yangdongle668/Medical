@@ -3,6 +3,8 @@ import { canSeeSite, siteScopeSql } from "@sitedesk/policy";
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { hashPassword, passwordProblem } from "../../auth/password.js";
+
 
 interface AccountRow {
   id: string; login: string; display_name: string; is_external: boolean;
@@ -19,6 +21,12 @@ const ACCOUNT_COLS = `
 const ACCOUNT_FROM = `account a JOIN role r ON r.id = a.role_id LEFT JOIN team t ON t.id = a.team_id`;
 const iso = (v: Date | null) => v ? v.toISOString() : null;
 const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
+
+/** 副作用信封。和 clinical 那边同一个形状 —— 前端只认 type 与 summary。 */
+interface Effect {
+  type: string; summary: string;
+  ref?: string; amountCents?: number; studySiteId?: string;
+}
 
 const toAccount = (r: AccountRow) => ({
   id: r.id, login: r.login, displayName: r.display_name,
@@ -51,12 +59,21 @@ export class IdentityService {
       : p.rowRule === "none" ? "无数据范围"
       : `${nSites} 个中心 · ${nStudies} 个项目`;
 
+    /* 自己那一行。RLS 已经把它限在本人 —— 这里不必再带 account_id 条件，
+       但还是带上：策略是防线，条件是意图，两者说的是同一件事时才对得起读者。 */
+    const { rows: pw } = await c.client.query<{ is_initial: boolean }>(
+      `SELECT is_initial FROM auth_password WHERE account_id = $1`, [p.accountId]);
+
     return {
       account: toAccount(rows[0]!),
       scopeLabel: label,
       permissions: {
         rowRule: p.rowRule, fields: [...p.fields],
         actions: [...p.actions], modules: [...p.modules]
+      },
+      credentials: {
+        hasPassword: pw.length > 0,
+        passwordIsInitial: pw[0]?.is_initial ?? false
       }
     };
   }
@@ -149,6 +166,164 @@ export class IdentityService {
       sideEffects: [{ type: "SiteStateChanged" as const,
         summary: `${acc.display_name} 的会话已全部失效`, ref: id }]
     };
+  }
+
+  /** 改账号的角色 / 分组 / 所属机构。**登录名与姓名不在这里改** ——
+   *  登录名是审计轨迹里的那个标识，改掉等于把历史记录指向别人。 */
+  async updateAccount(id: string, b: {
+    roleId?: string; teamId?: string | null; orgRef?: string | null; reason: string;
+  }) {
+    const c = ctx();
+    const cur = await c.client.query<AccountRow>(
+      `SELECT ${ACCOUNT_COLS} FROM ${ACCOUNT_FROM} WHERE a.id = $1`, [id]);
+    if (!cur.rows[0]) throw notFound("账号");
+    const before = toAccount(cur.rows[0]);
+
+    /* is_external 跟着角色走，不由调用方传：一个"外部账号 + 内部角色"的
+       组合在库里是能存下的，而它的意思没有人说得清。 */
+    let isExternal = before.isExternal;
+    if (b.roleId) {
+      const role = await c.client.query<{ is_external: boolean }>(
+        `SELECT is_external FROM role WHERE id = $1`, [b.roleId]);
+      if (!role.rows[0]) throw notFound("角色");
+      isExternal = role.rows[0].is_external;
+    }
+
+    const sets: string[] = [], params: unknown[] = [id];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
+    if (b.roleId) { sets.push(`role_id = ${add(b.roleId)}`, `is_external = ${add(isExternal)}`); }
+    if (b.teamId !== undefined) sets.push(`team_id = ${add(b.teamId)}`);
+    if (b.orgRef !== undefined) sets.push(`org_ref = ${add(b.orgRef)}`);
+    if (!sets.length) return before;
+
+    try {
+      await c.client.query(`UPDATE account SET ${sets.join(", ")} WHERE id = $1`, params);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      /* 触发器 account_scope_resolvable 拦下的那种：改成 hospital 规则的角色
+         却没有 org_ref —— 人登得进来，一行数据都看不到，且没有任何提示。 */
+      if (/account_scope_resolvable|org_ref/.test(msg))
+        throw new ProblemException("invariant-violated", {
+          detail: "该角色按「本院承接的项目」切行，必须同时给出 orgRef，" +
+                  "否则这个账号登得进来却一行数据都看不到",
+          invariant: "row-scope-resolvable" });
+      throw e;
+    }
+
+    const out = await c.client.query<AccountRow>(
+      `SELECT ${ACCOUNT_COLS} FROM ${ACCOUNT_FROM} WHERE a.id = $1`, [id]);
+    const after = toAccount(out.rows[0]!);
+    /* 改角色是权限变更 —— 「谁把谁调成了什么」是核查必查项。
+       审计里带上前后两个角色，光记一个 account id 事后读不出发生了什么。 */
+    await this.audit.write({
+      action: b.roleId && b.roleId !== before.role.id ? "调整账号角色" : "调整账号归属",
+      targetType: "account", targetId: before.login,
+      before: { role: before.role.code, team: before.team?.code ?? null, orgRef: before.orgRef },
+      after: { role: after.role.code, team: after.team?.code ?? null, orgRef: after.orgRef },
+      reason: b.reason });
+    return after;
+  }
+
+  /** 启用。**派工不会跟着回来** —— 见契约里那段说明。 */
+  async enableAccount(id: string, reason: string) {
+    const c = ctx();
+    const cur = await c.client.query<AccountRow>(
+      `SELECT ${ACCOUNT_COLS} FROM ${ACCOUNT_FROM} WHERE a.id = $1`, [id]);
+    const acc = cur.rows[0];
+    if (!acc) throw notFound("账号");
+    if (acc.status === "active")
+      return { data: toAccount(acc), sideEffects: [] as Effect[] };
+
+    await c.client.query(
+      `UPDATE account SET status='active', disabled_at=NULL, disabled_reason=NULL WHERE id=$1`,
+      [id]);
+    await this.audit.write({ action: "启用账号", targetType: "account", targetId: acc.login,
+      before: { status: "disabled" }, after: { status: "active" }, reason });
+    const out = await c.client.query<AccountRow>(
+      `SELECT ${ACCOUNT_COLS} FROM ${ACCOUNT_FROM} WHERE a.id = $1`, [id]);
+    const held = await c.client.query<{ n: string }>(
+      `SELECT count(*) AS n FROM site_assignment
+        WHERE account_id = $1 AND effective @> CURRENT_DATE`, [id]);
+    return {
+      data: toAccount(out.rows[0]!),
+      sideEffects: [{
+        type: "AccountEnabled",
+        summary: Number(held.rows[0]!.n) === 0
+          /* 说出来，因为这正是启用之后最容易被误以为已经恢复的那件事 */
+          ? `${acc.display_name} 已恢复登录，但他名下目前没有中心 —— 停用时交接出去的不会自动回来`
+          : `${acc.display_name} 已恢复登录，名下 ${held.rows[0]!.n} 个中心`,
+        ref: id
+      }] as Effect[]
+    };
+  }
+
+  /** 管理员给别人设一个初始口令。**不能给自己设** —— 那绕过了验旧口令那道门。 */
+  async setAccountPassword(id: string, password: string, reason: string) {
+    const c = ctx();
+    const bad = passwordProblem(password);
+    if (bad) throw new ProblemException("validation-failed", { detail: bad });
+
+    const cur = await c.client.query<AccountRow>(
+      `SELECT ${ACCOUNT_COLS} FROM ${ACCOUNT_FROM} WHERE a.id = $1`, [id]);
+    const acc = cur.rows[0];
+    if (!acc) throw notFound("账号");
+    if (acc.id === principal().accountId)
+      throw new ProblemException("validation-failed", {
+        detail: "改自己的口令请走「改口令」，那条要验当前口令 —— " +
+                "从这里走等于绕过它，而会话被偷走时那道门是唯一的一道" });
+
+    /* 标成初始口令：本人登录后顶上挂红条，改掉才消失，而且翻不回去。
+       "管理员知道别人的口令"是个短期状态，这个标记是让它保持短期的唯一办法。 */
+    await c.client.query(`SELECT app.set_password($1, $2, true)`,
+      [id, await hashPassword(password)]);
+    /* 换了口令，之前的会话一律作废：设初始口令的场景要么是新人入职，
+       要么是账号出了事 —— 两种都不该让旧会话继续开着。
+
+       **必须走 app.revoke_sessions**，不能直接 UPDATE：auth_session 的策略是
+       「只看得到自己那些」，管理员那句 UPDATE 会匹配到 0 行而不报错 ——
+       口令换了、旧会话还开着，而接口返回 204。见迁移 0027。 */
+    await c.client.query(`SELECT app.revoke_sessions($1, $2)`,
+      [id, "管理员重设了口令"]);
+    /* **口令本身一个字都不进审计。** 记的是"谁给谁设过"，不是设成了什么。 */
+    await this.audit.write({ action: "重设账号口令", targetType: "account",
+      targetId: acc.login, after: { passwordIsInitial: true }, reason });
+  }
+
+  async listTeams() {
+    const c = ctx();
+    const { rows } = await c.client.query<{
+      id: string; code: string; name: string;
+      lead_id: string | null; lead_name: string | null;
+      members: string; studies: string;
+    }>(`SELECT t.id, t.code, t.name,
+               l.id AS lead_id, l.display_name AS lead_name,
+               (SELECT count(*) FROM account a WHERE a.team_id = t.id
+                  AND a.status = 'active') AS members,
+               (SELECT count(*) FROM team_study ts WHERE ts.team_id = t.id) AS studies
+          FROM team t LEFT JOIN account l ON l.id = t.lead_account_id
+         ORDER BY t.code`);
+    return { items: rows.map(r => ({
+      id: r.id, code: r.code, name: r.name,
+      lead: r.lead_id ? { id: r.lead_id, displayName: r.lead_name! } : null,
+      memberCount: Number(r.members), studyCount: Number(r.studies) })) };
+  }
+
+  async createTeam(b: { code: string; name: string; leadAccountId?: string | null }) {
+    const c = ctx();
+    try {
+      const { rows } = await c.client.query<{ id: string }>(
+        `INSERT INTO team (code, name, lead_account_id) VALUES ($1,$2,$3) RETURNING id`,
+        [b.code, b.name, b.leadAccountId ?? null]);
+      await this.audit.write({ action: "新建分组", targetType: "team", targetId: b.code,
+        after: { code: b.code, name: b.name } });
+      const one = (await this.listTeams()).items.find(t => t.id === rows[0]!.id)!;
+      return one;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/duplicate key/.test(msg))
+        throw new ProblemException("validation-failed", { detail: `分组代号 ${b.code} 已存在` });
+      throw e;
+    }
   }
 
   async listRoles() {

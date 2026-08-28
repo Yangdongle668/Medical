@@ -25,11 +25,24 @@ export function TodayPage() {
   const [visits, setVisits] = useState<Visit[] | null>(null);
 
   useEffect(() => {
-    call<{ items: Visit[] }>("listSubjectVisits", { query: { limit: 50 } })
+    /* **在服务端筛，不在这里筛。**
+       原来是拉 50 条回来再 `filter(status === "planned")` ——
+       种子里只有 10 条访视且恰好都没做完时，两种写法看不出区别。
+       数据一多就不是了：列表按窗口升序，最早的那 50 条全是历史上
+       已经做完的，于是"今天要做什么"这一页**空着**，
+       而它看起来完全正常（没有报错、没有加载中）。
+
+       一个先截断再过滤的列表，过滤条件越常见，它越安全；
+       而这一条恰恰是最不常见的那种 —— 未完成的访视永远是少数。 */
+    call<{ items: Visit[] }>("listSubjectVisits",
+      { query: { limit: 50, status: "planned" } })
       .then(r => setVisits(r.items));
   }, []);
 
-  const open = visits?.filter(v => v.status === "planned") ?? [];
+  /* 服务端已经只给 planned 了。这里不再二次过滤 ——
+     留着的话，摘要数的和表格画的又会是两批东西
+     （原来正是如此：摘要用过滤后的，表格 map 的是全部）。 */
+  const open = visits ?? [];
   const late = open.filter(v => v.outOfWindow).length;
 
   return (
@@ -58,7 +71,7 @@ export function TodayPage() {
             </tr>
           </thead>
           <tbody>
-            {visits?.map(v => {
+            {open.map(v => {
               const done = v.tasks.filter(t => t.doneAt).length;
               return (
                 <tr key={v.id} data-testid="visit-row">

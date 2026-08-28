@@ -115,8 +115,34 @@ function mkVisit(
 }
 
 /** 可变状态。每次 resetScenario() 回到已知起点 —— 测试要从确定处出发。 */
+export interface MockRole {
+  id: string; code: string; name: string; isExternal: boolean; rowRule: string;
+  visibleFields: string[]; allowedActions: string[]; modules: string[];
+}
+export interface MockTeam {
+  id: string; code: string; name: string;
+  lead: { id: string; displayName: string } | null;
+  memberCount: number; studyCount: number;
+}
+export interface MockAccount {
+  id: string; login: string; displayName: string;
+  role: { id: string; code: string; name: string; isExternal: boolean };
+  team: { id: string; code: string; name: string } | null;
+  isExternal: boolean; orgRef: string | null;
+  status: "active" | "disabled";
+  joinedOn: string | null; disabledAt: string | null; disabledReason: string | null;
+  lastLoginAt: string | null;
+}
+
 export interface Scenario {
   visits: MockVisit[];
+  /* ── 组织与权限 ────────────────────────────────────────────────
+     这三份是**可变的**：mock 模式下建号、改角色、勾权限都要当场看得见。
+     取值与迁移 0026 的开户目录一致 —— 两处对不上的话，
+     mock 上调通的界面到了真库会发现角色代号根本没有那一个。 */
+  roles: MockRole[];
+  teams: MockTeam[];
+  accounts: MockAccount[];
   /** 中心的当前阶段。推进会改它，所以不能从 SITES 常量上读。 */
   siteState: Record<string, string>;
   /** 计划 SIV 日 —— 清单项的到期日全是相对它算的，两处必须同源 */
@@ -145,8 +171,107 @@ export interface Scenario {
   rateCards: MockRateCard[];
 }
 
+
+/* 角色目录 —— 与迁移 0026 的开户目录逐条对应。
+   照抄不是重复：两处对不上的话，mock 上调通的界面到了真库会发现
+   角色代号根本没有那一个，而那种错在 e2e 上永远看不出来。 */
+const ROLE_CATALOGUE: Omit<MockRole, "id">[] = [
+  { code: "admin", name: "系统管理员", isExternal: false, rowRule: "all",
+    visibleFields: ["cost", "margin", "price", "staff"],
+    allowedActions: ["advance", "approve", "bid", "closeQ", "closeQA", "ethics", "manage",
+      "piConfirm", "raiseQ", "rateWrite", "subjRead", "subjWrite", "timeWrite"],
+    modules: ["org", "dash", "sites", "intake", "enr", "screen", "client", "cash",
+      "feas", "price", "bid", "change", "staff", "people", "time", "pnl", "bill",
+      "qa", "mon", "audit", "capa", "trail", "pm", "team", "approve", "cra", "mysites",
+      "crc", "mysite", "sched", "subj", "query", "startup", "prescreen", "ethics",
+      "handover", "isf", "material", "pay", "dm", "inst", "instac", "instqc",
+      "instreg", "pi"] },
+  { code: "boss", name: "经营层", isExternal: false, rowRule: "all",
+    visibleFields: ["cost", "margin", "price", "staff"],
+    allowedActions: ["advance", "approve", "bid", "manage", "rateWrite", "subjRead", "timeWrite"],
+    modules: ["dash", "intake", "sites", "enr", "screen", "client", "cash", "bid", "change",
+      "staff", "people", "time", "pnl", "bill", "qa", "mon", "price", "org", "trail"] },
+  { code: "pm", name: "项目总监 PM", isExternal: false, rowRule: "team",
+    visibleFields: ["cost", "margin", "price", "subject"],
+    allowedActions: ["advance", "approve", "bid", "ethics", "raiseQ", "subjRead",
+      "subjWrite", "timeWrite"],
+    modules: ["pm", "team", "approve", "intake", "feas", "sites", "enr", "screen",
+      "mon", "change", "qa", "pnl", "trail"] },
+  { code: "cra", name: "临床监查员 CRA", isExternal: false, rowRule: "assigned",
+    visibleFields: ["subject"], allowedActions: ["raiseQ", "subjRead", "timeWrite"],
+    modules: ["cra", "mysites", "mon", "query", "screen", "feas", "material", "time",
+      "qa", "capa", "trail"] },
+  { code: "crc", name: "临床协调员 CRC", isExternal: false, rowRule: "assigned",
+    visibleFields: ["subject"],
+    allowedActions: ["ethics", "subjRead", "subjWrite", "timeWrite"],
+    modules: ["crc", "mysite", "startup", "sched", "subj", "prescreen", "ethics",
+      "query", "capa", "isf", "material", "pay", "handover", "time"] },
+  { code: "dm", name: "数据管理 DM", isExternal: false, rowRule: "all",
+    visibleFields: ["subject"], allowedActions: ["closeQ", "raiseQ", "subjRead"],
+    modules: ["dm", "query", "screen", "trail"] },
+  { code: "qa", name: "质量保证 QA", isExternal: false, rowRule: "all",
+    visibleFields: ["subject"], allowedActions: ["closeQA", "raiseQ"],
+    modules: ["audit", "qa", "screen", "mon", "trail"] },
+  { code: "inst", name: "机构办（外部）", isExternal: true, rowRule: "hospital",
+    visibleFields: ["subject"], allowedActions: ["closeQA"],
+    modules: ["inst", "instac", "instqc", "instreg"] },
+  { code: "pi", name: "研究者 PI（外部）", isExternal: true, rowRule: "pi",
+    visibleFields: ["subject"], allowedActions: ["piConfirm", "subjRead"],
+    modules: ["pi", "qa"] }
+];
+
+const mkRoles = (): MockRole[] =>
+  ROLE_CATALOGUE.map(r => ({ id: `r-${r.code}`, ...r,
+    visibleFields: [...r.visibleFields], allowedActions: [...r.allowedActions],
+    modules: [...r.modules] }));
+
+const mkTeams = (): MockTeam[] => [
+  { id: "t1", code: "G-01", name: "华东华南组",
+    lead: { id: "a-hanxue", displayName: "韩雪" }, memberCount: 0, studyCount: 2 },
+  { id: "t2", code: "G-02", name: "华北西南组",
+    lead: { id: "a-cendi", displayName: "岑迪" }, memberCount: 0, studyCount: 2 },
+  { id: "t3", code: "G-00", name: "职能组", lead: null, memberCount: 0, studyCount: 0 }
+];
+
+const mkAccounts = (roles: MockRole[], teams: MockTeam[]): MockAccount[] => {
+  const ref = (code: string) => {
+    const r = roles.find(x => x.code === code)!;
+    return { id: r.id, code: r.code, name: r.name, isExternal: r.isExternal };
+  };
+  const team = (code: string) => {
+    const t = teams.find(x => x.code === code)!;
+    return { id: t.id, code: t.code, name: t.name };
+  };
+  const mk = (login: string, displayName: string, role: string,
+              opts: Partial<MockAccount> = {}): MockAccount => ({
+    id: `a-${login}`, login, displayName, role: ref(role), team: null,
+    isExternal: ref(role).isExternal, orgRef: null, status: "active",
+    joinedOn: "2024-03-01", disabledAt: null, disabledReason: null,
+    lastLoginAt: "2026-08-24T09:00:00.000Z", ...opts
+  });
+  return [
+    mk("admin", "系统管理员", "admin", { joinedOn: "2026-08-01", lastLoginAt: null }),
+    mk("lingyuan", "凌远", "boss", { team: team("G-00") }),
+    mk("hanxue", "韩雪", "pm", { team: team("G-01") }),
+    mk("cendi", "岑迪", "pm", { team: team("G-02") }),
+    mk("linmin", "林敏", "cra", { team: team("G-01") }),
+    mk("wutong", "吴桐", "crc", { team: team("G-01") }),
+    mk("liaomeng", "廖萌", "crc", { team: team("G-02") }),
+    mk("miaoqing", "苗青", "dm", { team: team("G-00") }),
+    mk("weilan", "韦岚", "qa", { team: team("G-00") }),
+    mk("zhanghm", "张慧敏", "inst", { orgRef: "北京协和医院" }),
+    mk("chenguod", "陈国栋", "pi"),
+    mk("zhouqi", "周琦", "cra", {
+      status: "disabled", disabledAt: "2026-05-12T02:00:00.000Z",
+      disabledReason: "离职，中心已交接给林敏" })
+  ];
+};
+
 export function makeScenario(): Scenario {
+  const roles = mkRoles();
+  const teams = mkTeams();
   return {
+    roles, teams, accounts: mkAccounts(roles, teams),
     visits: [
       /* 已超窗 3 天 —— 列表第一屏就该看见它 */
       mkVisit("v1", SITES[0]!, "S-0331", "u1", 4, "C4D1 第 4 周期给药",
@@ -211,16 +336,33 @@ function makeHandover(): MockHandover {
 }
 
 /** mock 人员名册。发起交接的表单要靠它把候选人缩到同工种。 */
+/* GCP 与在职状态是「派工与产能」那一页的正题，所以 mock 里要造得出
+   三种状态：已过期、快到期、还早。全填 null 的话那一页在 mock 上
+   永远是一片"未登记"，而它要盯的两件事一件都看不见。 */
+const gcp = (daysLeft: number | null) => daysLeft === null
+  ? { gcpExpiresOn: null, gcpDaysLeft: null }
+  : {
+      gcpExpiresOn: new Date(Date.now() + daysLeft * 86_400_000).toISOString().slice(0, 10),
+      gcpDaysLeft: daysLeft
+    };
+
 export const STAFF_LIST = [
   { accountId: "a-wutong",  login: "wutong",  displayName: "吴桐", roleKind: "CRC",
-    level: "P4", city: "北京", gcpExpiresOn: null, gcpDaysLeft: null,
-    mentorName: null, successorName: null, siteCount: 2, successionGap: false },
+    level: "P4", city: "北京", ...gcp(410),
+    mentorName: null, successorName: "唐延", siteCount: 2, successionGap: false,
+    active: true, disabledReason: null },
   { accountId: "a-tangyan", login: "tangyan", displayName: "唐延", roleKind: "CRC",
-    level: "P3", city: "西安", gcpExpiresOn: null, gcpDaysLeft: null,
-    mentorName: "吴桐", successorName: null, siteCount: 1, successionGap: false },
+    level: "P3", city: "西安", ...gcp(45),
+    mentorName: "吴桐", successorName: null, siteCount: 1, successionGap: false,
+    active: true, disabledReason: null },
   { accountId: "a-duan",    login: "duanzhiyu", displayName: "段志远", roleKind: "CRA",
-    level: "P5", city: "上海", gcpExpiresOn: null, gcpDaysLeft: null,
-    mentorName: null, successorName: null, siteCount: 4, successionGap: true }
+    level: "P5", city: "上海", ...gcp(-12),
+    mentorName: null, successorName: null, siteCount: 4, successionGap: true,
+    active: true, disabledReason: null },
+  { accountId: "a-zhouqi",  login: "zhouqi", displayName: "周琦", roleKind: "CRA",
+    level: "P4", city: "广州", ...gcp(120),
+    mentorName: null, successorName: null, siteCount: 0, successionGap: false,
+    active: false, disabledReason: "离职 —— 转甲方 CRA" }
 ];
 
 /** 工作类型 → 中文名与是否可计费。与库里的 work_type 表同一套口径：
@@ -334,3 +476,76 @@ function makeIpMovements(): Scenario["ipMovements"] {
     m("ip2", "dispense", 12, { movedOn: on(-14), subjectRef: "S-0331" })
   ];
 }
+
+/* ── 入组漏斗 ──────────────────────────────────────────────────────
+   三个中心刻意造成三种形状 —— 「入组慢」有三种完全不同的根因，
+   而这两页存在的理由就是把它们分开：
+     SS-01 预筛多、筛败高 → 要谈方案修订
+     SS-07 预筛少、转化好 → 要加招募渠道
+     SS-14 一例都没有     → 不是入组慢，是还没真正启动
+   三个中心给一样的数的话，页面画得出来，但它想说的话一句也说不出来。 */
+const ratio = (a: number, b: number) => b > 0 ? a / b : null;
+
+const mkFunnel = (
+  id: string, code: string, hospital: string, contracted: number,
+  n: { prescreened: number; icfSigned: number; inScreening: number;
+       enrolled: number; screenFailed: number; withdrawn: number; completed: number },
+  screenFailBreakdown: { reason: string; count: number }[],
+  withdrawBreakdown: { reason: string; count: number }[]
+) => ({
+  studySiteId: id, siteCode: code, hospital, contracted, ...n,
+  screenFailRate: ratio(n.screenFailed, n.icfSigned),
+  icfRate: ratio(n.icfSigned, n.prescreened),
+  yieldRate: ratio(n.enrolled, n.prescreened),
+  retentionRate: ratio(n.enrolled - n.withdrawn, n.enrolled),
+  screenFailBreakdown, withdrawBreakdown,
+  attainment: ratio(n.enrolled, contracted)
+});
+
+export const FUNNELS = [
+  mkFunnel("s1", "SS-01", "北京协和医院", 20,
+    { prescreened: 62, icfSigned: 41, inScreening: 4, enrolled: 24, screenFailed: 13,
+      withdrawn: 3, completed: 6 },
+    [{ reason: "imaging", count: 6 }, { reason: "lab", count: 4 },
+     { reason: "comorbidity", count: 2 }, { reason: "withdrew_icf", count: 1 }],
+    [{ reason: "adverse_event", count: 2 }, { reason: "lost_to_followup", count: 1 }]),
+  mkFunnel("s2", "SS-07", "中山大学肿瘤防治中心", 18,
+    { prescreened: 21, icfSigned: 16, inScreening: 2, enrolled: 12, screenFailed: 2,
+      withdrawn: 1, completed: 3 },
+    [{ reason: "lab", count: 2 }],
+    [{ reason: "withdrew_icf", count: 1 }]),
+  mkFunnel("s3", "SS-14", "江苏省人民医院", 12,
+    { prescreened: 0, icfSigned: 0, inScreening: 0, enrolled: 0, screenFailed: 0,
+      withdrawn: 0, completed: 0 },
+    [], [])
+];
+
+/* ── 审计轨迹 ──────────────────────────────────────────────────────
+   要造得出两类：权限变更（isSensitive）与日常写入。
+   全是敏感的话，"默认只看权限类变更"这个开关就看不出作用；
+   而那个开关正是这一页最重要的一个设计判断。 */
+const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+
+export const AUDIT_ENTRIES = [
+  { id: "au1", at: ago(2), actorLogin: "lingyuan", actorRoleCode: "boss",
+    action: "调整角色权限", targetType: "role", targetId: "cra",
+    before: { visibleFields: ["subject"] },
+    after: { visibleFields: ["subject", "price"] },
+    studySiteId: null, reason: "本季度中心谈判需要 CRA 看得到报价", isSensitive: true },
+  { id: "au2", at: ago(26), actorLogin: "lingyuan", actorRoleCode: "boss",
+    action: "停用账号", targetType: "account", targetId: "zhouqi",
+    before: { status: "active" }, after: { status: "disabled" },
+    studySiteId: null, reason: "离职 —— 中心已交接给段志远", isSensitive: true },
+  { id: "au3", at: ago(30), actorLogin: "admin", actorRoleCode: "admin",
+    action: "重设账号口令", targetType: "account", targetId: "tangyan",
+    before: null, after: { passwordIsInitial: true },
+    studySiteId: null, reason: "新人入职，通道尚未配置", isSensitive: true },
+  { id: "au4", at: ago(5), actorLogin: "wutong", actorRoleCode: "crc",
+    action: "完成访视", targetType: "subject_visit", targetId: "v1",
+    before: { status: "planned" }, after: { status: "done_pending_pi" },
+    studySiteId: "s1", reason: null, isSensitive: false },
+  { id: "au5", at: ago(9), actorLogin: "wutong", actorRoleCode: "crc",
+    action: "填报工时", targetType: "timesheet_entry", targetId: "t-1",
+    before: null, after: { hours: 3.5 },
+    studySiteId: "s1", reason: null, isSensitive: false }
+];

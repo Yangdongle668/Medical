@@ -6,6 +6,8 @@ import { installGracefulShutdown } from "./infra/shutdown.js";
 import { JsonLogger, emit } from "./infra/log.js";
 import { drainConfig } from "./infra/drain.js";
 import { deliveryPlan } from "./infra/login-delivery.js";
+import { POOL } from "./infra/db.js";
+import type { Pool } from "pg";
 
 async function bootstrap() {
   /* 先自检，再建应用 —— 不该跑的配置组合不该走到监听端口那一步 */
@@ -32,5 +34,31 @@ async function bootstrap() {
     drainMs: drain.ms, drainFrom: drain.source,
     loginEmail: delivery.email, loginSms: delivery.sms
   });
+
+  await warnFactoryPasswords(app.get<Pool>(POOL));
+}
+
+/** 还在用出厂口令的账号，每次启动报一次。
+ *
+ *  为什么不在 preflight 里：那个函数是纯的（只看 env），
+ *  而这件事只有库知道。也**不拒绝启动** —— 拒绝启动的话，
+ *  一次干净部署会在第一次就起不来，而那正是唯一需要它能起来的时候。
+ *
+ *  为什么放在 listen 之后：库连不上时不该把启动一起拖死。 */
+async function warnFactoryPasswords(pool: Pool): Promise<void> {
+  try {
+    const { rows } = await pool.query<{ login: string; display_name: string }>(
+      "SELECT login, display_name FROM app.accounts_on_factory_password()");
+    if (!rows.length) return;
+    emit("warn", "security",
+      `有 ${rows.length} 个账号还在用出厂口令（admin）：${rows.map(r => r.login).join("、")}\n` +
+      "    出厂口令是公开的 —— 这台机器只要能从外面打到，任何人都能以管理员身份登进来。\n" +
+      "    改密：登录后在「组织与权限」页改，或界面顶部那条红条上直接点。",
+      { logins: rows.map(r => r.login) });
+  } catch (err) {
+    /* 迁移还没跑到 0025 时这个函数不存在。那不是错误，是"还没到时候"。 */
+    emit("info", "security", "出厂口令自检跳过", {
+      err: err instanceof Error ? err.message : String(err) });
+  }
 }
 void bootstrap();

@@ -5,7 +5,8 @@ import { siteRevenue, siteCost, siteMargin, CALC_VERSION,
 import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
-import { makeScenario, SITES_LIST, STAFF_LIST, mkTimesheet, WORK_TYPE_META,
+import { makeScenario, SITES_LIST, STAFF_LIST, FUNNELS, AUDIT_ENTRIES,
+  mkTimesheet, WORK_TYPE_META,
   type Scenario, type MockVisit, type MockHandover, type MockRateCard,
   type MockTimesheet } from "./scenario.js";
 
@@ -64,7 +65,13 @@ const ROLE = {
     role: { id: "r-crc", code: "crc", name: "临床协调员 CRC" },
     rowRule: "assigned", fields: ["subject"],
     actions: ["ethics", "subjRead", "subjWrite", "timeWrite"],
-    modules: ["today", "sites", "subjects", "timesheets"]
+    /* **module_key，不是路径。** 这里曾经写的是 ["today","sites",…]，
+       而真接口给的是 role_module 里的键 —— 两者恰好长得像，
+       所以在导航还是写死数组的时候看不出区别。侧栏改成按模块出之后，
+       一份路径清单会让 mock 模式下的导航整个空掉。
+       取值与迁移 0026 里 crc 的授予一致。 */
+    modules: ["crc", "mysite", "startup", "sched", "subj", "prescreen", "ethics",
+      "query", "capa", "isf", "material", "pay", "handover", "time"]
   },
   boss: {
     id: "a-lingyuan", login: "lingyuan", name: "凌远",
@@ -72,7 +79,9 @@ const ROLE = {
     rowRule: "all", fields: ["cost", "margin", "price", "staff"],
     actions: ["advance", "approve", "bid", "manage", "rateWrite",
       "subjRead", "timeWrite"],
-    modules: ["today", "sites", "subjects", "timesheets", "pnl"]
+    modules: ["dash", "intake", "sites", "enr", "screen", "client", "cash", "bid",
+      "change", "staff", "people", "time", "pnl", "bill", "qa", "mon", "price",
+      "org", "trail"]
   }
 } as const;
 
@@ -92,7 +101,10 @@ const me = () => {
     permissions: {
       rowRule: r.rowRule, fields: [...r.fields],
       actions: [...r.actions], modules: [...r.modules]
-    }
+    },
+    /* mock 里的人是用一次性链接进来的，没有口令 —— 于是也不会挂那条红条。
+       要看红条长什么样，把 passwordIsInitial 改成 true。 */
+    credentials: { hasPassword: false, passwordIsInitial: false }
   };
 };
 
@@ -116,6 +128,136 @@ export const scenarioHandlers = [
   http.post(pathToRegExp("/v1/auth/dev-session"), () =>
     HttpResponse.json({ token: "mock-token", expiresAt: new Date(Date.now() + 8 * 3600e3).toISOString() })),
 
+  /* 口令登录。**不能落到兜底处理器上** —— 那一层照契约回一份示例，
+     于是"随便打个口令都能登进去"，而这个端点存在的全部意义就是拦住那件事。
+     mock 里认一对：admin/admin（出厂管理员）。其余一律 401，
+     且**三种失败一个说法** —— 和真后端一致，否则前端会照着 mock 的
+     区分去写提示文案，上真库就对不上。 */
+  http.post(pathToRegExp("/v1/auth/password-session"), async ({ request }) => {
+    const b = await request.json() as { login: string; password: string };
+    if (b.login === "admin" && b.password === "admin")
+      return HttpResponse.json(
+        { token: "mock-token", expiresAt: new Date(Date.now() + 8 * 3600e3).toISOString() });
+    return HttpResponse.json(
+      problem("unauthenticated", 401, "登录名或口令不对"), { status: 401 });
+  }),
+
+  /* ── 组织与权限 ────────────────────────────────────────────────
+     这几个**必须有场景处理器**，不能落到兜底层。兜底层照契约回一份示例，
+     于是这一页看起来能用、点什么都不生效 —— 建了账号列表不变、
+     勾了权限矩阵不动。那比一张空页更难看出问题。 */
+  http.get(pathToRegExp("/v1/accounts"), () =>
+    HttpResponse.json({ items: scenario.accounts, nextCursor: null })),
+
+  http.post(pathToRegExp("/v1/accounts"), async ({ request }) => {
+    const b = await request.json() as {
+      login: string; displayName: string; roleId: string;
+      teamId?: string | null; orgRef?: string | null };
+    if (scenario.accounts.some(a => a.login === b.login))
+      return HttpResponse.json(
+        problem("validation-failed", 422, `登录名 ${b.login} 已存在`), { status: 422 });
+    const role = scenario.roles.find(r => r.id === b.roleId)!;
+    const team = scenario.teams.find(t => t.id === b.teamId) ?? null;
+    const acc = {
+      id: `a-${b.login}`, login: b.login, displayName: b.displayName,
+      role: { id: role.id, code: role.code, name: role.name, isExternal: role.isExternal },
+      team: team ? { id: team.id, code: team.code, name: team.name } : null,
+      isExternal: role.isExternal, orgRef: b.orgRef ?? null,
+      status: "active" as const, joinedOn: todayStr(),
+      disabledAt: null, disabledReason: null, lastLoginAt: null
+    };
+    scenario.accounts.push(acc);
+    return HttpResponse.json(acc, { status: 201 });
+  }),
+
+  http.patch(pathToRegExp("/v1/accounts/{id}"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname.match(/\/accounts\/([^/?]+)/) ?? [];
+    const a = scenario.accounts.find(x => x.id === id);
+    if (!a) return HttpResponse.json(problem("not-found", 404, "账号不存在"), { status: 404 });
+    const b = await request.json() as {
+      roleId?: string; teamId?: string | null; orgRef?: string | null };
+    if (b.roleId) {
+      const role = scenario.roles.find(r => r.id === b.roleId)!;
+      a.role = { id: role.id, code: role.code, name: role.name, isExternal: role.isExternal };
+      a.isExternal = role.isExternal;
+      /* 和真后端同一条拦截：hospital 规则没有 orgRef，人登得进来一行都看不到 */
+      if (role.rowRule === "hospital" && !(b.orgRef ?? a.orgRef))
+        return HttpResponse.json(problem("invariant-violated", 422,
+          "该角色按「本院承接的项目」切行，必须同时给出 orgRef，" +
+          "否则这个账号登得进来却一行数据都看不到"), { status: 422 });
+    }
+    if (b.teamId !== undefined) {
+      const team = scenario.teams.find(t => t.id === b.teamId) ?? null;
+      a.team = team ? { id: team.id, code: team.code, name: team.name } : null;
+    }
+    if (b.orgRef !== undefined) a.orgRef = b.orgRef;
+    return HttpResponse.json(a);
+  }),
+
+  http.post(pathToRegExp("/v1/accounts/{id}:disable"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname.match(/\/accounts\/([^/:]+):disable/) ?? [];
+    const a = scenario.accounts.find(x => x.id === id);
+    if (!a) return HttpResponse.json(problem("not-found", 404, "账号不存在"), { status: 404 });
+    const b = await request.json() as { reason: string };
+    a.status = "disabled"; a.disabledAt = new Date().toISOString(); a.disabledReason = b.reason;
+    return HttpResponse.json({ data: a, sideEffects: [
+      { type: "AccountDisabled", summary: `${a.displayName} 已停用，历史记录与审计轨迹保留` }
+    ] }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/accounts/{id}:enable"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname.match(/\/accounts\/([^/:]+):enable/) ?? [];
+    const a = scenario.accounts.find(x => x.id === id);
+    if (!a) return HttpResponse.json(problem("not-found", 404, "账号不存在"), { status: 404 });
+    a.status = "active"; a.disabledAt = null; a.disabledReason = null;
+    return HttpResponse.json({ data: a, sideEffects: [
+      { type: "AccountEnabled",
+        summary: `${a.displayName} 已恢复登录 —— 停用时交接出去的中心不会自动回来` }
+    ] }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/accounts/{id}:set-password"), () =>
+    new HttpResponse(null, { status: 204 })),
+
+  http.get(pathToRegExp("/v1/teams"), () =>
+    HttpResponse.json({ items: scenario.teams.map(t => ({
+      ...t,
+      memberCount: scenario.accounts.filter(
+        a => a.team?.id === t.id && a.status === "active").length
+    })) })),
+
+  http.post(pathToRegExp("/v1/teams"), async ({ request }) => {
+    const b = await request.json() as
+      { code: string; name: string; leadAccountId?: string | null };
+    if (scenario.teams.some(t => t.code === b.code))
+      return HttpResponse.json(
+        problem("validation-failed", 422, `分组代号 ${b.code} 已存在`), { status: 422 });
+    const lead = scenario.accounts.find(a => a.id === b.leadAccountId);
+    const t = {
+      id: `t-${b.code}`, code: b.code, name: b.name,
+      lead: lead ? { id: lead.id, displayName: lead.displayName } : null,
+      memberCount: 0, studyCount: 0
+    };
+    scenario.teams.push(t);
+    return HttpResponse.json(t, { status: 201 });
+  }),
+
+  http.get(pathToRegExp("/v1/roles"), () => HttpResponse.json({ items: scenario.roles })),
+
+  http.patch(pathToRegExp("/v1/roles/{id}"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname.match(/\/roles\/([^/?]+)/) ?? [];
+    const r = scenario.roles.find(x => x.id === id);
+    if (!r) return HttpResponse.json(problem("not-found", 404, "角色不存在"), { status: 404 });
+    const b = await request.json() as {
+      rowRule?: string; visibleFields?: string[];
+      allowedActions?: string[]; modules?: string[] };
+    if (b.rowRule) r.rowRule = b.rowRule;
+    if (b.visibleFields) r.visibleFields = b.visibleFields;
+    if (b.allowedActions) r.allowedActions = b.allowedActions;
+    if (b.modules) r.modules = b.modules;
+    return HttpResponse.json(r);
+  }),
+
   http.get(pathToRegExp("/v1/subject-visits"), ({ request }) => {
     const q = new URL(request.url).searchParams;
     let items = scenario.visits.map(withDaysLeft);
@@ -126,6 +268,15 @@ export const scenarioHandlers = [
     if (status.length) items = items.filter(v => status.includes(v.status));
     items.sort(byWindow);
     return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  /* 详情页取的是**这一条**。放在列表处理器后面没关系：
+     pathToRegExp 结尾锚了 `(\?|$)`，`/v1/subject-visits` 那条匹配不到带 id 的路径。 */
+  http.get(pathToRegExp("/v1/subject-visits/{id}"), ({ request }) => {
+    const [, id] = new URL(request.url).pathname.match(/\/subject-visits\/([^/?]+)/) ?? [];
+    const v = scenario.visits.find(x => x.id === id);
+    if (!v) return HttpResponse.json(problem("not-found", 404, "访视不存在"), { status: 404 });
+    return HttpResponse.json(withDaysLeft(v));
   }),
 
   http.post(pathToRegExp("/v1/subject-visits/{id}/tasks/{seq}:done"), ({ request }) => {
@@ -511,9 +662,43 @@ export const scenarioHandlers = [
     return HttpResponse.json(pnlFor(id, dto));
   }),
 
+  /* ── 入组漏斗 ────────────────────────────────────────────────────
+     三个中心造出三种形状，因为这两页要回答的正是"哪一种"：
+       SS-01 预筛多、筛败高 —— 要谈方案修订
+       SS-07 预筛少、转化好 —— 要加招募渠道
+       SS-14 一例都没有   —— 不是入组慢，是还没真正启动
+     全给一样的数的话，页面画得出来，但它想说的话一句也说不出来。 */
+  http.get(pathToRegExp("/v1/enrollment"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    const items = q.get("behindOnly") === "true"
+      ? FUNNELS.filter(f => f.enrolled < f.contracted) : FUNNELS;
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  /* ── 审计轨迹 ──────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/audit-entries"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = AUDIT_ENTRIES;
+    /* 显式比 "false" —— `q.get(...)` 拿到的是字符串，
+       而非空字符串一律为真：`if (q.get("sensitiveOnly"))` 会让
+       `?sensitiveOnly=false` 也去筛。这正是 QueryBool 那条欠账的形状。 */
+    if (q.get("sensitiveOnly") === "true") items = items.filter(e => e.isSensitive);
+    const actor = q.get("actorLogin");
+    if (actor) items = items.filter(e => e.actorLogin === actor);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
   /* ── 人员与交接 ──────────────────────────────────────────────── */
-  http.get(pathToRegExp("/v1/staff"), () =>
-    HttpResponse.json({ items: STAFF_LIST, nextCursor: null })),
+  http.get(pathToRegExp("/v1/staff"), ({ request }) => {
+    /* **activeOnly 要真的生效。** 不实现它的话，mock 上"发起交接"
+       的下拉里会出现已停用的人 —— 选中之后是一次白跑（真后端会拒），
+       而这正是 E3 那条欠账修掉的东西。mock 忽略一个筛选参数，
+       等于把已经修好的行为在开发环境里又退回去。 */
+    const q = new URL(request.url).searchParams;
+    const items = q.get("activeOnly") === "true"
+      ? STAFF_LIST.filter(s => s.active) : STAFF_LIST;
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
 
   http.get(pathToRegExp("/v1/handovers"), () =>
     HttpResponse.json({ items: scenario.handovers.map(handoverDto), nextCursor: null })),

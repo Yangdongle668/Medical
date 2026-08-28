@@ -28,15 +28,38 @@ export function VisitPage() {
   const [reason, setReason] = useState("");
   const [result, setResult] = useState<CompleteResult | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  /** 404：不存在，或者不在行范围里 —— 两者对外是同一件事。 */
+  const [gone, setGone] = useState(false);
   const [busy, setBusy] = useState(false);
   /* 断网时勾一下、点一下，进的是发件箱 —— 行上要说出来，否则人会再点一次。 */
   const pending = usePending();
 
+  /* **取这一条，不是取一页再在里面找。**
+     原来是 `listSubjectVisits({ limit: 200 })` 然后 `.find(v => v.id === id)`。
+     种子里只有 10 条访视时，这两种写法看不出任何区别。
+     访视上了几百条之后：列表按窗口升序，前 200 条全是更早的历史访视，
+     `find` 返回 undefined —— 而 undefined 就是"还没加载完"的那个值，
+     于是页面**永远停在「加载中…」**。没有报错，没有空态，
+     Network 里那个请求还是 200。这是最难报障的一种坏法。 */
   const load = () =>
-    call<{ items: Visit[] }>("listSubjectVisits", { query: { limit: 200 } })
-      .then(r => setVisit(r.items.find(v => v.id === id) ?? null));
+    call<Visit>("getSubjectVisit", { params: { id } })
+      .then(v => { setVisit(v); setGone(false); })
+      .catch(e => {
+        if (e instanceof ApiError && e.problem.status === 404) { setVisit(null); setGone(true); return; }
+        throw e;
+      });
   useEffect(() => { void load(); }, [id]);
 
+  /* 三种状态要分得开：拿到了 / 还在拿 / 拿不到。
+     把后两种合成一个「加载中…」，正是上面那个 bug 能藏这么久的原因。 */
+  if (gone) return (
+    <div className="stack">
+      <Link to="/today" className="muted">← 今天</Link>
+      <p className="problem" data-testid="visit-gone">
+        找不到这次访视，或者它不在你的范围里。
+      </p>
+    </div>
+  );
   if (!visit) return <p className="muted">加载中…</p>;
 
   const open = visit.tasks.filter(t => !t.doneAt);

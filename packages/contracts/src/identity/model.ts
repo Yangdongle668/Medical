@@ -39,6 +39,15 @@ export const TeamRef = z.object({
   id: Uuid, code: Code, name: z.string()
 }).meta({ id: "TeamRef" });
 
+/** 分组的完整形态。**不是通讯录上的标签** —— PM 的行范围就是从它推导的，
+ *  所以「这个组承接哪些项目」和「组里有几个人」是它的正题，不是附注。 */
+export const Team = TeamRef.extend({
+  lead: z.object({ id: Uuid, displayName: z.string() }).nullable()
+    .describe("组长。为空是正常状态：新建的组还没定人。"),
+  memberCount: z.number().int(),
+  studyCount: z.number().int().describe("本组承接的项目数 —— 组员的行范围就是这些项目下的中心")
+}).meta({ id: "Team" });
+
 export const Account = z.object({
   id: Uuid,
   login: z.string(),
@@ -85,6 +94,15 @@ export const Principal = z.object({
     fields: z.array(FieldKey),
     actions: z.array(ActionKey),
     modules: z.array(z.string())
+  }),
+  /** 本人的登录方式现状。**只描述自己**，不泄漏别人有没有设口令。 */
+  credentials: z.object({
+    hasPassword: z.boolean()
+      .describe("设过口令没有。false 是正常状态 —— 多数人只用一次性链接。"),
+    passwordIsInitial: z.boolean()
+      .describe(
+        "还在用出厂口令（admin）。界面据此挂红条。" +
+        "这个标记只能从 true 变 false —— 能被重新点亮的报警灯等于没有报警灯。")
   })
 }).meta({ id: "Principal" });
 

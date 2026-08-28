@@ -46,6 +46,17 @@ a { color: var(--accent); text-underline-offset: 2px; }
 }
 .rail a:hover { background: var(--surface-2); color: var(--ink); }
 .rail a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+/* 分组：标题很轻，只在扫一眼时起路标作用，不跟链接抢注意力。 */
+.nav-group { display: flex; flex-direction: column; gap: 2px; }
+.nav-group + .nav-group { margin-top: 10px; }
+.nav-group-title {
+  padding: 0 10px 4px; font-size: 11px; letter-spacing: .04em;
+  color: var(--ink-3); text-transform: none;
+}
+/* 「这一页还没建」的记号。用一个点而不是"WIP"之类的字：
+   它要能被看见，但不该在侧栏里排成一列噪音。 */
+.nav-todo { color: var(--ink-3); margin-left: 5px; }
+
 .rail .who {
   margin-top: auto; padding: 10px; border-top: 1px solid var(--line);
   color: var(--ink-3); font-size: 12px;
@@ -65,6 +76,11 @@ a { color: var(--accent); text-underline-offset: 2px; }
   }
   .rail h1 { padding: 0 8px 0 0; white-space: nowrap; }
   .rail nav { flex-direction: row; gap: 4px; }
+  /* 手机上导航是横向滚动条，分组标题会把它切碎 —— 收起来，
+     链接自己首尾相连地滚。 */
+  .nav-group { flex-direction: row; gap: 4px; }
+  .nav-group + .nav-group { margin-top: 0; margin-left: 8px; }
+  .nav-group-title { display: none; }
   .rail a { white-space: nowrap; }
   .rail .who { display: none; }
 }
@@ -240,3 +256,29 @@ input, textarea, select {
   text-decoration: none; font-size: 12px; font-weight: 500;
 }
 .outbox-badge:hover { filter: brightness(.97); }
+
+
+/* ── 分段切换（组织与权限那三页共用） ────────────────────────────
+   不做成侧栏的三个链接：它们是同一页的三个视角，不是三个模块。
+   做成路由的话，"改完角色回到人员列表"会变成一次导航而不是一次切换。 */
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--line); }
+.seg button {
+  border: 0; background: transparent; color: var(--ink-2);
+  padding: 6px 12px; border-radius: 6px; cursor: pointer; font: inherit;
+}
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; }
+
+/* 概览小卡。四个数字一行，回答"这个租户现在什么样"。 */
+.stats { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.stat .stat-l { color: var(--ink-3); font-size: 12px; }
+.stat .stat-v { font-size: 22px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.stat .stat-n { color: var(--ink-3); font-size: 11.5px; margin-top: 3px; }
+
+/* 表单行：几个字段横着排，窄屏自己折。 */
+.grid-form { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+
+/* 权限矩阵里的复选格 */
+.tick { text-align: center; }
+.tick input { width: auto; }

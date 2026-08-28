@@ -3,7 +3,7 @@ import { define } from "../kernel/registry.js";
 import { Uuid, QueryBool } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
-import { Account, Principal, Role, AuditEntry, RowRule, ActionKey } from "./model.js";
+import { Account, Principal, Role, Team, AuditEntry, RowRule, ActionKey } from "./model.js";
 import { FieldKey } from "../kernel/fields.js";
 
 const CTX = "identity";
@@ -81,6 +81,86 @@ define({
   }).extend(WithReason.shape),
   response: Role,
   errors: ["conflict-version"]
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   「组织与权限」这一页要用的其余几个。
+
+   在此之前 identity 只有五个端点，而它们凑不出一张能用的管理页：
+   建了账号改不了角色、看不到有哪些分组、停用之后启用不回来、
+   新建的内部账号没有任何进得去的办法（要有人上服务器跑脚本登记收件地址）。
+
+   也就是说：管理员建得出人，建出来的人用不了。
+   ════════════════════════════════════════════════════════════════════ */
+
+define({
+  id: "listTeams", method: "get", path: "/v1/teams", layer: "L1", context: CTX,
+  summary: "分组",
+  description:
+    "PM 的行范围（`team`）就是从这里推导的 —— 分组不是通讯录上的标签，\n" +
+    "是「这个人看得到哪些项目」的来源。所以建账号那一步必须挑得到它。",
+  response: z.object({ items: z.array(Team) })
+});
+
+define({
+  id: "createTeam", method: "post", path: "/v1/teams", layer: "L1", context: CTX,
+  summary: "新建分组", action: "manage", status: 201,
+  body: z.object({
+    code: z.string().regex(/^[A-Za-z0-9-]{2,16}$/, "2–16 位字母 / 数字 / 连字符"),
+    name: z.string().min(1).max(64),
+    leadAccountId: Uuid.nullable().optional()
+  }),
+  response: Team,
+  errors: ["validation-failed"]
+});
+
+define({
+  id: "updateAccount", method: "patch", path: "/v1/accounts/{id}",
+  layer: "L1", context: CTX, summary: "改账号的角色 / 分组 / 所属机构", action: "manage",
+  description:
+    "**改角色是权限变更**，写审计且 isSensitive=true —— 「谁把谁调成了什么」是核查必查项。\n\n" +
+    "改成 `row_rule=hospital` 的角色而没有 orgRef，会被拦下：\n" +
+    "那种账号登得进来却一行数据都看不到，而界面上没有任何东西说得出为什么。\n\n" +
+    "登录名与姓名不在这里改：登录名是审计轨迹里的那个标识，改掉等于把历史记录指向别人。",
+  params: ById,
+  body: z.object({
+    roleId: Uuid.optional(),
+    teamId: Uuid.nullable().optional(),
+    orgRef: z.string().max(128).nullable().optional()
+  }).extend(WithReason.shape),
+  response: Account,
+  errors: ["invariant-violated", "not-found"]
+});
+
+define({
+  id: "enableAccount", method: "post", path: "/v1/accounts/{id}:enable",
+  layer: "L2", context: CTX, summary: "启用账号", action: "manage",
+  description:
+    "停用是可逆的 —— 请长假、借调、误停都会走到这里。\n" +
+    "**但派工不会自己回来**：停用时交接出去的中心仍然在接手人名下，\n" +
+    "要还回去得再发起一次交接。这条不是遗漏，是刻意的：\n" +
+    "让派工随启用自动回滚，会把接手人这段时间做的事变成无主的。",
+  params: ById,
+  body: WithReason,
+  response: commandResult(Account),
+  errors: ["not-found", "conflict-version"]
+});
+
+define({
+  id: "setAccountPassword", method: "post", path: "/v1/accounts/{id}:set-password",
+  layer: "L1", context: CTX, summary: "给账号设一个初始口令", action: "manage",
+  description:
+    "新建的内部账号需要一条进得来的路。一次性链接要求先登记收件地址\n" +
+    "（那要有人上服务器跑脚本），在通道配好之前，管理员当面给一个初始口令更实际。\n\n" +
+    "设出来的口令**标成初始口令**：本人登录后顶上会挂一条改不掉的红条，\n" +
+    "改掉之后才消失，而且翻不回去。管理员知道别人的口令是个短期状态，\n" +
+    "这个标记是让它保持短期的唯一办法。\n\n" +
+    "改自己的口令走 `changePassword`，那条要验旧口令；这条是管理员对别人，\n" +
+    "验的是 `manage` 权限。**不能对自己用** —— 那等于绕过验旧口令那道门。",
+  params: ById,
+  body: z.object({ password: z.string().min(8).max(200) }).extend(WithReason.shape),
+  status: 204,
+  errors: ["not-found", "validation-failed"]
 });
 
 define({

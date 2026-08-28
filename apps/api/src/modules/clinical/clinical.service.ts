@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { PoolClient } from "pg";
 import { ctx, principal } from "../../infra/ctx.js";
+import { siteScopeSql } from "@sitedesk/policy";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { pendingSubscribers } from "./visit-completed.js";
@@ -217,13 +218,16 @@ export class ClinicalService {
           sf = num(n.screen_failed), wd = num(n.withdrawn);
 
     const sfBreak = await c.client.query<{ reason: string; count: string }>(
+      /* 第二排序键不是讲究：只按 count DESC 排的话，计数相同的两个原因
+         顺序是**随机**的 —— 同一个请求两次可能给出不同的顺序，
+         而这两条口径要和 listEnrollment 逐字段对得上。 */
       `SELECT screen_fail_reason AS reason, count(*) AS count FROM subject
         WHERE study_site_id = $1 AND screen_fail_reason IS NOT NULL
-        GROUP BY 1 ORDER BY 2 DESC`, [siteId]);
+        GROUP BY 1 ORDER BY 2 DESC, 1`, [siteId]);
     const wdBreak = await c.client.query<{ reason: string; count: string }>(
       `SELECT withdraw_reason AS reason, count(*) AS count FROM subject
         WHERE study_site_id = $1 AND withdraw_reason IS NOT NULL
-        GROUP BY 1 ORDER BY 2 DESC`, [siteId]);
+        GROUP BY 1 ORDER BY 2 DESC, 1`, [siteId]);
 
     const ratio = (a: number, b: number) => b > 0 ? a / b : null;
     return {
@@ -236,6 +240,82 @@ export class ClinicalService {
       withdrawBreakdown: wdBreak.rows.map(r => ({ reason: r.reason, count: Number(r.count) })),
       attainment: ratio(enr, s.contracted)
     };
+  }
+
+  /** 全部中心的漏斗。**一条查询，不是每个中心一条** ——
+   *  客户端 fan-out 是把 N+1 搬到浏览器上，不是消灭它。
+   *
+   *  拆解（筛败原因、脱落原因）另走一条聚合查询：
+   *  把它们塞进上面那条会让每个中心多出几行，分页游标就没法算了。 */
+  async listEnrollment(q: {
+    limit: number; cursor?: string; studyId?: string; behindOnly?: boolean;
+  }) {
+    const c = ctx();
+    const sc = siteScopeSql(principal(), "s");
+    const params: unknown[] = [...sc.params];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
+    const conds = [sc.sql];
+    if (q.studyId) conds.push(`s.study_id = ${add(q.studyId)}`);
+    if (q.cursor) conds.push(`s.code > ${add(q.cursor)}`);
+
+    const { rows } = await c.client.query<{
+      id: string; code: string; hospital: string; contracted: number;
+      prescreened: string; icf_signed: string; in_screening: string;
+      enrolled: string; screen_failed: string; withdrawn: string; completed: string;
+    }>(`
+      SELECT s.id, s.code, s.hospital, s.contracted,
+             count(j.id)                                                   AS prescreened,
+             count(j.id) FILTER (WHERE j.icf_signed_on IS NOT NULL)        AS icf_signed,
+             count(j.id) FILTER (WHERE j.state = 'screening')              AS in_screening,
+             count(j.id) FILTER (WHERE j.state IN ('enrolled','withdrawn','completed'))
+                                                                           AS enrolled,
+             count(j.id) FILTER (WHERE j.state = 'screen_failed')          AS screen_failed,
+             count(j.id) FILTER (WHERE j.state = 'withdrawn')              AS withdrawn,
+             count(j.id) FILTER (WHERE j.state = 'completed')              AS completed
+        FROM study_site s LEFT JOIN subject j ON j.study_site_id = s.id
+       WHERE ${conds.join(" AND ")}
+       GROUP BY s.id, s.code, s.hospital, s.contracted
+       ${q.behindOnly
+         ? `HAVING count(j.id) FILTER (WHERE j.state IN ('enrolled','withdrawn','completed'))
+                  < s.contracted`
+         : ""}
+       ORDER BY s.code LIMIT ${add(q.limit + 1)}`, params);
+
+    const page = rows.slice(0, q.limit);
+    if (!page.length) return { items: [], nextCursor: null };
+
+    const ids = page.map(r => r.id);
+    const breakdown = async (col: string) => {
+      const { rows: b } = await c.client.query<{
+        study_site_id: string; reason: string; count: string;
+      }>(`SELECT study_site_id, ${col} AS reason, count(*) AS count FROM subject
+           WHERE study_site_id = ANY($1) AND ${col} IS NOT NULL
+           GROUP BY 1, 2 ORDER BY 3 DESC, 2`, [ids]);
+      const by = new Map<string, { reason: string; count: number }[]>();
+      for (const r of b)
+        by.set(r.study_site_id,
+          [...(by.get(r.study_site_id) ?? []), { reason: r.reason, count: Number(r.count) }]);
+      return by;
+    };
+    const [sfBy, wdBy] = await Promise.all([
+      breakdown("screen_fail_reason"), breakdown("withdraw_reason")]);
+
+    const ratio = (a: number, b: number) => b > 0 ? a / b : null;
+    const items = page.map(r => {
+      const pre = Number(r.prescreened), icf = Number(r.icf_signed),
+            enr = Number(r.enrolled), sf = Number(r.screen_failed), wd = Number(r.withdrawn);
+      return {
+        studySiteId: r.id, siteCode: r.code, hospital: r.hospital, contracted: r.contracted,
+        prescreened: pre, icfSigned: icf, inScreening: Number(r.in_screening),
+        enrolled: enr, screenFailed: sf, withdrawn: wd, completed: Number(r.completed),
+        screenFailRate: ratio(sf, icf), icfRate: ratio(icf, pre), yieldRate: ratio(enr, pre),
+        retentionRate: ratio(enr - wd, enr),
+        screenFailBreakdown: sfBy.get(r.id) ?? [],
+        withdrawBreakdown: wdBy.get(r.id) ?? [],
+        attainment: ratio(enr, r.contracted)
+      };
+    });
+    return { items, nextCursor: rows.length > q.limit ? page.at(-1)!.code : null };
   }
 
   async listVisits(q: {

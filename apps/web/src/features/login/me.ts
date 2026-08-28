@@ -21,6 +21,7 @@ export interface Me {
   permissions: {
     rowRule: string; fields: string[]; actions: string[]; modules: string[];
   };
+  credentials: { hasPassword: boolean; passwordIsInitial: boolean };
 }
 
 let inflight: Promise<Me> | null = null;
