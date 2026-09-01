@@ -121,6 +121,26 @@ define({
 });
 
 define({
+  id: "listPnl", method: "get", path: "/v1/pnl",
+  layer: "L1", context: CTX,
+  summary: "全部中心的损益",
+  description:
+    "`getSitePnl` 的列表形态。**存在的理由是不让前端做 fan-out** ——\n" +
+    "「成本与毛利」那一页要的是全部中心的同一组数，按中心逐个去打，\n" +
+    "就是把 N+1 从服务端搬到浏览器上。\n\n" +
+    "口径与 `getSitePnl` 完全一致：同一批 `@sitedesk/calc` 函数、同一个 `calcVersion`。\n" +
+    "**两套口径迟早长出分歧，而分歧只有对账那天才看得见。**\n\n" +
+    "列权限照常：一线拿到的是同一个接口，只是没有钱那几栏；\n" +
+    "毛利只有拿到 `margin` 的人看得到。",
+  query: PageQuery.extend({
+    studyId: Uuid.optional(),
+    /** 只看亏的。**默认不筛** —— 赚的也要看得见，否则"我们一共赚了多少"凑不齐。 */
+    lossOnly: QueryBool.optional()
+  }),
+  response: page(SitePnl)
+});
+
+define({
   id: "getSitePnlTrend", method: "get", path: "/v1/study-sites/{id}/pnl/monthly",
   layer: "L1", context: CTX,
   summary: "单中心分月损益",

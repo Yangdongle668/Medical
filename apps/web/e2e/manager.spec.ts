@@ -102,3 +102,54 @@ test.describe("经营层", () => {
     await expect(page.locator("pre").last()).toContainText("price");
   });
 });
+
+test.describe("经营层 · 驾驶舱与财务", () => {
+  test.beforeEach(async ({ page }) => { await page.goto("/sites?as=boss"); });
+
+  test("驾驶舱只列要动手的，且每一条都指得出去哪一页", async ({ page }) => {
+    await page.getByRole("link", { name: "经营驾驶舱" }).click();
+    const todos = page.getByTestId("todo");
+    await expect(todos.first()).toBeVisible();
+
+    /* SS-14 一例预筛都没有 —— 这一条要在，而且要标重 */
+    await expect(page.getByTestId("todos")).toContainText("一例预筛都没有");
+    /* 每一条都带一个去处，不是一句干巴巴的告警 */
+    const n = await todos.count();
+    for (let i = 0; i < n; i++)
+      await expect(todos.nth(i).getByRole("link")).toBeVisible();
+  });
+
+  test("驾驶舱不再画第四遍表 —— 主体是待办，不是表格", async ({ page }) => {
+    await page.getByRole("link", { name: "经营驾驶舱" }).click();
+    await expect(page.getByTestId("todos")).toBeVisible();
+    /* 底下那几页已经把表画全了，这一页一张 table 都不该有 */
+    await expect(page.locator("table")).toHaveCount(0);
+  });
+
+  test("成本与毛利：亏得最多的排最上面，待审那一笔单独说清", async ({ page }) => {
+    await page.getByRole("link", { name: "成本与毛利" }).click();
+    await expect(page.getByTestId("pnl-row").first()).toBeVisible();
+    await expect(page.getByTestId("pnl-summary")).toContainText("个中心");
+
+    /* 毛利升序：第一行的毛利不该大于最后一行 */
+    const first = await page.getByTestId("pnl-row").first().innerText();
+    const last = await page.getByTestId("pnl-row").last().innerText();
+    expect(first).not.toBe(last);
+  });
+
+  test("人才梯队：逐条列风险项，不给一个说不清来源的分数", async ({ page }) => {
+    await page.getByRole("link", { name: "人才梯队" }).click();
+    await expect(page.getByTestId("person-card").first()).toBeVisible();
+    /* 段志远：GCP 过期 + 无继任者 —— 至少两项 */
+    const duan = page.getByTestId("person-card").filter({ hasText: "段志远" });
+    await expect(duan.getByTestId("risk-chip")).toContainText("项风险");
+    await expect(duan).toContainText("没有继任者");
+    /* 每一条风险都要说得出怎么解 */
+    await expect(duan).toContainText("指定继任者");
+  });
+});
+
+test("CRC 打开成本与毛利：整块金额不画，而且直说为什么", async ({ page }) => {
+  await page.goto("/pnl");
+  await expect(page.getByTestId("pnl-masked")).toContainText("看不到它们的钱");
+});

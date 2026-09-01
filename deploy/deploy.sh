@@ -61,6 +61,11 @@ until dc exec -T db pg_isready -U postgres >/dev/null 2>&1; do
 done
 echo
 
+# 迁移之前先确认口令对得上。不确认的话，卷比 .env 老这件事会以
+# 一条 `password authentication failed` 的堆栈出现在迁移日志里 ——
+# 那句话指向"口令填错了"，而实际要做的是换口令或者重建卷。
+验口令 || 口令对不上 "$([ "$DEMO" = 1 ] && echo --demo)"
+
 步 "④ 迁移"
 # 一次性容器，跑完就退。失败就停在这里 —— 让一个 schema 不对的库
 # 把服务拉起来，只会把问题推迟到第一个请求。

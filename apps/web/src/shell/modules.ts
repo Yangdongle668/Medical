@@ -80,8 +80,7 @@ export const MODULES: ModuleDef[] = [
     todo: "每次访视产生的补偿，按受试者与状态列出。已产生未发放的是重点。" },
 
   /* ── 经营 ─────────────────────────────────────────────────────── */
-  { key: "dash", title: "经营驾驶舱", group: "经营", path: "/dash",
-    todo: "在手项目、在组人数、本月确认收入与毛利、需要现在动手的几件事。" },
+  { key: "dash", title: "经营驾驶舱", group: "经营", path: "/dash" },
   { key: "intake", title: "立项与建档", group: "经营", path: "/intake",
     todo: "待受理的立项申请：申办方、适应症、预算、要不要接。" },
   { key: "sites", title: "项目 · 中心台账", group: "经营", path: "/sites" },
@@ -104,13 +103,11 @@ export const MODULES: ModuleDef[] = [
 
   /* ── 资源 ─────────────────────────────────────────────────────── */
   { key: "staff", title: "派工与产能", group: "资源", path: "/staff" },
-  { key: "people", title: "人才梯队", group: "资源", path: "/people",
-    todo: "在职情况、能力标签、离职风险 —— 高风险的要提前看见。" },
+  { key: "people", title: "人才梯队", group: "资源", path: "/people" },
   { key: "time", title: "工时与差旅", group: "资源", path: "/timesheets" },
 
   /* ── 财务 ─────────────────────────────────────────────────────── */
-  { key: "pnl", title: "成本与毛利", group: "财务", path: "/pnl",
-    todo: "按项目/中心的收入、成本、毛利。单个中心的损益页已经有了（/sites/:id/pnl）。" },
+  { key: "pnl", title: "成本与毛利", group: "财务", path: "/pnl" },
   { key: "bill", title: "里程碑 · 结算", group: "财务", path: "/bill",
     todo: "合同里程碑的达成与开票状态，逾期未收的排在前面。" },
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { owner, appConn, accountIds, asAccount } from "./helpers.js";
+import { owner, appConn, accountIds, asAccount, TENANT } from "./helpers.js";
 
 let o, c, ID;
 beforeAll(async () => {
@@ -84,7 +84,21 @@ describe("四个 W：为什么最容易被省，所以由约束强制", () => {
   it("角色是快照 —— 事后改角色，历史里仍是当时的身份", async () => {
     await o.query("BEGIN");
     await insert(o, { actor_role_code: "crc" });
-    await o.query("UPDATE account SET role_id = (SELECT id FROM role WHERE code='pm') WHERE login='wutong'");
+    /* **角色要按租户找。** `WHERE code='pm'` 在多租户下返回多行，
+       子查询当场报 "more than one row returned by a subquery"。
+
+       测试库每轮从一个租户开始（global-setup 会 down 99 / up），
+       但 tenant.test.js 会再开一个 —— 于是这条测试的成败取决于
+       vitest 把哪个文件排在前面。**文件是串行跑的，顺序却不保证稳定**，
+       所以它表现成"偶尔红一次"。
+
+       更糟的是：这句一抛，下面那句 ROLLBACK 就走不到了，
+       共用的 owner 连接从此停在一个失败的事务里 ——
+       同一文件后面每一条都跟着红，而它们和这个 bug 毫无关系。 */
+    await o.query(
+      `UPDATE account SET role_id =
+         (SELECT id FROM role WHERE code = 'pm' AND tenant_id = $1)
+        WHERE login = 'wutong'`, [TENANT]);
     const { rows } = await o.query(
       "SELECT actor_role_code FROM audit_entry WHERE target_id='SV-0001' ORDER BY at DESC LIMIT 1");
     expect(rows[0].actor_role_code).toBe("crc");

@@ -23,10 +23,14 @@ test.describe("经营层：组织与权限", () => {
   });
 
   test("还没建的页有入口，点进去说得出它将来要回答什么", async ({ page }) => {
-    await page.getByRole("link", { name: "经营驾驶舱" }).click();
+    /* 挑一个**还没建**的模块。这里原来点的是「经营驾驶舱」，
+       而它后来建好了 —— 于是这条测试红在"找不到 coming-soon"上，
+       报错指向导航坏了，实际只是它盯的那一页交付了。
+       换成合同变更；它建好的那天，这条会以同样的方式提醒下一个人。 */
+    await page.getByRole("link", { name: "合同变更" }).click();
     await expect(page.getByTestId("coming-soon")).toBeVisible();
     /* 不是一句"敬请期待" —— 说的是这一页该有什么 */
-    await expect(page.locator(".card")).toContainText("在手项目");
+    await expect(page.locator(".card")).toContainText("变更单");
   });
 
   test("建号 → 台账里立刻有他 → 停用要理由", async ({ page }) => {

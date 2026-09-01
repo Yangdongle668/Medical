@@ -170,13 +170,20 @@ describe("account 表：外部方只看得到自己", () => {
     const { rows } = await c.query("SELECT login FROM account ORDER BY login");
     return rows.map(r => r.login);
   });
-  it("内部员工看得到全部账号", async () => {
+  it("内部员工看得到本租户的全部账号", async () => {
     /* 20 个演示账号 + 出厂管理员（迁移 0026）。
-       断言的是"全部"，所以拿库里真实的总数比 —— 写死 21 的话，
+       断言的是"全部"，所以拿库里真实的数比 —— 写死 21 的话，
        下次种子里多一个人，这条测试会以"RLS 挡住了谁"的样子失败，
-       而那正是最容易查错方向的一种失败。 */
-    const all = (await o.query("SELECT count(*)::int AS n FROM account")).rows[0].n;
-    expect((await visibleAccounts(ID.linmin)).length).toBe(all);
+       而那正是最容易查错方向的一种失败。
+
+       **数的必须是同一个租户。** 裸 `count(*) FROM account`
+       走的是 owner 连接、绕过 RLS，数的是全部租户 ——
+       而 tenant.test.js 每跑一次就留下一个租户（各带一个出厂 admin），
+       且 vitest 并行跑文件，那一行插入可能正好落在这两句查询之间。
+       于是这条测试**时好时坏**，失败信息说的是"RLS 挡住了谁"。 */
+    const mine = (await o.query(
+      "SELECT count(*)::int AS n FROM account WHERE tenant_id = $1", [TENANT])).rows[0].n;
+    expect((await visibleAccounts(ID.linmin)).length).toBe(mine);
     /* 顺带钉住管理员确实在里面 —— "看得到全部"在库里只有一个账号时
        也成立，那句话就没有内容了。 */
     expect(await visibleAccounts(ID.linmin)).toContain("admin");

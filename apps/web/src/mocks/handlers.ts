@@ -662,6 +662,20 @@ export const scenarioHandlers = [
     return HttpResponse.json(pnlFor(id, dto));
   }),
 
+  /* 全部中心的损益。**走同一个 pnlFor** —— mock 里为汇总另写一遍
+     I8' 的话，这个系统就有了第四套口径（服务端、calc、mock 单中心、
+     mock 汇总），而"汇总页和详情页对不上"正是它最先长出来的样子。 */
+  http.get(pathToRegExp("/v1/pnl"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = SITES_LIST
+      .map(x => { const dto = siteDto(x.id); return dto ? pnlFor(x.id, dto) : null; })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    if (q.get("lossOnly") === "true")
+      items = items.filter(x => typeof x.grossProfitCents === "number"
+        && x.grossProfitCents < 0);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
   /* ── 入组漏斗 ────────────────────────────────────────────────────
      三个中心造出三种形状，因为这两页要回答的正是"哪一种"：
        SS-01 预筛多、筛败高 —— 要谈方案修订

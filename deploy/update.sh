@@ -65,6 +65,11 @@ fi
 步 "② 构建 $新标签"
 SITEDESK_TAG="$新标签" dc build
 
+# 同 deploy.sh：先确认口令对得上，再迁移。
+# 升级路径上更容易撞到 —— 换机器、换目录、从备份恢复 .env，
+# 都会让"卷"和".env"来自两个不同的时刻。
+验口令 || 口令对不上
+
 步 "③ 迁移（在换镜像之前）"
 SITEDESK_TAG="$新标签" dc --profile tools run --rm migrate
 
