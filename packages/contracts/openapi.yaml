@@ -3542,6 +3542,128 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/startup-checklists:
+    get:
+      operationId: listStartupChecklists
+      tags:
+        - site
+      summary: 各中心的启动清单进度
+      description: |-
+        `getStartupChecklist` 的汇总形态，**不带逐项明细** ——
+        这一页问的是「哪几个中心卡住了」，不是「某个中心还差哪几项」。
+        带上 items 的话，15 个中心就是 15 × 16 项，而这一页一项都不画。
+
+        排序：先未完成的阻塞项数（降序），再距计划 SIV 的天数 ——
+        **启动慢一个月，这个中心的整条收入曲线右移一个月。**
+      x-layer: L1
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: blockedOnly
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
+      responses:
+        '200':
+          description: 各中心的启动清单进度
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListStartupChecklistsResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/startup-items/{id}:complete:
     post:
       operationId: completeStartupItem
@@ -9376,6 +9498,64 @@ components:
         - items
       additionalProperties: false
       description: 启动慢一个月，这个中心的整条收入曲线右移一个月。
+    StartupSummary:
+      type: object
+      properties:
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        hospital:
+          type: string
+        state:
+          type: string
+        sivPlannedOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        daysToSiv:
+          nullable: true
+          description: 距计划 SIV 的天数；负数表示已过计划日
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        total:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        done:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        blockingOpen:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+          description: 未完成的阻塞项数 —— 它为 0 才能推进 SIV
+        overdue:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+      required:
+        - studySiteId
+        - siteCode
+        - hospital
+        - state
+        - sivPlannedOn
+        - daysToSiv
+        - total
+        - done
+        - blockingOpen
+        - overdue
+      additionalProperties: false
     RoleKind:
       type: string
       enum:
@@ -11638,6 +11818,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Staff'
+        nextCursor:
+          nullable: true
+          description: null 表示已到末页
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+        - items
+        - nextCursor
+      additionalProperties: false
+    ListStartupChecklistsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StartupSummary'
         nextCursor:
           nullable: true
           description: null 表示已到末页

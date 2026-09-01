@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
-import { today } from "../subject/api.js";
+import { today, daysSince } from "../../shell/dates.js";
 
 /* ════════════════════════════════════════════════════════════════════
    伦理事务。
@@ -33,9 +33,6 @@ const DECISION_LABEL: Record<string, string> = {
   pending: "待批复", approved: "已批准", rejected: "未通过"
 };
 
-/** 递上去多少天了。待批复的那些，这个数是唯一的紧急信号。 */
-const daysSince = (d: string) =>
-  Math.round((Date.now() - new Date(d + "T00:00:00Z").getTime()) / 86_400_000);
 
 export function EthicsPage() {
   const [sites, setSites] = useState<Site[] | null>(null);

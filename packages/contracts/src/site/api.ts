@@ -107,7 +107,7 @@ define({
 /* ════════════════════════════════════════════════════════════════════
    启动清单 · 人员 · 交接
    ════════════════════════════════════════════════════════════════════ */
-import { StartupChecklist, StartupItem, Staff, Handover, RoleKind, HandoverStatus,
+import { StartupChecklist, StartupSummary, StartupItem, Staff, Handover, RoleKind, HandoverStatus,
   StartupTemplate, StartupTemplateItem }
   from "./staffing.js";
 
@@ -120,6 +120,24 @@ define({
     "阻塞项未清零，`POST /v1/study-sites/{id}:advance` 到 `siv` 会被闸门拦下。",
   params: ById,
   response: StartupChecklist
+});
+
+define({
+  id: "listStartupChecklists", method: "get", path: "/v1/startup-checklists",
+  layer: "L1", context: CTX,
+  summary: "各中心的启动清单进度",
+  description:
+    "`getStartupChecklist` 的汇总形态，**不带逐项明细** ——\n" +
+    "这一页问的是「哪几个中心卡住了」，不是「某个中心还差哪几项」。\n" +
+    "带上 items 的话，15 个中心就是 15 × 16 项，而这一页一项都不画。\n\n" +
+    "排序：先未完成的阻塞项数（降序），再距计划 SIV 的天数 ——\n" +
+    "**启动慢一个月，这个中心的整条收入曲线右移一个月。**",
+  query: PageQuery.extend({
+    /** 只看还有阻塞项没清的。**默认不筛** —— 清完的也要看得见，
+     *  否则"还有几个中心没启动"这个数在页面上凑不齐。 */
+    blockedOnly: QueryBool.optional()
+  }),
+  response: page(StartupSummary)
 });
 
 define({

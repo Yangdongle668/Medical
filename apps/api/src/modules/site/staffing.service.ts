@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { DEFAULT_HANDOVER_ITEMS } from "@sitedesk/contracts";
 import { ctx, principal } from "../../infra/ctx.js";
+import { siteScopeSql } from "@sitedesk/policy";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { NotifyService } from "../../infra/notify.js";
@@ -76,6 +77,59 @@ export class StaffingService {
       overdue: items.filter(i => i.overdueDays !== null).length,
       items
     };
+  }
+
+  /** 各中心的启动清单进度。**两条查询，不是每个中心一条。**
+   *
+   *  逐项明细不下发：这一页问的是"哪几个中心卡住了"，
+   *  而 15 个中心 × 16 项 = 240 行里，它一行都不画。
+   *
+   *  统计在 SQL 里做，不是取回全部 startup_item 再在 JS 里数 ——
+   *  后者在 15 个中心时看不出区别，中心上到几百个时那一条请求会把
+   *  几千行搬进内存，只为了得到四个整数。 */
+  async listChecklists(q: { limit: number; cursor?: string; blockedOnly?: boolean }) {
+    const c = ctx();
+    const sc = siteScopeSql(principal(), "s");
+    const params: unknown[] = [...sc.params];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
+    const conds = [sc.sql];
+    if (q.cursor) conds.push(`s.code > ${add(q.cursor)}`);
+
+    const { rows } = await c.client.query<{
+      id: string; code: string; hospital: string; state: string;
+      siv_planned_on: Date | null;
+      total: string; done: string; blocking_open: string; overdue: string;
+    }>(`
+      SELECT s.id, s.code, s.hospital, s.state, s.siv_planned_on,
+             count(i.id)                                             AS total,
+             count(i.id) FILTER (WHERE i.done_at IS NOT NULL)         AS done,
+             count(i.id) FILTER (WHERE i.is_blocking
+                                   AND i.done_at IS NULL)             AS blocking_open,
+             /* 逾期与 toItem() 同一条口径：**当天到期不算逾期** ——
+                逾期是"过了应完成日"，不是"今天该做"。
+                所以下面是严格小于 CURRENT_DATE，不是小于等于。
+                两处口径必须一致，否则汇总页说 3 项逾期、详情页说 2 项。
+                （注释里不写反引号 —— 它会把这个模板字符串就地截断。） */
+             count(i.id) FILTER (WHERE i.done_at IS NULL
+                                   AND i.due_on IS NOT NULL
+                                   AND i.due_on < CURRENT_DATE)       AS overdue
+        FROM study_site s LEFT JOIN startup_item i ON i.study_site_id = s.id
+       WHERE ${conds.join(" AND ")}
+       GROUP BY s.id, s.code, s.hospital, s.state, s.siv_planned_on
+       ORDER BY s.code LIMIT ${add(q.limit + 1)}`, params);
+
+    const page = rows.slice(0, q.limit);
+    const today = new Date();
+    let items = page.map(r => ({
+      studySiteId: r.id, siteCode: r.code, hospital: r.hospital, state: r.state,
+      sivPlannedOn: day(r.siv_planned_on),
+      daysToSiv: r.siv_planned_on ? daysBetween(today, r.siv_planned_on) : null,
+      total: Number(r.total), done: Number(r.done),
+      blockingOpen: Number(r.blocking_open), overdue: Number(r.overdue)
+    }));
+    if (q.blockedOnly) items = items.filter(x => x.blockingOpen > 0);
+
+    return { items, nextCursor: rows.length > q.limit ? page.at(-1)!.code : null };
   }
 
   private async item(id: string): Promise<ItemRow> {

@@ -61,7 +61,9 @@ export const pay = (id: string, paidOn: string, receiptRef: string) =>
   call<{ data: Payment }>("paySubjectPayment",
     { params: { id }, body: { paidOn, receiptRef } });
 
-export const today = () => new Date().toISOString().slice(0, 10);
+/* today 住在 shell/dates.ts —— 和 daysSince 在一起。
+   日期这类东西散成两份，迟早有一份用的是本地时区、另一份用 UTC。 */
+export { today } from "../../shell/dates.js";
 
 /** 「筛选号看不看得到」由**数据**回答，不由角色判断 ——
  *  后端把无权限的字段删掉了，这里就少一列，仅此而已。 */

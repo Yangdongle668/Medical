@@ -21,12 +21,19 @@ const CreateHandover = z.object({
   plannedOn: DateOnly
 });
 
+const ChecklistQ = PageQuery.extend({ blockedOnly: QueryBool.optional() });
+
 @Controller("/v1")
 export class StaffingController {
   constructor(
     private readonly svc: StaffingService,
     private readonly idem: IdempotencyService
   ) {}
+
+  @Get("/startup-checklists") @Operation("listStartupChecklists")
+  listChecklists(@Query(new ZodPipe(ChecklistQ)) q: z.infer<typeof ChecklistQ>) {
+    return this.svc.listChecklists(q);
+  }
 
   @Get("/study-sites/:id/startup-items") @Operation("getStartupChecklist")
   checklist(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.checklist(id); }

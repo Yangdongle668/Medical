@@ -62,8 +62,7 @@ export const MODULES: ModuleDef[] = [
     todo: "待审工时、差旅、方案偏离。审批不能审自己填的 —— 那条规则在库里（迁移 0023）。" },
 
   /* ── 项目周期 ─────────────────────────────────────────────────── */
-  { key: "startup", title: "中心启动清单", group: "项目周期", path: "/startup",
-    todo: "按中心列启动清单完成度。单个中心的清单页已经有了（/sites/:id/startup），这里是汇总。" },
+  { key: "startup", title: "中心启动清单", group: "项目周期", path: "/startup" },
   { key: "prescreen", title: "预筛登记", group: "项目周期", path: "/prescreen" },
   { key: "ethics", title: "伦理事务", group: "项目周期", path: "/ethics" },
   { key: "handover", title: "交接", group: "项目周期", path: "/handovers" },
@@ -71,8 +70,7 @@ export const MODULES: ModuleDef[] = [
   /* ── 现场 ─────────────────────────────────────────────────────── */
   { key: "isf", title: "中心文件与物资", group: "现场", path: "/isf",
     todo: "ISF 文件清单与缺件、现场物资库存。" },
-  { key: "material", title: "药品与样本", group: "现场", path: "/material",
-    todo: "药品发放/回收/销毁的账实核对，样本采集与外送。账实不平的要顶到最上面。" },
+  { key: "material", title: "药品与样本", group: "现场", path: "/material" },
   { key: "pay", title: "受试者补偿", group: "现场", path: "/payments" },
 
   /* ── 经营 ─────────────────────────────────────────────────────── */

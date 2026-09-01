@@ -60,6 +60,14 @@ export const StartupChecklist = z.object({
   description: "启动慢一个月，这个中心的整条收入曲线右移一个月。"
 });
 
+/** 汇总视角：**同一份口径，但不带 items**。
+ *
+ *  「中心启动清单」那一页问的是"哪几个中心卡住了"，不是"某个中心还差哪几项"
+ *  —— 后者是详情页的事。把 items 一起下发的话，
+ *  15 个中心就是 15 × 16 项，而那一页一项都不画。 */
+export const StartupSummary = StartupChecklist.omit({ items: true })
+  .meta({ id: "StartupSummary" });
+
 /* ── 人员 ────────────────────────────────────────────────────────── */
 export const ROLE_KINDS = ["CRA", "CRC", "PM", "QA", "DM"] as const;
 export const RoleKind = z.enum(ROLE_KINDS).meta({ id: "RoleKind" });

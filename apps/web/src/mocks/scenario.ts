@@ -170,6 +170,12 @@ export interface Scenario {
     id: string; studySiteId: string; movedOn: string; kind: string;
     quantity: number; subjectRef: string | null; refNo: string | null; note: string | null;
   }[];
+  /** 生物样本。闭环 = 收到**或**销毁；两个都没有 = 在路上不知去向。 */
+  specimens: {
+    id: string; studySiteId: string; subjectRef: string; kind: string;
+    collectedOn: string; shippedOn: string | null; receivedOn: string | null;
+    discardedOn: string | null; trackingNo: string | null; closed: boolean;
+  }[];
   timesheets: MockTimesheet[];
   rateCards: MockRateCard[];
 }
@@ -295,6 +301,7 @@ export function makeScenario(): Scenario {
        于是没有人会发现它们其实没写对。 */
     qualityEvents: makeSaes(),
     ipMovements: makeIpMovements(),
+    specimens: makeSpecimens(),
     timesheets: makeTimesheets(),
     rateCards: makeRateCards(),
     siteState: Object.fromEntries(SITES.map(s => [s.id, s.state])),
@@ -660,3 +667,25 @@ export const mkSubmissions = (): MockSubmission[] => [
   { id: "sub-4", studySiteId: "s2", kind: "annual", submittedOn: day(-12),
     decision: "pending", decidedOn: null, refNo: null, note: "年度跟踪审查" }
 ];
+
+/* 样本：三种结局各一，因为这一页要分的正是这三种 ——
+     在途 21 天（久到该去问）、在途 3 天（正常）、已收到（闭环）、还没寄。
+   全给"已收到"的话，"寄出了但没确认"那条红条永远不出现，
+   而它是这一页存在的理由。 */
+function makeSpecimens(): Scenario["specimens"] {
+  const d = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+  return [
+    { id: "sp-1", studySiteId: "s1", subjectRef: "R-0203", kind: "全血",
+      collectedOn: d(24), shippedOn: d(21), receivedOn: null, discardedOn: null,
+      trackingNo: "SF-77301", closed: false },
+    { id: "sp-2", studySiteId: "s1", subjectRef: "R-0203", kind: "血清",
+      collectedOn: d(5), shippedOn: d(3), receivedOn: null, discardedOn: null,
+      trackingNo: "SF-77455", closed: false },
+    { id: "sp-3", studySiteId: "s1", subjectRef: "S-0102", kind: "尿",
+      collectedOn: d(30), shippedOn: d(28), receivedOn: d(26), discardedOn: null,
+      trackingNo: "SF-77120", closed: true },
+    { id: "sp-4", studySiteId: "s2", subjectRef: "R-0331", kind: "全血",
+      collectedOn: d(1), shippedOn: null, receivedOn: null, discardedOn: null,
+      trackingNo: null, closed: false }
+  ];
+}

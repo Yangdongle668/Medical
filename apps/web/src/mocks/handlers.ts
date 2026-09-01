@@ -435,6 +435,73 @@ export const scenarioHandlers = [
     });
   }),
 
+  http.post(pathToRegExp("/v1/study-sites/{id}/ip-movements"), async ({ request }) => {
+    const id = seg(request.url, /\/study-sites\/([^/]+)\/ip-movements/);
+    const b = await request.json() as {
+      kind: string; quantity: number; movedOn?: string;
+      subjectRef?: string; refNo?: string; note?: string };
+    const m = {
+      id: `ip-${scenario.ipMovements.length + 1}`, studySiteId: id!,
+      movedOn: b.movedOn ?? todayStr(), kind: b.kind, quantity: b.quantity,
+      subjectRef: b.subjectRef ?? null, refNo: b.refNo ?? null, note: b.note ?? null
+    };
+    /* **只追加。** mock 里也不提供改与删 —— 提供了的话，
+       前端迟早会长出一个"编辑"按钮，而真后端根本没有那个入口。 */
+    scenario.ipMovements.push(m);
+    return HttpResponse.json(m, { status: 201 });
+  }),
+
+  /* ── 生物样本 ──────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/study-sites/{id}/specimens"), ({ request }) => {
+    const id = seg(request.url, /\/study-sites\/([^/]+)\/specimens/);
+    const q = new URL(request.url).searchParams;
+    let items = scenario.specimens.filter(x => x.studySiteId === id);
+    if (q.get("openOnly") === "true") items = items.filter(x => !x.closed);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/study-sites/{id}/specimens"), async ({ request }) => {
+    const id = seg(request.url, /\/study-sites\/([^/]+)\/specimens/);
+    const b = await request.json() as {
+      subjectRef: string; kind: string; collectedOn: string; trackingNo?: string };
+    const x = {
+      id: `sp-${scenario.specimens.length + 1}`, studySiteId: id!,
+      subjectRef: b.subjectRef, kind: b.kind, collectedOn: b.collectedOn,
+      shippedOn: null, receivedOn: null, discardedOn: null,
+      trackingNo: b.trackingNo ?? null, closed: false
+    };
+    scenario.specimens.push(x);
+    return HttpResponse.json(x, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/specimens/{id}:advance"), async ({ request }) => {
+    const id = seg(request.url, /\/specimens\/([^/:]+):advance/);
+    const x = scenario.specimens.find(y => y.id === id);
+    if (!x) return HttpResponse.json(problem("not-found", 404, "样本不存在"), { status: 404 });
+    const b = await request.json() as { stage: string; on: string };
+    if (b.stage === "shipped") x.shippedOn = b.on;
+    if (b.stage === "received") x.receivedOn = b.on;
+    if (b.stage === "discarded") x.discardedOn = b.on;
+    /* 闭环 = 收到 **或** 销毁。两个都没有就是在路上不知去向 ——
+       这个布尔是算出来的，不是存的，和后端同一条口径。 */
+    x.closed = !!(x.receivedOn || x.discardedOn);
+    return HttpResponse.json({ data: x, sideEffects: [] }, { status: 201 });
+  }),
+
+  /* ── 启动清单汇总 ──────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/startup-checklists"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    /* **走同一个 checklistFor** —— 汇总另算一遍的话，
+       汇总页和详情页会在"逾期"这一栏上对不上，
+       而那正是这条端点的测试里花了最多力气钉住的东西。 */
+    let items = SITES_LIST.map(s => {
+      const { items: _items, ...summary } = checklistFor(s.id);
+      return summary;
+    });
+    if (q.get("blockedOnly") === "true") items = items.filter(x => x.blockingOpen > 0);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
   http.get(pathToRegExp("/v1/quality-events"), () =>
     HttpResponse.json({ items: scenario.qualityEvents, nextCursor: null })),
 
