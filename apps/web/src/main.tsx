@@ -29,6 +29,10 @@ import { PaymentsPage } from "./features/subject/PaymentsPage.js";
 import { EthicsPage } from "./features/ethics/EthicsPage.js";
 import { StartupSummaryPage } from "./features/site/StartupSummaryPage.js";
 import { MaterialPage } from "./features/material/MaterialPage.js";
+import { PmPage } from "./features/workbench/PmPage.js";
+import { TeamPage } from "./features/workbench/TeamPage.js";
+import { ApprovalsPage } from "./features/workbench/ApprovalsPage.js";
+import { SchedulePage } from "./features/workbench/SchedulePage.js";
 import { ComingSoon } from "./shell/ComingSoon.js";
 import { MODULES } from "./shell/modules.js";
 import "./shell/styles.css";
@@ -56,7 +60,11 @@ const BUILT: Record<string, React.ReactElement> = {
   "/payments": <PaymentsPage />,
   "/ethics": <EthicsPage />,
   "/startup": <StartupSummaryPage />,
-  "/material": <MaterialPage />
+  "/material": <MaterialPage />,
+  "/pm": <PmPage />,
+  "/team": <TeamPage />,
+  "/approvals": <ApprovalsPage />,
+  "/sched": <SchedulePage />
 };
 
 /* 45 个模块的路由。同一个路径被几个模块共用是正常的

@@ -294,7 +294,16 @@ export function makeScenario(): Scenario {
         2, 2, TASKS_IO, 0),
       /* 下周 */
       mkVisit("v4", SITES[1]!, "S-0198", "u4", 12, "C12D1 第 12 周期给药",
-        7, 3, TASKS_IO, 0)
+        7, 3, TASKS_IO, 0),
+      /* ── 「我的日程」要的那一天 ──────────────────────────────────
+         下面两条的窗口和 v3 重叠：中间那几天会同时落三次访视，
+         而且分属两家医院。这一页存在的理由就是把那一天标出来 ——
+         四条访视谁也撞不上谁的话，撞车那条分支在界面上永远不出现，
+         也就没人会发现它其实没写对。 */
+      mkVisit("v5", SITES[0]!, "S-0417", "u5", 6, "C6D1 给药 + 采血",
+        2, 3, TASKS_ONCO, 0),
+      mkVisit("v6", SITES[1]!, "S-0455", "u6", 2, "C2D1 给药",
+        3, 3, TASKS_IO, 0)
     ],
     /* 演示数据里**故意各摆一条**：一条按时上报、一条超时未报。
        只摆按时的那种，界面上那两个"最坏的一条""还在计时"永远画不出来，
@@ -439,7 +448,12 @@ function makeTimesheets(): MockTimesheet[] {
     { ...mkTimesheet("ts-2", SITES[0]!, shift(TODAY, -2), "sdv", 5),
       approvedAt: shift(TODAY, -1) + "T09:00:00+08:00", approvedByName: "韩雪" },
     /* 不可计费的那一条：占比高说明人力花在了卖不出去的事情上 */
-    mkTimesheet("ts-3", SITES[1]!, shift(TODAY, -3), "training", 2)
+    mkTimesheet("ts-3", SITES[1]!, shift(TODAY, -3), "training", 2),
+    /* **一条属于经营层自己的。** 「待我审批」那一页要能演示
+       "不能审自己填的"：全部工时都属于别人的话，那条规则在界面上
+       永远不出现，而它恰恰是审批流唯一的价值所在。 */
+    { ...mkTimesheet("ts-4", SITES[0]!, shift(TODAY, -5), "monitoring", 4),
+      accountId: "a-lingyuan", personName: "凌远" }
   ];
 }
 

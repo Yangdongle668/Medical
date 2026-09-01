@@ -41,8 +41,13 @@ test.describe("药品与样本", () => {
   test.beforeEach(async ({ page }) => { await page.goto("/material"); });
 
   test("在手数量是算出来的，记一笔就跟着变", async ({ page }) => {
+    /* **先等台账真的回来再读那个数。**
+       在手数量渲染的是 `ledger?.balance ?? 0` —— 数据没到时它是 0，
+       而 0 和一个真实的余额长得一模一样。于是这条测试单跑时侥幸通过，
+       全套跑（接口更慢）时读到 0，然后以"期望 12 收到 30"的样子失败，
+       指向"记账算错了"，而实际是断言跑在数据前面。 */
+    await expect(page.getByTestId("ip-row").first()).toBeVisible();
     const chip = page.getByTestId("ip-balance");
-    await expect(chip).toBeVisible();
     const before = Number((await chip.innerText()).replace(/\D/g, ""));
 
     await page.getByTestId("add-ip").click();

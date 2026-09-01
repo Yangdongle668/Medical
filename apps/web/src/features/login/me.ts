@@ -16,6 +16,9 @@ export interface Me {
   account: {
     id: string; login: string; displayName: string;
     role: { code: string; name: string; isExternal: boolean };
+    /** 分组。**PM 的行范围就是从它推导的** —— 为空是正常状态
+     *  （经营层、QA 这些 row_rule=all 的角色不靠分组切行）。 */
+    team: { id: string; code: string; name: string } | null;
   };
   scopeLabel: string;
   permissions: {
