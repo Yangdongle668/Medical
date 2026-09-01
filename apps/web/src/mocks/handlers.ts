@@ -7,6 +7,7 @@ import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { makeScenario, SITES_LIST, STAFF_LIST, FUNNELS, AUDIT_ENTRIES,
   mkTimesheet, WORK_TYPE_META,
+  type MockSubject, type MockPayment,
   type Scenario, type MockVisit, type MockHandover, type MockRateCard,
   type MockTimesheet } from "./scenario.js";
 
@@ -107,6 +108,30 @@ const me = () => {
     credentials: { hasPassword: false, passwordIsInitial: false }
   };
 };
+
+/* 列权限在 mock 里也要**删字段**，不是置 null。
+   置 null 的话前端会写成 `?? "—"`，而真库上那个字段根本不在 ——
+   `undefined ?? "—"` 也是 "—"，看起来一样；
+   但"整列不画"和"画一列横杠"是两种不同的界面，
+   只有真库那一侧会暴露出来。 */
+const canSeeSubject = () => ROLE[mockRole].fields.includes("subject" as never);
+
+function maskSubject(s: MockSubject) {
+  if (canSeeSubject()) return { ...s, randomizationNo: s.randomizationNo ?? undefined };
+  const { screeningNo: _n, randomizationNo: _r, ...rest } = s;
+  return rest as Omit<MockSubject, "screeningNo" | "randomizationNo">;
+}
+function maskPayment(p: MockPayment) {
+  if (canSeeSubject()) return p;
+  const { screeningNo: _n, ...rest } = p;
+  return rest as Omit<MockPayment, "screeningNo">;
+}
+const subjectFrom = (request: Request, re: RegExp) => {
+  const [, id] = new URL(request.url).pathname.match(re) ?? [];
+  return scenario.subjects.find(x => x.id === id);
+};
+const notFoundSubject = () =>
+  HttpResponse.json(problem("not-found", 404, "受试者不存在"), { status: 404 });
 
 const daysBetween = (a: string, b: string) =>
   Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
@@ -700,6 +725,132 @@ export const scenarioHandlers = [
     const actor = q.get("actorLogin");
     if (actor) items = items.filter(e => e.actorLogin === actor);
     return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  /* ── 受试者 ──────────────────────────────────────────────────────
+     筛选号受列权限管辖：**没权限时把字段删掉**，不是置 null。
+     mock 里也要照做 —— 置 null 的话前端会写成 `?? "—"`，
+     到了真库上那个字段根本不在，`undefined ?? "—"` 也是 "—"，
+     看起来一样；但"整列不画"和"画一列横杠"是两种不同的界面，
+     而只有真库那一侧会暴露出来。 */
+  http.get(pathToRegExp("/v1/subjects"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = scenario.subjects.map(maskSubject);
+    const states = q.getAll("state");
+    if (states.length) items = items.filter(x => states.includes(x.state));
+    const site = q.get("studySiteId");
+    if (site) items = items.filter(x => x.studySiteId === site);
+    if (q.get("outOfWindow") === "true")
+      items = items.filter(x => x.nextVisit?.outOfWindow);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/subjects"), async ({ request }) => {
+    const b = await request.json() as { studySiteId: string; screeningNo: string };
+    if (scenario.subjects.some(x => x.screeningNo === b.screeningNo))
+      return HttpResponse.json(problem("invariant-violated", 422,
+        `筛选号 ${b.screeningNo} 在这个中心已经用过了`), { status: 422 });
+    const site = SITES_LIST.find(x => x.id === b.studySiteId);
+    const s = {
+      id: `u-${scenario.subjects.length + 1}`, studySiteId: b.studySiteId,
+      siteCode: site?.code ?? "SS-??", screeningNo: b.screeningNo,
+      randomized: false, randomizationNo: null, state: "prescreen",
+      icfSignedOn: null, enrolledOn: null, exitedOn: null,
+      screenFailReason: null, withdrawReason: null, crcName: me().account.displayName,
+      visitsDone: 0, visitsPlanned: 0, nextVisit: null
+    };
+    scenario.subjects.push(s);
+    return HttpResponse.json(maskSubject(s), { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/subjects/{id}:sign-icf"), async ({ request }) => {
+    const s = subjectFrom(request, /\/subjects\/([^/:]+):sign-icf/);
+    if (!s) return notFoundSubject();
+    const b = await request.json() as { signedOn: string };
+    if (b.signedOn > todayStr())
+      return HttpResponse.json(problem("invariant-violated", 422,
+        "知情签署日不能晚于今天"), { status: 422 });
+    s.icfSignedOn = b.signedOn; s.state = "screening";
+    s.visitsPlanned = 8; s.visitsDone = 0;
+    return HttpResponse.json({ data: maskSubject(s), sideEffects: [
+      { type: "ScreeningVisitsScheduled", summary: "已按 SOA 生成筛选期访视窗口" }
+    ] }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/subjects/{id}:enroll"), async ({ request }) => {
+    const s = subjectFrom(request, /\/subjects\/([^/:]+):enroll/);
+    if (!s) return notFoundSubject();
+    const b = await request.json() as { randomizationNo: string; enrolledOn: string };
+    s.state = "enrolled"; s.randomized = true;
+    s.randomizationNo = b.randomizationNo; s.enrolledOn = b.enrolledOn;
+    return HttpResponse.json({ data: maskSubject(s), sideEffects: [
+      { type: "SubjectEnrolled", summary: `已入组，随机号 ${b.randomizationNo}` }
+    ] }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/subjects/{id}:screen-fail"), async ({ request }) => {
+    const s = subjectFrom(request, /\/subjects\/([^/:]+):screen-fail/);
+    if (!s) return notFoundSubject();
+    const b = await request.json() as { reason: string; failedOn: string };
+    s.state = "screen_failed"; s.screenFailReason = b.reason;
+    s.exitedOn = b.failedOn; s.nextVisit = null;
+    return HttpResponse.json({ data: maskSubject(s), sideEffects: [
+      /* 筛败不是失败，是收入 —— 副作用里要说出来 */
+      { type: "ScreenFailFeeAccrued", summary: "筛败补偿已计入收入（I8′）" }
+    ] }, { status: 201 });
+  }),
+
+  /* ── 受试者补偿 ────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/subject-payments"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = scenario.payments.map(maskPayment);
+    if (q.get("unpaid") === "true") items = items.filter(p => !p.paidOn);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/subject-payments/{id}:pay"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname
+      .match(/\/subject-payments\/([^/:]+):pay/) ?? [];
+    const p = scenario.payments.find(x => x.id === id);
+    if (!p) return HttpResponse.json(problem("not-found", 404, "补偿记录不存在"), { status: 404 });
+    const b = await request.json() as { paidOn: string; receiptRef: string };
+    p.paidOn = b.paidOn; p.receiptRef = b.receiptRef;
+    return HttpResponse.json({ data: maskPayment(p), sideEffects: [] }, { status: 201 });
+  }),
+
+  /* ── 伦理递交 ──────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/study-sites/{id}/regulatory-submissions"), ({ request }) => {
+    const [, id] = new URL(request.url).pathname
+      .match(/\/study-sites\/([^/]+)\/regulatory-submissions/) ?? [];
+    return HttpResponse.json({
+      items: scenario.submissions.filter(x => x.studySiteId === id), nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/study-sites/{id}/regulatory-submissions"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname
+      .match(/\/study-sites\/([^/]+)\/regulatory-submissions/) ?? [];
+    const b = await request.json() as
+      { kind: string; submittedOn: string; refNo?: string; note?: string };
+    const x = {
+      id: `sub-${scenario.submissions.length + 1}`, studySiteId: id!,
+      kind: b.kind, submittedOn: b.submittedOn,
+      /* **递交了不等于批下来了** —— 新建的一律 pending */
+      decision: "pending", decidedOn: null,
+      refNo: b.refNo ?? null, note: b.note ?? null
+    };
+    scenario.submissions.push(x);
+    return HttpResponse.json(x, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/regulatory-submissions/{id}:decide"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname
+      .match(/\/regulatory-submissions\/([^/:]+):decide/) ?? [];
+    const x = scenario.submissions.find(y => y.id === id);
+    if (!x) return HttpResponse.json(problem("not-found", 404, "递交记录不存在"), { status: 404 });
+    const b = await request.json() as { decision: string; decidedOn: string; note?: string };
+    x.decision = b.decision; x.decidedOn = b.decidedOn;
+    if (b.note) x.note = b.note;
+    return HttpResponse.json({ data: x, sideEffects: [] }, { status: 201 });
   }),
 
   /* ── 人员与交接 ──────────────────────────────────────────────── */

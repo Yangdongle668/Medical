@@ -53,8 +53,7 @@ export const MODULES: ModuleDef[] = [
   { key: "mysites", title: "我的中心", group: "我的工作", path: "/sites" },
   { key: "sched", title: "我的日程", group: "我的工作", path: "/sched",
     todo: "未来两周的访视与监查排期，按天铺开，标出同一天撞车的。" },
-  { key: "subj", title: "受试者访视窗口", group: "我的工作", path: "/subjects",
-    todo: "在组受试者一人一行，最近一次访视的窗口状态。超窗的排在最上面。" },
+  { key: "subj", title: "受试者访视窗口", group: "我的工作", path: "/subjects" },
   { key: "query", title: "数据质疑", group: "我的工作", path: "/queries",
     todo: "EDC 质疑台账：谁提的、待谁回、超期多久。CRC 看本中心，DM 看全部。" },
   { key: "team", title: "我的团队", group: "我的工作", path: "/team",
@@ -65,10 +64,8 @@ export const MODULES: ModuleDef[] = [
   /* ── 项目周期 ─────────────────────────────────────────────────── */
   { key: "startup", title: "中心启动清单", group: "项目周期", path: "/startup",
     todo: "按中心列启动清单完成度。单个中心的清单页已经有了（/sites/:id/startup），这里是汇总。" },
-  { key: "prescreen", title: "预筛登记", group: "项目周期", path: "/prescreen",
-    todo: "预筛人数、通过率、失败原因分布 —— 筛选漏斗最上面那一段。" },
-  { key: "ethics", title: "伦理事务", group: "项目周期", path: "/ethics",
-    todo: "各中心伦理批件的状态与到期日。快到期而没续的要红。" },
+  { key: "prescreen", title: "预筛登记", group: "项目周期", path: "/prescreen" },
+  { key: "ethics", title: "伦理事务", group: "项目周期", path: "/ethics" },
   { key: "handover", title: "交接", group: "项目周期", path: "/handovers" },
 
   /* ── 现场 ─────────────────────────────────────────────────────── */
@@ -76,8 +73,7 @@ export const MODULES: ModuleDef[] = [
     todo: "ISF 文件清单与缺件、现场物资库存。" },
   { key: "material", title: "药品与样本", group: "现场", path: "/material",
     todo: "药品发放/回收/销毁的账实核对，样本采集与外送。账实不平的要顶到最上面。" },
-  { key: "pay", title: "受试者补偿", group: "现场", path: "/payments",
-    todo: "每次访视产生的补偿，按受试者与状态列出。已产生未发放的是重点。" },
+  { key: "pay", title: "受试者补偿", group: "现场", path: "/payments" },
 
   /* ── 经营 ─────────────────────────────────────────────────────── */
   { key: "dash", title: "经营驾驶舱", group: "经营", path: "/dash" },

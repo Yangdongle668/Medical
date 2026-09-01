@@ -143,6 +143,9 @@ export interface Scenario {
   roles: MockRole[];
   teams: MockTeam[];
   accounts: MockAccount[];
+  subjects: MockSubject[];
+  payments: MockPayment[];
+  submissions: MockSubmission[];
   /** 中心的当前阶段。推进会改它，所以不能从 SITES 常量上读。 */
   siteState: Record<string, string>;
   /** 计划 SIV 日 —— 清单项的到期日全是相对它算的，两处必须同源 */
@@ -272,6 +275,7 @@ export function makeScenario(): Scenario {
   const teams = mkTeams();
   return {
     roles, teams, accounts: mkAccounts(roles, teams),
+    subjects: mkSubjects(), payments: mkPayments(), submissions: mkSubmissions(),
     visits: [
       /* 已超窗 3 天 —— 列表第一屏就该看见它 */
       mkVisit("v1", SITES[0]!, "S-0331", "u1", 4, "C4D1 第 4 周期给药",
@@ -548,4 +552,111 @@ export const AUDIT_ENTRIES = [
     action: "填报工时", targetType: "timesheet_entry", targetId: "t-1",
     before: null, after: { hours: 3.5 },
     studySiteId: "s1", reason: null, isSensitive: false }
+];
+
+/* ── 受试者、补偿、伦理递交 ────────────────────────────────────────
+   这三份是**可变的**：登记预筛、签知情、筛败、登记发放、登记批复
+   都要当场看得见。造的形状同样是"三种情况"，不是三份一样的数据：
+
+     P-0101 预筛，还没签知情        → 下一步是签 ICF
+     P-0102 筛选中，等入组或筛败     → 两个按钮都该出现
+     S-0203 已入组，下一次访视超窗   → 受试者窗口那页要把它顶到最上面
+     S-0331 已入组，窗口内
+     P-0099 已筛败                  → 不该再有下一步
+*/
+export interface MockSubject {
+  id: string; studySiteId: string; siteCode: string;
+  screeningNo: string; randomized: boolean; randomizationNo: string | null;
+  state: string;
+  icfSignedOn: string | null; enrolledOn: string | null; exitedOn: string | null;
+  screenFailReason: string | null; withdrawReason: string | null;
+  crcName: string | null;
+  visitsDone: number; visitsPlanned: number;
+  nextVisit: {
+    id: string; seq: number; visitCode: string; visitLabel: string;
+    targetDate: string; windowFrom: string; windowTo: string;
+    daysLeft: number; outOfWindow: boolean;
+  } | null;
+}
+
+export interface MockPayment {
+  id: string; studySiteId: string; siteCode: string;
+  subjectId: string; screeningNo: string;
+  visitId: string | null; visitLabel: string | null;
+  amountCents: number; dueOn: string;
+  paidOn: string | null; receiptRef: string | null; ageDays: number;
+}
+
+export interface MockSubmission {
+  id: string; studySiteId: string; kind: string;
+  submittedOn: string; decision: string; decidedOn: string | null;
+  refNo: string | null; note: string | null;
+}
+
+const day = (offset: number) =>
+  new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+
+const mkNext = (id: string, label: string, daysLeft: number) => ({
+  id, seq: 4, visitCode: "C4D1", visitLabel: label,
+  targetDate: day(daysLeft - 3), windowFrom: day(daysLeft - 6), windowTo: day(daysLeft),
+  daysLeft, outOfWindow: daysLeft < 0
+});
+
+export const mkSubjects = (): MockSubject[] => [
+  { id: "u-101", studySiteId: "s1", siteCode: "SS-01", screeningNo: "SS-01-P0101",
+    randomized: false, randomizationNo: null, state: "prescreen",
+    icfSignedOn: null, enrolledOn: null, exitedOn: null,
+    screenFailReason: null, withdrawReason: null, crcName: "吴桐",
+    visitsDone: 0, visitsPlanned: 0, nextVisit: null },
+  { id: "u-102", studySiteId: "s1", siteCode: "SS-01", screeningNo: "SS-01-P0102",
+    randomized: false, randomizationNo: null, state: "screening",
+    icfSignedOn: day(-9), enrolledOn: null, exitedOn: null,
+    screenFailReason: null, withdrawReason: null, crcName: "吴桐",
+    visitsDone: 1, visitsPlanned: 8, nextVisit: mkNext("v-102", "筛选期评估", 5) },
+  { id: "u1", studySiteId: "s1", siteCode: "SS-01", screeningNo: "S-0203",
+    randomized: true, randomizationNo: "R-0203", state: "enrolled",
+    icfSignedOn: day(-120), enrolledOn: day(-110), exitedOn: null,
+    screenFailReason: null, withdrawReason: null, crcName: "吴桐",
+    visitsDone: 5, visitsPlanned: 8, nextVisit: mkNext("v1", "C4D1 第 4 周期给药", -6) },
+  { id: "u2", studySiteId: "s2", siteCode: "SS-07", screeningNo: "S-0331",
+    randomized: true, randomizationNo: "R-0331", state: "enrolled",
+    icfSignedOn: day(-80), enrolledOn: day(-72), exitedOn: null,
+    screenFailReason: null, withdrawReason: null, crcName: "廖萌",
+    visitsDone: 3, visitsPlanned: 8, nextVisit: mkNext("v3", "C3D1 给药 + 肿瘤评估", 12) },
+  { id: "u-099", studySiteId: "s1", siteCode: "SS-01", screeningNo: "SS-01-P0099",
+    randomized: false, randomizationNo: null, state: "screen_failed",
+    icfSignedOn: day(-40), enrolledOn: null, exitedOn: day(-33),
+    screenFailReason: "imaging", withdrawReason: null, crcName: "吴桐",
+    visitsDone: 1, visitsPlanned: 8, nextVisit: null }
+];
+
+export const mkPayments = (): MockPayment[] => [
+  /* 欠了 48 天 —— 这一笔要排最上面，而且刷红 */
+  { id: "pay-1", studySiteId: "s1", siteCode: "SS-01", subjectId: "u1",
+    screeningNo: "S-0203", visitId: "v1", visitLabel: "C3D1 给药",
+    amountCents: 60000, dueOn: day(-48), paidOn: null, receiptRef: null, ageDays: 48 },
+  { id: "pay-2", studySiteId: "s1", siteCode: "SS-01", subjectId: "u-102",
+    screeningNo: "SS-01-P0102", visitId: "v-102", visitLabel: "筛选期评估",
+    amountCents: 30000, dueOn: day(-6), paidOn: null, receiptRef: null, ageDays: 6 },
+  /* **发了但没凭证** —— 比"还没发"更麻烦，关闭中心那天对不上 */
+  { id: "pay-3", studySiteId: "s2", siteCode: "SS-07", subjectId: "u2",
+    screeningNo: "S-0331", visitId: "v3", visitLabel: "C2D1 给药",
+    amountCents: 60000, dueOn: day(-30), paidOn: day(-22), receiptRef: null, ageDays: 30 },
+  { id: "pay-4", studySiteId: "s2", siteCode: "SS-07", subjectId: "u2",
+    screeningNo: "S-0331", visitId: null, visitLabel: null,
+    amountCents: 45000, dueOn: day(-60), paidOn: day(-58), receiptRef: "RC-2026-0088",
+    ageDays: 60 }
+];
+
+export const mkSubmissions = (): MockSubmission[] => [
+  { id: "sub-1", studySiteId: "s1", kind: "initial", submittedOn: day(-300),
+    decision: "approved", decidedOn: day(-280), refNo: "PJ-2025-118", note: null },
+  /* 递上去 74 天没动静 —— 这一条要刷红，而不是和刚递的那份同色 */
+  { id: "sub-2", studySiteId: "s1", kind: "amendment", submittedOn: day(-74),
+    decision: "pending", decidedOn: null, refNo: "PJ-2026-041",
+    note: "方案 v3.1，新增一次影像评估" },
+  { id: "sub-3", studySiteId: "s2", kind: "initial", submittedOn: day(-210),
+    decision: "approved", decidedOn: day(-195), refNo: "ZS-2025-233", note: null },
+  { id: "sub-4", studySiteId: "s2", kind: "annual", submittedOn: day(-12),
+    decision: "pending", decidedOn: null, refNo: null, note: "年度跟踪审查" }
 ];
