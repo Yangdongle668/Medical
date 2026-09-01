@@ -72,12 +72,20 @@ const shift = (base: Date, n: number) => {
 };
 const TODAY = new Date();
 
+/* 科室、城市、研究者都是**逐个中心**的。
+   在此之前它们写死在 siteDto 里（三个中心同一个科室、同一个 PI、都在北京），
+   于是「PI 只看自己签字的中心」这条行范围在 mock 上根本演不出来 ——
+   三个中心的 pi_account_id 一样，PI 身份看到的就是全部。
+   外部角色那四页的全部内容就是"看得窄"，看不窄等于那四页没测过。 */
 const SITES = [
-  { id: "s1", code: "SS-01", hospital: "北京协和医院", state: "enrolling" },
-  { id: "s2", code: "SS-07", hospital: "中山大学肿瘤防治中心", state: "enrolling" },
+  { id: "s1", code: "SS-01", hospital: "北京协和医院", dept: "肝胆外科", city: "北京",
+    piName: "陈国栋", piAccountId: "a-chenguod", state: "enrolling" },
+  { id: "s2", code: "SS-07", hospital: "中山大学肿瘤防治中心", dept: "肿瘤内科", city: "广州",
+    piName: "梁佩珊", piAccountId: null, state: "enrolling" },
   /* 第三个中心停在 contract —— 它存在的唯一理由是让 SIV 闸门有东西可拦。
      两个 enrolling 的中心谁也过不了闸门那一关，因为它们早就过去了。 */
-  { id: "s3", code: "SS-14", hospital: "江苏省人民医院", state: "contract" }
+  { id: "s3", code: "SS-14", hospital: "江苏省人民医院", dept: "呼吸与危重症医学科",
+    city: "南京", piName: "邵建军", piAccountId: null, state: "contract" }
 ];
 
 /** 每例的任务清单来自项目的 SOA —— 与 visit_template_task 同一套文字 */
@@ -111,6 +119,20 @@ function mkVisit(
     piConfirmedAt: null, piConfirmedByName: null,
     tasks: tasks.map((t, i) => ({
       seq: i, task: t, doneAt: i < doneCount ? new Date().toISOString() : null }))
+  };
+}
+
+/** 把一条访视标成"已完成"。
+ *  `outOfWindow` 在完成之后判的是**实际完成日在不在窗口内**，
+ *  不再是"窗口关了还没做" —— 两种判法在 planned / done 上各管一段，
+ *  写成一个 `dueIn + win < 0` 通吃的话，一条按时做完的历史访视
+ *  会因为窗口早就过去而被标成超窗。 */
+function done(v: MockVisit, doneIn: number): MockVisit {
+  const actualDate = shift(TODAY, doneIn);
+  return {
+    ...v, actualDate, status: "done", daysLeft: null,
+    outOfWindow: actualDate < v.windowFrom || actualDate > v.windowTo,
+    tasks: v.tasks.map(t => ({ ...t, doneAt: new Date().toISOString() }))
   };
 }
 
@@ -303,12 +325,27 @@ export function makeScenario(): Scenario {
       mkVisit("v5", SITES[0]!, "S-0417", "u5", 6, "C6D1 给药 + 采血",
         2, 3, TASKS_ONCO, 0),
       mkVisit("v6", SITES[1]!, "S-0455", "u6", 2, "C2D1 给药",
-        3, 3, TASKS_IO, 0)
+        3, 3, TASKS_IO, 0),
+      /* ── 研究者工作台要的那两条 ────────────────────────────────
+         **做完了、但还没签字。** 六条 planned 的访视演不出这一页：
+         PI 的整个工作面就是这个队列，队列空着，页面上
+         "等了多久""超过 7 天"两条分支都不会出现。
+         一条等了 12 天（该红），一条昨天做完的（正常）。 */
+      done(mkVisit("v7", SITES[0]!, "S-0331", "u1", 5, "C5D1 第 5 周期给药",
+        -12, 3, TASKS_ONCO), -12),
+      done(mkVisit("v8", SITES[0]!, "S-0203", "u2", 9, "C9D1 第 9 周期给药",
+        -1, 3, TASKS_ONCO), -1),
+      /* 已经签过字的那条 —— 队列里**不该**出现它。
+         少了这条对照，"pendingPi 到底筛没筛"在界面上看不出来。 */
+      { ...done(mkVisit("v9", SITES[0]!, "S-0417", "u5", 3, "C3D1 给药",
+          -20, 3, TASKS_ONCO), -20),
+        piConfirmedAt: new Date(TODAY.getTime() - 18 * 86_400_000).toISOString(),
+        piConfirmedByName: "陈国栋" }
     ],
     /* 演示数据里**故意各摆一条**：一条按时上报、一条超时未报。
        只摆按时的那种，界面上那两个"最坏的一条""还在计时"永远画不出来，
        于是没有人会发现它们其实没写对。 */
-    qualityEvents: makeSaes(),
+    qualityEvents: [...makeSaes(), ...makeQualityEvents()],
     ipMovements: makeIpMovements(),
     specimens: makeSpecimens(),
     timesheets: makeTimesheets(),
@@ -383,6 +420,39 @@ export const STAFF_LIST = [
     level: "P4", city: "广州", ...gcp(120),
     mentorName: null, successorName: null, siteCount: 0, successionGap: false,
     active: false, disabledReason: "离职 —— 转甲方 CRA" }
+];
+
+/** 备案名册（`/v1/site-staff`）。**不是 STAFF_LIST 的一个投影** ——
+ *  它的中心列表按行范围重算，而 STAFF_LIST 的 siteCount 数的是全部派工。
+ *  两者在 mock 里就该是两份数据，否则"机构办数不出他在别家带几个"
+ *  这条边界在 mock 上不成立，只有真库那一侧会暴露。
+ *
+ *  证书刻意排成三种：已过期（段志远 −12 天）、快到期（唐延 45 天）、
+ *  还早（吴桐 410 天）、无记录（沈亦琳）。四种都摆，那一页的四个角标
+ *  才都有东西可挂。 */
+export interface MockSiteStaff {
+  accountId: string; displayName: string; roleKind: string;
+  gcpExpiresOn: string | null; gcpDaysLeft: number | null; active: boolean;
+  sites: { id: string; code: string; hospital: string;
+           studyShortName: string; since: string }[];
+}
+const at = (i: number, since: string) => ({
+  id: SITES[i]!.id, code: SITES[i]!.code, hospital: SITES[i]!.hospital,
+  studyShortName: "艾瑞替尼 III", since
+});
+export const SITE_STAFF: MockSiteStaff[] = [
+  { accountId: "a-wutong", displayName: "吴桐", roleKind: "CRC", ...gcp(410),
+    active: true, sites: [at(0, "2024-09-01"), at(1, "2025-03-04")] },
+  { accountId: "a-tangyan", displayName: "唐延", roleKind: "CRC", ...gcp(45),
+    active: true, sites: [at(0, "2025-06-16")] },
+  /* 证书过期的这一位在协和 —— 机构办一进页面就该看见他。 */
+  { accountId: "a-duan", displayName: "段志远", roleKind: "CRA", ...gcp(-12),
+    active: true, sites: [at(0, "2024-09-01"), at(2, "2025-01-13")] },
+  { accountId: "a-shen", displayName: "沈亦琳", roleKind: "CRC", ...gcp(null),
+    active: true, sites: [at(1, "2025-08-11")] },
+  /* 已停用但**留在名册上**：他上周还在中心里出现过。 */
+  { accountId: "a-zhouqi", displayName: "周琦", roleKind: "CRA", ...gcp(120),
+    active: false, sites: [at(0, "2024-11-05")] }
 ];
 
 /** 工作类型 → 中文名与是否可计费。与库里的 work_type 表同一套口径：
@@ -484,6 +554,42 @@ function makeSaes(): Scenario["qualityEvents"] {
       detail: "尚在整理上报材料 —— 已经超过 24 小时。",
       raisedOn: hoursAgo(52).slice(0, 10),
       occurredAt: hoursAgo(52), reportedAt: null }              // 52 小时未报 = 迟报
+  ];
+}
+
+/** SAE 之外的质量事件。**机构质控那一页要的是这几条** ——
+ *  只摆两条 SAE 的话，那一页上"重的排前面""挂了 30 天以上"
+ *  两条分支永远画不出来，也就没人会发现它们其实没写对。
+ *
+ *  三条各有用处：
+ *   · 一条挂了 60 天的重大偏离 —— 逾期那个角标要有东西可挂
+ *   · 一条自动生成的（访视超窗触发）—— "系统自动"那一栏要有对照
+ *   · 一条在 SS-07 —— 机构办（协和）**不该看见它**，行范围才演得出来 */
+function makeQualityEvents(): Scenario["qualityEvents"] {
+  const base = {
+    autoGenerated: false, sourceEventId: null,
+    occurredAt: null, reportedAt: null
+  };
+  return [
+    { ...base, id: "qa1", code: "QA-2026-0071",
+      siteCode: SITES[0]!.code, studySiteId: SITES[0]!.id,
+      kind: "deviation", severity: "major", state: "open",
+      title: "两例受试者的知情同意版本落后一个版本",
+      detail: "IRB 批件已更新至 v3.1，中心仍在用 v3.0 签署。",
+      raisedBy: "instqc", raisedOn: shift(TODAY, -60), ageDays: 60 },
+    { ...base, id: "qa2", code: "QA-2026-0088",
+      siteCode: SITES[0]!.code, studySiteId: SITES[0]!.id,
+      kind: "deviation", severity: "minor", state: "open",
+      title: "C4D1 访视超出窗口 3 天",
+      detail: "完成日 2026-08-21，窗口关闭日 2026-08-18。",
+      autoGenerated: true,
+      raisedBy: "system", raisedOn: shift(TODAY, -6), ageDays: 6 },
+    { ...base, id: "qa3", code: "QA-2026-0090",
+      siteCode: SITES[1]!.code, studySiteId: SITES[1]!.id,
+      kind: "ip_discrepancy", severity: "major", state: "open",
+      title: "药品回收数量与发放记录差 2 盒",
+      detail: "中心称已发给受试者但未登记，正在核对。",
+      raisedBy: "cra", raisedOn: shift(TODAY, -9), ageDays: 9 }
   ];
 }
 

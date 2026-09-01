@@ -117,18 +117,14 @@ export const MODULES: ModuleDef[] = [
   { key: "trail", title: "审计轨迹", group: "质量", path: "/trail" },
 
   /* ── 机构办公室（外部） ───────────────────────────────────────── */
-  { key: "inst", title: "机构工作台", group: "机构办公室", path: "/inst",
-    todo: "本院承接的项目一览。行范围是 hospital，由 account.org_ref 推导。" },
+  { key: "inst", title: "机构工作台", group: "机构办公室", path: "/inst" },
   { key: "instac", title: "立项受理", group: "机构办公室", path: "/inst/intake",
     todo: "递到本院的立项申请，受理与退回。" },
-  { key: "instqc", title: "机构质控", group: "机构办公室", path: "/inst/qc",
-    todo: "本院发起的质控检查与发现项。" },
-  { key: "instreg", title: "人员备案与准入", group: "机构办公室", path: "/inst/registry",
-    todo: "研究者与 CRC 的备案状态、GCP 证书有效期。" },
+  { key: "instqc", title: "机构质控", group: "机构办公室", path: "/inst/qc" },
+  { key: "instreg", title: "人员备案与准入", group: "机构办公室", path: "/inst/registry" },
 
   /* ── 研究者（外部） ───────────────────────────────────────────── */
-  { key: "pi", title: "研究者工作台", group: "研究者", path: "/pi",
-    todo: "本人担任 PI 的中心、等着他确认的访视。行范围是 pi。" },
+  { key: "pi", title: "研究者工作台", group: "研究者", path: "/pi" },
 
   /* ── 系统 ─────────────────────────────────────────────────────── */
   { key: "org", title: "组织与权限", group: "系统", path: "/org" }

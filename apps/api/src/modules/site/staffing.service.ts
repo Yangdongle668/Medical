@@ -260,6 +260,77 @@ export class StaffingService {
     return { items, nextCursor: rows.length > q.limit ? items.at(-1)?.login ?? null : null };
   }
 
+  /** 备案名册。数据源是 `app.site_staff_registry()` —— 不是 staff 表。
+   *
+   *  那个函数走 SECURITY DEFINER，因为 `staff_scope` 对外部方整表关闭；
+   *  但它内部照样调 `app.site_visible`，所以**行范围一点没放宽**：
+   *  机构办只看本院，PI 只看自己的中心，CRA 只看被指派的。
+   *
+   *  函数按「人 × 中心」出行，这里合并成「人」——
+   *  备案备的是人，一个 CRC 在本院带三个中心是一条记录的三个中心，
+   *  不是三条记录。 */
+  async listSiteStaff(q: {
+    limit: number; cursor?: string; roleKind?: string;
+    gcpProblem?: boolean; studySiteId?: string;
+  }) {
+    const c = ctx();
+    const params: unknown[] = [];
+    const conds = ["true"];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
+    if (q.roleKind)     conds.push(`r.role_kind = ${add(q.roleKind)}`);
+    if (q.studySiteId)  conds.push(`r.study_site_id = ${add(q.studySiteId)}`);
+    /* 游标走 account_id：显示名会重名，而 login 这一列**这条端点不给**
+       —— 拿一个不下发的列做游标，翻页就成了前端猜不出来的黑箱。 */
+    if (q.cursor)       conds.push(`r.account_id > ${add(q.cursor)}`);
+
+    const { rows } = await c.client.query<{
+      account_id: string; display_name: string; role_kind: string;
+      gcp_expires_on: Date | null; active: boolean;
+      study_site_id: string; site_code: string; hospital: string;
+      study_short: string; since: Date;
+    }>(`SELECT r.* FROM app.site_staff_registry() r
+         WHERE ${conds.join(" AND ")}
+         ORDER BY r.account_id, r.site_code`, params);
+
+    const today = new Date();
+    const byAccount = new Map<string, {
+      accountId: string; displayName: string; roleKind: string;
+      gcpExpiresOn: string | null; gcpDaysLeft: number | null; active: boolean;
+      sites: { id: string; code: string; hospital: string;
+               studyShortName: string; since: string }[];
+    }>();
+    for (const r of rows) {
+      let p = byAccount.get(r.account_id);
+      if (!p) {
+        p = {
+          accountId: r.account_id, displayName: r.display_name, roleKind: r.role_kind,
+          gcpExpiresOn: day(r.gcp_expires_on),
+          gcpDaysLeft: r.gcp_expires_on ? daysBetween(today, r.gcp_expires_on) : null,
+          active: r.active, sites: []
+        };
+        byAccount.set(r.account_id, p);
+      }
+      p.sites.push({
+        id: r.study_site_id, code: r.site_code, hospital: r.hospital,
+        studyShortName: r.study_short, since: day(r.since)!
+      });
+    }
+
+    let items = [...byAccount.values()];
+    /* 60 天是**备案窗口**，不是「快到期了」的美学阈值：
+       换证要走机构培训与考试，排期通常一个月起。
+       证书为空一并算问题 —— 没有证书和证书过期，在核查时是同一件事。 */
+    if (q.gcpProblem)
+      items = items.filter(i => i.gcpDaysLeft === null || i.gcpDaysLeft <= 60);
+    /* 分页在合并之后切：函数按「人 × 中心」出行，
+       按行数截断会把一个人的中心切成两半，第二页再出现同一个人。 */
+    const pageItems = items.slice(0, q.limit);
+    return {
+      items: pageItems,
+      nextCursor: items.length > q.limit ? pageItems.at(-1)?.accountId ?? null : null
+    };
+  }
+
   /* ── 交接 ─────────────────────────────────────────────────────── */
 
   /** 一批交接单的完整装配 —— **固定 3 条 SQL，与条数无关**。

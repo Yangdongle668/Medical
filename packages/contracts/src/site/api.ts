@@ -107,8 +107,8 @@ define({
 /* ════════════════════════════════════════════════════════════════════
    启动清单 · 人员 · 交接
    ════════════════════════════════════════════════════════════════════ */
-import { StartupChecklist, StartupSummary, StartupItem, Staff, Handover, RoleKind, HandoverStatus,
-  StartupTemplate, StartupTemplateItem }
+import { StartupChecklist, StartupSummary, StartupItem, Staff, SiteStaff, Handover,
+  RoleKind, HandoverStatus, StartupTemplate, StartupTemplateItem }
   from "./staffing.js";
 
 define({
@@ -175,6 +175,28 @@ define({
     activeOnly: QueryBool.optional()
   }),
   response: page(Staff)
+});
+
+define({
+  id: "listSiteStaff", method: "get", path: "/v1/site-staff", layer: "L1", context: CTX,
+  summary: "中心人员备案名册",
+  description:
+    "`listStaff` 的**另一个问题**，不是它的一个筛子。\n\n" +
+    "`/v1/staff` 是我方的人事账（职级、带教、继任、共带几个中心），" +
+    "外部方一行也看不到，那条策略要保留。\n" +
+    "但机构办有一件必须做的事：备案 —— 我院这几个中心上出现的 CRC 是谁、" +
+    "他的 GCP 证书还有效吗。证书过期的人不得开展工作，" +
+    "这不是我方的内部管理，是机构履行监管职责的一部分。\n\n" +
+    "所以走一个只开这几列的口子（`app.site_staff_registry()`），" +
+    "行范围照旧由登录身份推导 —— **SECURITY DEFINER 绕开的是表策略，不是行范围**。\n" +
+    "`sites` 只列本范围内的中心：那个 CRC 在别家医院还带着几个，与本院无关。",
+  query: PageQuery.extend({
+    roleKind: RoleKind.optional(),
+    /** 只看证书已过期或即将到期的 —— 备案表上真正要动手的就这几个人。 */
+    gcpProblem: QueryBool.optional().describe("只看 GCP 已过期或 60 天内到期的"),
+    studySiteId: Uuid.optional()
+  }),
+  response: page(SiteStaff)
 });
 
 define({

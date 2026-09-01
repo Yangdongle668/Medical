@@ -5,7 +5,8 @@ import { siteRevenue, siteCost, siteMargin, CALC_VERSION,
 import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
-import { makeScenario, SITES_LIST, STAFF_LIST, FUNNELS, AUDIT_ENTRIES,
+import { IDENTITIES, type MockRole } from "./roles.js";
+import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
   mkTimesheet, WORK_TYPE_META,
   type MockSubject, type MockPayment,
   type Scenario, type MockVisit, type MockHandover, type MockRateCard,
@@ -47,58 +48,65 @@ export const currentScenario = () => scenario;
 
 /** mock 身份。切换它可以看到「同一个接口，不同的人看到不同的列、
  *  以及同一个按钮，不同的人点不点得动」。
- *  由 URL 上的 `?as=boss` 驱动（见 main.tsx），所以 e2e 里换个人只要换个地址。 */
-let mockRole: "crc" | "boss" = "crc";
-export const setMockRole = (r: "crc" | "boss") => { mockRole = r; };
+ *  由 URL 上的 `?as=boss` 驱动（见 main.tsx），所以 e2e 里换个人只要换个地址。
+ *
+ *  四个身份的目录在 `mocks/roles.ts`，与迁移 0026 逐字同源。 */
+let mockRole: MockRole = "crc";
+export const setMockRole = (r: MockRole) => { mockRole = r; };
+const identity = () => IDENTITIES[mockRole];
 
-/** 与种子里的 role_action / role_field **逐字**同一套口径。
+/** mock 的行范围。
  *
- *  抹平任何一条，界面上最要紧的差别就在 mock 上消失了，
- *  而真库上一登录就撞见 —— 这套 mock 存在的意义正是提前撞见它们：
+ *  **只对 hospital 与 pi 两条规则生效。** assigned（CRC / CRA）在这里
+ *  演不出来：mock 没有 site_assignment 那张表，而硬编一份"吴桐带哪几个"
+ *  会凭空立起第四套口径。所以内部身份照旧看到全部三个中心 ——
+ *  这一点写在这里，免得有人把它当成"mock 里 RLS 是通的"。
  *
- *  · **CRC 没有 advance**：清单做完了，最后那一下也不归他按
- *  · **CRC 没有 cost**：他填工时，却看不到自己值多少钱
- *  · **只有 boss 有 rateWrite**：费率卡是经营层的事
- *  · **boss 没有 subject**：钱看得全，受试者明细反而看不到 */
-const ROLE = {
-  crc: {
-    id: "a-wutong", login: "wutong", name: "吴桐",
-    role: { id: "r-crc", code: "crc", name: "临床协调员 CRC" },
-    rowRule: "assigned", fields: ["subject"],
-    actions: ["ethics", "subjRead", "subjWrite", "timeWrite"],
-    /* **module_key，不是路径。** 这里曾经写的是 ["today","sites",…]，
-       而真接口给的是 role_module 里的键 —— 两者恰好长得像，
-       所以在导航还是写死数组的时候看不出区别。侧栏改成按模块出之后，
-       一份路径清单会让 mock 模式下的导航整个空掉。
-       取值与迁移 0026 里 crc 的授予一致。 */
-    modules: ["crc", "mysite", "startup", "sched", "subj", "prescreen", "ethics",
-      "query", "capa", "isf", "material", "pay", "handover", "time"]
-  },
-  boss: {
-    id: "a-lingyuan", login: "lingyuan", name: "凌远",
-    role: { id: "r-boss", code: "boss", name: "经营层" },
-    rowRule: "all", fields: ["cost", "margin", "price", "staff"],
-    actions: ["advance", "approve", "bid", "manage", "rateWrite",
-      "subjRead", "timeWrite"],
-    modules: ["dash", "intake", "sites", "enr", "screen", "client", "cash", "bid",
-      "change", "staff", "people", "time", "pnl", "bill", "qa", "mon", "price",
-      "org", "trail"]
-  }
-} as const;
+ *  外部两条必须是真的：机构工作台与研究者工作台**整页的内容就是"看得窄"**，
+ *  看不窄，那两页画得出来也说不出话。 */
+function visibleSiteIds(): Set<string> {
+  const me = identity();
+  const keep =
+    me.rowRule === "hospital" ? SITES_LIST.filter(s => s.hospital === me.orgRef)
+    : me.rowRule === "pi"     ? SITES_LIST.filter(s => s.piAccountId === me.id)
+    : SITES_LIST;
+  return new Set(keep.map(s => s.id));
+}
+const siteInScope = (id: string) => visibleSiteIds().has(id);
+/** 范围内的中心本身。**不要拿 inScope() 去筛它们** ——
+ *  中心行上那两个键叫 `id` / `code`，不叫 `studySiteId` / `siteCode`，
+ *  于是 inScope 会走到"两个键都没有，原样放行"那一支，
+ *  一行都不筛而且不报错。 */
+function visibleSites() {
+  const ids = visibleSiteIds();
+  return SITES_LIST.filter(s => ids.has(s.id));
+}
+/** 按中心代号收敛一批行 —— 范围外的**不是空值，是不存在**。 */
+function inScope<T extends { studySiteId?: string; siteCode?: string }>(xs: T[]): T[] {
+  const ids = visibleSiteIds();
+  const codes = new Set(SITES_LIST.filter(s => ids.has(s.id)).map(s => s.code));
+  return xs.filter(x =>
+    x.studySiteId !== undefined ? ids.has(x.studySiteId)
+    : x.siteCode !== undefined  ? codes.has(x.siteCode)
+    : true);
+}
 
 
 const me = () => {
-  const r = ROLE[mockRole];
+  const r = identity();
+  const scope = visibleSiteIds();
   return {
     account: {
       id: r.id, login: r.login, displayName: r.name,
-      role: { ...r.role, isExternal: false },
-      team: { id: "t1", code: "G-01", name: "华东华南组" },
-      isExternal: false, orgRef: null, status: "active",
+      role: { ...r.role, isExternal: r.isExternal },
+      /* 外部方**没有分组** —— 分组是我方承接项目的单位，
+         给机构办安一个「华东华南组」会让"我的团队"那一页凭空成立。 */
+      team: r.isExternal ? null : { id: "t1", code: "G-01", name: "华东华南组" },
+      isExternal: r.isExternal, orgRef: r.orgRef, status: "active",
       joinedOn: "2024-03-01", disabledAt: null, disabledReason: null,
       lastLoginAt: new Date().toISOString()
     },
-    scopeLabel: `${SITES_LIST.length} 个中心 · 1 个项目`,
+    scopeLabel: `${scope.size} 个中心 · 1 个项目`,
     permissions: {
       rowRule: r.rowRule, fields: [...r.fields],
       actions: [...r.actions], modules: [...r.modules]
@@ -114,7 +122,7 @@ const me = () => {
    `undefined ?? "—"` 也是 "—"，看起来一样；
    但"整列不画"和"画一列横杠"是两种不同的界面，
    只有真库那一侧会暴露出来。 */
-const canSeeSubject = () => ROLE[mockRole].fields.includes("subject" as never);
+const canSeeSubject = () => identity().fields.includes("subject");
 
 function maskSubject(s: MockSubject) {
   if (canSeeSubject()) return { ...s, randomizationNo: s.randomizationNo ?? undefined };
@@ -285,12 +293,17 @@ export const scenarioHandlers = [
 
   http.get(pathToRegExp("/v1/subject-visits"), ({ request }) => {
     const q = new URL(request.url).searchParams;
-    let items = scenario.visits.map(withDaysLeft);
+    let items = inScope(scenario.visits).map(withDaysLeft);
     const subjectId = q.get("subjectId");
     if (subjectId) items = items.filter(v => v.subjectId === subjectId);
     if (q.get("outOfWindow") === "true") items = items.filter(v => v.outOfWindow);
     const status = q.getAll("status");
     if (status.length) items = items.filter(v => status.includes(v.status));
+    /* 待 PI 确认 = 已完成、但还没签字。**在服务端筛** ——
+       前端取一页回来自己挑，访视上了几百条之后第一页全是历史，
+       研究者工作台就永远是空的。 */
+    if (q.get("pendingPi") === "true")
+      items = items.filter(v => v.status === "done" && !v.piConfirmedAt);
     items.sort(byWindow);
     return HttpResponse.json({ items, nextCursor: null });
   }),
@@ -300,7 +313,10 @@ export const scenarioHandlers = [
   http.get(pathToRegExp("/v1/subject-visits/{id}"), ({ request }) => {
     const [, id] = new URL(request.url).pathname.match(/\/subject-visits\/([^/?]+)/) ?? [];
     const v = scenario.visits.find(x => x.id === id);
-    if (!v) return HttpResponse.json(problem("not-found", 404, "访视不存在"), { status: 404 });
+    /* 范围之外与不存在**同样是 404** —— 给 403 等于承认"它存在但不给你看"，
+       那本身就是一条信息。 */
+    if (!v || !siteInScope(v.studySiteId))
+      return HttpResponse.json(problem("not-found", 404, "访视不存在"), { status: 404 });
     return HttpResponse.json(withDaysLeft(v));
   }),
 
@@ -311,6 +327,23 @@ export const scenarioHandlers = [
     if (!v) return HttpResponse.json(problem("not-found", 404, "访视不存在"), { status: 404 });
     const t = v.tasks.find(x => x.seq === Number(seq));
     if (t && !t.doneAt) t.doneAt = new Date().toISOString();
+    return HttpResponse.json({ data: withDaysLeft(v), sideEffects: [] }, { status: 201 });
+  }),
+
+  /* PI 确认。**只有该中心的 PI 本人能按** —— 服务端那条 I3 在这里
+     演成两半：别的角色没有 piConfirm 动作（按钮画不出来），
+     范围外的访视 404（连行都看不到）。 */
+  http.post(pathToRegExp("/v1/subject-visits/{id}:confirm"), ({ request }) => {
+    const id = seg(request.url, /\/subject-visits\/([^/:]+):confirm/);
+    const v = scenario.visits.find(x => x.id === id);
+    if (!v || !siteInScope(v.studySiteId)) return HttpResponse.json(
+      problem("not-found", 404, "访视不存在"), { status: 404 });
+    if (!identity().actions.includes("piConfirm")) return HttpResponse.json(
+      problem("forbidden", 403, "只有该中心的研究者可以确认访视"), { status: 403 });
+    if (v.status !== "done") return HttpResponse.json(
+      problem("invariant-violated", 422, "访视尚未完成，没有可确认的内容"), { status: 422 });
+    v.piConfirmedAt = new Date().toISOString();
+    v.piConfirmedByName = identity().name;
     return HttpResponse.json({ data: withDaysLeft(v), sideEffects: [] }, { status: 201 });
   }),
 
@@ -494,7 +527,7 @@ export const scenarioHandlers = [
     /* **走同一个 checklistFor** —— 汇总另算一遍的话，
        汇总页和详情页会在"逾期"这一栏上对不上，
        而那正是这条端点的测试里花了最多力气钉住的东西。 */
-    let items = SITES_LIST.map(s => {
+    let items = visibleSites().map(s => {
       const { items: _items, ...summary } = checklistFor(s.id);
       return summary;
     });
@@ -503,11 +536,53 @@ export const scenarioHandlers = [
   }),
 
   http.get(pathToRegExp("/v1/quality-events"), () =>
-    HttpResponse.json({ items: scenario.qualityEvents, nextCursor: null })),
+    HttpResponse.json({ items: inScope(scenario.qualityEvents), nextCursor: null })),
+
+  /* 关闭质量事件。**机构提出的由机构关** —— 这条规则在服务端，
+     这里只演它的另一半：没有 closeQA 的角色连按钮都看不到，
+     而带着 closeQA 的机构办按下去要真的让那一行从"未了结"里消失。 */
+  http.post(pathToRegExp("/v1/quality-events/{id}:close"), async ({ request }) => {
+    const id = seg(request.url, /\/quality-events\/([^/:]+):close/);
+    const b = await request.json() as { reason?: string };
+    const q = scenario.qualityEvents.find(x => x.id === id);
+    if (!q || (q.studySiteId !== undefined && !siteInScope(q.studySiteId)))
+      return HttpResponse.json(
+        problem("not-found", 404, "质量事件不存在"), { status: 404 });
+    if (!identity().actions.includes("closeQA")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能关闭质量事件"), { status: 403 });
+    /* 整改说明是**必填**（契约里的 WithReason，最短 4 个字）。
+       mock 上放行一次真库会拒的提交，等于把这条规则藏到集成测试才暴露。 */
+    if (!b.reason || b.reason.trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：整改说明至少 4 个字"),
+      { status: 422 });
+    q.state = "closed";
+    return HttpResponse.json({ data: q, sideEffects: [] }, { status: 201 });
+  }),
+
+  /* 备案名册。行范围**在这里也要收** —— 这一页整页的内容就是
+     "我这几个中心上有谁"，不收就成了"全公司的人"。
+     而且中心列表要按范围重算：机构办不该数得出这个 CRC
+     在别家医院还带着几个。 */
+  http.get(pathToRegExp("/v1/site-staff"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    const ids = visibleSiteIds();
+    let items = SITE_STAFF
+      .map(p => ({ ...p, sites: p.sites.filter(x => ids.has(x.id)) }))
+      .filter(p => p.sites.length > 0);
+    const kind = q.get("roleKind");
+    if (kind) items = items.filter(p => p.roleKind === kind);
+    const site = q.get("studySiteId");
+    if (site) items = items
+      .map(p => ({ ...p, sites: p.sites.filter(x => x.id === site) }))
+      .filter(p => p.sites.length > 0);
+    if (q.get("gcpProblem") === "true")
+      items = items.filter(p => p.gcpDaysLeft === null || p.gcpDaysLeft <= 60);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
 
   http.get(pathToRegExp("/v1/study-sites"), ({ request }) => {
     const only = new URL(request.url).searchParams.get("startupInvalidated");
-    const items = SITES_LIST.map(s => siteDto(s.id)!)
+    const items = visibleSites().map(s => siteDto(s.id)!)
       .filter(s => only === null || s.startupInvalidated === (only === "true"));
     return HttpResponse.json({ items, nextCursor: null });
   }),
@@ -564,7 +639,8 @@ export const scenarioHandlers = [
 
   http.get(pathToRegExp("/v1/study-sites/{id}"), ({ request }) => {
     const id = seg(request.url, /\/study-sites\/([^/?]+)/);
-    const dto = siteDto(id);
+    /* 范围之外与不存在**同样是 404**（规约 I2）。 */
+    const dto = siteInScope(id) ? siteDto(id) : null;
     return dto ? HttpResponse.json(dto)
       : HttpResponse.json(problem("not-found", 404, "中心不存在"), { status: 404 });
   }),
@@ -759,7 +835,7 @@ export const scenarioHandlers = [
      mock 汇总），而"汇总页和详情页对不上"正是它最先长出来的样子。 */
   http.get(pathToRegExp("/v1/pnl"), ({ request }) => {
     const q = new URL(request.url).searchParams;
-    let items = SITES_LIST
+    let items = visibleSites()
       .map(x => { const dto = siteDto(x.id); return dto ? pnlFor(x.id, dto) : null; })
       .filter((x): x is NonNullable<typeof x> => x !== null);
     if (q.get("lossOnly") === "true")
@@ -776,8 +852,9 @@ export const scenarioHandlers = [
      全给一样的数的话，页面画得出来，但它想说的话一句也说不出来。 */
   http.get(pathToRegExp("/v1/enrollment"), ({ request }) => {
     const q = new URL(request.url).searchParams;
+    const all = inScope(FUNNELS);
     const items = q.get("behindOnly") === "true"
-      ? FUNNELS.filter(f => f.enrolled < f.contracted) : FUNNELS;
+      ? all.filter(f => f.enrolled < f.contracted) : all;
     return HttpResponse.json({ items, nextCursor: null });
   }),
 
@@ -802,7 +879,7 @@ export const scenarioHandlers = [
      而只有真库那一侧会暴露出来。 */
   http.get(pathToRegExp("/v1/subjects"), ({ request }) => {
     const q = new URL(request.url).searchParams;
-    let items = scenario.subjects.map(maskSubject);
+    let items = inScope(scenario.subjects).map(maskSubject);
     const states = q.getAll("state");
     if (states.length) items = items.filter(x => states.includes(x.state));
     const site = q.get("studySiteId");
@@ -1023,8 +1100,8 @@ function siteDto(id: string) {
   return {
     id: s.id, code: s.code,
     study: { id: "st1", code: "HJ-2024-017", shortName: "艾瑞替尼 III" },
-    hospital: s.hospital, dept: "肝胆外科", city: "北京",
-    piName: "陈国栋", piAccountId: null,
+    hospital: s.hospital, dept: s.dept, city: s.city,
+    piName: s.piName, piAccountId: s.piAccountId,
     state: scenario.siteState[s.id] ?? s.state, contracted: 30,
     irbApprovedOn: "2024-10-18",
     sivOn: scenario.sivOn[s.id] ?? null,
@@ -1039,7 +1116,10 @@ function siteDto(id: string) {
     startupInvalidated: PAST_SIV.includes(scenario.siteState[s.id] ?? s.state)
       && scenario.startupItems.some(
         i => i.studySiteId === s.id && i.isBlocking && !i.doneAt),
-    ...(mockRole === "boss"
+    /* 按**列权限**判，不按角色名判。写成 `mockRole === "boss"` 的那一版，
+       加一个同样看得到 price 的身份时会静默漏掉它 ——
+       而真库那一侧看的从来都是 role_field。 */
+    ...(identity().fields.includes("price")
       ? { unitPriceCents: 5800000, startupFeeCents: 17600000 } : {})
   };
 }
@@ -1095,7 +1175,7 @@ function gateFor(siteId: string) {
  *  界面据此判断"有没有这一块"，两边差一点都会露馅。 */
 const GATES = fieldGates();
 const mask = <T,>(v: T): T =>
-  maskFields({ active: true, fields: ROLE[mockRole].fields }, GATES, v);
+  maskFields({ active: true, fields: identity().fields }, GATES, v);
 
 /** 成本三件套受 cost 列权限管辖 —— 一线填工时，但看不到自己值多少钱。 */
 const stripCost = (t: MockTimesheet) => mask(t);
@@ -1182,7 +1262,11 @@ export const contractHandlers = allEndpoints().map(e => {
   const path = pathToRegExp(e.path);
   const fn = () => {
     if (!ex) return new HttpResponse(null, { status: 501 });
-    const body = mockRole === "crc" && ex.bodyWithoutFieldPermission
+    /* 两份示例：一份含全部受管辖字段，一份是无权限时的样子。
+       **除了经营层，其余三个身份都拿不到钱那几列** —— 判据是列权限本身，
+       不是"是不是 CRC"。 */
+    const rich = identity().fields.includes("cost");
+    const body = !rich && ex.bodyWithoutFieldPermission
       ? ex.bodyWithoutFieldPermission : ex.body;
     return body === undefined
       ? new HttpResponse(null, { status: ex.status })
@@ -1224,7 +1308,7 @@ function trendFor(id: string, dto: { code: string; hospital: string }, months: n
         month, enrolled: k.enrolled, screenFailed: 0, withdrawn: 0
       };
       /* 与真实后端同一套列权限：一线看得到例数，看不到钱 */
-      return mockRole === "boss" ? {
+      return identity().fields.includes("cost") ? {
         ...base, revenueCents: k.rev, costCents: k.cost,
         personDays: k.cost / 2_11_200,
         grossProfitCents: k.rev - k.cost

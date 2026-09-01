@@ -3297,6 +3297,143 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/site-staff:
+    get:
+      operationId: listSiteStaff
+      tags:
+        - site
+      summary: 中心人员备案名册
+      description: |-
+        `listStaff` 的**另一个问题**，不是它的一个筛子。
+
+        `/v1/staff` 是我方的人事账（职级、带教、继任、共带几个中心），外部方一行也看不到，那条策略要保留。
+        但机构办有一件必须做的事：备案 —— 我院这几个中心上出现的 CRC 是谁、他的 GCP 证书还有效吗。证书过期的人不得开展工作，这不是我方的内部管理，是机构履行监管职责的一部分。
+
+        所以走一个只开这几列的口子（`app.site_staff_registry()`），行范围照旧由登录身份推导 —— **SECURITY DEFINER 绕开的是表策略，不是行范围**。
+        `sites` 只列本范围内的中心：那个 CRC 在别家医院还带着几个，与本院无关。
+      x-layer: L1
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: roleKind
+          in: query
+          required: false
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/RoleKind'
+        - name: gcpProblem
+          in: query
+          required: false
+          description: 只看 GCP 已过期或 60 天内到期的
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
+        - name: studySiteId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        '200':
+          description: 中心人员备案名册
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSiteStaffResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/specimens/{id}:advance:
     post:
       operationId: advanceSpecimen
@@ -9630,6 +9767,77 @@ components:
         - disabledReason
       additionalProperties: false
       description: account 回答「谁能登录、看得到什么」；staff 回答「他是什么工种、带谁、谁接他」。
+    SiteStaff:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        displayName:
+          type: string
+        roleKind:
+          $ref: '#/components/schemas/RoleKind'
+        gcpExpiresOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        gcpDaysLeft:
+          nullable: true
+          description: 负数表示已过期 —— 过期即不得开展工作
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        active:
+          type: boolean
+        sites:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+                pattern: >-
+                  ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              code:
+                type: string
+                minLength: 1
+                maxLength: 64
+                pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+              hospital:
+                type: string
+              studyShortName:
+                type: string
+              since:
+                type: string
+                format: date
+                pattern: >-
+                  ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                description: 这次派工的起始日
+            required:
+              - id
+              - code
+              - hospital
+              - studyShortName
+              - since
+            additionalProperties: false
+          description: '**只含本行范围内的中心**'
+      required:
+        - accountId
+        - displayName
+        - roleKind
+        - gcpExpiresOn
+        - gcpDaysLeft
+        - active
+        - sites
+      additionalProperties: false
+      description: |-
+        备案视角的人员：我看得到的中心上，在岗的 CRA / CRC 是谁、证书还有效吗。
+        PI 不在其中 —— 他是医院自己的人，证书归医院管，我方手里那份不会更新。
     HandoverStatus:
       type: string
       enum:
@@ -11778,6 +11986,23 @@ components:
           description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
       required:
         - reason
+      additionalProperties: false
+    ListSiteStaffResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SiteStaff'
+        nextCursor:
+          nullable: true
+          description: null 表示已到末页
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+        - items
+        - nextCursor
       additionalProperties: false
     AdvanceSpecimenRequest:
       type: object

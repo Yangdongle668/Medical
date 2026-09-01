@@ -33,8 +33,13 @@ import { PmPage } from "./features/workbench/PmPage.js";
 import { TeamPage } from "./features/workbench/TeamPage.js";
 import { ApprovalsPage } from "./features/workbench/ApprovalsPage.js";
 import { SchedulePage } from "./features/workbench/SchedulePage.js";
+import { PiPage } from "./features/external/PiPage.js";
+import { InstPage } from "./features/external/InstPage.js";
+import { InstQcPage } from "./features/external/InstQcPage.js";
+import { InstRegistryPage } from "./features/external/InstRegistryPage.js";
 import { ComingSoon } from "./shell/ComingSoon.js";
 import { MODULES } from "./shell/modules.js";
+import { MOCK_ROLES, type MockRole } from "./mocks/roles.js";
 import "./shell/styles.css";
 
 /* 已经建好的页 —— 按路径登记。
@@ -64,7 +69,11 @@ const BUILT: Record<string, React.ReactElement> = {
   "/pm": <PmPage />,
   "/team": <TeamPage />,
   "/approvals": <ApprovalsPage />,
-  "/sched": <SchedulePage />
+  "/sched": <SchedulePage />,
+  "/pi": <PiPage />,
+  "/inst": <InstPage />,
+  "/inst/qc": <InstQcPage />,
+  "/inst/registry": <InstRegistryPage />
 };
 
 /* 45 个模块的路由。同一个路径被几个模块共用是正常的
@@ -106,13 +115,20 @@ const USE_MOCKS = import.meta.env.DEV || import.meta.env.VITE_USE_MOCKS === "1";
 
 /** mock 模式下用 `?as=boss` 换一个身份看同一个页面。
  *  存进 sessionStorage 是因为换页面要保持住 —— 这套界面里
- *  「同一个按钮，谁点得动」是要看得见的差别，翻一页就丢了等于没有。 */
-function mockRoleFromUrl(): "crc" | "boss" {
+ *  「同一个按钮，谁点得动」是要看得见的差别，翻一页就丢了等于没有。
+ *
+ *  **外部两个身份（inst / pi）不是凑数的。** 它们的行范围
+ *  （本院 / 本人担任研究者的中心）比内部窄，而"窄"这件事
+ *  只有真的换过去看一眼才发现得了 —— 界面上少了哪几行、
+ *  哪个按钮点不动。mock 里扮不了外部角色，那四页就等于没测过。 */
+function mockRoleFromUrl(): MockRole {
   const q = new URLSearchParams(location.search).get("as");
+  const ok = (v: string | null): v is MockRole =>
+    v !== null && (MOCK_ROLES as readonly string[]).includes(v);
   try {
-    if (q === "boss" || q === "crc") { sessionStorage.setItem("sitedesk.as", q); return q; }
+    if (ok(q)) { sessionStorage.setItem("sitedesk.as", q); return q; }
     const saved = sessionStorage.getItem("sitedesk.as");
-    if (saved === "boss" || saved === "crc") return saved;
+    if (ok(saved)) return saved;
   } catch { /* 隐私模式下 sessionStorage 会抛 —— 退回默认身份即可 */ }
   return "crc";
 }
