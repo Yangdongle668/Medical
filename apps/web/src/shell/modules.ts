@@ -82,14 +82,10 @@ export const MODULES: ModuleDef[] = [
     todo: "未来六个月的收支预测，累计为负的月份要红。" },
 
   /* ── 商务 ─────────────────────────────────────────────────────── */
-  { key: "feas", title: "中心可行性调查", group: "商务", path: "/feas",
-    todo: "候选中心的病例量、竞争试验、启动周期，用来决定要不要选它。" },
-  { key: "price", title: "报价模型", group: "商务", path: "/price",
-    todo: "单例报价的拆解：人天成本、管理费、毛利率。费率卡在 /rate-cards。" },
-  { key: "bid", title: "投标与报价闭环", group: "商务", path: "/bid",
-    todo: "投出去的标：报价、结果、赢的输的各是什么价位。" },
-  { key: "change", title: "合同变更", group: "商务", path: "/change",
-    todo: "变更单：从提出到签署，以及它对合同额与毛利的影响。" },
+  { key: "feas", title: "中心可行性调查", group: "商务", path: "/feas" },
+  { key: "price", title: "报价模型", group: "商务", path: "/price" },
+  { key: "bid", title: "投标与报价闭环", group: "商务", path: "/bid" },
+  { key: "change", title: "合同变更", group: "商务", path: "/change" },
 
   /* ── 资源 ─────────────────────────────────────────────────────── */
   { key: "staff", title: "派工与产能", group: "资源", path: "/staff" },

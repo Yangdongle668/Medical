@@ -44,7 +44,8 @@ const STUDIES = grab("STUDIES"), SITES = grab("SITES"),
       SIV_PLAN = grab("SIV_PLAN"),
       SOA = grab("SOA"), SUBJ = grab("SUBJ"), FUNNEL = grab("FUNNEL"),
       DROPS = grab("DROPS"), QUERIES = grab("QUERIES"),
-      RATE = grab("RATE"), WORKTYPES = grab("WORKTYPES"), TIMESHEET = grab("TIMESHEET");
+      RATE = grab("RATE"), WORKTYPES = grab("WORKTYPES"), TIMESHEET = grab("TIMESHEET"),
+      FEAS = grab("FEAS"), BIDS = grab("BIDS"), CHANGES = grab("CHANGES");
 
 const q  = v => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const d  = v => (!v || v === "—") ? "NULL" : `'${v}'`;
@@ -485,6 +486,89 @@ TIMESHEET.forEach(t => {
 });
 P(``);
 
+P(`-- ── 中心可行性调查：选址的账 ───────────────────────────────`);
+P(`-- 报价模型算「这个项目要花多少人天」，这张表算「这家能不能出病人」。`);
+/* 原型里 st 写的是「已入选（SS-04）」这样的中文串 —— 库里拆成
+   status 与 study_site_id 两列：一个是状态机，一个是外键。
+   保留原串去解析，等于把状态判断建在文案上，改一个字就全断。 */
+let feasRows = 0;
+FEAS.forEach(f => {
+  const m = /已入选（(SS-\d+)）/.exec(f.st);
+  const selected = !!m;
+  const siteId = m ? `'${uuid5("site:" + m[1])}'` : "NULL";
+  /* 决定日：原型没有这一栏。用调查日推 —— 入选的决定不会在调查当天下，
+     但也不该编一个看起来很精确的日期。取调查日后 14 天，
+     并在注释里说明它是推出来的，不是记录下来的。 */
+  const decided = selected ? new Date(new Date(f.date).getTime() + 14 * 864e5)
+    .toISOString().slice(0, 10) : null;
+  P(`INSERT INTO feasibility (id, code, study_id, hospital, city, dept, pi_name,` +
+    ` surveyed_on, surveyed_by, pt_year, past_n, past_best, compet, ethics_days,` +
+    ` start_days, team_n, pi_commit, elig_pct, status, decided_on, decided_by,` +
+    ` study_site_id, override_reason, reject_reason, actual_rate) VALUES (` +
+    `'${uuid5("feas:" + f.id)}', ${q(f.id)}, '${uuid5("study:" + f.sid)}', ` +
+    `${q(f.hosp)}, ${q(f.city)}, ${q(f.dept)}, ${q(f.pi)}, ` +
+    `${d(f.date)}, ${acc(f.by)}, ${f.q.ptYear}, ${f.q.pastN}, ${f.q.pastBest}, ` +
+    `${f.q.compet}, ${f.q.ethicsDays}, ${f.q.startDays}, ${f.q.teamN}, ` +
+    `${f.q.piCommit}, ${f.q.eligPct == null ? "NULL" : f.q.eligPct}, ` +
+    `${q(selected ? "selected" : "assessing")}, ${d(decided)}, ` +
+    `${selected ? acc(f.by) : "NULL"}, ${siteId}, ${q(f.override)}, NULL, ` +
+    `${f.actual == null ? "NULL" : f.actual});`);
+  feasRows++;
+});
+P(``);
+
+P(`-- ── 投标：报出去的价，赢没赢 ───────────────────────────────`);
+P(`-- 不回写开标结果，报价模型就是自说自话。`);
+/* 原型里 st 是中文串、金额是万元、win 是成交价（失标时是对手的价）。
+   `win: null` 在原型里既表示"待定"也表示"问不到" —— 库里分得开：
+   待定的 status='pending'（约束禁止有价），失标的 win 可以为 NULL。 */
+const BID_ST = { "待定": "pending", "中标": "won", "失标": "lost" };
+let bidRows = 0;
+BIDS.forEach(b => {
+  const st = BID_ST[b.st];
+  /* 决定日：原型没有这一栏。投标 → 开标通常一到两个月，取投标日 + 45 天。
+     它是推出来的，不是记录下来的 —— 和可行性的 decided_on 同一个处理。 */
+  const decided = st === "pending" ? null
+    : new Date(new Date(b.sub).getTime() + 45 * 864e5).toISOString().slice(0, 10);
+  P(`INSERT INTO bid (id, code, sponsor, name, submitted_on, sites, subjects,` +
+    ` our_quote_cents, our_person_days, status, decided_on, winning_price_cents,` +
+    ` owner_account_id, note) VALUES (` +
+    `'${uuid5("bid:" + b.id)}', ${q(b.id)}, ${q(b.sp)}, ${q(b.name)}, ${d(b.sub)}, ` +
+    `${b.sites}, ${b.subjects}, ${cents(b.ours)}, ${b.md}, ${q(st)}, ${d(decided)}, ` +
+    `${b.win == null ? "NULL" : cents(b.win)}, ${acc(b.by)}, ${q(b.note)});`);
+  bidRows++;
+});
+P(``);
+
+P(`-- ── 合同变更：亏损第二大原因就是 scope creep 没有变更单 ────────`);
+const CHG_KIND = {
+  "方案修订 · 访视增加": "visit_add", "方案修订 · 检查项增加": "exam_add",
+  "例数调整": "subject_adj", "中心增减": "site_adj",
+  "周期延长": "extend", "单价调整": "price_adj"
+};
+const CHG_ST = { "待提出": "draft", "已提交": "submitted",
+  "已签署": "signed", "未获批": "rejected" };
+let chgRows = 0;
+CHANGES.forEach(c => {
+  const st = CHG_ST[c.st];
+  const decided = ["signed", "rejected"].includes(st)
+    ? new Date(new Date(c.raised).getTime() + 30 * 864e5).toISOString().slice(0, 10)
+    : null;
+  /* 未获批的那条金额是 NULL —— **不是 0**。
+     0 表示"谈过了，对方不给钱，我们认了"（已签署但零元）；
+     NULL 表示"没有对应金额"，那正是 scope creep 的定义。 */
+  P(`INSERT INTO contract_change (id, code, study_id, study_site_id, kind,` +
+    ` raised_on, raised_by, what, person_days_impact, per_subject, amount_cents,` +
+    ` status, decided_on, note) VALUES (` +
+    `'${uuid5("chg:" + c.id)}', ${q(c.id)}, '${uuid5("study:" + c.sid)}', ` +
+    `${c.ss ? `'${uuid5("site:" + c.ss)}'` : "NULL"}, ${q(CHG_KIND[c.kind])}, ` +
+    `${d(c.raised)}, ${acc(c.by)}, ${q(c.what)}, ${c.mdImpact}, ` +
+    `${c.perSubject ? "true" : "false"}, ${c.amt == null ? "NULL" : cents(c.amt)}, ` +
+    `${q(st)}, ${d(decided)}, ${q(c.note || null)});`);
+  chgRows++;
+});
+P(``);
+
 P(`-- ── 合同条款：筛败费率与管理分摊（原型里是两个写死的常量） ─────`);
 P(`UPDATE study SET screen_fail_fee_rate = 0.350, overhead_rate = ${RATE.overhead};`);
 P(``);
@@ -525,4 +609,5 @@ fs.writeFileSync(OUT, text);
 console.log(`db/seeds/001_demo.sql 已生成（${L.length} 行）` +
   `｜角色 ${Object.keys(ROLE_DEF).length} · 账号 ${USERS.length} · 分组 ${GROUPS.length}` +
   ` · 项目 ${STUDIES.length} · 中心 ${SITES.length} · 受试者 ${subjRows} · 访视 ${visitRows}` +
-  ` · 费率卡 ${RATES.length} · 工时 ${tsRows}`);
+  ` · 费率卡 ${RATES.length} · 工时 ${tsRows} · 可行性 ${feasRows}` +
+  ` · 投标 ${bidRows} · 变更 ${chgRows}`);

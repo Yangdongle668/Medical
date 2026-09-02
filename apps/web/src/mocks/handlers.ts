@@ -1,11 +1,14 @@
 import { http, HttpResponse } from "msw";
 import { allEndpoints, SITE_STATES, DEFAULT_HANDOVER_ITEMS } from "@sitedesk/contracts";
+import { feasibilityScore, feasibilityBias, reviewBids, scopeCreep, changeDays }
+  from "@sitedesk/calc";
 import { siteRevenue, siteCost, siteMargin, CALC_VERSION,
   saeTimeliness, saeReportHours, type CostEntry } from "@sitedesk/calc";
 import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
+import type { MockFeas, MockBid, MockChange } from "./scenario.js";
 import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
   mkTimesheet, WORK_TYPE_META,
   type MockSubject, type MockPayment,
@@ -764,6 +767,209 @@ export const scenarioHandlers = [
     }, { status: 201 });
   }),
 
+  /* ── 中心可行性调查 ────────────────────────────────────────────
+     **评分走 @sitedesk/calc，mock 不另写一份。** 在 mock 里手搓一遍
+     等于给这套口径开了第三个入口（服务端、calc、mock），
+     而三套迟早分叉 —— 分叉那天，一家医院会因为看哪个页面拿到不同的结论。 */
+  http.get(pathToRegExp("/v1/feasibility/calibration"), () => {
+    const sel = scenario.feasibility.filter(f => f.status === "selected");
+    const rows = sel.map(feasDto);
+    const withActual = rows.filter(x => x.bias !== null);
+    const overrides = rows.filter(x => x.score.total < 65);
+    return HttpResponse.json({
+      selected: withActual.length,
+      meanBias: withActual.length
+        ? withActual.reduce((n, x) => n + x.bias!, 0) / withActual.length : null,
+      overrides: overrides.length,
+      overridesGoneBad: overrides.filter(
+        x => x.actualRate !== null && x.actualRate < 1).length,
+      calcVersion: CALC_VERSION
+    });
+  }),
+
+  http.get(pathToRegExp("/v1/feasibility"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = scenario.feasibility.map(feasDto);
+    const status = q.getAll("status");
+    if (status.length) items = items.filter(f => status.includes(f.status));
+    if (q.get("overrideOnly") === "true")
+      items = items.filter(f => f.status === "selected" && f.score.total < 65);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/feasibility/{id}:decide"), async ({ request }) => {
+    const id = seg(request.url, /\/feasibility\/([^/:]+):decide/);
+    const b = await request.json() as { decision: string; reason?: string };
+    const f = scenario.feasibility.find(x => x.id === id);
+    if (!f) return HttpResponse.json(
+      problem("not-found", 404, "可行性调查不存在"), { status: 404 });
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能定选址"), { status: 403 });
+    if (f.status !== "assessing") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${f.code} 已经定过了 —— 决定不能改，要改就重新做一次调查`), { status: 422 });
+
+    const score = feasibilityScore(f.answers);
+    const reason = (b.reason ?? "").trim();
+    /* **低分入选不拦，但必须写理由。** mock 上放行一次真库会拒的提交，
+       等于把这条规则藏到集成测试才暴露 —— 而这条规则正是这一页的核心。 */
+    const needsReason = b.decision === "rejected" || score.total < 65;
+    if (needsReason && reason.length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, b.decision === "rejected"
+        ? "拒绝必须写理由 —— 申办方问「为什么没选这家」时，「评分不够」不是答案"
+        : `${f.code} 评分 ${Math.round(score.total)} 分，低于 65 分。` +
+          "入选它不被阻止，但必须写下理由"), { status: 422 });
+
+    f.status = b.decision as MockFeas["status"];
+    f.decidedOn = todayStr();
+    f.decidedByName = identity().name;
+    f.overrideReason = b.decision === "selected" && reason ? reason : null;
+    f.rejectReason = b.decision === "rejected" ? reason : null;
+
+    const sideEffects = b.decision === "selected" && score.total < 65
+      ? [{ type: "FeasibilityOverride",
+           summary: `${f.hospital} 评分 ${Math.round(score.total)} 分入选 —— ` +
+             `预测月入组约 ${score.predictedPerMonth.toFixed(1)} 例，理由已记入审计轨迹`,
+           ref: f.id }]
+      : [];
+    return HttpResponse.json({ data: feasDto(f), sideEffects }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/feasibility/{id}:actual"), async ({ request }) => {
+    const id = seg(request.url, /\/feasibility\/([^/:]+):actual/);
+    const b = await request.json() as { actualRate: number };
+    const f = scenario.feasibility.find(x => x.id === id);
+    if (!f) return HttpResponse.json(
+      problem("not-found", 404, "可行性调查不存在"), { status: 404 });
+    if (f.status !== "selected") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${f.code} 没有入选 —— 只有入选的中心谈得上实际入组速度`), { status: 422 });
+    f.actualRate = b.actualRate;
+    const dto = feasDto(f);
+    const sideEffects = dto.bias !== null && (dto.bias < 0.5 || dto.bias > 2)
+      ? [{ type: "FeasibilityBias",
+           summary: `实际是预测的 ${(dto.bias * 100).toFixed(0)}%`, ref: f.id }]
+      : [];
+    return HttpResponse.json({ data: dto, sideEffects }, { status: 201 });
+  }),
+
+  /* ── 投标 ────────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/bids/review"), () =>
+    HttpResponse.json(mask({
+      ...reviewBids(scenario.bids.map(b => ({
+        status: b.status, ourQuoteCents: b.ourQuoteCents,
+        ourPersonDays: b.ourPersonDays, subjects: b.subjects,
+        winningPriceCents: b.winningPriceCents
+      }))),
+      calcVersion: CALC_VERSION
+    }))),
+
+  http.get(pathToRegExp("/v1/bids"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = scenario.bids.map(bidDto);
+    const status = q.getAll("status");
+    if (status.length) items = items.filter(b => status.includes(b.status));
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/bids/{id}:decide"), async ({ request }) => {
+    const id = seg(request.url, /\/bids\/([^/:]+):decide/);
+    const b = await request.json() as
+      { result: string; winningPriceCents?: number | null };
+    const bid = scenario.bids.find(x => x.id === id);
+    if (!bid) return HttpResponse.json(
+      problem("not-found", 404, "投标不存在"), { status: 404 });
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能回写开标结果"), { status: 403 });
+    if (bid.status !== "pending") return HttpResponse.json(
+      problem("invariant-violated", 422, `${bid.code} 已经出过结果了`), { status: 422 });
+
+    const win = b.winningPriceCents ?? null;
+    /* **中标必须知道自己签了多少** —— 那个数就在合同上。 */
+    if (b.result === "won" && win === null) return HttpResponse.json(
+      problem("validation-failed", 422,
+        "中标必须填成交价 —— 不填的话这一标永远进不了报价偏差统计"), { status: 422 });
+
+    bid.status = b.result as MockBid["status"];
+    bid.decidedOn = todayStr();
+    bid.winningPriceCents = win;
+
+    const gap = win !== null && win > 0
+      ? (bid.ourQuoteCents - win) / win : null;
+    const sideEffects = gap !== null && Math.abs(gap) >= 0.15
+      ? [{ type: "BidDecided",
+           summary: gap > 0
+             ? `我们比成交价高 ${(gap * 100).toFixed(0)}% —— 去「报价偏差复盘」看看是不是系统性的`
+             : `我们比成交价低 ${(-gap * 100).toFixed(0)}% —— 报低了同样要查`,
+           ref: bid.id }]
+      : b.result === "lost" && win === null
+        ? [{ type: "BidDecided",
+             summary: "没有成交价，这一标不进偏差统计 —— " +
+               "「不知道对方报了多少」不会被当成「和我们一样」",
+             ref: bid.id }]
+        : [];
+    return HttpResponse.json({ data: bidDto(bid), sideEffects }, { status: 201 });
+  }),
+
+  /* ── 合同变更 ─────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/contract-changes/scope-creep"), () =>
+    HttpResponse.json(mask({
+      ...scopeCreep(scenario.changes.map(c => ({
+        status: c.status, personDaysImpact: c.personDaysImpact,
+        perSubject: c.perSubject, affectedSubjects: c.affectedSubjects,
+        amountCents: c.amountCents
+      })), crcDayCost()),
+      calcVersion: CALC_VERSION
+    }))),
+
+  http.get(pathToRegExp("/v1/contract-changes"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = scenario.changes.map(changeDto);
+    const status = q.getAll("status");
+    if (status.length) items = items.filter(c => status.includes(c.status));
+    if (q.get("uncoveredOnly") === "true")
+      items = items.filter(c => c.status !== "signed");
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/contract-changes/{id}:settle"), async ({ request }) => {
+    const id = seg(request.url, /\/contract-changes\/([^/:]+):settle/);
+    const b = await request.json() as
+      { status: string; settledCents?: number | null };
+    const c = scenario.changes.find(x => x.id === id);
+    if (!c) return HttpResponse.json(
+      problem("not-found", 404, "变更单不存在"), { status: 404 });
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能推进变更单"), { status: 403 });
+    if (["signed", "rejected"].includes(c.status)) return HttpResponse.json(
+      problem("invariant-violated", 422, `${c.code} 已经了结了`), { status: 422 });
+
+    /* **签署必须填金额，哪怕是 0。** 0 是「谈过了对方不给」，
+       不填是「还没谈」—— 前者是决策，后者是欠账。 */
+    const amount = b.settledCents ?? null;
+    if (b.status === "signed" && amount === null) return HttpResponse.json(
+      problem("validation-failed", 422,
+        "签署必须填金额，哪怕是 0 —— 0 表示「谈过了对方不给」，不填表示「还没谈」"),
+      { status: 422 });
+
+    c.status = b.status as MockChange["status"];
+    c.decidedOn = ["signed", "rejected"].includes(b.status) ? todayStr() : null;
+    if (b.status === "signed") c.amountCents = amount;
+
+    const total = changeDays({
+      status: c.status, personDaysImpact: c.personDaysImpact,
+      perSubject: c.perSubject, affectedSubjects: c.affectedSubjects,
+      amountCents: c.amountCents
+    });
+    const sideEffects = b.status === "rejected"
+      ? [{ type: "ScopeCreepRecorded",
+           summary: `${c.kindLabel}未获批 —— ${total.toFixed(1)} 人天没有对应金额。` +
+             "下次报价时这就是该加进去的成本",
+           ref: c.id }]
+      : [];
+    return HttpResponse.json({ data: changeDto(c), sideEffects }, { status: 201 });
+  }),
+
   http.get(pathToRegExp("/v1/rate-cards"), () =>
     HttpResponse.json({
       items: scenario.rateCards.map(mask),
@@ -1089,6 +1295,59 @@ export const scenarioHandlers = [
 /** 从 URL 里抠出一段路径参数。正则各处不同，所以由调用方传进来。 */
 function seg(url: string, re: RegExp): string {
   return new URL(url).pathname.match(re)?.[1] ?? "";
+}
+
+/** 可行性调查的一行。评分**现算**（走 calc），不存 ——
+ *  存下来的分数会在口径升级之后悄悄变成历史值，
+ *  而这一页要的恰恰是"按现在这套口径，这家该得多少分"。 */
+function feasDto(f: MockFeas) {
+  const score = feasibilityScore(f.answers);
+  return {
+    ...f,
+    score: { ...score, calcVersion: CALC_VERSION },
+    bias: f.actualRate === null
+      ? null : feasibilityBias(f.actualRate, score.predictedPerMonth)
+  };
+}
+
+/** 一条投标。**价格受 price 列权限管辖，走 mask()**（契约派生的门），
+ *  不在这里手抄一份"哪些字段该删"。 */
+function bidDto(b: MockBid) {
+  const gap = b.winningPriceCents !== null && b.winningPriceCents > 0
+    ? (b.ourQuoteCents - b.winningPriceCents) / b.winningPriceCents : null;
+  const { winningPriceCents, ...rest } = b;
+  return mask({
+    ...rest,
+    daysPerSubject: b.subjects > 0 ? b.ourPersonDays / b.subjects : 0,
+    /* 成交价未知时**这个键不出现** —— 与服务端同一条规矩。 */
+    ...(winningPriceCents !== null ? { winningPriceCents } : {}),
+    gap
+  });
+}
+
+/** CRC 人天成本：从现行费率卡取，**不写常量** —— 与服务端同源。 */
+const crcDayCost = () => {
+  const t = todayStr();
+  return scenario.rateCards.find(c =>
+    c.roleKind === "CRC" && c.level === null
+    && c.validFrom <= t && (c.validTo === null || c.validTo >= t))?.dayCostCents ?? 0;
+};
+
+function changeDto(c: MockChange) {
+  const total = changeDays({
+    status: c.status, personDaysImpact: c.personDaysImpact,
+    perSubject: c.perSubject, affectedSubjects: c.affectedSubjects,
+    amountCents: c.amountCents
+  });
+  const { amountCents: settledCents, ...rest } = c;
+  return mask({
+    ...rest,
+    totalPersonDays: total,
+    /* 已签署的不算白做 —— 哪怕金额是 0：那是谈过之后的决定。 */
+    ...(c.status !== "signed"
+      ? { uncoveredCents: Math.round(total * crcDayCost()) } : {}),
+    ...(settledCents !== null ? { settledCents } : {})
+  });
 }
 
 /** 状态机顺序取自契约，不在 mock 里另立一份。 */

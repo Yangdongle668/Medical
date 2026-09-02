@@ -28,11 +28,18 @@ test.describe("启动清单汇总", () => {
   });
 
   test("只看有阻塞项的，会把已过启动期的都筛掉", async ({ page }) => {
-    await expect(page.getByTestId("startup-row").first()).toBeVisible();
-    const all = await page.getByTestId("startup-row").count();
+    const rows = page.getByTestId("startup-row");
+    await expect(rows.first()).toBeVisible();
+    /* 三个中心里只有 SS-14 还在启动期、有阻塞项。 */
+    await expect(rows).toHaveCount(3);
+
     await page.getByTestId("blocked-only").check();
-    const some = await page.getByTestId("startup-row").count();
-    expect(some).toBeLessThan(all);
+    /* **用会重试的 toHaveCount，不用裸 count()。**
+       裸 count() 读的是勾选那一瞬间的 DOM，而 React 还没重渲染完 ——
+       于是筛前筛后读到同一个数，测试红在"3 不小于 3"上，
+       而代码是对的。这是这个项目里第四次撞上同一个形状。 */
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("SS-14");
     await expect(page.getByTestId("no-checklist")).toHaveCount(0);
   });
 });

@@ -32,7 +32,11 @@ export const SIDE_EFFECT_TYPES = [
   "SubjectEnrolled",     // 受试者由筛选期转为已入组
   "MilestoneReached",    // 里程碑达成，进入待开票队列
   "EthicsTaskCreated",   // 生成了伦理递交待办
-  "SiteStateChanged"     // 中心状态机推进
+  "SiteStateChanged",    // 中心状态机推进
+  "FeasibilityOverride", // 评分不够却入选了一个候选中心 —— 理由已入审计
+  "FeasibilityBias",     // 实际入组与当初预测差得离谱 —— 评分口径该校准了
+  "BidDecided",          // 开标结果回写，且价格偏差值得一看
+  "ScopeCreepRecorded"   // 一张变更单没要到钱 —— 那部分工作量白做了
 ] as const;
 export const SideEffectType = z.enum(SIDE_EFFECT_TYPES).meta({
   id: "SideEffectType",

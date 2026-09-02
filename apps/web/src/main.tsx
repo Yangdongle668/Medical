@@ -37,6 +37,10 @@ import { PiPage } from "./features/external/PiPage.js";
 import { InstPage } from "./features/external/InstPage.js";
 import { InstQcPage } from "./features/external/InstQcPage.js";
 import { InstRegistryPage } from "./features/external/InstRegistryPage.js";
+import { FeasPage } from "./features/bizdev/FeasPage.js";
+import { PricePage } from "./features/bizdev/PricePage.js";
+import { BidPage } from "./features/bizdev/BidPage.js";
+import { ChangePage } from "./features/bizdev/ChangePage.js";
 import { ComingSoon } from "./shell/ComingSoon.js";
 import { MODULES } from "./shell/modules.js";
 import { MOCK_ROLES, type MockRole } from "./mocks/roles.js";
@@ -73,7 +77,11 @@ const BUILT: Record<string, React.ReactElement> = {
   "/pi": <PiPage />,
   "/inst": <InstPage />,
   "/inst/qc": <InstQcPage />,
-  "/inst/registry": <InstRegistryPage />
+  "/inst/registry": <InstRegistryPage />,
+  "/feas": <FeasPage />,
+  "/price": <PricePage />,
+  "/bid": <BidPage />,
+  "/change": <ChangePage />
 };
 
 /* 45 个模块的路由。同一个路径被几个模块共用是正常的

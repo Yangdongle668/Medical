@@ -5,3 +5,6 @@ export * from "./kernel.js";
 export * from "./revenue.js";
 export * from "./cost.js";
 export * from "./quality.js";
+export * from "./feasibility.js";
+export * from "./quote.js";
+export * from "./bizdev.js";

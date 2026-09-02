@@ -41,6 +41,14 @@ const RULES = [
     why: "同上，方向反过来也一样"
   },
   {
+    scope: "apps/api/src/modules/bizdev",
+    forbid: [/modules\/identity\//, /modules\/clinical\//, /modules\/site\//,
+             /modules\/cost\//],
+    why: "商务上下文（可行性 · 投标 · 变更）同样不直接引用别的上下文的服务。" +
+         "它要项目与中心的信息时走 SQL 读同一个库，而不是 import 对方的 Service —— " +
+         "后者是最省事的写法，也是最贵的"
+  },
+  {
     scope: "packages/calc",
     forbid: [/^node:/, /^pg$/, /^fs$/, /^express$/, /^@nestjs\//, /^\.\.\/\.\.\/apps\//],
     why: "计算引擎必须是纯函数 —— 前后端共用同一份口径，且能被穷举测试"

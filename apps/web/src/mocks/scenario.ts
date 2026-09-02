@@ -200,6 +200,9 @@ export interface Scenario {
   }[];
   timesheets: MockTimesheet[];
   rateCards: MockRateCard[];
+  feasibility: MockFeas[];
+  bids: MockBid[];
+  changes: MockChange[];
 }
 
 
@@ -350,6 +353,9 @@ export function makeScenario(): Scenario {
     specimens: makeSpecimens(),
     timesheets: makeTimesheets(),
     rateCards: makeRateCards(),
+    feasibility: mkFeas(),
+    bids: mkBids(),
+    changes: mkChanges(),
     siteState: Object.fromEntries(SITES.map(s => [s.id, s.state])),
     sivPlannedOn: SIV_PLANNED,
     sivOn: {}, fpiOn: {},
@@ -454,6 +460,181 @@ export const SITE_STAFF: MockSiteStaff[] = [
   { accountId: "a-zhouqi", displayName: "周琦", roleKind: "CRA", ...gcp(120),
     active: false, sites: [at(0, "2024-11-05")] }
 ];
+
+/** 候选中心（可行性调查）。
+ *
+ *  **五条各有各的用处**，缺一条界面上就有一条分支画不出来：
+ *   · 一条高分待定 —— 「入选不用写理由」那条路要走得通
+ *   · 一条低分待定 —— 「低分入选必须写理由」是这一页最要紧的一条规则
+ *   · 一条低分已入选、实际入组 0    —— 「当初说了不行」的兑现
+ *   · 一条入排匹配度为 null        —— 「当时没问过」和「填了 0」要分得开
+ *   · 一条预测撞到病源上限          —— 「瓶颈是病人不是团队」
+ *
+ *  分数不在这里写死：mock 只出问卷答案，评分由**契约里那套口径**
+ *  在服务端算。mock 自己算一遍等于第三套口径。 */
+export interface MockFeas {
+  id: string; code: string;
+  study: { id: string; code: string; shortName: string };
+  hospital: string; city: string; dept: string; piName: string;
+  surveyedOn: string; surveyedByName: string | null;
+  answers: {
+    ptYear: number; pastN: number; pastBest: number; compet: number;
+    ethicsDays: number; startDays: number; teamN: number; piCommit: number;
+    eligPct: number | null;
+  };
+  status: "assessing" | "selected" | "rejected";
+  decidedOn: string | null; decidedByName: string | null;
+  studySiteId: string | null; siteCode: string | null;
+  overrideReason: string | null; rejectReason: string | null;
+  actualRate: number | null;
+}
+const STUDY = { id: "st1", code: "HJ-2024-017", shortName: "艾瑞替尼 III" };
+export function mkFeas(): MockFeas[] {
+  return [
+    /* 高分待定：入选不用写理由 */
+    { id: "fs1", code: "FS-2026-014", study: STUDY,
+      hospital: "浙江大学医学院附属第二医院", city: "杭州", dept: "心内科",
+      piName: "施允中", surveyedOn: "2026-08-12", surveyedByName: "何雨薇",
+      answers: { ptYear: 520, pastN: 6, pastBest: 5.5, compet: 1, ethicsDays: 38,
+                 startDays: 52, teamN: 8, piCommit: 6.0, eligPct: 0.34 },
+      status: "assessing", decidedOn: null, decidedByName: null,
+      studySiteId: null, siteCode: null,
+      overrideReason: null, rejectReason: null, actualRate: null },
+    /* 低分待定：入选必须写理由。竞争试验 4 个、既往只做过 1 次 */
+    { id: "fs2", code: "FS-2026-015", study: STUDY,
+      hospital: "福建省立医院", city: "福州", dept: "心内科",
+      piName: "林彦成", surveyedOn: "2026-08-15", surveyedByName: "何雨薇",
+      answers: { ptYear: 150, pastN: 1, pastBest: 0.8, compet: 4, ethicsDays: 66,
+                 startDays: 98, teamN: 3, piCommit: 3.5, eligPct: 0.19 },
+      status: "assessing", decidedOn: null, decidedByName: null,
+      studySiteId: null, siteCode: null,
+      overrideReason: null, rejectReason: null, actualRate: null },
+    /* 低分入选、实际 0 例 —— 校准表里那个「当初说了不行」 */
+    { id: "fs3", code: "FS-2025-002", study: STUDY,
+      hospital: "西安交大第一附属医院", city: "西安", dept: "肝胆外科",
+      piName: "白玉山", surveyedOn: "2025-04-16", surveyedByName: "段志远",
+      answers: { ptYear: 45, pastN: 0, pastBest: 0, compet: 2, ethicsDays: 74,
+                 startDays: 147, teamN: 3, piCommit: 2.0, eligPct: null },
+      status: "selected", decidedOn: "2025-04-30", decidedByName: "凌远",
+      studySiteId: null, siteCode: "SS-05",
+      overrideReason: "为赶 FPI 时间点凑够中心数，明知评分偏低仍启动",
+      rejectReason: null, actualRate: 0 },
+    /* 入排匹配度为 null：那一栏当时问卷里没有 */
+    { id: "fs4", code: "FS-2024-003", study: STUDY,
+      hospital: "北京协和医院", city: "北京", dept: "肝胆外科",
+      piName: "陈国栋", surveyedOn: "2024-09-20", surveyedByName: "林敏",
+      answers: { ptYear: 280, pastN: 8, pastBest: 2.6, compet: 1, ethicsDays: 35,
+                 startDays: 49, teamN: 7, piCommit: 3.0, eligPct: null },
+      status: "selected", decidedOn: "2024-10-04", decidedByName: "凌远",
+      studySiteId: "s1", siteCode: "SS-01",
+      overrideReason: null, rejectReason: null, actualRate: 1.4 },
+    /* 预测撞到病源上限：PI 报 5 例/月，但一年只看 60 例 */
+    { id: "fs5", code: "FS-2024-006", study: STUDY,
+      hospital: "四川大学华西医院", city: "成都", dept: "腹部肿瘤科",
+      piName: "罗建平", surveyedOn: "2024-11-08", surveyedByName: "段志远",
+      answers: { ptYear: 60, pastN: 2, pastBest: 1.4, compet: 3, ethicsDays: 58,
+                 startDays: 112, teamN: 4, piCommit: 5.0, eligPct: null },
+      status: "selected", decidedOn: "2024-11-22", decidedByName: "凌远",
+      studySiteId: null, siteCode: "SS-04",
+      overrideReason: "申办方指定：PI 为该适应症区域学术带头人，坚持纳入",
+      rejectReason: null, actualRate: 0.5 }
+  ];
+}
+
+/** 投标。**四条各有各的用处**：
+ *   · 一条待定        —— 「回写结果」那条路要走得通
+ *   · 一条中标        —— 成交价就是我们的价，偏差 0（用来稀释总体偏差）
+ *   · 一条失标且知价  —— 失标偏差的样本
+ *   · 一条失标问不到  —— 「不知道 ≠ 零」在界面上要看得见
+ *  少最后一条，那条规矩在 mock 上就永远不出现。 */
+export interface MockBid {
+  id: string; code: string; sponsor: string; name: string;
+  submittedOn: string; sites: number; subjects: number;
+  ourQuoteCents: number; ourPersonDays: number;
+  status: "pending" | "won" | "lost";
+  decidedOn: string | null; winningPriceCents: number | null;
+  ownerName: string | null; note: string | null;
+}
+export function mkBids(): MockBid[] {
+  return [
+    { id: "b1", code: "B-2026-11", sponsor: "中康制药",
+      name: "恒糖宁 IV 期上市后研究", submittedOn: "2026-08-05",
+      sites: 24, subjects: 600, ourQuoteCents: 2180_0000_00, ourPersonDays: 8420,
+      status: "pending", decidedOn: null, winningPriceCents: null,
+      ownerName: "韩雪", note: "老客户，对方已口头示意价格可接受" },
+    { id: "b2", code: "B-2026-09", sponsor: "华拓生物",
+      name: "艾瑞替尼 IIIb 期扩展", submittedOn: "2026-06-18",
+      sites: 16, subjects: 320, ourQuoteCents: 1960_0000_00, ourPersonDays: 7150,
+      status: "won", decidedOn: "2026-08-02", winningPriceCents: 1880_0000_00,
+      ownerName: "韩雪", note: "降价 4.1% 成交，仍在毛利线上" },
+    /* 差 21%：那次复盘的结论是「对方按 12 人天/例，我们按 19」 */
+    { id: "b3", code: "B-2026-07", sponsor: "惠元制药", name: "HY-207 II 期",
+      submittedOn: "2026-05-22", sites: 8, subjects: 120,
+      ourQuoteCents: 1120_0000_00, ourPersonDays: 4100,
+      status: "lost", decidedOn: "2026-07-06", winningPriceCents: 890_0000_00,
+      ownerName: "岑迪", note: "输给报价低 21% 的同行 —— 对方按 12 人天/例，我们按 19" },
+    /* 问不到对手价的那一标。**它不进偏差统计** */
+    { id: "b4", code: "B-2025-08", sponsor: "华拓生物", name: "HT-90 生物等效性",
+      submittedOn: "2025-07-11", sites: 2, subjects: 48,
+      ourQuoteCents: 320_0000_00, ourPersonDays: 980,
+      status: "lost", decidedOn: "2025-08-25", winningPriceCents: null,
+      ownerName: "岑迪", note: "对方未披露报价。BE 试验我们没有成本优势，之后不再投" }
+  ];
+}
+
+/** 合同变更。**四条覆盖四种状态**，而且要有一条「每例」的：
+ *  一条「每例 0.8 人天 × 143 例」在界面上是 114 人天，
+ *  而它在提出那天只有十几例 —— 那条「入组越多白做越多」的话
+ *  非得有这样一条才说得出来。 */
+export interface MockChange {
+  id: string; code: string;
+  study: { id: string; code: string; shortName: string };
+  studySiteId: string | null; siteCode: string | null;
+  kind: string; kindLabel: string;
+  raisedOn: string; raisedByName: string | null; what: string;
+  personDaysImpact: number; perSubject: boolean; affectedSubjects: number;
+  amountCents: number | null;
+  status: "draft" | "submitted" | "signed" | "rejected";
+  decidedOn: string | null; note: string | null;
+}
+export function mkChanges(): MockChange[] {
+  const st = { id: "st1", code: "HJ-2024-017", shortName: "艾瑞替尼 III" };
+  return [
+    { id: "c1", code: "CR-2026-014", study: st,
+      studySiteId: SITES[1]!.id, siteCode: SITES[1]!.code,
+      kind: "exam_add", kindLabel: "方案修订 · 检查项增加",
+      raisedOn: "2026-08-18", raisedByName: "吴桐",
+      what: "方案 V3.0 → V3.1，C4 起每例增加心肌酶检测 2 次采血，CRC 每例多约 1.5 人天",
+      personDaysImpact: 1.5, perSubject: true, affectedSubjects: 42,
+      amountCents: null, status: "draft", decidedOn: null,
+      note: "伦理已受理（E-0089），但商务侧尚未提出变更" },
+    { id: "c2", code: "CR-2026-013", study: st,
+      studySiteId: null, siteCode: null,
+      kind: "extend", kindLabel: "周期延长",
+      raisedOn: "2026-07-30", raisedByName: "韩雪",
+      what: "入组滞后，整体周期由 27 个月延长至 31 个月，4 个月的 PM 与 CRA 驻场成本未覆盖",
+      personDaysImpact: 260, perSubject: false, affectedSubjects: 0,
+      amountCents: null, status: "submitted", decidedOn: null,
+      note: "申办方以「延长系我方入组不力」为由暂未签署" },
+    { id: "c3", code: "CR-2026-012", study: st,
+      studySiteId: SITES[0]!.id, siteCode: SITES[0]!.code,
+      kind: "subject_adj", kindLabel: "例数调整",
+      raisedOn: "2026-06-12", raisedByName: "岑迪",
+      what: "该中心筛败率 57%，合同 30 例下调至 20 例，同时上调单例单价补偿筛败成本",
+      personDaysImpact: -180, perSubject: false, affectedSubjects: 0,
+      amountCents: -18_5000_00, status: "signed", decidedOn: "2026-07-12",
+      note: "已生效，单价由 3.9 调至 4.4 万" },
+    /* 未获批但**仍然算白做** —— 这一条是整页最要紧的那句话 */
+    { id: "c4", code: "CR-2026-010", study: st,
+      studySiteId: SITES[0]!.id, siteCode: SITES[0]!.code,
+      kind: "visit_add", kindLabel: "方案修订 · 访视增加",
+      raisedOn: "2026-03-14", raisedByName: "吴桐",
+      what: "新增 EOT 后 30 天安全随访访视 1 次",
+      personDaysImpact: 0.8, perSubject: true, affectedSubjects: 143,
+      amountCents: null, status: "rejected", decidedOn: "2026-04-13",
+      note: "申办方认为属安全性义务，不追加费用" }
+  ];
+}
 
 /** 工作类型 → 中文名与是否可计费。与库里的 work_type 表同一套口径：
  *  billable 由类型推导，提交时**落库固化**（I1）—— 所以 mock 也必须
