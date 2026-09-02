@@ -95,8 +95,7 @@ export const MODULES: ModuleDef[] = [
   /* ── 质量 ─────────────────────────────────────────────────────── */
   { key: "qa", title: "质量事件与 CAPA", group: "质量", path: "/quality" },
   { key: "mon", title: "监查访视", group: "质量", path: "/monitoring" },
-  { key: "audit", title: "内部稽查", group: "质量", path: "/audit",
-    todo: "稽查计划、发现项与关闭情况。" },
+  { key: "audit", title: "内部稽查", group: "质量", path: "/audit" },
   /* capa 与 qa 是同一本台账的两个说法：qa 是"全部质量事件"，
      capa 是"指到我名下要整改的那些"。指向同一页 —— 行范围本来就把
      CRC 收在自己那几个中心上。

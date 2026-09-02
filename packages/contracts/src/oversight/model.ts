@@ -131,3 +131,100 @@ export const MonitorBoard = z.object({
   travelEstimateCents: gated(z.int().min(0), "cost"),
   calcVersion: z.string()
 }).meta({ id: "MonitorBoard" });
+
+/* ── 内部稽查（迁移 0035） ────────────────────────────────────────
+   机构质控是医院查我们，稽查是我们自己查自己。
+   QA 的价值不在于再发现一批问题，**在于 CAPA 有效性验证：
+   同类问题是否复发。** 复发 = 当初只做了纠正，没做预防。 */
+
+export const AUDIT_KINDS = ["site", "system", "capa_check", "pre_inspection"] as const;
+export const AuditKind = z.enum(AUDIT_KINDS).meta({
+  id: "AuditKind",
+  description: "site 中心内部稽查 · system 体系稽查 · capa_check CAPA 有效性验证 · pre_inspection 核查前模拟稽查"
+});
+
+export const AuditFinding = z.object({
+  seq: z.int().min(0),
+  severity: z.enum(["minor", "major", "critical"]),
+  finding: z.string(),
+  /** 复发：这一条是此前那条质量事件的同一个问题又出现了。 */
+  repeatOf: Uuid.nullable(),
+  repeatOfCode: z.string().nullable(),
+  /** 源事件当时是否已关闭。**两种复发都算数，但要分得开** ——
+   *  关闭后复发是 CAPA 写错了方向，整改期内复发是措施根本没起作用。 */
+  repeatAfterClose: z.boolean().nullable(),
+  state: z.enum(["open", "closed"]),
+  /** 验证整改的说明。**「已整改」三个字不是验证** ——
+   *  核查时看的是「你怎么确认它真的改了」。 */
+  verification: z.string().nullable(),
+  closedAt: Timestamp.nullable()
+}).meta({ id: "AuditFinding" });
+
+export const InternalAudit = z.object({
+  id: Uuid,
+  code: Code,
+  studySiteId: Uuid,
+  siteCode: Code,
+  hospital: z.string(),
+  kind: AuditKind,
+  auditedOn: DateOnly,
+  auditorAccountId: Uuid,
+  auditorName: z.string(),
+  scope: z.string(),
+  state: z.enum(["open", "remediating", "closed"]),
+  closedAt: Timestamp.nullable(),
+  findings: z.array(AuditFinding),
+  openFindings: z.int().min(0),
+  repeatFindings: z.int().min(0)
+}).meta({
+  id: "InternalAudit",
+  description:
+    "内部稽查。**对外部方整表关闭** —— 把自查报告给被查方看，" +
+    "下一次自查就查不出东西了。"
+});
+
+export const CapaCategory = z.object({
+  category: z.string(),
+  total: z.int(),
+  closed: z.int(),
+  /** 已指派责任人却还没提交整改措施的条数。 */
+  owesPlan: z.int(),
+  repeatAfterClose: z.int(),
+  repeatWhileOpen: z.int(),
+  /** ineffective 无效（复发了）· unowned 没人管（欠着措施）·
+   *  watching 待观察（在整改）· effective 有效（全关且未复发）。
+   *  **「没人管」从「待观察」里拆出来**：后者是在观察，前者是没人写措施。 */
+  verdict: z.enum(["ineffective", "unowned", "watching", "effective"])
+}).meta({ id: "CapaCategory" });
+
+export const SiteQualityGrade = z.object({
+  studySiteId: Uuid,
+  siteCode: Code,
+  hospital: z.string(),
+  penalty: z.int().min(0),
+  grade: z.enum(["A", "B", "C", "D"]),
+  /** 扣在哪几项。**A 级也要说话** ——「无扣分项」是一个结论，不是空白。 */
+  reasons: z.array(z.string()),
+  severeOpen: z.int(),
+  minorOpen: z.int(),
+  saeLate: z.int(),
+  staleQueries: z.int(),
+  capaRepeats: z.int()
+}).meta({ id: "SiteQualityGrade" });
+
+export const AuditBoard = z.object({
+  openAudits: z.int(),
+  openFindings: z.int(),
+  repeatFindings: z.int(),
+  /** 欠着整改措施的质量事件数 —— 有人认了，但措施还没写。 */
+  owesCapaPlan: z.int(),
+  capa: z.array(CapaCategory),
+  sites: z.array(SiteQualityGrade),
+  calcVersion: z.string()
+}).meta({
+  id: "AuditBoard",
+  description:
+    "**质量扣分 = 重大/严重未关闭×3 + 一般未关闭×1 + SAE 超窗×4 + " +
+    "质疑挂起超 7 天×2 + CAPA 后复发×4。** A：0｜B：≤3｜C：≤7｜D：>7 —— " +
+    "复发权重最高，因为它证明的是体系失效，不是单点失误。"
+});

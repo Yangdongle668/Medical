@@ -47,6 +47,7 @@ import { CashPage } from "./features/finance/CashPage.js";
 import { QueryPage } from "./features/dataquery/QueryPage.js";
 import { DmPage } from "./features/dataquery/DmPage.js";
 import { MonPage } from "./features/oversight/MonPage.js";
+import { QaAuditPage } from "./features/oversight/QaAuditPage.js";
 import { ComingSoon } from "./shell/ComingSoon.js";
 import { MODULES } from "./shell/modules.js";
 import { MOCK_ROLES, type MockRole } from "./mocks/roles.js";
@@ -93,7 +94,10 @@ const BUILT: Record<string, React.ReactElement> = {
   "/cash": <CashPage />,
   "/queries": <QueryPage />,
   "/dm": <DmPage />,
-  "/monitoring": <MonPage />
+  "/monitoring": <MonPage />,
+  /* `/trail` 是**操作留痕**（谁改了什么），`/audit` 是**质量稽查**（我方查自己）。
+     中文都叫"审计/稽查"，但它们毫无关系 —— 两个页面组件因此不同名。 */
+  "/audit": <QaAuditPage />
 };
 
 /* 45 个模块的路由。同一个路径被几个模块共用是正常的

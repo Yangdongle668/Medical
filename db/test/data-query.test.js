@@ -84,10 +84,12 @@ describe("数据质疑的形状约束", () => {
     expect(rows[0].n).toBeGreaterThan(0);
   });
 
-  it("提出方仍然只能是那五个之一", async () => {
+  it("提出方仍然是一份封闭清单", async () => {
+    /* 清单本身在长（0035 补了 sponsor / site），但它必须**是一份清单** ——
+       随手写一个来源进去，「同类问题总是被谁发现的」就再也分不了组。 */
     const q = await pick("query");
     await expect(tx(() => o.query(
-      `UPDATE quality_event SET raised_by = 'sponsor' WHERE id = $1`, [q.id])))
+      `UPDATE quality_event SET raised_by = 'whoever' WHERE id = $1`, [q.id])))
       .rejects.toThrow(/quality_event_raised_by_check/);
   });
 });

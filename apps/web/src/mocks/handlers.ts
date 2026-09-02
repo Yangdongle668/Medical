@@ -9,12 +9,13 @@ import { queryLoad, siteQueryDensity, densityVerdict, QUERY_STALE_DAYS }
   from "@sitedesk/calc";
 import { monitorPlan, monitorDue, mvrLoad, mvrLagDays, travelEstimateCents, MVR_DUE_DAYS }
   from "@sitedesk/calc";
+import { gradeSite, capaEffectiveness } from "@sitedesk/calc";
 import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
 import type { MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
-  MockMonitorVisit } from "./scenario.js";
+  MockMonitorVisit, MockAudit } from "./scenario.js";
 import { CLIENTS } from "./scenario.js";
 import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
   mkTimesheet, WORK_TYPE_META,
@@ -145,6 +146,42 @@ function monitorDto(v: MockMonitorVisit) {
     mvrOverdue: v.reportSubmittedOn === null && lag !== null && lag > MVR_DUE_DAYS,
     visitOverdueDays: over > 0 ? over : null
   });
+}
+
+/** 看得见的内部稽查。**外部方一条都没有** ——
+ *  把自查报告给被查方看，下一次自查就查不出东西了。 */
+function visibleAudits() {
+  if (identity().isExternal) return [];
+  return inScope(scenario.audits);
+}
+function findAudit(url: string, re: RegExp):
+  { a: MockAudit } | { problem: Response } {
+  const id = seg(url, re);
+  const a = visibleAudits().find(x => x.id === id);
+  return a ? { a } : { problem: HttpResponse.json(
+    problem("not-found", 404, "内部稽查不存在"), { status: 404 }) };
+}
+const auditDto = (a: MockAudit) => ({
+  ...a,
+  openFindings: a.findings.filter(f => f.state === "open").length,
+  repeatFindings: a.findings.filter(f => f.repeatOf !== null).length
+});
+
+/** 质量事件的 CAPA 派生字段 —— 服务端算什么，这里算什么。 */
+function qualityDto(e: Scenario["qualityEvents"][number]) {
+  const over = e.capaDueOn && e.state !== "closed"
+    ? Math.round((Date.parse(TODAY_STR) - Date.parse(e.capaDueOn)) / 86_400_000) : 0;
+  return {
+    ...e,
+    category: e.category ?? null,
+    capaPlan: e.capaPlan ?? null,
+    capaOwnerAccountId: e.capaOwnerAccountId ?? null,
+    capaOwnerName: e.capaOwnerName ?? null,
+    capaDueOn: e.capaDueOn ?? null,
+    capaOverdueDays: over > 0 ? over : null,
+    /* **已指派、还没写措施** —— 它不是「正在整改」，是有人欠着一份措施。 */
+    owesCapaPlan: !!e.capaOwnerAccountId && !e.capaPlan
+  };
 }
 
 const TODAY_STR = new Date().toISOString().slice(0, 10);
@@ -595,8 +632,45 @@ export const scenarioHandlers = [
     return HttpResponse.json({ items, nextCursor: null });
   }),
 
-  http.get(pathToRegExp("/v1/quality-events"), () =>
-    HttpResponse.json({ items: inScope(scenario.qualityEvents), nextCursor: null })),
+  http.get(pathToRegExp("/v1/quality-events"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = inScope(scenario.qualityEvents);
+    const kinds = q.getAll("kind");
+    if (kinds.length) items = items.filter(e => kinds.includes(e.kind));
+    return HttpResponse.json({ items: items.map(qualityDto), nextCursor: null });
+  }),
+
+  /* 写整改措施。**写措施的人不能自己验证关闭** ——
+     这里是 capaWrite，关闭是 closeQA（上面那个端点）。 */
+  http.post(pathToRegExp("/v1/quality-events/{id}:capa"), async ({ request }) => {
+    const id = seg(request.url, /\/quality-events\/([^/:]+):capa/);
+    const b = await request.json() as { plan?: string; dueOn?: string };
+    const e = inScope(scenario.qualityEvents).find(x => x.id === id);
+    if (!e) return HttpResponse.json(
+      problem("not-found", 404, "质量事件不存在"), { status: 404 });
+    if (!identity().actions.includes("capaWrite")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能写整改措施"), { status: 403 });
+    /* 质疑有自己的闭环（回复 → 判定），不挂 CAPA。 */
+    if (e.kind === "query") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${e.code} 是数据质疑 —— 它走回复与判定，不走 CAPA`), { status: 422 });
+    if ((b.plan ?? "").trim().length < 10) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：整改措施至少 10 个字"),
+      { status: 422 });
+    if (b.dueOn && b.dueOn < e.raisedOn) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `整改期限 ${b.dueOn} 早于问题提出日 ${e.raisedOn}`), { status: 422 });
+    e.capaPlan = b.plan!.trim();
+    e.capaDueOn = b.dueOn ?? null;
+    e.capaOwnerAccountId = identity().id;
+    e.capaOwnerName = identity().name;
+    return HttpResponse.json({
+      data: qualityDto(e),
+      sideEffects: [{ type: "CapaPlanned", ref: e.id,
+        summary: `${e.code} 的整改措施已提交，期限 ${b.dueOn} —— ` +
+          "验证关闭在 QA 那边，写措施的人不能自己关" }]
+    }, { status: 201 });
+  }),
 
   /* 关闭质量事件。**机构提出的由机构关** —— 这条规则在服务端，
      这里只演它的另一半：没有 closeQA 的角色连按钮都看不到，
@@ -618,6 +692,177 @@ export const scenarioHandlers = [
     q.state = "closed";
     return HttpResponse.json({ data: q, sideEffects: [] }, { status: 201 });
   }),
+
+  /* ── 内部稽查 ────────────────────────────────────────────────────
+     机构质控是医院查我们，稽查是我们自己查自己。**对外部方整表关闭。** */
+  http.get(pathToRegExp("/v1/internal-audits/board"), () => {
+    const as_ = visibleAudits();
+    const evs = inScope(scenario.qualityEvents).filter(e => e.kind !== "query");
+    const cat = (e: typeof evs[number]) => e.category ?? e.kind;
+
+    const repeats = as_.flatMap(a => a.findings)
+      .filter(f => f.repeatOf !== null)
+      .map(f => {
+        const src = scenario.qualityEvents.find(e => e.id === f.repeatOf);
+        return {
+          category: src ? cat(src) : "未知",
+          sourceClosed: src ? src.state === "closed" : false
+        };
+      });
+
+    const sites = visibleSites().map(site => {
+      const q = inScope(scenario.qualityEvents).filter(e => e.studySiteId === site.id);
+      const stale = scenario.dataQueries.filter(
+        d => d.studySiteId === site.id && d.state === "open" && d.ageDays > QUERY_STALE_DAYS);
+      const input = {
+        severeOpen: q.filter(e => e.state !== "closed" && e.kind !== "sae_late"
+          && (e.severity === "major" || e.severity === "critical")).length,
+        minorOpen: q.filter(e => e.state !== "closed" && e.kind !== "sae_late"
+          && e.severity === "minor").length,
+        saeLate: q.filter(e => e.state !== "closed" && e.kind === "sae_late").length,
+        staleQueries: stale.length,
+        capaRepeats: as_.filter(a => a.studySiteId === site.id)
+          .flatMap(a => a.findings).filter(f => f.repeatOf !== null).length
+      };
+      return {
+        studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+        ...gradeSite(input), ...input
+      };
+    }).sort((a, b) => b.penalty - a.penalty || a.siteCode.localeCompare(b.siteCode));
+
+    const capaEvents = evs.map(e => ({
+      category: cat(e),
+      closed: e.state === "closed",
+      owesPlan: !!e.capaOwnerAccountId && !e.capaPlan
+    }));
+    return HttpResponse.json({
+      openAudits: as_.filter(a => a.state !== "closed").length,
+      openFindings: as_.flatMap(a => a.findings).filter(f => f.state === "open").length,
+      repeatFindings: repeats.length,
+      owesCapaPlan: capaEvents.filter(e => e.owesPlan).length,
+      capa: capaEffectiveness(capaEvents, repeats),
+      sites, calcVersion: CALC_VERSION
+    });
+  }),
+
+  http.get(pathToRegExp("/v1/internal-audits"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = visibleAudits();
+    const kinds = q.getAll("kind");
+    if (kinds.length) items = items.filter(a => kinds.includes(a.kind));
+    if (q.get("openOnly") === "true") items = items.filter(a => a.state !== "closed");
+    items = [...items].sort((a, b) => b.auditedOn.localeCompare(a.auditedOn));
+    return HttpResponse.json({ items: items.map(auditDto), nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/internal-audits"), async ({ request }) => {
+    const b = await request.json() as {
+      studySiteId: string; kind: string; auditedOn?: string; scope: string;
+    };
+    /* **audit 不是 closeQA。** 机构办有 closeQA —— 借它来发起内部稽查，
+       等于让被稽查的一方能对我方发起稽查。 */
+    if (!identity().actions.includes("audit")) return HttpResponse.json(
+      problem("forbidden", 403, "只有质量保证能发起内部稽查"), { status: 403 });
+    const site = SITES_LIST.find(x => x.id === b.studySiteId);
+    if (!site || !siteInScope(site.id)) return HttpResponse.json(
+      problem("not-found", 404, "中心不存在"), { status: 404 });
+    if ((b.scope ?? "").trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422,
+        "请求参数不符合契约：稽查范围至少 4 个字 —— 空范围的稽查等于没查"),
+      { status: 422 });
+
+    const me = identity();
+    const row: MockAudit = {
+      id: `au-${scenario.audits.length + 1}`,
+      code: `AU-2026-${String(100 + scenario.audits.length).slice(-3)}`,
+      studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+      kind: b.kind, auditedOn: b.auditedOn ?? TODAY_STR,
+      auditorAccountId: me.id, auditorName: me.name,
+      scope: b.scope.trim(), state: "open", closedAt: null, findings: []
+    };
+    scenario.audits.unshift(row);
+    return HttpResponse.json({
+      data: auditDto(row),
+      sideEffects: [{ type: "InternalAuditOpened", ref: row.id,
+        summary: `${row.code} 已对 ${site.code} 发起 —— 发现项逐条记，全部关闭时自动结案` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/internal-audits/{id}:finding"), async ({ request }) => {
+    const r = findAudit(request.url, /\/internal-audits\/([^/:]+):finding/);
+    if ("problem" in r) return r.problem;
+    const b = await request.json() as {
+      severity: string; finding: string; repeatOf?: string;
+    };
+    if (!identity().actions.includes("audit")) return HttpResponse.json(
+      problem("forbidden", 403, "只有质量保证能记稽查发现"), { status: 403 });
+    if (r.a.state === "closed") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${r.a.code} 已结案 —— 新发现要新开一次稽查`), { status: 422 });
+    if ((b.finding ?? "").trim().length < 10) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：发现描述至少 10 个字"),
+      { status: 422 });
+
+    const src = b.repeatOf
+      ? scenario.qualityEvents.find(e => e.id === b.repeatOf) : undefined;
+    if (b.repeatOf && !src) return HttpResponse.json(
+      problem("not-found", 404, "质量事件不存在"), { status: 404 });
+    /* 源事件必须早于本次稽查 —— 指向一条今天才提出的，那不是复发，
+       而"复发"这个判定会把整类问题判成 CAPA 无效。 */
+    if (src && src.raisedOn >= r.a.auditedOn) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${src.code} 提出于 ${src.raisedOn}，不早于本次稽查 ${r.a.auditedOn} —— 那不是复发`),
+      { status: 422 });
+
+    const seq = r.a.findings.length;
+    r.a.findings.push({
+      seq, severity: b.severity, finding: b.finding.trim(),
+      repeatOf: b.repeatOf ?? null, repeatOfCode: src?.code ?? null,
+      repeatAfterClose: src ? src.state === "closed" : null,
+      state: "open", verification: null, closedAt: null
+    });
+    if (r.a.state === "open") r.a.state = "remediating";
+    return HttpResponse.json({
+      data: auditDto(r.a),
+      sideEffects: [{ type: "AuditFindingAdded", ref: r.a.id,
+        summary: b.repeatOf
+          ? `${r.a.code} 记下一条复发发现 —— 同类问题的 CAPA 判定会因此变成「无效」`
+          : `${r.a.code} 已记下第 ${seq + 1} 条发现` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/internal-audits/{id}/findings/{seq}:close"),
+    async ({ request }) => {
+      const r = findAudit(request.url, /\/internal-audits\/([^/]+)\/findings\//);
+      if ("problem" in r) return r.problem;
+      const seq = Number(seg(request.url, /\/findings\/(\d+):close/));
+      const b = await request.json() as { verification?: string };
+      if (!identity().actions.includes("audit")) return HttpResponse.json(
+        problem("forbidden", 403, "只有质量保证能验证关闭"), { status: 403 });
+      /* 「已整改」三个字不是验证 —— 核查时看的是"你怎么确认它真的改了"。 */
+      if ((b.verification ?? "").trim().length < 10) return HttpResponse.json(
+        problem("validation-failed", 422,
+          "请求参数不符合契约：验证说明至少 10 个字 —— 「已整改」三个字不是验证"),
+        { status: 422 });
+      const f = r.a.findings.find(x => x.seq === seq);
+      if (!f) return HttpResponse.json(
+        problem("not-found", 404, "稽查发现不存在"), { status: 404 });
+      if (f.state === "closed") return HttpResponse.json(
+        problem("invariant-violated", 422,
+          `${r.a.code} 第 ${seq + 1} 条已经关闭`), { status: 422 });
+      f.state = "closed";
+      f.verification = b.verification!.trim();
+      f.closedAt = new Date().toISOString();
+      const left = r.a.findings.filter(x => x.state === "open").length;
+      if (left === 0) { r.a.state = "closed"; r.a.closedAt = new Date().toISOString(); }
+      return HttpResponse.json({
+        data: auditDto(r.a),
+        sideEffects: [{ type: "AuditFindingClosed", ref: r.a.id,
+          summary: left === 0
+            ? `${r.a.code} 全部发现项已验证关闭，稽查自动结案`
+            : `${r.a.code} 第 ${seq + 1} 条已验证关闭，还剩 ${left} 条` }]
+      }, { status: 201 });
+    }),
 
   /* ── 监查访视 ────────────────────────────────────────────────────
      **外部方一条都看不到**（迁移 0033 的行策略）：一个机构办看得到

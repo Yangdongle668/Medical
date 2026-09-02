@@ -23,8 +23,9 @@ import { z } from "zod";
    ════════════════════════════════════════════════════════════════════ */
 
 export const ACTION_KEYS = [
-  "advance", "approve", "bid", "closeQ", "closeQA", "ethics", "manage", "monitor",
-  "piConfirm", "raiseQ", "rateWrite", "subjRead", "subjWrite", "timeWrite"
+  "advance", "approve", "audit", "bid", "capaWrite", "closeQ", "closeQA", "ethics",
+  "manage", "monitor", "piConfirm", "raiseQ", "rateWrite", "subjRead", "subjWrite",
+  "timeWrite"
 ] as const;
 
 export const ActionKey = z.enum(ACTION_KEYS).meta({ id: "ActionKey" });

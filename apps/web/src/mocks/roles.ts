@@ -18,7 +18,7 @@
 
 import type { FieldKey, ActionKey } from "@sitedesk/contracts";
 
-export const MOCK_ROLES = ["crc", "cra", "boss", "dm", "inst", "pi"] as const;
+export const MOCK_ROLES = ["crc", "cra", "qa", "boss", "dm", "inst", "pi"] as const;
 export type MockRole = (typeof MOCK_ROLES)[number];
 
 export interface MockIdentity {
@@ -41,7 +41,7 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     role: { id: "r-crc", code: "crc", name: "临床协调员 CRC" },
     isExternal: false, orgRef: null,
     rowRule: "assigned", fields: ["subject"],
-    actions: ["ethics", "subjRead", "subjWrite", "timeWrite"],
+    actions: ["capaWrite", "ethics", "subjRead", "subjWrite", "timeWrite"],
     /* **module_key，不是路径。** 这里曾经写的是 ["today","sites",…]，
        而真接口给的是 role_module 里的键 —— 两者恰好长得像，
        所以在导航还是写死数组的时候看不出区别。侧栏改成按模块出之后，
@@ -58,9 +58,23 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     role: { id: "r-cra", code: "cra", name: "临床监查员 CRA" },
     isExternal: false, orgRef: null,
     rowRule: "assigned", fields: ["subject"],
-    actions: ["monitor", "raiseQ", "subjRead", "timeWrite"],
+    actions: ["capaWrite", "monitor", "raiseQ", "subjRead", "timeWrite"],
     modules: ["cra", "mysites", "mon", "query", "screen", "feas", "material",
       "time", "qa", "capa", "trail"]
+  },
+  /* **质量保证 QA。** 内部稽查那一页只有它点得动 ——
+     发起稽查（audit）、验证整改并关闭（closeQA）三个动作里，
+     它是唯一一个三个都不缺的角色。
+     **写措施（capaWrite）它也有，但那不是它的日常** ——
+     CAPA 由责任人写、由 QA 验证，两端不能是同一个人，
+     而这条规矩只有在两个身份之间切换才看得出来。 */
+  qa: {
+    id: "a-weilan", login: "weilan", name: "卫兰",
+    role: { id: "r-qa", code: "qa", name: "质量保证 QA" },
+    isExternal: false, orgRef: null,
+    rowRule: "all", fields: ["subject"],
+    actions: ["audit", "capaWrite", "closeQA", "raiseQ"],
+    modules: ["audit", "qa", "screen", "mon", "trail"]
   },
   /* **数据管理 DM。** 它是这套角色里唯一握着 closeQ 的人 ——
      「中心回复了不等于问题解决了」这句话，只有换到这个身份才看得见：

@@ -215,7 +215,24 @@ export const QualityEvent = z.object({
   reportHours: z.number().nullable(),
   /** 自动生成的事件因哪条质量事件而生成。`sae_late` 指向它所说的那条 SAE。
    *  自动记录必须答得出「凭什么存在」—— 数据库上有约束（迁移 0018）。 */
-  sourceEventId: Uuid.nullable()
+  sourceEventId: Uuid.nullable(),
+
+  /* ── CAPA（迁移 0035） ─────────────────────────────────────────── */
+  /** 问题类型，比 `kind` 细。CAPA 有效性按它分组 ——
+   *  按 kind 分的话，「源数据缺陷」和「知情同意版本错误」会落进同一格，
+   *  而这两类的根因与预防措施毫无共同之处。 */
+  category: z.string().nullable(),
+  /** 纠正与预防措施。**只写纠正不写预防的 CAPA，等于把同一个核查风险
+   *  往后推了一个季度** —— 而这件事只有在同类问题复发时才看得出来。 */
+  capaPlan: z.string().nullable(),
+  capaOwnerAccountId: Uuid.nullable(),
+  capaOwnerName: z.string().nullable(),
+  capaDueOn: DateOnly.nullable(),
+  /** 整改期限过了还没关闭，超了多少天。没到期或已关闭为 null。 */
+  capaOverdueDays: z.int().nullable(),
+  /** **已指派责任人、但还没提交整改措施。** 它不是「正在整改」，
+   *  是有人欠着一份措施 —— 两者在界面上必须分得开。 */
+  owesCapaPlan: z.boolean()
 }).meta({
   id: "QualityEvent",
   description:

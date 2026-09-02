@@ -11,3 +11,4 @@ export * from "./bizdev.js";
 export * from "./cash.js";
 export * from "./query.js";
 export * from "./monitor.js";
+export * from "./audit.js";

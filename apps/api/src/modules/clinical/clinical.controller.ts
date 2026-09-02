@@ -42,6 +42,12 @@ const PaymentQ = PageQuery.extend({
   unpaid: QueryBool.optional()
 });
 
+const Capa = z.object({
+  plan: z.string().trim().min(10).max(2000),
+  ownerAccountId: Uuid.optional(),
+  dueOn: DateOnly
+});
+
 const CreateSubject = z.object({
   studySiteId: Uuid, screeningNo: z.string().trim().min(1).max(32)
 });
@@ -237,6 +243,13 @@ export class ClinicalController {
     @Body(new ZodPipe(SaeReported)) b: z.infer<typeof SaeReported>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.markSaeReported(id, b)); }
+
+  @Post("/quality-events/:id\\:capa") @Operation("setCapaPlan")
+  capa(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(Capa)) b: z.infer<typeof Capa>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.setCapaPlan(id, b)); }
 
   @Post("/quality-events/:id\\:close") @Operation("closeQualityEvent")
   closeQuality(

@@ -474,6 +474,30 @@ define({
 });
 
 define({
+  id: "setCapaPlan", method: "post", path: "/v1/quality-events/{id}:capa",
+  layer: "L2", context: CTX,
+  summary: "写纠正与预防措施（CAPA）",
+  description:
+    "**写措施的人不能自己验证关闭。** 这里是 `capaWrite`（责任人：CRC/CRA/PM/QA），" +
+    "验证关闭是 `closeQA`（只有 QA 与机构办）—— 与数据质疑那条" +
+    "（回复的人不能自己关闭）是同一条规矩。\n\n" +
+    "措施要写到**预防**那一层。「集中补签并留痕」是纠正 ——" +
+    "补完签名下个月照样缺；预防是把签名完整性做进每周自查清单并留痕。" +
+    "只做纠正不做预防的 CAPA，等于把同一个核查风险往后推了一个季度。\n\n" +
+    "质疑不走这条路：它有自己的闭环（回复 → 判定）。",
+  action: "capaWrite",
+  params: ById,
+  body: z.object({
+    plan: z.string().trim().min(10).max(2000),
+    /** 不填就是指给自己 —— 谁提出整改谁负责是常态。 */
+    ownerAccountId: Uuid.optional(),
+    dueOn: DateOnly
+  }),
+  response: commandResult(QualityEvent),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+define({
   id: "paySubjectPayment", method: "post", path: "/v1/subject-payments/{id}:pay",
   layer: "L2", context: CTX,
   summary: "登记补偿已发放",

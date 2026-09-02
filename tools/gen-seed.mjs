@@ -47,7 +47,7 @@ const STUDIES = grab("STUDIES"), SITES = grab("SITES"),
       RATE = grab("RATE"), WORKTYPES = grab("WORKTYPES"), TIMESHEET = grab("TIMESHEET"),
       FEAS = grab("FEAS"), BIDS = grab("BIDS"), CHANGES = grab("CHANGES"),
       MILES = grab("MILES"), CLIENT_META = grab("CLIENT_META"),
-      VISITS = grab("VISITS");
+      VISITS = grab("VISITS"), ISSUES = grab("ISSUES"), AUDIT = grab("AUDIT");
 
 const q  = v => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const d  = v => (!v || v === "—") ? "NULL" : `'${v}'`;
@@ -470,6 +470,83 @@ QUERIES.forEach(qy => {
     `${answer ? d(dayBefore(TODAY, Math.floor(qy.age / 2))) : "NULL"}, ` +
     `${q(dm ? "dm" : "cra")}, ${acc(byName)}, ` +
     `${d(dayBefore(TODAY, qy.age))});`);
+});
+P(``);
+
+/* ── 质量事件与 CAPA ───────────────────────────────────────────
+   原型的 ISSUES 是**十条真实存在的质量事件**，此前一条都没进过种子 ——
+   于是 `quality_event` 里只有 2 条 SAE 和 7 条质疑，
+   而「质量事件与 CAPA」那一页打开是半空的，
+   上一批种进去的 MVR 跟进项里还写着 QI-2026-0155 这样的编号，
+   指向**库里根本不存在的记录**。
+
+   category 存的是去掉「机构质控发现 · 」前缀之后的问题类型：
+   CAPA 有效性按它分组，而 kind 只有五个取值，
+   按 kind 分的话「源数据缺陷」和「知情同意版本错误」会落进同一格。 */
+P(`-- ── 质量事件与 CAPA（原型 ISSUES） ─────────────────────────────`);
+const ISS_SEV = { "重大": "critical", "严重": "major", "一般": "minor" };
+/* 来源：0035 给 raised_by 补了 sponsor 与 site。
+   「同类问题总是被谁发现的」本身就是一个结论 —— 某一类永远由申办方
+   稽查发现、我方监查从来没查出来过，那要改的是 SDV 抽样策略。 */
+const ISS_SRC = { "内部监查": "cra", "机构质控": "institution",
+                  "申办方稽查": "sponsor", "中心自查": "site" };
+/* 状态：待整改 与 CAPA进行中 都是 open —— 差别在**有没有措施**，
+   而那由 capa_plan 是不是空表达，不需要第四个状态。 */
+const ISS_STATE = { "待整改": "open", "CAPA进行中": "open",
+                    "待验证": "pending_review", "已关闭": "closed" };
+const ISS_KIND = t =>
+  /SAE/.test(t) ? "sae_late" : /方案偏离/.test(t) ? "deviation" : "other";
+/* 「（待受托方提交整改措施）」不是一份措施，是一句占位符。
+   照原样存进 capa_plan，「还有几条欠着整改措施」这个数就永远是 0。 */
+const ISS_CAPA = c => (!c || /^（待/.test(c)) ? null : c;
+ISSUES.forEach(i => {
+  const state = ISS_STATE[i.st] ?? "open";
+  const capa = ISS_CAPA(i.capa);
+  const closed = state === "closed";
+  P(`INSERT INTO quality_event (code, study_site_id, kind, severity, state, title, detail,` +
+    ` category, raised_by, raised_on, capa_plan, capa_owner_account_id, capa_due_on,` +
+    ` closed_at, closed_by, resolution) VALUES (${q(i.id)}, '${uuid5("site:"+i.ss)}', ` +
+    `${q(ISS_KIND(i.type))}, ${q(ISS_SEV[i.sev])}, ${q(state)}, ${q(i.type)}, ${q(i.desc)}, ` +
+    `${q(i.type.replace(/^机构质控发现 · /, ""))}, ${q(ISS_SRC[i.src] ?? "qa")}, ${d(i.found)}, ` +
+    `${q(capa)}, ${acc(i.own)}, ${d(i.due)}, ` +
+    /* 关闭三件套同生共死（0009 的 CHECK）。关闭人是 QA —— 关闭要 closeQA，
+       而整改责任人（capa_owner）并没有这个动作权限：**写措施的人不能自己验证**。 */
+    `${closed ? `'${i.due} 17:00+08'::timestamptz` : "NULL"}, ` +
+    `${closed ? acc("卫兰") : "NULL"}, ${closed ? q(capa) : "NULL"});`);
+});
+P(``);
+
+/* ── 内部稽查与发现项 ──────────────────────────────────────────
+   QA 是我方的第二道防线：机构质控是医院查我们，稽查是我们自己查自己。
+   稽查的价值不在于又发现一批问题，**在于 CAPA 有效性验证**。 */
+P(`-- ── 内部稽查（QA 的第二道防线） ────────────────────────────────`);
+const AU_KIND = { "中心内部稽查": "site", "体系稽查": "system",
+                  "CAPA 有效性验证": "capa_check", "核查前模拟稽查": "pre_inspection" };
+const AU_STATE = { "进行中": "open", "待整改": "remediating", "已关闭": "closed" };
+AUDIT.forEach(a => {
+  const id = uuid5("audit:" + a.id);
+  const state = AU_STATE[a.st] ?? "open";
+  const closed = state === "closed";
+  P(`INSERT INTO internal_audit (id, code, study_site_id, kind, audited_on,` +
+    ` auditor_account_id, scope, state, closed_at, closed_by) VALUES (` +
+    `'${id}', ${q(a.id)}, '${uuid5("site:"+a.ss)}', ${q(AU_KIND[a.type] ?? "site")}, ` +
+    `${d(a.date)}, ${acc(a.by)}, ${q(a.scope)}, ${q(state)}, ` +
+    `${closed ? `'${a.date} 17:00+08'::timestamptz` : "NULL"}, ` +
+    `${closed ? acc(a.by) : "NULL"});`);
+  a.findings.forEach((f, k) => {
+    const fClosed = f.st === "已关闭";
+    P(`INSERT INTO audit_finding (audit_id, seq, severity, finding, repeat_of, state,` +
+      ` verification, closed_at, closed_by) VALUES ('${id}', ${k}, ` +
+      `${q(ISS_SEV[f.sev])}, ${q(f.t)}, ` +
+      /* 复发指向那条质量事件本身。原型记的是编号字符串，找不到就静默丢掉 ——
+         而这个指标存在的全部理由就是抓复发。这里是外键。 */
+      `${f.repeat ? `(SELECT id FROM quality_event WHERE code = ${q(f.repeat)})` : "NULL"}, ` +
+      `${q(fClosed ? "closed" : "open")}, ` +
+      /* 「已整改」三个字不是验证。已关闭的那条给一句说得出"怎么确认的"的话。 */
+      `${fClosed ? q("已抽查复核，问题未再出现，整改证据已归档") : "NULL"}, ` +
+      `${fClosed ? `'${a.date} 17:00+08'::timestamptz` : "NULL"}, ` +
+      `${fClosed ? acc(a.by) : "NULL"});`);
+  });
 });
 P(``);
 

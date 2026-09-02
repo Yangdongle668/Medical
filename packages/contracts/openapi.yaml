@@ -4706,6 +4706,587 @@ paths:
                 title: 服务暂时不可用
                 status: 503
                 code: service-unavailable
+  /v1/internal-audits:
+    get:
+      operationId: listInternalAudits
+      tags:
+        - oversight
+      summary: 内部稽查
+      description: |-
+        机构质控是医院查我们，稽查是我们自己查自己。**对外部方整表关闭** —— 把自查报告给被查方看，下一次自查就查不出东西了。
+
+        默认最近的排最前：稽查看的是当前状态，不是历史顺序。
+      x-layer: L1
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: studySiteId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/AuditKind'
+        - name: openOnly
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
+      responses:
+        '200':
+          description: 内部稽查
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListInternalAuditsResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+    post:
+      operationId: openInternalAudit
+      tags:
+        - oversight
+      summary: 发起内部稽查
+      description: |-
+        **只有 QA**（`audit`）。不能借 `closeQA` —— 那个动作机构办也有，借它等于让被稽查的一方能对我方发起内部稽查。
+
+        稽查范围必填：空范围的稽查等于没查，事后说不清当时看了什么。
+      x-layer: L1
+      x-required-action: audit
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 幂等键（uuid）。可选；带上之后 24 小时内重放同一键返回首次结果，离线重放因此不会写两笔。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenInternalAuditRequest'
+      responses:
+        '201':
+          description: 发起内部稽查
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenInternalAuditResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/internal-audits/{id}:finding:
+    post:
+      operationId: addAuditFinding
+      tags:
+        - oversight
+      summary: 记一条稽查发现
+      description: |-
+        `repeatOf` 指向此前那条**同一个问题**的质量事件 —— 用外键，不是编号字符串：原型拿字符串去找源事件，找不到就静默丢掉，而这个指标存在的全部理由就是抓复发。
+
+        源事件必须早于本次稽查 —— 指向一条今天才提出的事件，那不是复发。
+      x-layer: L2
+      x-required-action: audit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddAuditFindingRequest'
+      responses:
+        '200':
+          description: 记一条稽查发现
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddAuditFindingResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/internal-audits/{id}/findings/{seq}:close:
+    post:
+      operationId: closeAuditFinding
+      tags:
+        - oversight
+      summary: 验证整改并关闭一条发现
+      description: |-
+        **「已整改」三个字不是验证。** 核查时看的是「你怎么确认它真的改了」 ——所以验证说明必填，且要写得出核实方式。
+
+        全部发现项关闭时，这次稽查**自动关闭** —— 留一个手动的「关闭稽查」按钮，就会出现「发现项全关了但稽查还开着」这种只有系统自己知道的状态。
+      x-layer: L2
+      x-required-action: audit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: seq
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseAuditFindingRequest'
+      responses:
+        '200':
+          description: 验证整改并关闭一条发现
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseAuditFindingResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/internal-audits/board:
+    get:
+      operationId: getAuditBoard
+      tags:
+        - oversight
+      summary: CAPA 有效性与中心质量评级
+      description: |-
+        **QA 的价值不在于再发现一批问题，在于回答同类问题是否复发。**
+
+        复发 = 当初只做了纠正，没做预防。两种复发都算数但分得开：源事件已关闭是「CAPA 写错了方向」，源事件还开着是「措施根本没起作用」——后者更急。
+
+        判定里还把「没人管」从「待观察」拆了出来：已指派责任人却还没提交措施，那不是在观察，是有人欠着一份措施。
+      x-layer: L1
+      parameters:
+        - name: studySiteId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        '200':
+          description: CAPA 有效性与中心质量评级
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditBoard'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/me:
     get:
       operationId: getMe
@@ -6418,6 +6999,129 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/quality-events/{id}:capa:
+    post:
+      operationId: setCapaPlan
+      tags:
+        - clinical
+      summary: 写纠正与预防措施（CAPA）
+      description: >-
+        **写措施的人不能自己验证关闭。** 这里是 `capaWrite`（责任人：CRC/CRA/PM/QA），验证关闭是 `closeQA`（只有 QA 与机构办）——
+        与数据质疑那条（回复的人不能自己关闭）是同一条规矩。
+
+
+        措施要写到**预防**那一层。「集中补签并留痕」是纠正 ——补完签名下个月照样缺；预防是把签名完整性做进每周自查清单并留痕。只做纠正不做预防的 CAPA，等于把同一个核查风险往后推了一个季度。
+
+
+        质疑不走这条路：它有自己的闭环（回复 → 判定）。
+      x-layer: L2
+      x-required-action: capaWrite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetCapaPlanRequest'
+      responses:
+        '200':
+          description: 写纠正与预防措施（CAPA）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetCapaPlanResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -12850,7 +13554,9 @@ components:
       enum:
         - advance
         - approve
+        - audit
         - bid
+        - capaWrite
         - closeQ
         - closeQA
         - ethics
@@ -14595,6 +15301,34 @@ components:
           format: uuid
           pattern: >-
             ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        category:
+          nullable: true
+          type: string
+        capaPlan:
+          nullable: true
+          type: string
+        capaOwnerAccountId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        capaOwnerName:
+          nullable: true
+          type: string
+        capaDueOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        capaOverdueDays:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        owesCapaPlan:
+          type: boolean
       required:
         - id
         - code
@@ -14616,6 +15350,13 @@ components:
         - reportedAt
         - reportHours
         - sourceEventId
+        - category
+        - capaPlan
+        - capaOwnerAccountId
+        - capaOwnerName
+        - capaDueOn
+        - capaOverdueDays
+        - owesCapaPlan
       additionalProperties: false
       description: 访视超窗**必须**生成方案偏离（I4），不可跳过 —— 在事务内与访视完成一起写，不是事后补录。
     DataQuery:
@@ -17033,6 +17774,294 @@ components:
         - upcomingDays
         - calcVersion
       additionalProperties: false
+    AuditKind:
+      type: string
+      enum:
+        - site
+        - system
+        - capa_check
+        - pre_inspection
+      description: site 中心内部稽查 · system 体系稽查 · capa_check CAPA 有效性验证 · pre_inspection 核查前模拟稽查
+    AuditFinding:
+      type: object
+      properties:
+        seq:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        severity:
+          type: string
+          enum:
+            - minor
+            - major
+            - critical
+        finding:
+          type: string
+        repeatOf:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        repeatOfCode:
+          nullable: true
+          type: string
+        repeatAfterClose:
+          nullable: true
+          type: boolean
+        state:
+          type: string
+          enum:
+            - open
+            - closed
+        verification:
+          nullable: true
+          type: string
+        closedAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+      required:
+        - seq
+        - severity
+        - finding
+        - repeatOf
+        - repeatOfCode
+        - repeatAfterClose
+        - state
+        - verification
+        - closedAt
+      additionalProperties: false
+    InternalAudit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        hospital:
+          type: string
+        kind:
+          $ref: '#/components/schemas/AuditKind'
+        auditedOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        auditorAccountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        auditorName:
+          type: string
+        scope:
+          type: string
+        state:
+          type: string
+          enum:
+            - open
+            - remediating
+            - closed
+        closedAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditFinding'
+        openFindings:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        repeatFindings:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+        - id
+        - code
+        - studySiteId
+        - siteCode
+        - hospital
+        - kind
+        - auditedOn
+        - auditorAccountId
+        - auditorName
+        - scope
+        - state
+        - closedAt
+        - findings
+        - openFindings
+        - repeatFindings
+      additionalProperties: false
+      description: 内部稽查。**对外部方整表关闭** —— 把自查报告给被查方看，下一次自查就查不出东西了。
+    CapaCategory:
+      type: object
+      properties:
+        category:
+          type: string
+        total:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        closed:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        owesPlan:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        repeatAfterClose:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        repeatWhileOpen:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        verdict:
+          type: string
+          enum:
+            - ineffective
+            - unowned
+            - watching
+            - effective
+      required:
+        - category
+        - total
+        - closed
+        - owesPlan
+        - repeatAfterClose
+        - repeatWhileOpen
+        - verdict
+      additionalProperties: false
+    SiteQualityGrade:
+      type: object
+      properties:
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        hospital:
+          type: string
+        penalty:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        grade:
+          type: string
+          enum:
+            - A
+            - B
+            - C
+            - D
+        reasons:
+          type: array
+          items:
+            type: string
+        severeOpen:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        minorOpen:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        saeLate:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        staleQueries:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        capaRepeats:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+      required:
+        - studySiteId
+        - siteCode
+        - hospital
+        - penalty
+        - grade
+        - reasons
+        - severeOpen
+        - minorOpen
+        - saeLate
+        - staleQueries
+        - capaRepeats
+      additionalProperties: false
+    AuditBoard:
+      type: object
+      properties:
+        openAudits:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        openFindings:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        repeatFindings:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        owesCapaPlan:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        capa:
+          type: array
+          items:
+            $ref: '#/components/schemas/CapaCategory'
+        sites:
+          type: array
+          items:
+            $ref: '#/components/schemas/SiteQualityGrade'
+        calcVersion:
+          type: string
+      required:
+        - openAudits
+        - openFindings
+        - repeatFindings
+        - owesCapaPlan
+        - capa
+        - sites
+        - calcVersion
+      additionalProperties: false
+      description: >-
+        **质量扣分 = 重大/严重未关闭×3 + 一般未关闭×1 + SAE 超窗×4 + 质疑挂起超 7 天×2 + CAPA 后复发×4。** A：0｜B：≤3｜C：≤7｜D：>7 ——
+        复发权重最高，因为它证明的是体系失效，不是单点失误。
     ListAccountsResponse:
       type: object
       properties:
@@ -17826,6 +18855,121 @@ components:
         - data
         - sideEffects
       additionalProperties: false
+    ListInternalAuditsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InternalAudit'
+        nextCursor:
+          nullable: true
+          description: null 表示已到末页
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+        - items
+        - nextCursor
+      additionalProperties: false
+    OpenInternalAuditRequest:
+      type: object
+      properties:
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        kind:
+          $ref: '#/components/schemas/AuditKind'
+        auditedOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        scope:
+          type: string
+          minLength: 4
+          maxLength: 1000
+      required:
+        - studySiteId
+        - kind
+        - scope
+      additionalProperties: false
+    OpenInternalAuditResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/InternalAudit'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    AddAuditFindingRequest:
+      type: object
+      properties:
+        severity:
+          type: string
+          enum:
+            - minor
+            - major
+            - critical
+        finding:
+          type: string
+          minLength: 10
+          maxLength: 1000
+        repeatOf:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      required:
+        - severity
+        - finding
+      additionalProperties: false
+    AddAuditFindingResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/InternalAudit'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    CloseAuditFindingRequest:
+      type: object
+      properties:
+        verification:
+          type: string
+          minLength: 10
+          maxLength: 1000
+      required:
+        - verification
+      additionalProperties: false
+    CloseAuditFindingResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/InternalAudit'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
     ListMilestonesResponse:
       type: object
       properties:
@@ -18099,6 +19243,41 @@ components:
       required:
         - items
         - nextCursor
+      additionalProperties: false
+    SetCapaPlanRequest:
+      type: object
+      properties:
+        plan:
+          type: string
+          minLength: 10
+          maxLength: 2000
+        ownerAccountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        dueOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+      required:
+        - plan
+        - dueOn
+      additionalProperties: false
+    SetCapaPlanResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/QualityEvent'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
       additionalProperties: false
     CloseQualityEventResponse:
       type: object

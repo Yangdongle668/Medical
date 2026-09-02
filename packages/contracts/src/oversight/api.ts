@@ -3,7 +3,8 @@ import { define } from "../kernel/registry.js";
 import { Uuid, DateOnly, QueryBool } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult } from "../kernel/command.js";
-import { MonitorVisit, MonitorKind, MonitorState, MonitorBoard } from "./model.js";
+import { MonitorVisit, MonitorKind, MonitorState, MonitorBoard,
+  InternalAudit, AuditKind, AuditBoard } from "./model.js";
 
 const CTX = "oversight";
 const ById = z.object({ id: Uuid });
@@ -121,5 +122,93 @@ define({
   action: "monitor",
   params: ById, body: z.object({}),
   response: commandResult(MonitorVisit),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+/* ── 内部稽查 ────────────────────────────────────────────────────── */
+
+define({
+  id: "listInternalAudits", method: "get", path: "/v1/internal-audits",
+  layer: "L1", context: CTX,
+  summary: "内部稽查",
+  description:
+    "机构质控是医院查我们，稽查是我们自己查自己。**对外部方整表关闭** —— " +
+    "把自查报告给被查方看，下一次自查就查不出东西了。\n\n" +
+    "默认最近的排最前：稽查看的是当前状态，不是历史顺序。",
+  query: PageQuery.extend({
+    studySiteId: Uuid.optional(),
+    kind: z.array(AuditKind).optional(),
+    openOnly: QueryBool.optional()
+  }),
+  response: page(InternalAudit)
+});
+
+define({
+  id: "getAuditBoard", method: "get", path: "/v1/internal-audits/board",
+  layer: "L1", context: CTX,
+  summary: "CAPA 有效性与中心质量评级",
+  description:
+    "**QA 的价值不在于再发现一批问题，在于回答同类问题是否复发。**\n\n" +
+    "复发 = 当初只做了纠正，没做预防。两种复发都算数但分得开：" +
+    "源事件已关闭是「CAPA 写错了方向」，源事件还开着是「措施根本没起作用」——" +
+    "后者更急。\n\n" +
+    "判定里还把「没人管」从「待观察」拆了出来：" +
+    "已指派责任人却还没提交措施，那不是在观察，是有人欠着一份措施。",
+  query: z.object({ studySiteId: Uuid.optional() }),
+  response: AuditBoard
+});
+
+define({
+  id: "openInternalAudit", method: "post", path: "/v1/internal-audits",
+  layer: "L1", context: CTX, status: 201,
+  summary: "发起内部稽查",
+  description:
+    "**只有 QA**（`audit`）。不能借 `closeQA` —— 那个动作机构办也有，" +
+    "借它等于让被稽查的一方能对我方发起内部稽查。\n\n" +
+    "稽查范围必填：空范围的稽查等于没查，事后说不清当时看了什么。",
+  action: "audit",
+  body: z.object({
+    studySiteId: Uuid,
+    kind: AuditKind,
+    auditedOn: DateOnly.optional(),
+    scope: z.string().trim().min(4).max(1000)
+  }),
+  response: commandResult(InternalAudit),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+define({
+  id: "addAuditFinding", method: "post", path: "/v1/internal-audits/{id}:finding",
+  layer: "L2", context: CTX,
+  summary: "记一条稽查发现",
+  description:
+    "`repeatOf` 指向此前那条**同一个问题**的质量事件 —— 用外键，不是编号字符串：" +
+    "原型拿字符串去找源事件，找不到就静默丢掉，而这个指标存在的全部理由就是抓复发。\n\n" +
+    "源事件必须早于本次稽查 —— 指向一条今天才提出的事件，那不是复发。",
+  action: "audit",
+  params: ById,
+  body: z.object({
+    severity: z.enum(["minor", "major", "critical"]),
+    finding: z.string().trim().min(10).max(1000),
+    repeatOf: Uuid.optional()
+  }),
+  response: commandResult(InternalAudit),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+define({
+  id: "closeAuditFinding", method: "post",
+  path: "/v1/internal-audits/{id}/findings/{seq}:close",
+  layer: "L2", context: CTX,
+  summary: "验证整改并关闭一条发现",
+  description:
+    "**「已整改」三个字不是验证。** 核查时看的是「你怎么确认它真的改了」 ——" +
+    "所以验证说明必填，且要写得出核实方式。\n\n" +
+    "全部发现项关闭时，这次稽查**自动关闭** —— 留一个手动的「关闭稽查」按钮，" +
+    "就会出现「发现项全关了但稽查还开着」这种只有系统自己知道的状态。",
+  action: "audit",
+  params: z.object({ id: Uuid, seq: z.coerce.number().int().min(0) }),
+  body: z.object({ verification: z.string().trim().min(10).max(1000) }),
+  response: commandResult(InternalAudit),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
