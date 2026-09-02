@@ -94,8 +94,7 @@ export const MODULES: ModuleDef[] = [
 
   /* ── 质量 ─────────────────────────────────────────────────────── */
   { key: "qa", title: "质量事件与 CAPA", group: "质量", path: "/quality" },
-  { key: "mon", title: "监查访视", group: "质量", path: "/monitoring",
-    todo: "监查计划与实际、每次访视的发现项、逾期未监查的中心。" },
+  { key: "mon", title: "监查访视", group: "质量", path: "/monitoring" },
   { key: "audit", title: "内部稽查", group: "质量", path: "/audit",
     todo: "稽查计划、发现项与关闭情况。" },
   /* capa 与 qa 是同一本台账的两个说法：qa 是"全部质量事件"，

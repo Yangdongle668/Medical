@@ -46,7 +46,8 @@ const STUDIES = grab("STUDIES"), SITES = grab("SITES"),
       DROPS = grab("DROPS"), QUERIES = grab("QUERIES"),
       RATE = grab("RATE"), WORKTYPES = grab("WORKTYPES"), TIMESHEET = grab("TIMESHEET"),
       FEAS = grab("FEAS"), BIDS = grab("BIDS"), CHANGES = grab("CHANGES"),
-      MILES = grab("MILES"), CLIENT_META = grab("CLIENT_META");
+      MILES = grab("MILES"), CLIENT_META = grab("CLIENT_META"),
+      VISITS = grab("VISITS");
 
 const q  = v => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const d  = v => (!v || v === "—") ? "NULL" : `'${v}'`;
@@ -469,6 +470,95 @@ QUERIES.forEach(qy => {
     `${answer ? d(dayBefore(TODAY, Math.floor(qy.age / 2))) : "NULL"}, ` +
     `${q(dm ? "dm" : "cra")}, ${acc(byName)}, ` +
     `${d(dayBefore(TODAY, qy.age))});`);
+});
+P(``);
+
+/* ── 监查访视 ──────────────────────────────────────────────────
+   原型的 VISITS 只有**未来四周**的六次排期。照搬进来，系统会得出
+   「15 个中心里 13 个一次都没监查过」这个结论 —— 而那是假的：
+   它们 2024 年底就启动了，两年里当然去过很多次。
+   真相是**这张表刚建**，不是没去过。
+
+   所以历史部分按一个说得清的规则回溯铺出来，而不是挑几个中心手工设：
+     · 只给已经启动（有 SIV 日期）的中心铺；
+     · 间隔按 70 天（normal 档的建议间隔）；
+     · 最后一次距今 35 + 11i 天（i 是中心序号）——
+       于是"该去了"和"还早"两种中心都有，且不是挑出来的。
+
+   这些历史访视一律 reported（跟进项全关、报告已交）：
+   **有争议的状态留给原型自己那六条**，历史只负责回答
+   「上一次去是什么时候」。 */
+P(`-- ── 监查访视：SIV / IMV / COV 与 MVR 跟进项 ────────────────────`);
+const MV_KIND = { SIV: "siv", IMV: "imv", COV: "cov" };
+const MV_STATE = { "待确认": "proposed", "已排期": "scheduled" };
+/* 历史 IMV 的通用跟进项。它们是每次例行监查都会做的三件事 ——
+   不是编的内容，是 SOP 上就有的那三项。 */
+const MV_ROUTINE = [
+  "SDV：本期新增受试者源数据核对",
+  "试验用药品发放与回收记录清点",
+  "未关闭质量事件与数据质疑跟进"
+];
+let mvSeq = 0;
+const mvCode = () => `MV-2026-${String(++mvSeq).padStart(3, "0")}`;
+const mvInsert = (o) => {
+  const id = uuid5("mv:" + o.code);
+  P(`INSERT INTO monitor_visit (id, code, study_site_id, kind, planned_on,` +
+    ` monitor_account_id, days, state, confirmed_on, performed_on,` +
+    ` report_submitted_on, sdv_sample_pct) VALUES (` +
+    `'${id}', ${q(o.code)}, '${uuid5("site:"+o.ss)}', ${q(o.kind)}, ${d(o.planned)}, ` +
+    `${o.monitor}, ${o.days}, ${q(o.state)}, ${d(o.confirmed)}, ${d(o.performed)}, ` +
+    `${d(o.reported)}, ${o.sdv ?? "NULL"});`);
+  o.items.forEach((it, k) =>
+    P(`INSERT INTO monitor_visit_item (visit_id, seq, task, done_at, done_by) VALUES (` +
+      `'${id}', ${k}, ${q(it.t)}, ` +
+      `${it.done ? `'${o.performed ?? o.planned} 17:00+08'::timestamptz` : "NULL"}, ` +
+      `${it.done ? o.monitor : "NULL"});`));
+  return id;
+};
+
+/* 历史：每个已启动的中心两次例行监查。
+   **判断"已启动"要看 siv 是不是一个真日期，不是它有没有值** ——
+   原型里未启动的中心写的是 "—"，而 "—" 是真值：
+   照 `s.siv` 这么筛，一个停在「伦理递交」的中心会长出两条监查记录，
+   而那种数据在界面上看不出问题，只有人去问"我们什么时候去过 SS-13"才露馅。 */
+SITES.filter(s => s.siv && s.siv !== "—").forEach((s, i) => {
+  const last = 35 + i * 11;
+  const cra = acc(s.cra);
+  /* 没有派工 CRA 的中心跳过 —— 一次没有监查员的监查记录，
+     "是谁去的"没有答案，而那正是这张表要回答的事之一。 */
+  if (cra === "NULL") return;
+  [last + 70, last].forEach(back => {
+    const on = dayBefore(TODAY, back);
+    mvInsert({
+      code: mvCode(), ss: s.id, kind: "imv", planned: on, monitor: cra, days: 1,
+      state: "reported", confirmed: dayBefore(TODAY, back + 10),
+      performed: on, reported: dayBefore(TODAY, back - 5), sdv: 50,
+      items: MV_ROUTINE.map(t => ({ t, done: true }))
+    });
+  });
+});
+
+/* 原型的六次排期。**两条已经过了计划日** ——
+   SS-02 那次的跟进项已经勾了两项，说明现场其实去过了：
+   于是它是 done 而不是 scheduled，报告压在 CRA 手上没交。
+   「去过了但报告没交」是监查上最常见的欠账，而它此前在原型里
+   连一个能表达它的状态都没有。 */
+VISITS.forEach(v => {
+  const cra = acc(v.who);
+  const someDone = v.items.some(x => x.done);
+  const state = someDone ? "done" : (MV_STATE[v.st] ?? "scheduled");
+  mvInsert({
+    code: mvCode(), ss: v.ss, kind: MV_KIND[v.kind], planned: v.d,
+    monitor: cra === "NULL" ? acc("林敏") : cra, days: v.days,
+    state,
+    confirmed: state === "proposed" ? null : dayBefore(v.d, 10),
+    performed: state === "done" ? v.d : null,
+    reported: null,
+    /* 抽样比例只在原型明写了的那一条上落库 —— 其余留空，
+       表示"这次没有单独定过"，而不是默认 100%。 */
+    sdv: /抽样 30%/.test(v.items.map(x => x.t).join("")) ? 30 : null,
+    items: v.items
+  });
 });
 P(``);
 

@@ -7,11 +7,14 @@ import { siteRevenue, siteCost, siteMargin, CALC_VERSION,
   saeTimeliness, saeReportHours, type CostEntry } from "@sitedesk/calc";
 import { queryLoad, siteQueryDensity, densityVerdict, QUERY_STALE_DAYS }
   from "@sitedesk/calc";
+import { monitorPlan, monitorDue, mvrLoad, mvrLagDays, travelEstimateCents, MVR_DUE_DAYS }
+  from "@sitedesk/calc";
 import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
-import type { MockFeas, MockBid, MockChange, MockMilestone, MockQuery } from "./scenario.js";
+import type { MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
+  MockMonitorVisit } from "./scenario.js";
 import { CLIENTS } from "./scenario.js";
 import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
   mkTimesheet, WORK_TYPE_META,
@@ -113,6 +116,35 @@ function findQuery(url: string, re: RegExp):
   const q = visibleQueries().find(x => x.id === id);
   return q ? { q } : { problem: HttpResponse.json(
     problem("not-found", 404, "数据质疑不存在"), { status: 404 }) };
+}
+
+/** 看得见的监查访视。**外部方一条都没有** ——
+ *  监查策略不能交给被监查的一方（迁移 0033 的行策略）。 */
+function visibleMonitorVisits() {
+  if (identity().isExternal) return [];
+  return inScope(scenario.monitorVisits);
+}
+function findVisit(url: string, re: RegExp):
+  { v: MockMonitorVisit } | { problem: Response } {
+  const id = seg(url, re);
+  const v = visibleMonitorVisits().find(x => x.id === id);
+  return v ? { v } : { problem: HttpResponse.json(
+    problem("not-found", 404, "监查访视不存在"), { status: 404 }) };
+}
+/** 服务端算出来的那几个派生字段 —— mock 也要算，否则页面在两边不一样。 */
+function monitorDto(v: MockMonitorVisit) {
+  const lag = mvrLagDays(
+    { performedOn: v.performedOn, reportSubmittedOn: v.reportSubmittedOn }, TODAY_STR);
+  const notYetThere = v.state === "proposed" || v.state === "scheduled";
+  const over = notYetThere
+    ? Math.round((Date.parse(TODAY_STR) - Date.parse(v.plannedOn)) / 86_400_000) : 0;
+  return mask({
+    ...v,
+    openItems: v.items.filter(i => i.doneAt === null).length,
+    mvrLagDays: lag,
+    mvrOverdue: v.reportSubmittedOn === null && lag !== null && lag > MVR_DUE_DAYS,
+    visitOverdueDays: over > 0 ? over : null
+  });
 }
 
 const TODAY_STR = new Date().toISOString().slice(0, 10);
@@ -585,6 +617,196 @@ export const scenarioHandlers = [
       { status: 422 });
     q.state = "closed";
     return HttpResponse.json({ data: q, sideEffects: [] }, { status: 201 });
+  }),
+
+  /* ── 监查访视 ────────────────────────────────────────────────────
+     **外部方一条都看不到**（迁移 0033 的行策略）：一个机构办看得到
+     我们打算什么时候去、抽多少比例，等于把监查策略交给了被监查的一方。 */
+  http.get(pathToRegExp("/v1/monitor-visits/board"), () => {
+    const vs = visibleMonitorVisits();
+    const sites = visibleSites().map(site => {
+      /* 风险信号从 mock 已有的两本台账里取 —— 手搓一份"这个中心几分"
+         等于给这个系统开第三套口径。 */
+      const q = scenario.qualityEvents.filter(
+        e => e.studySiteId === site.id && e.state !== "closed");
+      const stale = scenario.dataQueries.filter(
+        d => d.studySiteId === site.id && d.state === "open" && d.ageDays > QUERY_STALE_DAYS);
+      const plan = monitorPlan({
+        severeOpen: q.filter(e => e.kind !== "sae_late"
+          && (e.severity === "major" || e.severity === "critical")).length,
+        minorOpen: q.filter(e => e.kind !== "sae_late" && e.severity === "minor").length,
+        saeLate: q.filter(e => e.kind === "sae_late").length,
+        staleQueries: stale.length,
+        daysSinceEnroll: FUNNELS.find(f => f.studySiteId === site.id)?.enrolled ? 10 : null
+      });
+      const mine = vs.filter(v => v.studySiteId === site.id);
+      const last = mine.filter(v => v.performedOn)
+        .map(v => v.performedOn!).sort().at(-1) ?? null;
+      return {
+        studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+        siteState: site.state,
+        band: plan.band, riskScore: plan.score,
+        intervalDays: plan.intervalDays, sdvSamplePct: plan.sdvSamplePct,
+        reasons: plan.reasons,
+        lastVisitOn: last,
+        ...monitorDue(last, plan.intervalDays, TODAY_STR),
+        neverVisited: last === null,
+        openVisits: mine.filter(v => v.state !== "reported").length
+      };
+    }).sort((a, b) =>
+      (b.overdueDays ?? -1) - (a.overdueDays ?? -1)
+      || Number(b.neverVisited) - Number(a.neverVisited)
+      || b.riskScore - a.riskScore
+      || a.siteCode.localeCompare(b.siteCode));
+
+    const upcoming = vs.filter(v =>
+      (v.state === "proposed" || v.state === "scheduled")
+      && Date.parse(v.plannedOn) <= Date.now() + 28 * 86_400_000);
+    return HttpResponse.json(mask({
+      load: mvrLoad(vs.map(v => ({
+        performedOn: v.performedOn, reportSubmittedOn: v.reportSubmittedOn
+      })), TODAY_STR),
+      sites,
+      upcomingVisits: upcoming.length,
+      upcomingDays: upcoming.reduce((n, v) => n + v.days, 0),
+      travelEstimateCents: travelEstimateCents(upcoming.length, 285_000),
+      calcVersion: CALC_VERSION
+    }));
+  }),
+
+  http.get(pathToRegExp("/v1/monitor-visits"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = visibleMonitorVisits();
+    const kinds = q.getAll("kind"), states = q.getAll("state");
+    if (kinds.length) items = items.filter(v => kinds.includes(v.kind));
+    if (states.length) items = items.filter(v => states.includes(v.state));
+    if (q.get("mine") === "true")
+      items = items.filter(v => v.monitorAccountId === identity().id);
+    if (q.get("openOnly") === "true") items = items.filter(v => v.state !== "reported");
+    items = [...items].sort((a, b) => a.plannedOn.localeCompare(b.plannedOn));
+    return HttpResponse.json({ items: items.map(monitorDto), nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/monitor-visits"), async ({ request }) => {
+    const b = await request.json() as {
+      studySiteId: string; kind: string; plannedOn: string;
+      days: number; sdvSamplePct?: number; note?: string; items: string[];
+    };
+    if (!identity().actions.includes("monitor")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能排监查访视"), { status: 403 });
+    const site = SITES_LIST.find(x => x.id === b.studySiteId);
+    if (!site || !siteInScope(site.id)) return HttpResponse.json(
+      problem("not-found", 404, "中心不存在"), { status: 404 });
+    if (site.state === "closed") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${site.code} 已关闭 —— 关闭之后还要去，说明关闭那一步没做完`), { status: 422 });
+
+    const me = identity();
+    const row: MockMonitorVisit = {
+      id: `mv-${scenario.monitorVisits.length + 1}`,
+      code: `MV-2026-${String(100 + scenario.monitorVisits.length).slice(-3)}`,
+      studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+      studyShortName: "艾瑞替尼 III",
+      kind: b.kind, plannedOn: b.plannedOn,
+      monitorAccountId: me.id, monitorName: me.name,
+      days: b.days, state: "proposed",
+      confirmedOn: null, performedOn: null, reportSubmittedOn: null,
+      sdvSamplePct: b.sdvSamplePct ?? null, note: b.note ?? null,
+      items: b.items.map((task, seq) => ({ seq, task, doneAt: null, doneByName: null }))
+    };
+    scenario.monitorVisits.push(row);
+    return HttpResponse.json({
+      data: monitorDto(row),
+      sideEffects: [{ type: "MonitorVisitPlanned", ref: row.id,
+        summary: `${row.code} 已排到 ${b.plannedOn}（${b.items.length} 项跟进项）` +
+          " —— 还要与中心确认时间" }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/monitor-visits/{id}:confirm"), async ({ request }) => {
+    const r = findVisit(request.url, /\/monitor-visits\/([^/:]+):confirm/);
+    if ("problem" in r) return r.problem;
+    if (!identity().actions.includes("monitor")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能改监查排期"), { status: 403 });
+    if (r.v.state !== "proposed") return HttpResponse.json(
+      problem("invariant-violated", 422, `${r.v.code} 已经确认过了`), { status: 422 });
+    r.v.state = "scheduled";
+    r.v.confirmedOn = TODAY_STR;
+    return HttpResponse.json({
+      data: monitorDto(r.v),
+      sideEffects: [{ type: "MonitorVisitConfirmed", ref: r.v.id,
+        summary: `${r.v.code} 已与 ${r.v.hospital} 确认 ${r.v.plannedOn}` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/monitor-visits/{id}:perform"), async ({ request }) => {
+    const r = findVisit(request.url, /\/monitor-visits\/([^/:]+):perform/);
+    if ("problem" in r) return r.problem;
+    if (!identity().actions.includes("monitor")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能登记到现场"), { status: 403 });
+    if (r.v.state === "proposed") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${r.v.code} 还没与中心确认时间 —— 先确认`), { status: 422 });
+    if (r.v.state !== "scheduled") return HttpResponse.json(
+      problem("invariant-violated", 422, `${r.v.code} 已经登记过到现场`), { status: 422 });
+    r.v.state = "done";
+    r.v.performedOn = TODAY_STR;
+    return HttpResponse.json({
+      data: monitorDto(r.v),
+      sideEffects: [{ type: "MonitorVisitPerformed", ref: r.v.id,
+        summary: `${r.v.code} 已登记到现场（${TODAY_STR}）—— ` +
+          `监查报告请在 ${MVR_DUE_DAYS} 天内提交` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/monitor-visits/{id}/items/{seq}:done"),
+    async ({ request }) => {
+      const r = findVisit(request.url, /\/monitor-visits\/([^/]+)\/items\//);
+      if ("problem" in r) return r.problem;
+      const seq = Number(seg(request.url, /\/items\/(\d+):done/));
+      const b = await request.json() as { done: boolean };
+      if (!identity().actions.includes("monitor")) return HttpResponse.json(
+        problem("forbidden", 403, "你的角色不能改跟进项"), { status: 403 });
+      /* 报告交上去之后跟进项冻结 —— 交上去的报告和台账对不上，
+         比台账上少一项严重得多。 */
+      if (r.v.state === "reported") return HttpResponse.json(
+        problem("invariant-violated", 422,
+          `${r.v.code} 的报告已提交，跟进项不能再改 —— 要改就出一份补充报告`),
+        { status: 422 });
+      const it = r.v.items.find(x => x.seq === seq);
+      if (!it) return HttpResponse.json(
+        problem("not-found", 404, "跟进项不存在"), { status: 404 });
+      it.doneAt = b.done ? new Date().toISOString() : null;
+      it.doneByName = b.done ? identity().name : null;
+      return HttpResponse.json({ data: monitorDto(r.v), sideEffects: [] }, { status: 201 });
+    }),
+
+  http.post(pathToRegExp("/v1/monitor-visits/{id}:report"), async ({ request }) => {
+    const r = findVisit(request.url, /\/monitor-visits\/([^/:]+):report/);
+    if ("problem" in r) return r.problem;
+    if (!identity().actions.includes("monitor")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能提交监查报告"), { status: 403 });
+    if (r.v.state === "reported") return HttpResponse.json(
+      problem("invariant-violated", 422, `${r.v.code} 的报告已经提交过了`), { status: 422 });
+    if (r.v.state !== "done") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${r.v.code} 还没登记到现场 —— 没去过的访视写不出监查报告`), { status: 422 });
+    const open = r.v.items.filter(i => i.doneAt === null);
+    /* 拦的时候要说得出拦在哪几项 —— 一句「条件不满足」对要交报告的人没用。 */
+    if (open.length) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `还有 ${open.length} 项跟进项未关闭，监查报告无法提交：` +
+        open.slice(0, 5).map(i => i.task).join("；")), { status: 422 });
+    r.v.state = "reported";
+    r.v.reportSubmittedOn = TODAY_STR;
+    const lag = mvrLagDays(
+      { performedOn: r.v.performedOn, reportSubmittedOn: TODAY_STR }, TODAY_STR);
+    return HttpResponse.json({
+      data: monitorDto(r.v),
+      sideEffects: [{ type: "MonitorReportSubmitted", ref: r.v.id,
+        summary: `${r.v.code} 监查报告已提交，距现场 ${lag} 天` +
+          (lag !== null && lag > MVR_DUE_DAYS ? ` —— 超过 ${MVR_DUE_DAYS} 天时限` : "") }]
+    }, { status: 201 });
   }),
 
   /* ── 数据质疑 ────────────────────────────────────────────────────

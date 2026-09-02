@@ -5366,6 +5366,840 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/monitor-visits:
+    get:
+      operationId: listMonitorVisits
+      tags:
+        - oversight
+      summary: 监查访视排期
+      description: |-
+        SIV 启动 · IMV 例行 · COV 关闭。默认按**计划日**排 —— 这一页是「接下来去哪」，不是「最近做了什么」。
+
+        对外部方整表关闭：一个机构办看得到我们打算什么时候去、抽多少比例，等于把监查策略交给了被监查的一方。
+      x-layer: L1
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: studySiteId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/MonitorKind'
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/MonitorState'
+        - name: mine
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
+        - name: openOnly
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
+      responses:
+        '200':
+          description: 监查访视排期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListMonitorVisitsResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+    post:
+      operationId: planMonitorVisit
+      tags:
+        - oversight
+      summary: 排一次监查访视
+      description: |-
+        跟进项**在排期时就写下来**，不是回来之后补 —— 「这次去要看什么」是出发前的决定，事后补的清单只会写成已经做过的事。
+
+        抽样比例可以不填：空表示「这次没有单独定过」，而不是默认 100%。
+      x-layer: L1
+      x-required-action: monitor
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 幂等键（uuid）。可选；带上之后 24 小时内重放同一键返回首次结果，离线重放因此不会写两笔。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanMonitorVisitRequest'
+      responses:
+        '201':
+          description: 排一次监查访视
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanMonitorVisitResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/monitor-visits/{id}:confirm:
+    post:
+      operationId: confirmMonitorVisit
+      tags:
+        - oversight
+      summary: 与中心确认排期
+      description: 「待确认」和「已排期」的差别是**中心那边知不知道**。确认日期落库 —— 否则「什么时候跟中心敲定的」没有答案，而改期扯皮的时候要的正是这个日期。
+      x-layer: L2
+      x-required-action: monitor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmMonitorVisitRequest'
+      responses:
+        '200':
+          description: 与中心确认排期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmMonitorVisitResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/monitor-visits/{id}:perform:
+    post:
+      operationId: performMonitorVisit
+      tags:
+        - oversight
+      summary: 登记已到现场
+      description: '**到现场和交报告是两件事。** 登记到现场之后开始计报告时限 —— 在此之前它是「还没去」，在此之后它是「欠一份报告」，两种欠账要做的事不一样。'
+      x-layer: L2
+      x-required-action: monitor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerformMonitorVisitRequest'
+      responses:
+        '200':
+          description: 登记已到现场
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformMonitorVisitResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/monitor-visits/{id}:report:
+    post:
+      operationId: submitMonitorReport
+      tags:
+        - oversight
+      summary: 提交监查报告（MVR）
+      description: '**跟进项全部关闭之前提不了。** 拦的时候要说得出拦在哪几项 —— 一句「条件不满足」对要交报告的人没有任何用处。'
+      x-layer: L2
+      x-required-action: monitor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitMonitorReportRequest'
+      responses:
+        '200':
+          description: 提交监查报告（MVR）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitMonitorReportResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/monitor-visits/{id}/items/{seq}:done:
+    post:
+      operationId: setMonitorItemDone
+      tags:
+        - oversight
+      summary: 勾掉（或撤回）一项跟进项
+      description: 报告提交之后跟进项**冻结** —— 交上去的报告和台账对不上，比台账上少一项严重得多：核查时两份材料互相打脸。
+      x-layer: L2
+      x-required-action: monitor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: seq
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetMonitorItemDoneRequest'
+      responses:
+        '200':
+          description: 勾掉（或撤回）一项跟进项
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetMonitorItemDoneResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/monitor-visits/board:
+    get:
+      operationId: getMonitorBoard
+      tags:
+        - oversight
+      summary: 监查计划与欠账
+      description: >-
+        **「监查频率来自风险分级，不是一刀切」这句话在这里被算了出来。**
+
+
+        输入是系统里已经有的质量信号（未关闭事件、SAE 超窗、质疑挂起、入组停滞），输出是风险档、建议间隔、建议 SDV 抽样比例，**外加理由** ——
+        没有理由的建议值没人照着做，也没人能在核查时解释「为什么这个中心只抽了 25%」。
+
+
+        另一半是欠账：逾期未监查的中心，和已经到过现场却压着没交的报告。
+      x-layer: L1
+      parameters:
+        - name: studyId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        '200':
+          description: 监查计划与欠账
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonitorBoard'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/pnl:
     get:
       operationId: listPnl
@@ -12021,6 +12855,7 @@ components:
         - closeQA
         - ethics
         - manage
+        - monitor
         - piConfirm
         - raiseQ
         - rateWrite
@@ -15887,6 +16722,317 @@ components:
       description: |-
         未来几个月：预计回款 vs 刚性支出。
         **记录缺口单列**，因为把它算成未来收入会凭空造出现金流，而且是在最不该乐观的那个月。
+    MonitorKind:
+      type: string
+      enum:
+        - siv
+        - imv
+        - cov
+      description: siv 启动访视 · imv 例行监查 · cov 关闭访视
+    MonitorState:
+      type: string
+      enum:
+        - proposed
+        - scheduled
+        - done
+        - reported
+      description: proposed 待确认 → scheduled 已排期 → **done 已到现场** → reported 报告已提交。中间那一格不能省：去过了和报告交了是两件事，而欠账就藏在两者之间。
+    MonitorItem:
+      type: object
+      properties:
+        seq:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        task:
+          type: string
+        doneAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        doneByName:
+          nullable: true
+          type: string
+      required:
+        - seq
+        - task
+        - doneAt
+        - doneByName
+      additionalProperties: false
+      description: 监查报告跟进项（MVR Follow-up）。它不是待办清单 —— 每一项都是这次现场看出来、要中心去做的事，**全部关闭之前报告提不了**。
+    MonitorVisit:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        hospital:
+          type: string
+        studyShortName:
+          type: string
+        kind:
+          $ref: '#/components/schemas/MonitorKind'
+        plannedOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        monitorAccountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        monitorName:
+          type: string
+        days:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+        state:
+          $ref: '#/components/schemas/MonitorState'
+        confirmedOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        performedOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        reportSubmittedOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        sdvSamplePct:
+          nullable: true
+          type: integer
+          minimum: 1
+          maximum: 100
+        note:
+          nullable: true
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonitorItem'
+        openItems:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        mvrLagDays:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        mvrOverdue:
+          type: boolean
+        visitOverdueDays:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+      required:
+        - id
+        - code
+        - studySiteId
+        - siteCode
+        - hospital
+        - studyShortName
+        - kind
+        - plannedOn
+        - monitorAccountId
+        - monitorName
+        - days
+        - state
+        - confirmedOn
+        - performedOn
+        - reportSubmittedOn
+        - sdvSamplePct
+        - note
+        - items
+        - openItems
+        - mvrLagDays
+        - mvrOverdue
+        - visitOverdueDays
+      additionalProperties: false
+      description: 监查访视。排期、改期、到现场、提交报告 —— 四步各有各的日期，混成一个「状态」就答不出「为什么这个中心三个月没人管」。
+    RiskBand:
+      type: string
+      enum:
+        - low
+        - normal
+        - high
+    SiteMonitorPlan:
+      type: object
+      properties:
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        hospital:
+          type: string
+        siteState:
+          type: string
+        band:
+          $ref: '#/components/schemas/RiskBand'
+        riskScore:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        intervalDays:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+        sdvSamplePct:
+          type: integer
+          minimum: 1
+          maximum: 100
+        reasons:
+          type: array
+          items:
+            type: string
+        lastVisitOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        daysSince:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        dueOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        overdueDays:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        neverVisited:
+          type: boolean
+        openVisits:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+        - studySiteId
+        - siteCode
+        - hospital
+        - siteState
+        - band
+        - riskScore
+        - intervalDays
+        - sdvSamplePct
+        - reasons
+        - lastVisitOn
+        - daysSince
+        - dueOn
+        - overdueDays
+        - neverVisited
+        - openVisits
+      additionalProperties: false
+    MvrLoad:
+      type: object
+      properties:
+        performed:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        submitted:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        outstanding:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        overdue:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        meanLagDays:
+          nullable: true
+          type: number
+        worstLagDays:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+      required:
+        - performed
+        - submitted
+        - outstanding
+        - overdue
+        - meanLagDays
+        - worstLagDays
+      additionalProperties: false
+      description: '**未提交的报告按「到今天」计入平均**。只算已提交的，一份永远不交的报告就永远不进分母 —— 压得越久这个数越好看。'
+    MonitorBoard:
+      type: object
+      properties:
+        load:
+          $ref: '#/components/schemas/MvrLoad'
+        sites:
+          type: array
+          items:
+            $ref: '#/components/schemas/SiteMonitorPlan'
+        upcomingVisits:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        upcomingDays:
+          type: number
+        travelEstimateCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        calcVersion:
+          type: string
+      required:
+        - load
+        - sites
+        - upcomingVisits
+        - upcomingDays
+        - calcVersion
+      additionalProperties: false
     ListAccountsResponse:
       type: object
       properties:
@@ -16760,6 +17906,165 @@ components:
             $ref: '#/components/schemas/MilestonePlanItem'
       required:
         - items
+      additionalProperties: false
+    ListMonitorVisitsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MonitorVisit'
+        nextCursor:
+          nullable: true
+          description: null 表示已到末页
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+        - items
+        - nextCursor
+      additionalProperties: false
+    PlanMonitorVisitRequest:
+      type: object
+      properties:
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        kind:
+          $ref: '#/components/schemas/MonitorKind'
+        plannedOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        monitorAccountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        days:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 30
+        sdvSamplePct:
+          type: integer
+          minimum: 1
+          maximum: 100
+        note:
+          type: string
+          maxLength: 500
+        items:
+          minItems: 1
+          maxItems: 30
+          type: array
+          items:
+            type: string
+            minLength: 4
+            maxLength: 300
+      required:
+        - studySiteId
+        - kind
+        - plannedOn
+        - days
+        - items
+      additionalProperties: false
+    PlanMonitorVisitResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MonitorVisit'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    ConfirmMonitorVisitRequest:
+      type: object
+      properties: {}
+      additionalProperties: false
+    ConfirmMonitorVisitResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MonitorVisit'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    PerformMonitorVisitRequest:
+      type: object
+      properties:
+        performedOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+      additionalProperties: false
+    PerformMonitorVisitResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MonitorVisit'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    SubmitMonitorReportRequest:
+      type: object
+      properties: {}
+      additionalProperties: false
+    SubmitMonitorReportResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MonitorVisit'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    SetMonitorItemDoneRequest:
+      type: object
+      properties:
+        done:
+          type: boolean
+      required:
+        - done
+      additionalProperties: false
+    SetMonitorItemDoneResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/MonitorVisit'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
       additionalProperties: false
     ListPnlResponse:
       type: object

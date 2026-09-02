@@ -49,6 +49,13 @@ const RULES = [
          "后者是最省事的写法，也是最贵的"
   },
   {
+    scope: "apps/api/src/modules/oversight",
+    forbid: [/modules\/identity\//, /modules\/clinical\//, /modules\/site\//,
+             /modules\/cost\//, /modules\/bizdev\//, /modules\/finance\//],
+    why: "监查与稽查读别的上下文的**表**（质量事件、中心），但不引用它们的服务 —— " +
+         "省事的那条路会让「监查怎么算风险」的答案散在两个上下文里"
+  },
+  {
     scope: "apps/api/src/modules/finance",
     forbid: [/modules\/identity\//, /modules\/clinical\//, /modules\/site\//,
              /modules\/cost\//, /modules\/bizdev\//],

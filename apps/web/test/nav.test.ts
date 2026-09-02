@@ -30,7 +30,7 @@ describe("模块登记表", () => {
        删了 todo 却没在 main.tsx 里登记 → 点进去落回 ComingSoon。
        两种错都不报错、不变红，只是界面上少了点什么。 */
     expect(MODULES.filter(m => m.todo).map(m => m.key).sort()).toEqual([
-      "audit", "instac", "intake", "isf", "mon"
+      "audit", "instac", "intake", "isf"
     ]);
   });
 

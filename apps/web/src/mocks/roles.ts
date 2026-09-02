@@ -18,7 +18,7 @@
 
 import type { FieldKey, ActionKey } from "@sitedesk/contracts";
 
-export const MOCK_ROLES = ["crc", "boss", "dm", "inst", "pi"] as const;
+export const MOCK_ROLES = ["crc", "cra", "boss", "dm", "inst", "pi"] as const;
 export type MockRole = (typeof MOCK_ROLES)[number];
 
 export interface MockIdentity {
@@ -48,6 +48,19 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
        一份路径清单会让 mock 模式下的导航整个空掉。 */
     modules: ["crc", "mysite", "startup", "sched", "subj", "prescreen", "ethics",
       "query", "capa", "isf", "material", "pay", "handover", "time"]
+  },
+  /* **监查员 CRA。** 它是唯一握着 `monitor` 的一线角色 ——
+     排监查、登记到现场、提交监查报告三件事，只有换到这个身份才点得动。
+     行范围 assigned 在 mock 上演不出来（没有派工表），
+     所以它看到的是全部中心 —— 这一点写在 visibleSiteIds 那里。 */
+  cra: {
+    id: "a-linmin", login: "linmin", name: "林敏",
+    role: { id: "r-cra", code: "cra", name: "临床监查员 CRA" },
+    isExternal: false, orgRef: null,
+    rowRule: "assigned", fields: ["subject"],
+    actions: ["monitor", "raiseQ", "subjRead", "timeWrite"],
+    modules: ["cra", "mysites", "mon", "query", "screen", "feas", "material",
+      "time", "qa", "capa", "trail"]
   },
   /* **数据管理 DM。** 它是这套角色里唯一握着 closeQ 的人 ——
      「中心回复了不等于问题解决了」这句话，只有换到这个身份才看得见：

@@ -25,6 +25,8 @@ import { ClinicalService } from "./modules/clinical/clinical.service.js";
 import { ClinicalController } from "./modules/clinical/clinical.controller.js";
 import { DataQueryService } from "./modules/clinical/query.service.js";
 import { DataQueryController } from "./modules/clinical/query.controller.js";
+import { MonitorService } from "./modules/oversight/monitor.service.js";
+import { MonitorController } from "./modules/oversight/monitor.controller.js";
 import { AccountabilityService } from "./modules/clinical/accountability.service.js";
 import { AccountabilityController } from "./modules/clinical/accountability.controller.js";
 import { CostService } from "./modules/cost/cost.service.js";
@@ -42,7 +44,7 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
 @Module({
   controllers: [HealthController, AuthController, IdentityController, SiteController, StaffingController,
                 ClinicalController, DataQueryController, AccountabilityController, CostController,
-                BizdevController, FinanceController],
+                BizdevController, FinanceController, MonitorController],
   providers: [
     /* 池子必须能被关掉。`enableShutdownHooks()` 会调 `app.close()`，
        而 `app.close()` 只会去调 provider 的 onModuleDestroy ——
@@ -68,7 +70,7 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
     LoginDelivery, NotifyService,
     IdentityService, SiteService, StaffingService,
     ClinicalService, DataQueryService, AccountabilityService, CostService,
-    FeasibilityService, BidService, FinanceService,
+    FeasibilityService, BidService, FinanceService, MonitorService,
     /* 跨上下文装配：ClinicalOps 只认 ports.ts 里的接口，不 import CostService */
     { provide: VISIT_TIMESHEET_PORT, useExisting: CostService },
     { provide: APP_FILTER, useClass: ProblemFilter },

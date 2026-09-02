@@ -190,6 +190,9 @@ export interface Scenario {
   /** 数据质疑。**同一批行的另一个视角** —— 与 quality_event 里
    *  kind='query' 的那些是同一件东西，mock 里分开摆只是为了写得清楚。 */
   dataQueries: MockQuery[];
+  /** 监查访视。四个日期各有各的问题，压成一个"状态"就答不出
+   *  「为什么这个中心三个月没人管」。 */
+  monitorVisits: MockMonitorVisit[];
   /** 药品流水（I5）。在手数量是**算出来的**，所以这里不存那个数。 */
   ipMovements: {
     id: string; studySiteId: string; movedOn: string; kind: string;
@@ -354,6 +357,7 @@ export function makeScenario(): Scenario {
        于是没有人会发现它们其实没写对。 */
     qualityEvents: [...makeSaes(), ...makeQualityEvents()],
     dataQueries: makeDataQueries(),
+    monitorVisits: makeMonitorVisits(),
     ipMovements: makeIpMovements(),
     specimens: makeSpecimens(),
     timesheets: makeTimesheets(),
@@ -940,6 +944,89 @@ function makeDataQueries(): MockQuery[] {
         closedAt: new Date(Date.now() - 86_400_000).toISOString(),
         resolution: "回复合格，已核对源数据与补录的 AE"
       })
+  ];
+}
+
+export interface MockMonitorItem {
+  seq: number; task: string; doneAt: string | null; doneByName: string | null;
+}
+export interface MockMonitorVisit {
+  id: string; code: string;
+  studySiteId: string; siteCode: string; hospital: string; studyShortName: string;
+  kind: string; plannedOn: string;
+  monitorAccountId: string; monitorName: string;
+  days: number; state: string;
+  confirmedOn: string | null; performedOn: string | null; reportSubmittedOn: string | null;
+  sdvSamplePct: number | null; note: string | null;
+  items: MockMonitorItem[];
+}
+
+/** 监查访视。**每一条都在替一个分支站岗**：
+ *   · 两条已交报告的  —— 「上一次去是什么时候」要有答案；
+ *   · 一条去了没交的  —— MVR 欠账，原型里连一个状态都没有；
+ *   · 一条过了计划日还没去 —— 和上一条是**两个**不同的欠账；
+ *   · 一条待确认的    —— 中心那边还不知道我们要去；
+ *   · SS-14 一条都没有 —— 「一次都没监查过」不是「刚去过」。
+ *  编一批"都已排期、都在同一个中心"的数据，页面画得出来，
+ *  但一半的判断永远走不到。 */
+function makeMonitorVisits(): MockMonitorVisit[] {
+  const s1 = SITES[0]!, s2 = SITES[1]!;
+  const CRA: [string, string] = ["a-linmin", "林敏"];
+  /* plannedOn 已经是字符串了，而 shift() 收的是 Date —— 这里单独一个。 */
+  const back = (d: string, n: number) =>
+    new Date(Date.parse(d) - n * 86_400_000).toISOString().slice(0, 10);
+  const routine = [
+    "SDV：本期新增受试者源数据核对",
+    "试验用药品发放与回收记录清点",
+    "未关闭质量事件与数据质疑跟进"
+  ];
+  const mk = (
+    id: string, code: string, site: typeof SITES[number], kind: string,
+    plannedOn: string, state: string, days: number,
+    extra: Partial<MockMonitorVisit> = {},
+    tasks: { t: string; done: boolean }[] = routine.map(t => ({ t, done: true }))
+  ): MockMonitorVisit => ({
+    id, code,
+    studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+    studyShortName: "艾瑞替尼 III",
+    kind, plannedOn,
+    monitorAccountId: CRA[0], monitorName: CRA[1],
+    days, state,
+    confirmedOn: state === "proposed" ? null : back(plannedOn, 10),
+    performedOn: state === "done" || state === "reported" ? plannedOn : null,
+    reportSubmittedOn: null,
+    sdvSamplePct: null, note: null,
+    items: tasks.map((x, seq) => ({
+      seq, task: x.t,
+      doneAt: x.done ? `${plannedOn}T09:00:00.000Z` : null,
+      doneByName: x.done ? CRA[1] : null
+    })),
+    ...extra
+  });
+
+  return [
+    mk("mv1", "MV-2026-001", s1, "imv", shift(TODAY, -120), "reported", 1,
+      { reportSubmittedOn: shift(TODAY, -115), sdvSamplePct: 50 }),
+    mk("mv2", "MV-2026-002", s1, "imv", shift(TODAY, -50), "reported", 1,
+      { reportSubmittedOn: shift(TODAY, -44), sdvSamplePct: 50 }),
+    /* 去过了，报告压着 —— 最常见的欠账 */
+    mk("mv3", "MV-2026-003", s1, "imv", shift(TODAY, -21), "done", 2, {},
+      [{ t: "跟进 QI-2026-0155 SAE 上报 CAPA 执行证据", done: true },
+       { t: "核对试验用药品发放与回收记录，清点库存", done: false },
+       { t: "研究者文件夹（ISF）完整性检查表逐项过", done: false }]),
+    /* SS-07 上一次去还是五个多月前 —— **逾期未监查**那一格要有东西可挂。
+       它和"排了期没去"是两回事：那一条说的是这一次，这一条说的是这个中心。 */
+    mk("mv6", "MV-2026-006", s2, "imv", shift(TODAY, -160), "reported", 1,
+      { reportSubmittedOn: shift(TODAY, -152), sdvSamplePct: 100 }),
+    /* 排了期、也确认了，但计划日过了人还没去 —— 和上一条不是同一个问题 */
+    mk("mv4", "MV-2026-004", s2, "imv", shift(TODAY, -6), "scheduled", 2, {},
+      [{ t: "入组停滞根因访谈：PI 与研究护士各 30 分钟", done: false },
+       { t: "复核筛选失败日志，统计失败原因分布", done: false }]),
+    /* 待确认：中心那边还不知道我们要去 */
+    mk("mv5", "MV-2026-005", s2, "cov", shift(TODAY, 12), "proposed", 2, {},
+      [{ t: "全部受试者随访完成确认，末例出组日期锁定", done: false },
+       { t: "剩余药品回收销毁记录", done: false },
+       { t: "研究者文件夹归档移交清单", done: false }])
   ];
 }
 

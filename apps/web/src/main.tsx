@@ -46,6 +46,7 @@ import { ClientPage } from "./features/finance/ClientPage.js";
 import { CashPage } from "./features/finance/CashPage.js";
 import { QueryPage } from "./features/dataquery/QueryPage.js";
 import { DmPage } from "./features/dataquery/DmPage.js";
+import { MonPage } from "./features/oversight/MonPage.js";
 import { ComingSoon } from "./shell/ComingSoon.js";
 import { MODULES } from "./shell/modules.js";
 import { MOCK_ROLES, type MockRole } from "./mocks/roles.js";
@@ -91,7 +92,8 @@ const BUILT: Record<string, React.ReactElement> = {
   "/clients": <ClientPage />,
   "/cash": <CashPage />,
   "/queries": <QueryPage />,
-  "/dm": <DmPage />
+  "/dm": <DmPage />,
+  "/monitoring": <MonPage />
 };
 
 /* 45 个模块的路由。同一个路径被几个模块共用是正常的

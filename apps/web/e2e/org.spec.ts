@@ -23,19 +23,19 @@ test.describe("经营层：组织与权限", () => {
   });
 
   test("还没建的页有入口，点进去说得出它将来要回答什么", async ({ page }) => {
-    /* 挑一个**还没建**的模块。这条测试已经响过两次了：
-       先是「经营驾驶舱」建好，换成「合同变更」；合同变更也建好了，
-       现在换成「监查访视」。每一次它都红在"找不到 coming-soon"上，
+    /* 挑一个**还没建**的模块。这条测试已经响过三次了：
+       经营驾驶舱 → 合同变更 → 监查访视 → 现在是「立项与建档」。
+       每一次它都红在"找不到 coming-soon"上，
        报错看着像导航坏了，实际只是它盯的那一页交付了。
 
        **响是对的** —— 它是这条不变量的哨兵：
        「库里给了这个模块」和「界面上有这个入口」必须一致。
        建好一页却忘了从登记表里删 todo，这条同样会红。
        （nav.test.ts 里那条逐个点名的断言是它在单测一侧的对偶。） */
-    await page.getByRole("link", { name: "监查访视" }).click();
+    await page.getByRole("link", { name: "立项与建档" }).click();
     await expect(page.getByTestId("coming-soon")).toBeVisible();
     /* 不是一句"敬请期待" —— 说的是这一页该有什么 */
-    await expect(page.locator(".card")).toContainText("监查计划");
+    await expect(page.locator(".card")).toContainText("立项");
   });
 
   test("建号 → 台账里立刻有他 → 停用要理由", async ({ page }) => {

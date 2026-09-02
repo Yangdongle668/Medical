@@ -23,7 +23,7 @@ import { z } from "zod";
    ════════════════════════════════════════════════════════════════════ */
 
 export const ACTION_KEYS = [
-  "advance", "approve", "bid", "closeQ", "closeQA", "ethics", "manage",
+  "advance", "approve", "bid", "closeQ", "closeQA", "ethics", "manage", "monitor",
   "piConfirm", "raiseQ", "rateWrite", "subjRead", "subjWrite", "timeWrite"
 ] as const;
 
