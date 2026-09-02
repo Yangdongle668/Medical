@@ -1,6 +1,7 @@
 import { http, HttpResponse } from "msw";
 import { allEndpoints, SITE_STATES, DEFAULT_HANDOVER_ITEMS } from "@sitedesk/contracts";
-import { feasibilityScore, feasibilityBias, reviewBids, scopeCreep, changeDays }
+import { feasibilityScore, feasibilityBias, reviewBids, scopeCreep, changeDays,
+  arAging, cashFlow, roundCents, WORKDAYS_PER_MONTH, DAYS_PER_MONTH, type CashIn }
   from "@sitedesk/calc";
 import { siteRevenue, siteCost, siteMargin, CALC_VERSION,
   saeTimeliness, saeReportHours, type CostEntry } from "@sitedesk/calc";
@@ -8,7 +9,8 @@ import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
-import type { MockFeas, MockBid, MockChange } from "./scenario.js";
+import type { MockFeas, MockBid, MockChange, MockMilestone } from "./scenario.js";
+import { CLIENTS } from "./scenario.js";
 import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
   mkTimesheet, WORK_TYPE_META,
   type MockSubject, type MockPayment,
@@ -147,6 +149,9 @@ const notFoundSubject = () =>
 const daysBetween = (a: string, b: string) =>
   Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
 const todayStr = () => new Date().toISOString().slice(0, 10);
+/** 某个日期往后 n 天。**用 UTC 算** —— 本地时区在夏令时切换那两天会差一天。 */
+const shiftStr = (from: string, n: number) =>
+  new Date(Date.parse(from + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
 
 /** 按窗口关闭日升序 —— CRC 每天第一件事是看「今天谁到期」 */
 const byWindow = (a: MockVisit, b: MockVisit) => a.windowTo.localeCompare(b.windowTo);
@@ -970,6 +975,174 @@ export const scenarioHandlers = [
     return HttpResponse.json({ data: changeDto(c), sideEffects }, { status: 201 });
   }),
 
+  /* ── 里程碑 · 客户 · 现金流 ─────────────────────────────────── */
+  http.get(pathToRegExp("/v1/milestones/plan"), () =>
+    HttpResponse.json({ items: MS_PLAN })),
+
+  http.get(pathToRegExp("/v1/milestones/ar-aging"), () =>
+    HttpResponse.json(mask({
+      ...arAging(scenario.milestones
+        .filter(m => m.state === "invoiced")
+        .map(m => ({
+          amountCents: m.milestoneCents,
+          daysToDue: daysApart(todayStr(), m.dueOn!)
+        }))),
+      calcVersion: CALC_VERSION
+    }))),
+
+  http.get(pathToRegExp("/v1/milestones"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let rows = scenario.milestones.slice();
+    const state = q.getAll("state");
+    if (state.length) rows = rows.filter(m => state.includes(m.state));
+    if (q.get("receivableOnly") === "true")
+      rows = rows.filter(m => m.state === "invoiced");
+    if (q.get("overdueOnly") === "true")
+      rows = rows.filter(m =>
+        m.state === "invoiced" && daysApart(todayStr(), m.dueOn!) < 0);
+    /* **逾期最久的排最前，已回款的沉到最后** —— 与服务端同一条排序。 */
+    rows.sort((a, b) =>
+      Number(a.state === "paid") - Number(b.state === "paid")
+      || (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999")
+      || b.reachedOn.localeCompare(a.reachedOn));
+    return HttpResponse.json({ items: rows.map(msDto), nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/milestones/{id}:invoice"), ({ request }) => {
+    const id = seg(request.url, /\/milestones\/([^/:]+):invoice/);
+    const m = scenario.milestones.find(x => x.id === id);
+    if (!m) return HttpResponse.json(
+      problem("not-found", 404, "里程碑不存在"), { status: 404 });
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能开票"), { status: 403 });
+    if (m.state !== "pending") return HttpResponse.json(
+      problem("invariant-violated", 422, `${m.code} 已经开过票了`), { status: 422 });
+
+    /* 到期日 = 今天 + **客户账期**，算出来就固化 —— 客户之后改账期不回溯。 */
+    const terms = CLIENTS.find(c => c.name === m.clientName)?.paymentTermsDays ?? 60;
+    m.state = "invoiced";
+    m.invoicedOn = todayStr();
+    m.dueOn = shiftStr(todayStr(), terms);
+    return HttpResponse.json({
+      data: msDto(m),
+      sideEffects: [{ type: "MilestoneReached",
+        summary: `${m.code} 已开票，账期 ${terms} 天 —— ${m.dueOn} 到期`, ref: m.id }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/milestones/{id}:pay"), ({ request }) => {
+    const id = seg(request.url, /\/milestones\/([^/:]+):pay/);
+    const m = scenario.milestones.find(x => x.id === id);
+    if (!m) return HttpResponse.json(
+      problem("not-found", 404, "里程碑不存在"), { status: 404 });
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能登记回款"), { status: 403 });
+    if (m.state === "pending") return HttpResponse.json(
+      problem("invariant-violated", 422, `${m.code} 还没开票 —— 没有票的钱记不进来`),
+      { status: 422 });
+    /* **已回款的不能改回去** —— 钱到账是不可撤销的事实。 */
+    if (m.state === "paid") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${m.code} 已经登记过回款了 —— 钱到账是不可撤销的事实，写错了要走冲销`),
+      { status: 422 });
+
+    const late = daysApart(m.dueOn!, todayStr());
+    m.state = "paid";
+    m.paidOn = todayStr();
+    return HttpResponse.json({
+      data: msDto(m),
+      sideEffects: [{ type: "MilestoneReached",
+        summary: late > 0 ? `${m.code} 已回款，比约定晚了 ${late} 天` : `${m.code} 已回款`,
+        ref: m.id }]
+    }, { status: 201 });
+  }),
+
+  http.get(pathToRegExp("/v1/clients"), () =>
+    HttpResponse.json({
+      items: CLIENTS.map(c => {
+        const ms = scenario.milestones.filter(m => m.clientName === c.name);
+        const open = ms.filter(m => m.state === "invoiced");
+        return mask({
+          ...c,
+          paidCents: ms.filter(m => m.state === "paid")
+            .reduce((n, m) => n + m.milestoneCents, 0),
+          receivableCents: open.reduce((n, m) => n + m.milestoneCents, 0),
+          overdueCents: open
+            .filter(m => daysApart(todayStr(), m.dueOn!) < 0)
+            .reduce((n, m) => n + m.milestoneCents, 0),
+          /* 没有在途应收时是 null，不是 0。 */
+          meanArDays: open.length
+            ? open.reduce((n, m) => n + daysApart(m.invoicedOn!, todayStr()), 0) / open.length
+            : null
+        });
+      }),
+      nextCursor: null
+    })),
+
+  http.patch(pathToRegExp("/v1/clients/{id}"), async ({ request }) => {
+    const id = seg(request.url, /\/clients\/([^/?]+)/);
+    const b = await request.json() as
+      { paymentTermsDays?: number; note?: string | null };
+    const c = CLIENTS.find(x => x.id === id);
+    if (!c) return HttpResponse.json(
+      problem("not-found", 404, "客户不存在"), { status: 404 });
+    if (!identity().actions.includes("manage")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能改客户档案"), { status: 403 });
+    if (b.paymentTermsDays !== undefined) c.paymentTermsDays = b.paymentTermsDays;
+    if (b.note !== undefined) c.note = b.note;
+    /* **不动任何已开出去的票** —— 到期日在开票那一刻就固化了。 */
+    return HttpResponse.json(mask({ ...c,
+      paidCents: 0, receivableCents: 0, overdueCents: 0, meanArDays: null }));
+  }),
+
+  http.get(pathToRegExp("/v1/cash-forecast"), ({ request }) => {
+    const n = Number(new URL(request.url).searchParams.get("months") ?? 6);
+    const ins: CashIn[] = [];
+    let recordGapCents = 0, recordGapCount = 0;
+    for (const m of scenario.milestones) {
+      if (m.state === "paid") continue;
+      if (m.state === "invoiced" && m.dueOn) {
+        const d = daysApart(todayStr(), m.dueOn);
+        ins.push({
+          amountCents: m.milestoneCents,
+          month: Math.max(1, Math.ceil(d / DAYS_PER_MONTH)),
+          label: `${m.code} ${m.hospital} ${m.planLabel}`,
+          kind: d < 0 ? "overdue" : "invoiced"
+        });
+      } else {
+        /* 待开票：**它是已经发生的事实**（里程碑达成了），只是流程没走完。
+           所以进现金，但同时也是"记录缺口"要提醒的那一笔。 */
+        ins.push({
+          amountCents: m.milestoneCents, month: Math.min(3, n),
+          label: `${m.code} ${m.hospital} ${m.planLabel}（待开票）`, kind: "pending"
+        });
+        recordGapCents += m.milestoneCents; recordGapCount++;
+      }
+    }
+    /* 每月刚性支出：在职人力 × 现行费率 × 月均工作日。 */
+    const day = crcDayCost();
+    const heads = STAFF_LIST.filter(s => s.active);
+    const burn = roundCents(heads.length * day * WORKDAYS_PER_MONTH);
+    const t = todayStr();
+    const f = cashFlow(ins, burn, n, t.slice(0, 7), recordGapCents);
+    const toMonth = (m: typeof f.months[number]) => ({
+      month: m.month, inCents: m.inCents, outCents: m.outCents,
+      netCents: m.netCents, cumCents: m.cumCents,
+      items: m.items.map(i =>
+        ({ label: i.label, inflowCents: i.amountCents, kind: i.kind }))
+    });
+    return HttpResponse.json(mask({
+      months: f.months.map(toMonth),
+      burnCents: f.burnCents, headcount: heads.length,
+      troughCents: f.troughCents, troughMonth: f.troughMonth,
+      stress: {
+        months: f.stress.months.map(toMonth),
+        troughCents: f.stress.troughCents, troughMonth: f.stress.troughMonth
+      },
+      recordGapCents, recordGapCount, calcVersion: CALC_VERSION
+    }));
+  }),
+
   http.get(pathToRegExp("/v1/rate-cards"), () =>
     HttpResponse.json({
       items: scenario.rateCards.map(mask),
@@ -1349,6 +1522,32 @@ function changeDto(c: MockChange) {
     ...(settledCents !== null ? { settledCents } : {})
   });
 }
+
+/** 两个**日历日**之间相差几天。与服务端同一个式子。 */
+const daysApart = (a: string, b: string) =>
+  Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86_400_000);
+
+/** 一条里程碑。**逾期天数现算** —— 存下来的话，
+ *  这个 mock 每过一天就会和真库差一天。 */
+function msDto(m: MockMilestone) {
+  const open = m.state === "invoiced" && m.dueOn !== null;
+  const daysToDue = open ? daysApart(todayStr(), m.dueOn!) : null;
+  return mask({
+    ...m,
+    daysToDue,
+    /* 「没逾期」和「逾期 0 天」是两回事 —— 前者给 null。 */
+    overdueDays: daysToDue !== null && daysToDue < 0 ? -daysToDue : null
+  });
+}
+
+/** 里程碑计划表。与迁移 0031 的 milestone_plan 逐字同源。 */
+const MS_PLAN = [
+  { code: "contract", label: "合同签署",     ratio: 0.10, seq: 1 },
+  { code: "siv",      label: "中心启动 SIV", ratio: 0.15, seq: 2 },
+  { code: "half",     label: "入组过半",     ratio: 0.25, seq: 3 },
+  { code: "eighty",   label: "入组达成 80%", ratio: 0.25, seq: 4 },
+  { code: "closeout", label: "中心结题",     ratio: 0.25, seq: 5 }
+];
 
 /** 状态机顺序取自契约，不在 mock 里另立一份。 */
 const nextState = (cur: string) => SITE_STATES[SITE_STATES.indexOf(cur as never) + 1] ?? null;

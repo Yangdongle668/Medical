@@ -41,6 +41,9 @@ import { FeasPage } from "./features/bizdev/FeasPage.js";
 import { PricePage } from "./features/bizdev/PricePage.js";
 import { BidPage } from "./features/bizdev/BidPage.js";
 import { ChangePage } from "./features/bizdev/ChangePage.js";
+import { BillPage } from "./features/finance/BillPage.js";
+import { ClientPage } from "./features/finance/ClientPage.js";
+import { CashPage } from "./features/finance/CashPage.js";
 import { ComingSoon } from "./shell/ComingSoon.js";
 import { MODULES } from "./shell/modules.js";
 import { MOCK_ROLES, type MockRole } from "./mocks/roles.js";
@@ -81,7 +84,10 @@ const BUILT: Record<string, React.ReactElement> = {
   "/feas": <FeasPage />,
   "/price": <PricePage />,
   "/bid": <BidPage />,
-  "/change": <ChangePage />
+  "/change": <ChangePage />,
+  "/bill": <BillPage />,
+  "/clients": <ClientPage />,
+  "/cash": <CashPage />
 };
 
 /* 45 个模块的路由。同一个路径被几个模块共用是正常的

@@ -45,7 +45,8 @@ const STUDIES = grab("STUDIES"), SITES = grab("SITES"),
       SOA = grab("SOA"), SUBJ = grab("SUBJ"), FUNNEL = grab("FUNNEL"),
       DROPS = grab("DROPS"), QUERIES = grab("QUERIES"),
       RATE = grab("RATE"), WORKTYPES = grab("WORKTYPES"), TIMESHEET = grab("TIMESHEET"),
-      FEAS = grab("FEAS"), BIDS = grab("BIDS"), CHANGES = grab("CHANGES");
+      FEAS = grab("FEAS"), BIDS = grab("BIDS"), CHANGES = grab("CHANGES"),
+      MILES = grab("MILES"), CLIENT_META = grab("CLIENT_META");
 
 const q  = v => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const d  = v => (!v || v === "—") ? "NULL" : `'${v}'`;
@@ -112,13 +113,29 @@ for (const g of GROUPS)
       ` WHERE code = ${q(g.id)};`);
 P(``);
 
+/* ── 客户 ── */
+P(`-- ── 客户（申办方） ──────────────────────────────────────────`);
+P(`-- 0004 的 sponsor_name 在 0031 变成了 client_id —— 那句"届时改为 FK"到期了。`);
+P(`-- 账期是现金流预测里最要紧的一个数：月结 45 天和 90 天差一个半月进账。`);
+/* 原型的 pay 写作「月结 60 天」；库里存整数天数 —— 界面上要按它算到期日，
+   而"月结 60 天"这种串每次都要重新解析一遍。 */
+const payDays = t => { const m = /(\d+)/.exec(t || ""); return m ? Number(m[1]) : 60; };
+const SPONSORS = [...new Set(STUDIES.map(x => x.sponsor))];
+for (const sp of SPONSORS) {
+  const m = CLIENT_META[sp] || {};
+  P(`INSERT INTO client (id, name, since_year, contact, payment_terms_days, nps, note)` +
+    ` VALUES ('${uuid5("client:"+sp)}', ${q(sp)}, ${m.since ? Number(m.since) : "NULL"}, ` +
+    `${q(m.contact)}, ${payDays(m.pay)}, ${m.nps ?? "NULL"}, ${q(m.note)});`);
+}
+P(``);
+
 /* ── 项目与中心 ── */
 P(`-- ── 项目 ────────────────────────────────────────────────────`);
 P(`-- 金额一律以「分」存 bigint；原型的万元数值在此换算（见迁移 0006）。`);
 for (const s of STUDIES)
-  P(`INSERT INTO study (id, code, short_name, sponsor_name, phase, indication,` +
+  P(`INSERT INTO study (id, code, short_name, client_id, phase, indication,` +
     ` planned_subjects, contract_amount_cents, started_on, ends_on) VALUES (` +
-    `'${uuid5("study:"+s.id)}', ${q(s.id)}, ${q(s.short)}, ${q(s.sponsor)}, ${q(s.phase)}, ` +
+    `'${uuid5("study:"+s.id)}', ${q(s.id)}, ${q(s.short)}, '${uuid5("client:"+s.sponsor)}', ${q(s.phase)}, ` +
     `${q(s.indication)}, ${s.planned}, ${cents(s.contract)}, '${s.start}-01', '${s.end}-01');`);
 P(``);
 P(`-- ── 分组承接项目：PM 行范围的来源 ────────────────────────────`);
@@ -569,6 +586,44 @@ CHANGES.forEach(c => {
 });
 P(``);
 
+P(`-- ── 里程碑：达成 → 开票 → 回款 ───────────────────────────────`);
+P(`-- 只记**已达成**的。未来的里程碑是从入组速度推出来的预测，不落库 ——`);
+P(`-- 预测混进台账会凭空造出现金流，而那正是现金流预测最容易骗人的地方。`);
+const MS_CODE = { "合同签署": "contract", "中心启动 SIV": "siv", "入组过半": "half",
+  "入组达成 80%": "eighty", "中心结题": "closeout" };
+/* 原型的 inv 是中文串 + 一个 paid 布尔，两者有冗余（"已回款" 必然 paid）。
+   库里收敛成一个三态：pending / invoiced / paid。 */
+const MS_STATE = m => m.paid ? "paid" : m.inv === "已开票" ? "invoiced" : "pending";
+let msRows = 0;
+MILES.forEach(m => {
+  const st = MS_STATE(m);
+  /* 开票日：原型只给了到期日。按客户账期倒推 —— 到期日减账期。
+     它是推出来的，不是记录下来的，和别处一样在注释里说明。 */
+  const site = SITES.find(x => x.id === m.ss);
+  const sponsor = site ? STUDIES.find(x => x.id === site.sid)?.sponsor : null;
+  const terms = payDays((CLIENT_META[sponsor] || {}).pay);
+  const dueOn = m.due && m.due !== "—" ? m.due : null;
+  /* 到期日减账期。**再和达成日取较晚的那个** ——
+     原型的 due 有几条只比 hit 晚 60 天，而那个客户的账期是 90 天，
+     直接倒推会把开票日算到达成日之前。开不出那样的票，
+     库里的 milestone_dates 约束也不让（它挡住的正是这种编造）。 */
+  const invOn = st === "pending" ? null
+    : dueOn
+      ? [new Date(new Date(dueOn).getTime() - terms * 864e5).toISOString().slice(0, 10),
+         m.hit].sort().at(-1)
+      : m.hit;
+  /* 回款日：已回款的按到期日当天记 —— 原型没有这一栏，
+     而"回款日必须不早于开票日"这条约束需要一个值。 */
+  const paidOn = st === "paid" ? (dueOn ?? m.hit) : null;
+  P(`INSERT INTO milestone (id, code, study_site_id, plan_code, amount_cents,` +
+    ` reached_on, state, invoiced_on, due_on, paid_on) VALUES (` +
+    `'${uuid5("ms:"+m.id)}', ${q(m.id)}, '${uuid5("site:"+m.ss)}', ` +
+    `${q(MS_CODE[m.name])}, ${cents(m.amt)}, ${d(m.hit)}, ${q(st)}, ` +
+    `${d(invOn)}, ${d(st === "pending" ? null : dueOn ?? m.hit)}, ${d(paidOn)});`);
+  msRows++;
+});
+P(``);
+
 P(`-- ── 合同条款：筛败费率与管理分摊（原型里是两个写死的常量） ─────`);
 P(`UPDATE study SET screen_fail_fee_rate = 0.350, overhead_rate = ${RATE.overhead};`);
 P(``);
@@ -610,4 +665,4 @@ console.log(`db/seeds/001_demo.sql 已生成（${L.length} 行）` +
   `｜角色 ${Object.keys(ROLE_DEF).length} · 账号 ${USERS.length} · 分组 ${GROUPS.length}` +
   ` · 项目 ${STUDIES.length} · 中心 ${SITES.length} · 受试者 ${subjRows} · 访视 ${visitRows}` +
   ` · 费率卡 ${RATES.length} · 工时 ${tsRows} · 可行性 ${feasRows}` +
-  ` · 投标 ${bidRows} · 变更 ${chgRows}`);
+  ` · 投标 ${bidRows} · 变更 ${chgRows} · 客户 ${SPONSORS.length} · 里程碑 ${msRows}`);

@@ -49,6 +49,14 @@ const RULES = [
          "后者是最省事的写法，也是最贵的"
   },
   {
+    scope: "apps/api/src/modules/finance",
+    forbid: [/modules\/identity\//, /modules\/clinical\//, /modules\/site\//,
+             /modules\/cost\//, /modules\/bizdev\//],
+    why: "钱那一层（里程碑 · 客户 · 现金流）同样不 import 别的上下文的服务。" +
+         "它要项目、中心、人员的数就读同一个库 —— 那是有意的：" +
+         "跨上下文的耦合一旦从 SQL 变成 import，就再也拆不开了"
+  },
+  {
     scope: "packages/calc",
     forbid: [/^node:/, /^pg$/, /^fs$/, /^express$/, /^@nestjs\//, /^\.\.\/\.\.\/apps\//],
     why: "计算引擎必须是纯函数 —— 前后端共用同一份口径，且能被穷举测试"

@@ -203,6 +203,7 @@ export interface Scenario {
   feasibility: MockFeas[];
   bids: MockBid[];
   changes: MockChange[];
+  milestones: MockMilestone[];
 }
 
 
@@ -356,6 +357,7 @@ export function makeScenario(): Scenario {
     feasibility: mkFeas(),
     bids: mkBids(),
     changes: mkChanges(),
+    milestones: mkMilestones(),
     siteState: Object.fromEntries(SITES.map(s => [s.id, s.state])),
     sivPlannedOn: SIV_PLANNED,
     sivOn: {}, fpiOn: {},
@@ -633,6 +635,74 @@ export function mkChanges(): MockChange[] {
       personDaysImpact: 0.8, perSubject: true, affectedSubjects: 143,
       amountCents: null, status: "rejected", decidedOn: "2026-04-13",
       note: "申办方认为属安全性义务，不追加费用" }
+  ];
+}
+
+/** 客户。**账期各不相同是有意的** —— 现金流那一页的到期日全从它算，
+ *  四家都是 60 天的话，「月结 45 天和 90 天差一个半月」那句话演不出来。 */
+export interface MockClient {
+  id: string; name: string; sinceYear: number | null; contact: string | null;
+  paymentTermsDays: number; nps: number | null; note: string | null;
+  studyCount: number; siteCount: number; enrolled: number; plannedSubjects: number;
+  contractCents: number;
+}
+export const CLIENTS: MockClient[] = [
+  { id: "cl1", name: "华拓生物", sinceYear: 2021, contact: "临床运营部 · 邵敏",
+    paymentTermsDays: 60, nps: 8, note: "合作最久，付款守约，但压价最狠",
+    studyCount: 1, siteCount: 2, enrolled: 24, plannedSubjects: 240,
+    contractCents: 1860_0000_00 },
+  /* 账期 90 天的那一家 —— 「下次报价要把资金成本算进去」那条提示要有对象。 */
+  { id: "cl2", name: "安泰医药", sinceYear: 2024, contact: "医学部 · 骆一鸣",
+    paymentTermsDays: 90, nps: 6, note: "账期长，两笔逾期均出自这里",
+    studyCount: 1, siteCount: 1, enrolled: 8, plannedSubjects: 96,
+    contractCents: 920_0000_00 }
+];
+
+/** 里程碑。**四条覆盖三种状态 + 两档逾期**：
+ *   · 待开票      —— 「达成了没开票」那一格（记录缺口）
+ *   · 已开票未逾期
+ *   · 逾期 38 天  —— 一般逾期
+ *   · 逾期 94 天  —— 超过 60 天，「不再是催收问题」
+ *  再加一条已回款的，好让"已回款沉到最后"看得出来。 */
+export interface MockMilestone {
+  id: string; code: string; studySiteId: string; siteCode: string; hospital: string;
+  study: { id: string; code: string; shortName: string };
+  clientName: string; planCode: string; planLabel: string;
+  milestoneCents: number; reachedOn: string;
+  state: "pending" | "invoiced" | "paid";
+  invoicedOn: string | null; dueOn: string | null; paidOn: string | null;
+  note: string | null;
+}
+export function mkMilestones(): MockMilestone[] {
+  const st = { id: "st1", code: "HJ-2024-017", shortName: "艾瑞替尼 III" };
+  const at = (i: number) => ({
+    studySiteId: SITES[i]!.id, siteCode: SITES[i]!.code, hospital: SITES[i]!.hospital
+  });
+  const d = (n: number) => shift(TODAY, n);
+  return [
+    { id: "ms1", code: "M-046", ...at(2), study: st, clientName: "华拓生物",
+      planCode: "contract", planLabel: "合同签署", milestoneCents: 8_5000_00,
+      reachedOn: d(-2), state: "pending",
+      invoicedOn: null, dueOn: null, paidOn: null,
+      note: "中心刚签，还没走开票流程" },
+    { id: "ms2", code: "M-041", ...at(0), study: st, clientName: "华拓生物",
+      planCode: "eighty", planLabel: "入组达成 80%", milestoneCents: 42_0000_00,
+      reachedOn: d(-10), state: "invoiced",
+      invoicedOn: d(-10), dueOn: d(50), paidOn: null, note: null },
+    { id: "ms3", code: "M-035", ...at(1), study: st, clientName: "安泰医药",
+      planCode: "eighty", planLabel: "入组达成 80%", milestoneCents: 38_6000_00,
+      reachedOn: d(-128), state: "invoiced",
+      invoicedOn: d(-128), dueOn: d(-38), paidOn: null, note: null },
+    /* 逾期 94 天 —— 超过 60 天那条线 */
+    { id: "ms4", code: "M-026", ...at(1), study: st, clientName: "安泰医药",
+      planCode: "half", planLabel: "入组过半", milestoneCents: 33_6000_00,
+      reachedOn: d(-184), state: "invoiced",
+      invoicedOn: d(-184), dueOn: d(-94), paidOn: null,
+      note: "催过两次，对方称在走内部流程" },
+    { id: "ms5", code: "M-018", ...at(0), study: st, clientName: "华拓生物",
+      planCode: "half", planLabel: "入组过半", milestoneCents: 40_6000_00,
+      reachedOn: d(-212), state: "paid",
+      invoicedOn: d(-212), dueOn: d(-152), paidOn: d(-150), note: null }
   ];
 }
 

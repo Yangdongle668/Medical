@@ -76,10 +76,8 @@ export const MODULES: ModuleDef[] = [
   { key: "sites", title: "项目 · 中心台账", group: "经营", path: "/sites" },
   { key: "enr", title: "入组进度", group: "经营", path: "/enr" },
   { key: "screen", title: "筛选漏斗与筛败", group: "经营", path: "/screen" },
-  { key: "client", title: "客户", group: "经营", path: "/clients",
-    todo: "申办方档案：在手项目、累计合同额、回款情况。" },
-  { key: "cash", title: "现金流预测", group: "经营", path: "/cash",
-    todo: "未来六个月的收支预测，累计为负的月份要红。" },
+  { key: "client", title: "客户", group: "经营", path: "/clients" },
+  { key: "cash", title: "现金流预测", group: "经营", path: "/cash" },
 
   /* ── 商务 ─────────────────────────────────────────────────────── */
   { key: "feas", title: "中心可行性调查", group: "商务", path: "/feas" },
@@ -94,8 +92,7 @@ export const MODULES: ModuleDef[] = [
 
   /* ── 财务 ─────────────────────────────────────────────────────── */
   { key: "pnl", title: "成本与毛利", group: "财务", path: "/pnl" },
-  { key: "bill", title: "里程碑 · 结算", group: "财务", path: "/bill",
-    todo: "合同里程碑的达成与开票状态，逾期未收的排在前面。" },
+  { key: "bill", title: "里程碑 · 结算", group: "财务", path: "/bill" },
 
   /* ── 质量 ─────────────────────────────────────────────────────── */
   { key: "qa", title: "质量事件与 CAPA", group: "质量", path: "/quality" },

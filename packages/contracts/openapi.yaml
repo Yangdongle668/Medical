@@ -1772,6 +1772,319 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/cash-forecast:
+    get:
+      operationId: getCashForecast
+      tags:
+        - finance
+      summary: 现金流预测
+      description: |-
+        **系统此前只有后视镜。** 收入按已入组的例数确认、成本按已填的工时 ——两者都只回答「已经发生了什么」。
+
+        而现金是另一回事：人力成本每月刚性支出，回款是里程碑制 + 账期。
+        一个毛利率 30% 的项目，完全可能在第四个月付不出工资。
+
+        三样东西必须分开给，混起来这套数就开始骗人：
+        · **已开票未回款** —— 按到期日落月；
+        · **预计达成** —— 按入组速度推，达成月 + 账期；
+        · **记录缺口**（已达成但没进开票队列）—— **单列，不进现金**。它不是未来收入，钱本来就该收到了。
+
+        另给一份压力情景：逾期的再拖 3 个月、预计的延后 1 个月。不是悲观 —— 逾期之所以逾期，恰恰是因为对方还没打算付。
+      x-layer: L1
+      parameters:
+        - name: months
+          in: query
+          required: false
+          description: 默认 6
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+      responses:
+        '200':
+          description: 现金流预测
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashForecast'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/clients:
+    get:
+      operationId: listClients
+      tags:
+        - finance
+      summary: 客户档案
+      description: |-
+        申办方。**比「单中心毛利」更上位的切片** ——
+        「这个客户欠了我们多少、平均拖多久、在手几个项目」是按项目切看不出来的。
+
+        这也是把 `study.sponsor_name` 从字符串升成一张表的理由（见迁移 0031）：按字符串分组算这些数，一次拼写不一致就够毁掉那个数。
+        对外部方整表关闭 —— 账期、联系人、关系评分都是商业信息。
+      x-layer: L1
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        '200':
+          description: 客户档案
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListClientsResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/clients/{id}:
+    patch:
+      operationId: updateClient
+      tags:
+        - finance
+      summary: 改客户档案
+      description: '**账期改了不回溯历史发票** —— 已开出去的票，到期日在开票那一刻就固化了。'
+      x-layer: L1
+      x-required-action: manage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 幂等键（uuid）。可选；带上之后 24 小时内重放同一键返回首次结果，离线重放因此不会写两笔。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClientRequest'
+      responses:
+        '200':
+          description: 改客户档案
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/contract-changes:
     get:
       operationId: listContractChanges
@@ -3541,6 +3854,582 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Principal'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/milestones:
+    get:
+      operationId: listMilestones
+      tags:
+        - finance
+      summary: 里程碑 · 结算
+      description: |-
+        达成 → 开票 → 回款。**只有已达成的在这张表上** —— 未来的里程碑是从入组速度推出来的预测，在现金流那一页，不在台账里。
+
+        默认按**逾期最久**排：一笔挂了 94 天的应收，比今天刚达成的那笔紧急得多。
+        金额受 `price` 列权限管辖；对外部方整表关闭 —— 一个中心收了多少钱，医院不该从我们这里看到。
+      x-layer: L1
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: studySiteId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: studyId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: clientId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/MilestoneState'
+        - name: receivableOnly
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
+        - name: overdueOnly
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
+      responses:
+        '200':
+          description: 里程碑 · 结算
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListMilestonesResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/milestones/{id}:invoice:
+    post:
+      operationId: invoiceMilestone
+      tags:
+        - finance
+      summary: 开票
+      description: |-
+        到期日由**客户的账期**算出来并落库固化 —— 客户之后改账期，历史发票的到期日不该跟着变。
+        开票日不得早于达成日：开不出那样的票（库里的 CHECK 也不让）。
+      x-layer: L2
+      x-required-action: bid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceMilestoneRequest'
+      responses:
+        '200':
+          description: 开票
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceMilestoneResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/milestones/{id}:pay:
+    post:
+      operationId: payMilestone
+      tags:
+        - finance
+      summary: 登记回款
+      description: 回款日不得早于开票日。**已回款的不能改回去** —— 钱到账是一件不可撤销的事实，写错了要走冲销，不是改状态。
+      x-layer: L2
+      x-required-action: bid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayMilestoneRequest'
+      responses:
+        '200':
+          description: 登记回款
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayMilestoneResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/milestones/ar-aging:
+    get:
+      operationId: getArAging
+      tags:
+        - finance
+      summary: 应收账龄
+      description: |-
+        **逾期占比比绝对额有用**：500 万里逾期 50 万，和 80 万里逾期 50 万，是两种完全不同的处境。两者都给。
+        逾期超过 60 天的单独算 —— 那不再是催收问题。
+      x-layer: L1
+      parameters:
+        - name: clientId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        '200':
+          description: 应收账龄
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArAging'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/milestones/plan:
+    get:
+      operationId: getMilestonePlan
+      tags:
+        - finance
+      summary: 里程碑计划
+      description: 合同额按什么比例分段收。**五段之和必须是 1**，由库里的断言保证 ——加一段忘了调别的，收入会凭空多出来一截，而没有任何地方会红。
+      x-layer: L1
+      parameters: []
+      responses:
+        '200':
+          description: 里程碑计划
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetMilestonePlanResponse'
         '401':
           description: 未认证
           content:
@@ -13440,6 +14329,420 @@ components:
         - coverage
         - calcVersion
       additionalProperties: false
+    MilestoneState:
+      type: string
+      enum:
+        - pending
+        - invoiced
+        - paid
+      description: 待开票 → 已开票 → 已回款
+    MilestonePlanItem:
+      type: object
+      properties:
+        code:
+          type: string
+        label:
+          type: string
+        ratio:
+          type: number
+          minimum: 0
+          maximum: 1
+        seq:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+      required:
+        - code
+        - label
+        - ratio
+        - seq
+      additionalProperties: false
+      description: 合同额按什么比例分段收。签约 10% · SIV 15% · 过半 25% · 80% 25% · 结题 25%
+    Milestone:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        hospital:
+          type: string
+        study:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+              pattern: >-
+                ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            code:
+              type: string
+              minLength: 1
+              maxLength: 64
+              pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+            shortName:
+              type: string
+          required:
+            - id
+            - code
+            - shortName
+          additionalProperties: false
+        clientName:
+          type: string
+        planCode:
+          type: string
+        planLabel:
+          type: string
+        milestoneCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        reachedOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        state:
+          $ref: '#/components/schemas/MilestoneState'
+        invoicedOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        dueOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        paidOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        daysToDue:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        overdueDays:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        note:
+          nullable: true
+          type: string
+      required:
+        - id
+        - code
+        - studySiteId
+        - siteCode
+        - hospital
+        - study
+        - clientName
+        - planCode
+        - planLabel
+        - reachedOn
+        - state
+        - invoicedOn
+        - dueOn
+        - paidOn
+        - daysToDue
+        - overdueDays
+        - note
+      additionalProperties: false
+      description: |-
+        达成 → 开票 → 回款。只记已达成的。
+        「达成了但没开票」是这张表最要盯的一格 —— 那不是未来收入，是记录缺口：钱本来就该收到了，只是没人去开票。
+    ArAging:
+      type: object
+      properties:
+        totalCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        overdueCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        longOverdueCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        count:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        overdueCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        meanOverdueDays:
+          nullable: true
+          type: number
+        overdueShare:
+          nullable: true
+          type: number
+          minimum: 0
+          maximum: 1
+        calcVersion:
+          type: string
+      required:
+        - count
+        - overdueCount
+        - meanOverdueDays
+        - overdueShare
+        - calcVersion
+      additionalProperties: false
+    Client:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        name:
+          type: string
+        sinceYear:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        contact:
+          nullable: true
+          type: string
+        paymentTermsDays:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        nps:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        note:
+          nullable: true
+          type: string
+        studyCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        siteCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        enrolled:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        plannedSubjects:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        contractCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        paidCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        receivableCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        overdueCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        meanArDays:
+          nullable: true
+          type: number
+      required:
+        - id
+        - name
+        - sinceYear
+        - contact
+        - paymentTermsDays
+        - nps
+        - note
+        - studyCount
+        - siteCount
+        - enrolled
+        - plannedSubjects
+        - meanArDays
+      additionalProperties: false
+      description: 申办方。比「单中心毛利」更上位的切片 —— 「这个客户欠了我们多少、平均拖多久」是按项目切看不出来的。
+    CashInKind:
+      type: string
+      enum:
+        - invoiced
+        - overdue
+        - pending
+        - forecast
+      description: |-
+        已开票 / 已开票且逾期 / 待开票 / 预计达成。
+        决定它在压力情景里被推迟多久：逾期推 3 个月（它之所以逾期，恰恰是因为对方还没打算付），预计推 1 个月，其余不推。
+    CashItem:
+      type: object
+      properties:
+        label:
+          type: string
+        inflowCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        kind:
+          $ref: '#/components/schemas/CashInKind'
+      required:
+        - label
+        - kind
+      additionalProperties: false
+    CashMonth:
+      type: object
+      properties:
+        month:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+        inCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        outCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        netCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: -1000000000000
+          maximum: 1000000000000
+        cumCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: -1000000000000
+          maximum: 1000000000000
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashItem'
+      required:
+        - month
+        - items
+      additionalProperties: false
+    CashForecast:
+      type: object
+      properties:
+        months:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashMonth'
+        burnCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        headcount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        troughCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: -1000000000000
+          maximum: 1000000000000
+        troughMonth:
+          nullable: true
+          type: string
+        stress:
+          type: object
+          properties:
+            months:
+              type: array
+              items:
+                $ref: '#/components/schemas/CashMonth'
+            troughCents:
+              x-gated-by: price
+              description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+              type: integer
+              minimum: -1000000000000
+              maximum: 1000000000000
+            troughMonth:
+              nullable: true
+              type: string
+          required:
+            - months
+            - troughMonth
+          additionalProperties: false
+        recordGapCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 1000000000000
+        recordGapCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        calcVersion:
+          type: string
+      required:
+        - months
+        - headcount
+        - troughMonth
+        - stress
+        - recordGapCount
+        - calcVersion
+      additionalProperties: false
+      description: |-
+        未来几个月：预计回款 vs 刚性支出。
+        **记录缺口单列**，因为把它算成未来收入会凭空造出现金流，而且是在最不该乐观的那个月。
     ListAccountsResponse:
       type: object
       properties:
@@ -13753,6 +15056,49 @@ components:
         - data
         - sideEffects
       additionalProperties: false
+    ListClientsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Client'
+        nextCursor:
+          nullable: true
+          description: null 表示已到末页
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+        - items
+        - nextCursor
+      additionalProperties: false
+    UpdateClientRequest:
+      type: object
+      properties:
+        sinceYear:
+          nullable: true
+          type: integer
+          minimum: 1980
+          maximum: 2200
+        contact:
+          nullable: true
+          type: string
+          maxLength: 120
+        paymentTermsDays:
+          type: integer
+          minimum: 0
+          maximum: 365
+        nps:
+          nullable: true
+          type: integer
+          minimum: 0
+          maximum: 10
+        note:
+          nullable: true
+          type: string
+          maxLength: 1000
+      additionalProperties: false
     ListContractChangesResponse:
       type: object
       properties:
@@ -14058,6 +15404,87 @@ components:
       required:
         - data
         - sideEffects
+      additionalProperties: false
+    ListMilestonesResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Milestone'
+        nextCursor:
+          nullable: true
+          description: null 表示已到末页
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+        - items
+        - nextCursor
+      additionalProperties: false
+    InvoiceMilestoneRequest:
+      type: object
+      properties:
+        invoicedOn:
+          description: 默认今天
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        note:
+          type: string
+          maxLength: 500
+      additionalProperties: false
+    InvoiceMilestoneResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Milestone'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    PayMilestoneRequest:
+      type: object
+      properties:
+        paidOn:
+          description: 默认今天
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        note:
+          type: string
+          maxLength: 500
+      additionalProperties: false
+    PayMilestoneResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Milestone'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    GetMilestonePlanResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MilestonePlanItem'
+      required:
+        - items
       additionalProperties: false
     ListPnlResponse:
       type: object

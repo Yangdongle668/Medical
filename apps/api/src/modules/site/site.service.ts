@@ -69,7 +69,12 @@ export class SiteService {
       id: string; code: string; short_name: string; sponsor_name: string; phase: string;
       indication: string; planned_subjects: number; contract_amount_cents: number;
       started_on: Date | null; ends_on: Date | null;
-    }>(`SELECT st.* FROM study st WHERE ${where} ORDER BY st.code LIMIT $${params.length}`, params);
+      /* sponsorName 从 client join 出来 —— 0031 把 study.sponsor_name
+         换成了 client_id（0004 的注释预告过这一步）。
+         契约里那一栏没变：它是**显示名**，只是现在只有一个来源了。 */
+    }>(`SELECT st.*, cl.name AS sponsor_name
+          FROM study st JOIN client cl ON cl.id = st.client_id
+         WHERE ${where} ORDER BY st.code LIMIT $${params.length}`, params);
     const items = rows.slice(0, limit).map(r => ({
       id: r.id, code: r.code, shortName: r.short_name, sponsorName: r.sponsor_name,
       phase: r.phase, indication: r.indication, plannedSubjects: r.planned_subjects,

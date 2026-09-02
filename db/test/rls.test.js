@@ -110,9 +110,15 @@ describe("租户维度（当前单租户，但列与策略已就位）", () => {
     await o.query("BEGIN");
     try {
       await o.query("INSERT INTO tenant (id, code, name) VALUES ($1,'other','另一家 CRO')", [T2]);
-      const st = await o.query(`INSERT INTO study (tenant_id, code, short_name, sponsor_name,
+      /* 0031 起 sponsor 是一张表：客户也要跟着建在**那个租户**下 ——
+         建在本租户下的话，这条测试会在"他家项目挂着我家客户"上悄悄通过，
+         而那正好是租户隔离要防的事。 */
+      const cl = await o.query(`INSERT INTO client (tenant_id, name)
+        VALUES ($1,'他家申办方') RETURNING id`, [T2]);
+      const st = await o.query(`INSERT INTO study (tenant_id, code, short_name, client_id,
         phase, indication, planned_subjects, contract_amount_cents)
-        VALUES ($1,'XX-9999','他家项目','他家申办方','I期','X',10,100000000) RETURNING id`, [T2]);
+        VALUES ($1,'XX-9999','他家项目',$2,'I期','X',10,100000000) RETURNING id`,
+        [T2, cl.rows[0].id]);
       await o.query(`INSERT INTO study_site (tenant_id, study_id, code, hospital, dept, city,
         pi_name, contracted, unit_price_cents)
         VALUES ($1,$2,'ZZ-99','他家医院','科','城','某某',10,1000000)`, [T2, st.rows[0].id]);
