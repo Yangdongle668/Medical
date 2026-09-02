@@ -189,11 +189,26 @@ function classify(d: Doc): Map<string, Role> {
 }
 const ROLE = classify(C);
 
-function cmp(name: string, o: Schema, c: Schema, at = "") {
+/** 把 $ref 展开成它指向的 schema。 */
+const deref = (d: Doc, s: Schema): Schema =>
+  s.$ref ? (d.components?.schemas?.[s.$ref.split("/").pop()!] ?? s) : s;
+
+function cmp(name: string, o0: Schema, c0: Schema, at = "") {
   const where = `${name}${at}`;
   const role = ROLE.get(name) ?? "both";
   const isReq = role === "request" || role === "both";
   const isRes = role === "response" || role === "both";
+
+  /* **内联枚举抽成 $ref（或反过来）能同时逃过下面两条门**：
+     枚举那一条要求两边都有 `enum`，引用那一条要求两边都有 `$ref`。
+     于是「把枚举抽出去，顺手加一个取值」一条都不报 ——
+     而这正是一次真实的漏网：raisedBy 从内联的四个取值变成
+     QualityRaisedBy 的五个，门禁只说了句"新增 schema"。
+     只在**一侧**是 $ref 时展开；两侧都是的情况下一行就比出来了，
+     展开反而会在递归 schema 上绕不出来。 */
+  const [o, c] = (!!o0.$ref !== !!c0.$ref)
+    ? [deref(B, o0), deref(C, c0)]
+    : [o0, c0];
 
   if (o.type && c.type && o.type !== c.type)
     breaking.push(`${where} 类型变更：${o.type} → ${c.type}`);

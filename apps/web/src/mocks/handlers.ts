@@ -5,11 +5,13 @@ import { feasibilityScore, feasibilityBias, reviewBids, scopeCreep, changeDays,
   from "@sitedesk/calc";
 import { siteRevenue, siteCost, siteMargin, CALC_VERSION,
   saeTimeliness, saeReportHours, type CostEntry } from "@sitedesk/calc";
+import { queryLoad, siteQueryDensity, densityVerdict, QUERY_STALE_DAYS }
+  from "@sitedesk/calc";
 import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
-import type { MockFeas, MockBid, MockChange, MockMilestone } from "./scenario.js";
+import type { MockFeas, MockBid, MockChange, MockMilestone, MockQuery } from "./scenario.js";
 import { CLIENTS } from "./scenario.js";
 import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
   mkTimesheet, WORK_TYPE_META,
@@ -96,6 +98,24 @@ function inScope<T extends { studySiteId?: string; siteCode?: string }>(xs: T[])
     : true);
 }
 
+
+/** 看得见的数据质疑。**外部方一条都没有** ——
+ *  行策略上就关掉了（迁移 0032），不是靠"没有这个模块"挡着。 */
+function visibleQueries() {
+  if (identity().isExternal) return [];
+  return inScope(scenario.dataQueries);
+}
+
+/** 按 id 取一条质疑，顺带把"范围外 = 不存在"这条统一掉。 */
+function findQuery(url: string, re: RegExp):
+  { q: MockQuery } | { problem: Response } {
+  const id = seg(url, re);
+  const q = visibleQueries().find(x => x.id === id);
+  return q ? { q } : { problem: HttpResponse.json(
+    problem("not-found", 404, "数据质疑不存在"), { status: 404 }) };
+}
+
+const TODAY_STR = new Date().toISOString().slice(0, 10);
 
 const me = () => {
   const r = identity();
@@ -565,6 +585,200 @@ export const scenarioHandlers = [
       { status: 422 });
     q.state = "closed";
     return HttpResponse.json({ data: q, sideEffects: [] }, { status: 201 });
+  }),
+
+  /* ── 数据质疑 ────────────────────────────────────────────────────
+     **外部方一条都看不到。** 这不是"外部方没有这个模块"那种柔性隔离 ——
+     行策略上直接关掉（迁移 0032），因为机构办是外部的质量反馈闭环、
+     DM 是内部的数据质量闭环，混在一起的后果不是多几行，而是
+     机构质控页上「本院未关闭质量事件」这个数会把 EDC 质疑也算进去。 */
+  http.get(pathToRegExp("/v1/data-queries"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = visibleQueries();
+    const states = q.getAll("state");
+    if (states.length) items = items.filter(x => states.includes(x.state));
+    if (q.get("mine") === "true")
+      items = items.filter(x => x.ownerAccountId === identity().id);
+    /* 真接口按 raised_by_account 比对；mock 的行上没存账号 id，
+       按姓名比是它的近似。**不要把这条当成规则本身** —— 规则在服务端。 */
+    if (q.get("raisedByMe") === "true")
+      items = items.filter(x => x.raisedByName === identity().name);
+    if (q.get("staleOnly") === "true")
+      items = items.filter(x => x.state === "open" && x.ageDays > QUERY_STALE_DAYS);
+    /* 挂得最久的排最前 —— 与服务端同一条排序。 */
+    items = [...items].sort((a, b) => b.ageDays - a.ageDays || a.code.localeCompare(b.code));
+    return HttpResponse.json({ items: items.map(mask), nextCursor: null });
+  }),
+
+  http.get(pathToRegExp("/v1/data-queries/stats"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let rows = visibleQueries();
+    if (q.get("mine") === "true")
+      rows = rows.filter(x => x.ownerAccountId === identity().id);
+
+    const bySite = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const list = bySite.get(r.studySiteId);
+      if (list) list.push(r); else bySite.set(r.studySiteId, [r]);
+    }
+    const sites = [...bySite.entries()].map(([id, rs]) => {
+      const d = siteQueryDensity({
+        studySiteId: id,
+        enrolled: FUNNELS.find(f => f.studySiteId === id)?.enrolled ?? 0,
+        queries: rs.map(r => ({ ageDays: r.ageDays, state: r.state as never, form: r.form }))
+      });
+      return {
+        ...d, siteCode: rs[0]!.siteCode, hospital: rs[0]!.hospital,
+        verdict: densityVerdict(d)
+      };
+    }).sort((a, b) =>
+      (b.perSubject ?? -1) - (a.perSubject ?? -1)
+      || b.total - a.total || a.siteCode.localeCompare(b.siteCode));
+
+    return HttpResponse.json({
+      load: queryLoad(rows.map(r => ({ ageDays: r.ageDays, state: r.state as never }))),
+      sites, calcVersion: CALC_VERSION
+    });
+  }),
+
+  http.post(pathToRegExp("/v1/data-queries"), async ({ request }) => {
+    const b = await request.json() as {
+      subjectId?: string; form?: string; fieldName?: string; detail?: string;
+    };
+    if (!identity().actions.includes("raiseQ")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能发起数据质疑"), { status: 403 });
+    const su = scenario.subjects.find(x => x.id === b.subjectId);
+    if (!su) return HttpResponse.json(
+      problem("not-found", 404, "受试者不存在"), { status: 404 });
+    if ((b.fieldName ?? "").trim().length < 2) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：字段名至少 2 个字"),
+      { status: 422 });
+    if ((b.detail ?? "").trim().length < 10) return HttpResponse.json(
+      problem("validation-failed", 422,
+        "请求参数不符合契约：质疑内容需写清疑点与要求核实的方向（至少 10 个字）"),
+      { status: 422 });
+    /* 责任 CRC 从受试者取，并在这一刻固化。取不到就不给建 ——
+       无人认领的质疑等于没提。 */
+    if (!su.crcName) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${su.screeningNo} 还没有责任 CRC —— 请先指派，否则这条质疑没有人认领`),
+      { status: 422 });
+
+    const site = SITES_LIST.find(x => x.id === su.studySiteId)!;
+    const row: MockQuery = {
+      id: `q-${scenario.dataQueries.length + 1}`,
+      code: `Q-${1191 + scenario.dataQueries.length}`,
+      studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+      studyShortName: "艾瑞替尼 III",
+      subjectId: su.id, screeningNo: su.screeningNo,
+      form: b.form!, fieldName: b.fieldName!.trim(), detail: b.detail!.trim(),
+      severity: "minor", state: "open",
+      raisedBy: identity().role.code === "dm" ? "dm" : "cra",
+      raisedByName: identity().name, raisedOn: TODAY_STR,
+      ownerAccountId: null, ownerName: su.crcName,
+      answer: null, answeredOn: null, returnedReason: null,
+      chaseCount: 0, lastChasedOn: null,
+      closedAt: null, resolution: null, ageDays: 0, stale: false
+    };
+    scenario.dataQueries.unshift(row);
+    return HttpResponse.json({
+      data: mask(row),
+      sideEffects: [{ type: "DataQueryRaised", ref: row.id,
+        summary: `${row.code} 已发起，指派给 ${su.crcName}（${row.form} · ${row.fieldName}）` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/data-queries/{id}:answer"), async ({ request }) => {
+    const r = findQuery(request.url, /\/data-queries\/([^/:]+):answer/);
+    if ("problem" in r) return r.problem;
+    const b = await request.json() as { answer?: string };
+    if (!identity().actions.includes("subjWrite")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能回复数据质疑"), { status: 403 });
+    if ((b.answer ?? "").trim().length < 10) return HttpResponse.json(
+      problem("validation-failed", 422,
+        "请求参数不符合契约：回复需写清核实结果与源数据依据（至少 10 个字）"),
+      { status: 422 });
+    if (r.q.state !== "open") return HttpResponse.json(
+      problem("invariant-violated", 422, `${r.q.code} 不在「待中心回复」`), { status: 422 });
+    r.q.state = "pending_review";
+    r.q.answer = b.answer!.trim();
+    r.q.answeredOn = TODAY_STR;
+    r.q.stale = false;
+    return HttpResponse.json({
+      data: mask(r.q),
+      sideEffects: [{ type: "DataQueryAnswered", ref: r.q.id,
+        summary: `${r.q.code} 已回复，挂起 ${r.q.ageDays} 天 —— 等数据管理判定；回复了不等于关闭了` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/data-queries/{id}:close"), async ({ request }) => {
+    const r = findQuery(request.url, /\/data-queries\/([^/:]+):close/);
+    if ("problem" in r) return r.problem;
+    const b = await request.json() as { reason?: string };
+    /* **closeQ，不是 closeQA。** 质量事件的关闭门管不到数据质疑，
+       反过来也一样 —— 两条线共用一张表，但不共用一个动作。 */
+    if (!identity().actions.includes("closeQ")) return HttpResponse.json(
+      problem("forbidden", 403, "只有数据管理能关闭数据质疑"), { status: 403 });
+    if (!b.reason || b.reason.trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：判定说明至少 4 个字"),
+      { status: 422 });
+    if (r.q.state !== "pending_review") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${r.q.code} 中心还没有回复 —— 关掉它等于把问题从列表上抹掉，而不是解决`),
+      { status: 422 });
+    r.q.state = "closed";
+    r.q.closedAt = new Date().toISOString();
+    r.q.resolution = b.reason.trim();
+    r.q.stale = false;
+    return HttpResponse.json({
+      data: mask(r.q),
+      sideEffects: [{ type: "DataQueryClosed", ref: r.q.id,
+        summary: `${r.q.code} 已关闭，共挂起 ${r.q.ageDays} 天` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/data-queries/{id}:return"), async ({ request }) => {
+    const r = findQuery(request.url, /\/data-queries\/([^/:]+):return/);
+    if ("problem" in r) return r.problem;
+    const b = await request.json() as { reason?: string };
+    if (!identity().actions.includes("closeQ")) return HttpResponse.json(
+      problem("forbidden", 403, "只有数据管理能退回数据质疑"), { status: 403 });
+    if (!b.reason || b.reason.trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：退回理由至少 4 个字"),
+      { status: 422 });
+    if (r.q.state !== "pending_review") return HttpResponse.json(
+      problem("invariant-violated", 422, `${r.q.code} 没有可退回的回复`), { status: 422 });
+    r.q.state = "open";
+    r.q.returnedReason = b.reason.trim();
+    r.q.stale = r.q.ageDays > QUERY_STALE_DAYS;
+    return HttpResponse.json({
+      data: mask(r.q),
+      sideEffects: [{ type: "DataQueryReturned", ref: r.q.id,
+        summary: `${r.q.code} 已退回 ${r.q.ownerName} —— ${b.reason.trim()}` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/data-queries/{id}:chase"), async ({ request }) => {
+    const r = findQuery(request.url, /\/data-queries\/([^/:]+):chase/);
+    if ("problem" in r) return r.problem;
+    const b = await request.json() as { reason?: string };
+    if (!identity().actions.includes("raiseQ")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能催办"), { status: 403 });
+    if (!b.reason || b.reason.trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：催办记录至少 4 个字"),
+      { status: 422 });
+    if (r.q.state !== "open") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${r.q.code} 不在「待中心回复」 —— 现在球不在中心那边`), { status: 422 });
+    r.q.chaseCount += 1;
+    r.q.lastChasedOn = TODAY_STR;
+    return HttpResponse.json({
+      data: mask(r.q),
+      sideEffects: [{ type: "DataQueryChased", ref: r.q.id,
+        summary: `已记录对 ${r.q.hospital} 的第 ${r.q.chaseCount} 次催办：${r.q.code}` +
+          (r.q.chaseCount >= 3
+            ? " —— 催到第三次还没回，该升级到 PM 而不是再打一个电话" : "") }]
+    }, { status: 201 });
   }),
 
   /* 备案名册。行范围**在这里也要收** —— 这一页整页的内容就是

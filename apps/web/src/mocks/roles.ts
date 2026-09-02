@@ -18,7 +18,7 @@
 
 import type { FieldKey, ActionKey } from "@sitedesk/contracts";
 
-export const MOCK_ROLES = ["crc", "boss", "inst", "pi"] as const;
+export const MOCK_ROLES = ["crc", "boss", "dm", "inst", "pi"] as const;
 export type MockRole = (typeof MOCK_ROLES)[number];
 
 export interface MockIdentity {
@@ -48,6 +48,18 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
        一份路径清单会让 mock 模式下的导航整个空掉。 */
     modules: ["crc", "mysite", "startup", "sched", "subj", "prescreen", "ethics",
       "query", "capa", "isf", "material", "pay", "handover", "time"]
+  },
+  /* **数据管理 DM。** 它是这套角色里唯一握着 closeQ 的人 ——
+     「中心回复了不等于问题解决了」这句话，只有换到这个身份才看得见：
+     CRC 身上有回复框没有关闭键，DM 身上反过来。
+     少了它，数据质疑那两页就只剩"画得出来"。 */
+  dm: {
+    id: "a-miaoqing", login: "miaoqing", name: "苗青",
+    role: { id: "r-dm", code: "dm", name: "数据管理 DM" },
+    isExternal: false, orgRef: null,
+    rowRule: "all", fields: ["subject"],
+    actions: ["closeQ", "raiseQ", "subjRead"],
+    modules: ["dm", "query", "screen", "trail"]
   },
   boss: {
     id: "a-lingyuan", login: "lingyuan", name: "凌远",

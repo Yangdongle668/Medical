@@ -433,15 +433,41 @@ for (const c of COHORT) {
 }
 P(``);
 
-/* ── 质量事件：原型的 QUERIES 是真实存在的数据质疑 ── */
+/* ── 质量事件：原型的 QUERIES 是真实存在的数据质疑 ──
+   三个状态**逐一映射**，不是"关了 / 没关"两分。
+   此前这里写的是 `已关闭 ? closed : open` —— 于是「已回复待关闭」
+   在库里变成了「待中心回复」，而那一格正是这套流程的全部意义：
+   中心回复了不等于问题解决了，判定权在 DM。 */
+const Q_STATE = {"待中心回复":"open", "已回复待关闭":"pending_review", "已关闭":"closed"};
+/* 「已回复待关闭」必须带回复内容（迁移 0032 的 CHECK）。
+   原型把回复框留在界面上、没有落到数据里，所以这里按它自己的
+   placeholder 的形状补一句 —— 一条没有回复内容的"已回复"，
+   DM 判定的是一片空白。 */
+const Q_ANSWER = {
+  "Q-1165": "已调阅原始护理记录：该次收缩压为 120 mmHg，eCRF 录入时多输一位，" +
+            "已更正为 120，源文件见门诊病历第 7 页 2026-08-14 记录。"
+};
 P(`-- ── 质量事件：超窗必须生成方案偏离（I4），质疑同样进这张表 ─────`);
 QUERIES.forEach(qy => {
   const subj = SUBJ.find(x => x.id === qy.subj);
+  const state = Q_STATE[qy.st] ?? "open";
+  const answer = state === "pending_review" ? Q_ANSWER[qy.id] ?? null : null;
+  /* 提出方：原型的 by 是一个显示字符串。数据管理是这一版新增的来源
+     （迁移 0032 给 raised_by 补了 'dm'）—— 此前它只能记成 cra，
+     而"质疑是谁提的"因此答不出来。 */
+  const dm = qy.by.startsWith("数据管理");
+  const byName = dm ? "苗青" : qy.by.replace(/（.*）$/, "");
   P(`INSERT INTO quality_event (code, study_site_id, subject_id, kind, severity, state,` +
-    ` title, detail, raised_by, raised_on) VALUES (${q(qy.id)}, '${uuid5("site:"+qy.ss)}', ` +
+    ` title, detail, form, field_name, owner_account_id, answer, answered_on,` +
+    ` raised_by, raised_by_account, raised_on) VALUES (${q(qy.id)}, '${uuid5("site:"+qy.ss)}', ` +
     `${subj ? `'${uuid5("subj:"+qy.subj)}'` : "NULL"}, 'query', ` +
-    `${q(qy.age > 7 ? "major" : "minor")}, ${q(qy.st === "已关闭" ? "closed" : "open")}, ` +
-    `${q(qy.form + " · " + qy.field)}, ${q(qy.txt)}, 'cra', ` +
+    `${q(qy.age > 7 ? "major" : "minor")}, ${q(state)}, ` +
+    `${q(qy.form + " · " + qy.field)}, ${q(qy.txt)}, ${q(qy.form)}, ${q(qy.field)}, ` +
+    `${acc(qy.owner)}, ${q(answer)}, ` +
+    /* 回复日期取"提出后一半的时间"：它落在提出日与今天之间，
+       没有更精确的来源，但顺序必须对 —— 回复早于提出是不可能的事。 */
+    `${answer ? d(dayBefore(TODAY, Math.floor(qy.age / 2))) : "NULL"}, ` +
+    `${q(dm ? "dm" : "cra")}, ${acc(byName)}, ` +
     `${d(dayBefore(TODAY, qy.age))});`);
 });
 P(``);

@@ -187,6 +187,9 @@ export interface Scenario {
     occurredAt?: string | null; reportedAt?: string | null;
     sourceEventId?: string | null;
   }[];
+  /** 数据质疑。**同一批行的另一个视角** —— 与 quality_event 里
+   *  kind='query' 的那些是同一件东西，mock 里分开摆只是为了写得清楚。 */
+  dataQueries: MockQuery[];
   /** 药品流水（I5）。在手数量是**算出来的**，所以这里不存那个数。 */
   ipMovements: {
     id: string; studySiteId: string; movedOn: string; kind: string;
@@ -350,6 +353,7 @@ export function makeScenario(): Scenario {
        只摆按时的那种，界面上那两个"最坏的一条""还在计时"永远画不出来，
        于是没有人会发现它们其实没写对。 */
     qualityEvents: [...makeSaes(), ...makeQualityEvents()],
+    dataQueries: makeDataQueries(),
     ipMovements: makeIpMovements(),
     specimens: makeSpecimens(),
     timesheets: makeTimesheets(),
@@ -841,6 +845,101 @@ function makeQualityEvents(): Scenario["qualityEvents"] {
       title: "药品回收数量与发放记录差 2 盒",
       detail: "中心称已发给受试者但未登记，正在核对。",
       raisedBy: "cra", raisedOn: shift(TODAY, -9), ageDays: 9 }
+  ];
+}
+
+export interface MockQuery {
+  id: string; code: string;
+  studySiteId: string; siteCode: string; hospital: string; studyShortName: string;
+  subjectId: string | null; screeningNo?: string;
+  form: string; fieldName: string; detail: string;
+  severity: string; state: string;
+  raisedBy: string; raisedByName: string | null; raisedOn: string;
+  ownerAccountId: string | null; ownerName: string | null;
+  answer: string | null; answeredOn: string | null; returnedReason: string | null;
+  chaseCount: number; lastChasedOn: string | null;
+  closedAt: string | null; resolution: string | null;
+  ageDays: number; stale: boolean;
+}
+
+/** 数据质疑。**每一条都在替一个分支站岗** ——
+ *  编一批"都挂了 3 天、都在同一个中心"的数据，两页画得出来，
+ *  但页面上一半的判断永远走不到，也就没人会发现它们其实没写对：
+ *
+ *   · 挂了 21 天的  —— 超 7 天那个角标、以及催办按钮；
+ *   · 一条已回复的  —— DM 的「待我关闭」那一栏，和 CRC 的「已回复」栏；
+ *   · 一条已关闭的  —— 平均挂起里"未关闭的也算进去"要有对照；
+ *   · SS-01 上三条同一个表单 —— 归因结论走「表单难填」；
+ *   · SS-07 上三条各不相同 —— 走「录入质量」。
+ *  两个结论各有数据支撑，那句"高不一定是中心差"才不是免责声明。 */
+function makeDataQueries(): MockQuery[] {
+  const s1 = SITES[0]!, s2 = SITES[1]!;
+  const mk = (
+    id: string, code: string, site: typeof SITES[number], subjectId: string | null,
+    screeningNo: string | null, form: string, fieldName: string, detail: string,
+    ageDays: number, state: string, owner: [string, string],
+    extra: Partial<MockQuery> = {}
+  ): MockQuery => ({
+    id, code, studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+    studyShortName: "艾瑞替尼 III",
+    subjectId, ...(screeningNo ? { screeningNo } : {}),
+    form, fieldName, detail,
+    severity: ageDays > 7 ? "major" : "minor", state,
+    raisedBy: "dm", raisedByName: "苗青", raisedOn: shift(TODAY, -ageDays),
+    ownerAccountId: owner[0], ownerName: owner[1],
+    answer: null, answeredOn: null, returnedReason: null,
+    chaseCount: 0, lastChasedOn: null,
+    closedAt: null, resolution: null,
+    ageDays, stale: state === "open" && ageDays > 7,
+    ...extra
+  });
+  const WU: [string, string] = ["a-wutong", "吴桐"];
+  const LIAO: [string, string] = ["a-liaomeng", "廖萌"];
+
+  return [
+    /* SS-01：三条都在合并用药 CM 上 —— 这个表单本身难填，不是这家中心差。 */
+    mk("q1", "Q-1176", s1, "u1", "S-0203", "合并用药 CM", "起始日期",
+      "CM 起始日期（2026-07-30）早于知情同意签署日期（2026-08-02），请核实源数据。",
+      21, "open", WU),
+    /* **这一条被退回过。** 退回是个真实存在的状态，不是只能靠点一遍才看得见 ——
+       固定摆一条，CRC 那一页「上次为什么被退回」的那一格才有东西可画。 */
+    mk("q2", "Q-1182", s1, "u1", "S-0203", "合并用药 CM", "剂量单位",
+      "同一种药前后两次记录的剂量单位不一致（mg 与 mg/kg），请统一并核实。",
+      9, "open", WU, {
+        answer: "已按医嘱单核对，两处都是 mg。",
+        answeredOn: shift(TODAY, -4),
+        returnedReason: "回复未提供源数据依据，请附医嘱单页码或扫描件。"
+      }),
+    mk("q3", "Q-1190", s1, "u-102", "SS-01-P0102", "合并用药 CM", "结束日期",
+      "CM 结束日期为空但用药状态标为「已停用」，请补齐或更正状态。",
+      3, "open", WU),
+    /* 一条已回复待关闭 —— DM 的「待我关闭」和「回复合格才能关」都靠它。 */
+    mk("q4", "Q-1165", s1, "u1", "S-0203", "生命体征 VS", "收缩压",
+      "收缩压 210 mmHg 超出合理区间，疑为录入错误。",
+      12, "pending_review", WU, {
+        answer: "已调阅原始护理记录：该次收缩压为 120 mmHg，eCRF 录入时多输一位，" +
+          "已更正为 120，源文件见门诊病历第 7 页。",
+        answeredOn: shift(TODAY, -2)
+      }),
+    /* SS-07：三条散在三个表单 —— 这才是录入质量问题。 */
+    mk("q5", "Q-1155", s2, "u2", "S-0331", "访视日期 SV", "实际访视日期",
+      "第 4 次访视超出方案窗口 5 天，请提供方案偏离说明及 PI 签字。",
+      16, "open", LIAO),
+    mk("q6", "Q-1171", s2, "u2", "S-0331", "疗效评估 RS", "靶病灶长径",
+      "基线与 C4 靶病灶数量不一致（3 → 2），请补充说明。",
+      6, "open", LIAO),
+    mk("q7", "Q-1188", s2, "u2", "S-0331", "用药依从性 EX", "回收片数",
+      "发放 90 片、回收 12 片、服用记录 71 片，三者不平，请核对。",
+      4, "open", LIAO),
+    /* 一条已关闭 —— 「平均挂起把未关闭的也算进去」要有对照才说得清。 */
+    mk("q8", "Q-1140", s2, "u2", "S-0331", "实验室检查 LB", "中性粒细胞计数",
+      "C2D1 中性粒细胞 0.9×10⁹/L 已达 3 级，但未见对应 AE 记录，请确认是否漏报。",
+      2, "closed", LIAO, {
+        answer: "已确认为漏报，已补录 AE「3 级中性粒细胞减少」，起止日期与检验报告一致。",
+        answeredOn: shift(TODAY, -1),
+        closedAt: new Date(Date.now() - 86_400_000).toISOString(),
+        resolution: "回复合格，已核对源数据与补录的 AE"
+      })
   ];
 }
 

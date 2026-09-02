@@ -9,3 +9,4 @@ export * from "./feasibility.js";
 export * from "./quote.js";
 export * from "./bizdev.js";
 export * from "./cash.js";
+export * from "./query.js";
