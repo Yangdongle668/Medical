@@ -110,9 +110,15 @@ describe("租户维度（当前单租户，但列与策略已就位）", () => {
     await o.query("BEGIN");
     try {
       await o.query("INSERT INTO tenant (id, code, name) VALUES ($1,'other','另一家 CRO')", [T2]);
-      const st = await o.query(`INSERT INTO study (tenant_id, code, short_name, sponsor_name,
-        phase, indication, planned_subjects, contract_amount_cents)
-        VALUES ($1,'XX-9999','他家项目','他家申办方','I期','X',10,100000000) RETURNING id`, [T2]);
+      /* 0031 起 sponsor 是一张表：客户也要跟着建在**那个租户**下 ——
+         建在本租户下的话，这条测试会在"他家项目挂着我家客户"上悄悄通过，
+         而那正好是租户隔离要防的事。 */
+      const cl = await o.query(`INSERT INTO client (tenant_id, name)
+        VALUES ($1,'他家申办方') RETURNING id`, [T2]);
+      const st = await o.query(`INSERT INTO study (tenant_id, code, short_name, client_id,
+        phase, indication, planned_subjects, planned_sites, contract_amount_cents)
+        VALUES ($1,'XX-9999','他家项目',$2,'I期','X',10,1,100000000) RETURNING id`,
+        [T2, cl.rows[0].id]);
       await o.query(`INSERT INTO study_site (tenant_id, study_id, code, hospital, dept, city,
         pi_name, contracted, unit_price_cents)
         VALUES ($1,$2,'ZZ-99','他家医院','科','城','某某',10,1000000)`, [T2, st.rows[0].id]);
@@ -170,13 +176,20 @@ describe("account 表：外部方只看得到自己", () => {
     const { rows } = await c.query("SELECT login FROM account ORDER BY login");
     return rows.map(r => r.login);
   });
-  it("内部员工看得到全部账号", async () => {
+  it("内部员工看得到本租户的全部账号", async () => {
     /* 20 个演示账号 + 出厂管理员（迁移 0026）。
-       断言的是"全部"，所以拿库里真实的总数比 —— 写死 21 的话，
+       断言的是"全部"，所以拿库里真实的数比 —— 写死 21 的话，
        下次种子里多一个人，这条测试会以"RLS 挡住了谁"的样子失败，
-       而那正是最容易查错方向的一种失败。 */
-    const all = (await o.query("SELECT count(*)::int AS n FROM account")).rows[0].n;
-    expect((await visibleAccounts(ID.linmin)).length).toBe(all);
+       而那正是最容易查错方向的一种失败。
+
+       **数的必须是同一个租户。** 裸 `count(*) FROM account`
+       走的是 owner 连接、绕过 RLS，数的是全部租户 ——
+       而 tenant.test.js 每跑一次就留下一个租户（各带一个出厂 admin），
+       且 vitest 并行跑文件，那一行插入可能正好落在这两句查询之间。
+       于是这条测试**时好时坏**，失败信息说的是"RLS 挡住了谁"。 */
+    const mine = (await o.query(
+      "SELECT count(*)::int AS n FROM account WHERE tenant_id = $1", [TENANT])).rows[0].n;
+    expect((await visibleAccounts(ID.linmin)).length).toBe(mine);
     /* 顺带钉住管理员确实在里面 —— "看得到全部"在库里只有一个账号时
        也成立，那句话就没有内容了。 */
     expect(await visibleAccounts(ID.linmin)).toContain("admin");

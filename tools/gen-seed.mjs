@@ -44,7 +44,11 @@ const STUDIES = grab("STUDIES"), SITES = grab("SITES"),
       SIV_PLAN = grab("SIV_PLAN"),
       SOA = grab("SOA"), SUBJ = grab("SUBJ"), FUNNEL = grab("FUNNEL"),
       DROPS = grab("DROPS"), QUERIES = grab("QUERIES"),
-      RATE = grab("RATE"), WORKTYPES = grab("WORKTYPES"), TIMESHEET = grab("TIMESHEET");
+      RATE = grab("RATE"), WORKTYPES = grab("WORKTYPES"), TIMESHEET = grab("TIMESHEET"),
+      FEAS = grab("FEAS"), BIDS = grab("BIDS"), CHANGES = grab("CHANGES"),
+      MILES = grab("MILES"), CLIENT_META = grab("CLIENT_META"),
+      VISITS = grab("VISITS"), ISSUES = grab("ISSUES"), AUDIT = grab("AUDIT"),
+      INTAKE = grab("INTAKE"), ACCEPT = grab("ACCEPT"), ISF = grab("ISF");
 
 const q  = v => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const d  = v => (!v || v === "—") ? "NULL" : `'${v}'`;
@@ -111,14 +115,33 @@ for (const g of GROUPS)
       ` WHERE code = ${q(g.id)};`);
 P(``);
 
+/* ── 客户 ── */
+P(`-- ── 客户（申办方） ──────────────────────────────────────────`);
+P(`-- 0004 的 sponsor_name 在 0031 变成了 client_id —— 那句"届时改为 FK"到期了。`);
+P(`-- 账期是现金流预测里最要紧的一个数：月结 45 天和 90 天差一个半月进账。`);
+/* 原型的 pay 写作「月结 60 天」；库里存整数天数 —— 界面上要按它算到期日，
+   而"月结 60 天"这种串每次都要重新解析一遍。 */
+const payDays = t => { const m = /(\d+)/.exec(t || ""); return m ? Number(m[1]) : 60; };
+const SPONSORS = [...new Set(STUDIES.map(x => x.sponsor))];
+for (const sp of SPONSORS) {
+  const m = CLIENT_META[sp] || {};
+  P(`INSERT INTO client (id, name, since_year, contact, payment_terms_days, nps, note)` +
+    ` VALUES ('${uuid5("client:"+sp)}', ${q(sp)}, ${m.since ? Number(m.since) : "NULL"}, ` +
+    `${q(m.contact)}, ${payDays(m.pay)}, ${m.nps ?? "NULL"}, ${q(m.note)});`);
+}
+P(``);
+
 /* ── 项目与中心 ── */
 P(`-- ── 项目 ────────────────────────────────────────────────────`);
 P(`-- 金额一律以「分」存 bigint；原型的万元数值在此换算（见迁移 0006）。`);
 for (const s of STUDIES)
-  P(`INSERT INTO study (id, code, short_name, sponsor_name, phase, indication,` +
-    ` planned_subjects, contract_amount_cents, started_on, ends_on) VALUES (` +
-    `'${uuid5("study:"+s.id)}', ${q(s.id)}, ${q(s.short)}, ${q(s.sponsor)}, ${q(s.phase)}, ` +
-    `${q(s.indication)}, ${s.planned}, ${cents(s.contract)}, '${s.start}-01', '${s.end}-01');`);
+  /* planned_sites 是**合同里写的**中心数，不是已经建档的数量 ——
+     两者之差就是建档滞后（迁移 0037）。原型的 STUDIES 里就有这个数，
+     而 SITES 里实际铺出来的比它少，那个差正是要看见的东西。 */
+  P(`INSERT INTO study (id, code, short_name, client_id, phase, indication,` +
+    ` planned_subjects, planned_sites, contract_amount_cents, started_on, ends_on) VALUES (` +
+    `'${uuid5("study:"+s.id)}', ${q(s.id)}, ${q(s.short)}, '${uuid5("client:"+s.sponsor)}', ${q(s.phase)}, ` +
+    `${q(s.indication)}, ${s.planned}, ${s.sites}, ${cents(s.contract)}, '${s.start}-01', '${s.end}-01');`);
 P(``);
 P(`-- ── 分组承接项目：PM 行范围的来源 ────────────────────────────`);
 for (const g of GROUPS) for (const sid of g.studies)
@@ -415,16 +438,343 @@ for (const c of COHORT) {
 }
 P(``);
 
-/* ── 质量事件：原型的 QUERIES 是真实存在的数据质疑 ── */
+/* ── 质量事件：原型的 QUERIES 是真实存在的数据质疑 ──
+   三个状态**逐一映射**，不是"关了 / 没关"两分。
+   此前这里写的是 `已关闭 ? closed : open` —— 于是「已回复待关闭」
+   在库里变成了「待中心回复」，而那一格正是这套流程的全部意义：
+   中心回复了不等于问题解决了，判定权在 DM。 */
+const Q_STATE = {"待中心回复":"open", "已回复待关闭":"pending_review", "已关闭":"closed"};
+/* 「已回复待关闭」必须带回复内容（迁移 0032 的 CHECK）。
+   原型把回复框留在界面上、没有落到数据里，所以这里按它自己的
+   placeholder 的形状补一句 —— 一条没有回复内容的"已回复"，
+   DM 判定的是一片空白。 */
+const Q_ANSWER = {
+  "Q-1165": "已调阅原始护理记录：该次收缩压为 120 mmHg，eCRF 录入时多输一位，" +
+            "已更正为 120，源文件见门诊病历第 7 页 2026-08-14 记录。"
+};
 P(`-- ── 质量事件：超窗必须生成方案偏离（I4），质疑同样进这张表 ─────`);
 QUERIES.forEach(qy => {
   const subj = SUBJ.find(x => x.id === qy.subj);
+  const state = Q_STATE[qy.st] ?? "open";
+  const answer = state === "pending_review" ? Q_ANSWER[qy.id] ?? null : null;
+  /* 提出方：原型的 by 是一个显示字符串。数据管理是这一版新增的来源
+     （迁移 0032 给 raised_by 补了 'dm'）—— 此前它只能记成 cra，
+     而"质疑是谁提的"因此答不出来。 */
+  const dm = qy.by.startsWith("数据管理");
+  const byName = dm ? "苗青" : qy.by.replace(/（.*）$/, "");
   P(`INSERT INTO quality_event (code, study_site_id, subject_id, kind, severity, state,` +
-    ` title, detail, raised_by, raised_on) VALUES (${q(qy.id)}, '${uuid5("site:"+qy.ss)}', ` +
+    ` title, detail, form, field_name, owner_account_id, answer, answered_on,` +
+    ` raised_by, raised_by_account, raised_on) VALUES (${q(qy.id)}, '${uuid5("site:"+qy.ss)}', ` +
     `${subj ? `'${uuid5("subj:"+qy.subj)}'` : "NULL"}, 'query', ` +
-    `${q(qy.age > 7 ? "major" : "minor")}, ${q(qy.st === "已关闭" ? "closed" : "open")}, ` +
-    `${q(qy.form + " · " + qy.field)}, ${q(qy.txt)}, 'cra', ` +
+    `${q(qy.age > 7 ? "major" : "minor")}, ${q(state)}, ` +
+    `${q(qy.form + " · " + qy.field)}, ${q(qy.txt)}, ${q(qy.form)}, ${q(qy.field)}, ` +
+    `${acc(qy.owner)}, ${q(answer)}, ` +
+    /* 回复日期取"提出后一半的时间"：它落在提出日与今天之间，
+       没有更精确的来源，但顺序必须对 —— 回复早于提出是不可能的事。 */
+    `${answer ? d(dayBefore(TODAY, Math.floor(qy.age / 2))) : "NULL"}, ` +
+    `${q(dm ? "dm" : "cra")}, ${acc(byName)}, ` +
     `${d(dayBefore(TODAY, qy.age))});`);
+});
+P(``);
+
+/* ── 立项受理与中心文件 ────────────────────────────────────────
+   受理挂的是 (study_id, hospital)，不是 study_site —— 原型那两条
+   **一条都找不到对应的中心**，而那不是数据错了：
+   材料先递到医院，受理通过、伦理批下来、合同谈完，中心才进我方台账。 */
+P(`-- ── 立项受理（原型 ACCEPT） ────────────────────────────────────`);
+/* 「形式审查中」与「待受理」在原型里是两个词，但**它们是同一个状态的
+   两种材料齐备度** —— 差别由 acceptance_doc 的勾选算出来，
+   不需要在枚举里多开一格。 */
+const AC_STATE = { "形式审查中": "review", "待受理": "review", "已受理": "accepted" };
+ACCEPT.forEach(a => {
+  const id = uuid5("accept:" + a.id);
+  const st = AC_STATE[a.st] ?? "review";
+  /* 项目那几项抄在行上 —— 受理发生在建档之前，那时候医院对我方的
+     study / client 两张表都没有可见性（迁移 0038 的文件头）。 */
+  const sy = STUDIES.find(x => x.id === a.sid);
+  P(`INSERT INTO site_acceptance (id, code, study_id, study_code, drug,` +
+    ` sponsor_name, phase, hospital, submitted_by,` +
+    ` submitted_on, state, accepted_on, accepted_by) VALUES (` +
+    `'${id}', ${q(a.id)}, '${uuid5("study:"+a.sid)}', ${q(a.sid)}, ${q(a.drug)}, ` +
+    `${q(a.sponsor)}, ${q(sy.phase)}, ${q(a.hosp)}, ${acc(a.by)}, ` +
+    `${d(a.sub)}, ${q(st)}, ` +
+    `${st === "accepted" ? d(a.sub) : "NULL"}, ` +
+    `${st === "accepted" ? acc("张慧敏") : "NULL"});`);
+  a.docs.forEach((doc, k) =>
+    P(`INSERT INTO acceptance_doc (acceptance_id, seq, name, present) VALUES (` +
+      `'${id}', ${k}, ${q(doc[0])}, ${doc[1] ? "true" : "false"});`));
+});
+P(``);
+
+/* ── 既成事实的受理号：台账里那十五个中心 ────────────────────────
+   闸门（gate.ts 的 irb_submit）现在断言「机构受理过才准递伦理」。
+   台账里的中心**全都早就过了立项** —— 它们的受理确实发生过，
+   否则伦理那一步根本走不到。所以这里不是补一条假记录，
+   是把一件已经发生的事记进来。
+
+   但它跟上面那两条不是一回事，而且**差别必须留在库里**：
+   上面两条正在本系统里走形式审查；这十五条的受理发生在几年前的
+   医院里，多数医院的机构办根本不是本系统的用户。
+   原型自己就承认这件事 —— 建档表单上「机构受理号」的提示写着
+   「由医院机构办受理后回填，可留空」。
+
+   于是 origin='registered'：**没有材料清单，也没有受理人**。
+   空清单在这一类记录上要读成「没人在这儿查过」，
+   而不是「八项都齐」—— 两者混起来，界面就会对着一条谁也没审过的
+   记录报「材料齐备」。 */
+P(`-- ── 既成事实的受理号（origin=registered，见迁移 0038） ──────────`);
+/* 日期是**推出来的，不是编的**：机构受理 → 转伦理 → 拿到批件，
+   所以受理通过日取伦理批件日往前 30 天，递交日再往前 15 天。
+   还没拿到批件的中心（SS-13 停在伦理递交）没有这个锚点，
+   退回项目启动月的 15 日 —— 那是它唯一已知的时间坐标。 */
+const acCodes = new Set(ACCEPT.map(a => a.id));
+const acDone = new Set(ACCEPT.map(a => a.sid + "|" + a.hosp));
+const acSerial = {};                                    // 年份 → 已用到第几号
+SITES.filter(s => STATE[s.st] !== "intake").forEach(s => {
+  /* 受理挂 (study_id, hospital)。原型那两条指向的项目 × 医院组合
+     在 SITES 里一个都没有，但这里仍然按键去重 ——
+     一家医院在同一个项目上只有一次立项受理（库上的 UNIQUE 也拦）。 */
+  const key = s.sid + "|" + s.hosp;
+  if (acDone.has(key)) return;
+  acDone.add(key);
+
+  const study = STUDIES.find(x => x.id === s.sid);
+  const anchorDay = (s.ethics && s.ethics !== "—") ? s.ethics : `${study.start}-15`;
+  const acceptedOn = dayBefore(anchorDay, 30);
+  const submittedOn = dayBefore(acceptedOn, 15);
+  const year = acceptedOn.slice(0, 4);
+  /* 编号按受理年份连号。撞上原型那两个号就往后让 ——
+     一个受理号对两条记录，「这个中心受理号是多少」就有两个答案。 */
+  let n = (acSerial[year] ?? 0) + 1, code;
+  do { code = `AC-${year}-${String(n++).padStart(3, "0")}`; } while (acCodes.has(code));
+  acSerial[year] = n - 1;
+  acCodes.add(code);
+
+  /* 递交人取该中心的派驻 CRA —— 立项材料本来就是他递的，
+     而这是库里真实存在的一层关系，不是随手挑一个名字。 */
+  const cra = STAFF.find(x => x.role === "CRA" && x.sites.includes(s.id));
+  const submittedBy = acc(cra?.n);
+  if (submittedBy === "NULL")
+    throw new Error(`中心 ${s.id} 找不到派驻 CRA，受理记录没有递交人`);
+
+  P(`INSERT INTO site_acceptance (id, code, study_id, study_code, drug,` +
+    ` sponsor_name, phase, hospital, study_site_id,` +
+    ` submitted_by, submitted_on, state, origin, accepted_on, accepted_by) VALUES (` +
+    `'${uuid5("accept:" + key)}', ${q(code)}, '${uuid5("study:" + s.sid)}', ` +
+    `${q(s.sid)}, ${q(study.short)}, ${q(study.sponsor)}, ${q(study.phase)}, ` +
+    `${q(s.hosp)}, '${uuid5("site:" + s.id)}', ${submittedBy}, ${d(submittedOn)}, ` +
+    `'accepted', 'registered', ${d(acceptedOn)}, NULL);`);
+});
+P(``);
+
+/* ── 中心文件与物资 ────────────────────────────────────────────
+   **原型的 st（good/warn/crit）一个字都不进库。** 它是从到期日推出来的，
+   而存下来就会过期：六月标"齐备"的那一项，十月已经是缺项。
+   这里只存事实 —— 在不在、什么时候到期、还剩几份。 */
+P(`-- ── 中心文件与物资（原型 ISF：只存事实，状态由 calc 算） ──────────`);
+const ISF_CAT = { "研究者文件夹": "dossier", "人员资质": "credential",
+                  "试验用药品": "ip", "检验与设备": "equipment" };
+/* 从备注里把事实抠出来。**能抠出日期的就存日期**，
+   抠不出来的（"未更新授权行"）落到 present=false —— 一份没有把新护士
+   写进去的授权表，对那位护士而言就是没有授权。 */
+const ISF_FACT = {
+  "伦理年度跟踪审查":            { expires: "2026-10-18" },
+  "新入组研究护士 GCP 证书":      { present: false },
+  "研究者授权分工表 DOA":         { present: false },
+  "批次 260711 库存":            { qty: 18, reorder: 6 },
+  "中心实验室室间质评证书":        { expires: "2026-09-30" },
+  "离心机校准证书":              { expires: "2027-02-14" },
+  "知情同意书 V3.0 空白件":       { qty: 4, reorder: 10 },
+  "批次 260618 效期":            { expires: "2026-09-15", qty: 9, reorder: 10 }
+};
+ISF.forEach(i => {
+  const f = ISF_FACT[i.item] ?? {};
+  P(`INSERT INTO isf_item (study_site_id, category, item, present, expires_on,` +
+    ` quantity, reorder_at, note, checked_on, checked_by) VALUES (` +
+    `'${uuid5("site:"+i.ss)}', ${q(ISF_CAT[i.cat] ?? "dossier")}, ${q(i.item)}, ` +
+    `${f.present === false ? "false" : "true"}, ${d(f.expires)}, ` +
+    `${f.qty ?? "NULL"}, ${f.reorder ?? "NULL"}, ${q(i.note)}, ` +
+    `${d(dayBefore(TODAY, 7))}, ${acc("吴桐")});`);
+});
+P(``);
+
+/* ── 立项申请 ──────────────────────────────────────────────────
+   原型的 INTAKE 是两条**待经营层审批**的立项申请。它们回答的是
+   「项目是怎么进系统的」——在此之前，`study` 的第一行是凭空出现的。 */
+P(`-- ── 立项申请（原型 INTAKE） ────────────────────────────────────`);
+INTAKE.forEach(x => {
+  P(`INSERT INTO intake_application (code, drug, sponsor_name, phase, indication,` +
+    ` planned_sites, planned_subjects, enroll_months, contract_cents,` +
+    ` estimated_cost_cents, note, submitted_by, submitted_on, state) VALUES (` +
+    `${q(x.id)}, ${q(x.drug)}, ${q(x.sponsor)}, ${q(x.phase)}, ${q(x.indication)}, ` +
+    `${x.sites}, ${x.planned}, ${x.months}, ${cents(x.contract)}, ${cents(x.cost)}, ` +
+    `${q(x.note)}, ${acc(x.by)}, ${d(x.sub)}, 'submitted');`);
+});
+P(``);
+
+/* ── 质量事件与 CAPA ───────────────────────────────────────────
+   原型的 ISSUES 是**十条真实存在的质量事件**，此前一条都没进过种子 ——
+   于是 `quality_event` 里只有 2 条 SAE 和 7 条质疑，
+   而「质量事件与 CAPA」那一页打开是半空的，
+   上一批种进去的 MVR 跟进项里还写着 QI-2026-0155 这样的编号，
+   指向**库里根本不存在的记录**。
+
+   category 存的是去掉「机构质控发现 · 」前缀之后的问题类型：
+   CAPA 有效性按它分组，而 kind 只有五个取值，
+   按 kind 分的话「源数据缺陷」和「知情同意版本错误」会落进同一格。 */
+P(`-- ── 质量事件与 CAPA（原型 ISSUES） ─────────────────────────────`);
+const ISS_SEV = { "重大": "critical", "严重": "major", "一般": "minor" };
+/* 来源：0035 给 raised_by 补了 sponsor 与 site。
+   「同类问题总是被谁发现的」本身就是一个结论 —— 某一类永远由申办方
+   稽查发现、我方监查从来没查出来过，那要改的是 SDV 抽样策略。 */
+const ISS_SRC = { "内部监查": "cra", "机构质控": "institution",
+                  "申办方稽查": "sponsor", "中心自查": "site" };
+/* 状态：待整改 与 CAPA进行中 都是 open —— 差别在**有没有措施**，
+   而那由 capa_plan 是不是空表达，不需要第四个状态。 */
+const ISS_STATE = { "待整改": "open", "CAPA进行中": "open",
+                    "待验证": "pending_review", "已关闭": "closed" };
+const ISS_KIND = t =>
+  /SAE/.test(t) ? "sae_late" : /方案偏离/.test(t) ? "deviation" : "other";
+/* 「（待受托方提交整改措施）」不是一份措施，是一句占位符。
+   照原样存进 capa_plan，「还有几条欠着整改措施」这个数就永远是 0。 */
+const ISS_CAPA = c => (!c || /^（待/.test(c)) ? null : c;
+ISSUES.forEach(i => {
+  const state = ISS_STATE[i.st] ?? "open";
+  const capa = ISS_CAPA(i.capa);
+  const closed = state === "closed";
+  P(`INSERT INTO quality_event (code, study_site_id, kind, severity, state, title, detail,` +
+    ` category, raised_by, raised_on, capa_plan, capa_owner_account_id, capa_due_on,` +
+    ` closed_at, closed_by, resolution) VALUES (${q(i.id)}, '${uuid5("site:"+i.ss)}', ` +
+    `${q(ISS_KIND(i.type))}, ${q(ISS_SEV[i.sev])}, ${q(state)}, ${q(i.type)}, ${q(i.desc)}, ` +
+    `${q(i.type.replace(/^机构质控发现 · /, ""))}, ${q(ISS_SRC[i.src] ?? "qa")}, ${d(i.found)}, ` +
+    `${q(capa)}, ${acc(i.own)}, ${d(i.due)}, ` +
+    /* 关闭三件套同生共死（0009 的 CHECK）。关闭人是 QA —— 关闭要 closeQA，
+       而整改责任人（capa_owner）并没有这个动作权限：**写措施的人不能自己验证**。 */
+    `${closed ? `'${i.due} 17:00+08'::timestamptz` : "NULL"}, ` +
+    `${closed ? acc("卫兰") : "NULL"}, ${closed ? q(capa) : "NULL"});`);
+});
+P(``);
+
+/* ── 内部稽查与发现项 ──────────────────────────────────────────
+   QA 是我方的第二道防线：机构质控是医院查我们，稽查是我们自己查自己。
+   稽查的价值不在于又发现一批问题，**在于 CAPA 有效性验证**。 */
+P(`-- ── 内部稽查（QA 的第二道防线） ────────────────────────────────`);
+const AU_KIND = { "中心内部稽查": "site", "体系稽查": "system",
+                  "CAPA 有效性验证": "capa_check", "核查前模拟稽查": "pre_inspection" };
+const AU_STATE = { "进行中": "open", "待整改": "remediating", "已关闭": "closed" };
+AUDIT.forEach(a => {
+  const id = uuid5("audit:" + a.id);
+  const state = AU_STATE[a.st] ?? "open";
+  const closed = state === "closed";
+  P(`INSERT INTO internal_audit (id, code, study_site_id, kind, audited_on,` +
+    ` auditor_account_id, scope, state, closed_at, closed_by) VALUES (` +
+    `'${id}', ${q(a.id)}, '${uuid5("site:"+a.ss)}', ${q(AU_KIND[a.type] ?? "site")}, ` +
+    `${d(a.date)}, ${acc(a.by)}, ${q(a.scope)}, ${q(state)}, ` +
+    `${closed ? `'${a.date} 17:00+08'::timestamptz` : "NULL"}, ` +
+    `${closed ? acc(a.by) : "NULL"});`);
+  a.findings.forEach((f, k) => {
+    const fClosed = f.st === "已关闭";
+    P(`INSERT INTO audit_finding (audit_id, seq, severity, finding, repeat_of, state,` +
+      ` verification, closed_at, closed_by) VALUES ('${id}', ${k}, ` +
+      `${q(ISS_SEV[f.sev])}, ${q(f.t)}, ` +
+      /* 复发指向那条质量事件本身。原型记的是编号字符串，找不到就静默丢掉 ——
+         而这个指标存在的全部理由就是抓复发。这里是外键。 */
+      `${f.repeat ? `(SELECT id FROM quality_event WHERE code = ${q(f.repeat)})` : "NULL"}, ` +
+      `${q(fClosed ? "closed" : "open")}, ` +
+      /* 「已整改」三个字不是验证。已关闭的那条给一句说得出"怎么确认的"的话。 */
+      `${fClosed ? q("已抽查复核，问题未再出现，整改证据已归档") : "NULL"}, ` +
+      `${fClosed ? `'${a.date} 17:00+08'::timestamptz` : "NULL"}, ` +
+      `${fClosed ? acc(a.by) : "NULL"});`);
+  });
+});
+P(``);
+
+/* ── 监查访视 ──────────────────────────────────────────────────
+   原型的 VISITS 只有**未来四周**的六次排期。照搬进来，系统会得出
+   「15 个中心里 13 个一次都没监查过」这个结论 —— 而那是假的：
+   它们 2024 年底就启动了，两年里当然去过很多次。
+   真相是**这张表刚建**，不是没去过。
+
+   所以历史部分按一个说得清的规则回溯铺出来，而不是挑几个中心手工设：
+     · 只给已经启动（有 SIV 日期）的中心铺；
+     · 间隔按 70 天（normal 档的建议间隔）；
+     · 最后一次距今 35 + 11i 天（i 是中心序号）——
+       于是"该去了"和"还早"两种中心都有，且不是挑出来的。
+
+   这些历史访视一律 reported（跟进项全关、报告已交）：
+   **有争议的状态留给原型自己那六条**，历史只负责回答
+   「上一次去是什么时候」。 */
+P(`-- ── 监查访视：SIV / IMV / COV 与 MVR 跟进项 ────────────────────`);
+const MV_KIND = { SIV: "siv", IMV: "imv", COV: "cov" };
+const MV_STATE = { "待确认": "proposed", "已排期": "scheduled" };
+/* 历史 IMV 的通用跟进项。它们是每次例行监查都会做的三件事 ——
+   不是编的内容，是 SOP 上就有的那三项。 */
+const MV_ROUTINE = [
+  "SDV：本期新增受试者源数据核对",
+  "试验用药品发放与回收记录清点",
+  "未关闭质量事件与数据质疑跟进"
+];
+let mvSeq = 0;
+const mvCode = () => `MV-2026-${String(++mvSeq).padStart(3, "0")}`;
+const mvInsert = (o) => {
+  const id = uuid5("mv:" + o.code);
+  P(`INSERT INTO monitor_visit (id, code, study_site_id, kind, planned_on,` +
+    ` monitor_account_id, days, state, confirmed_on, performed_on,` +
+    ` report_submitted_on, sdv_sample_pct) VALUES (` +
+    `'${id}', ${q(o.code)}, '${uuid5("site:"+o.ss)}', ${q(o.kind)}, ${d(o.planned)}, ` +
+    `${o.monitor}, ${o.days}, ${q(o.state)}, ${d(o.confirmed)}, ${d(o.performed)}, ` +
+    `${d(o.reported)}, ${o.sdv ?? "NULL"});`);
+  o.items.forEach((it, k) =>
+    P(`INSERT INTO monitor_visit_item (visit_id, seq, task, done_at, done_by) VALUES (` +
+      `'${id}', ${k}, ${q(it.t)}, ` +
+      `${it.done ? `'${o.performed ?? o.planned} 17:00+08'::timestamptz` : "NULL"}, ` +
+      `${it.done ? o.monitor : "NULL"});`));
+  return id;
+};
+
+/* 历史：每个已启动的中心两次例行监查。
+   **判断"已启动"要看 siv 是不是一个真日期，不是它有没有值** ——
+   原型里未启动的中心写的是 "—"，而 "—" 是真值：
+   照 `s.siv` 这么筛，一个停在「伦理递交」的中心会长出两条监查记录，
+   而那种数据在界面上看不出问题，只有人去问"我们什么时候去过 SS-13"才露馅。 */
+SITES.filter(s => s.siv && s.siv !== "—").forEach((s, i) => {
+  const last = 35 + i * 11;
+  const cra = acc(s.cra);
+  /* 没有派工 CRA 的中心跳过 —— 一次没有监查员的监查记录，
+     "是谁去的"没有答案，而那正是这张表要回答的事之一。 */
+  if (cra === "NULL") return;
+  [last + 70, last].forEach(back => {
+    const on = dayBefore(TODAY, back);
+    mvInsert({
+      code: mvCode(), ss: s.id, kind: "imv", planned: on, monitor: cra, days: 1,
+      state: "reported", confirmed: dayBefore(TODAY, back + 10),
+      performed: on, reported: dayBefore(TODAY, back - 5), sdv: 50,
+      items: MV_ROUTINE.map(t => ({ t, done: true }))
+    });
+  });
+});
+
+/* 原型的六次排期。**两条已经过了计划日** ——
+   SS-02 那次的跟进项已经勾了两项，说明现场其实去过了：
+   于是它是 done 而不是 scheduled，报告压在 CRA 手上没交。
+   「去过了但报告没交」是监查上最常见的欠账，而它此前在原型里
+   连一个能表达它的状态都没有。 */
+VISITS.forEach(v => {
+  const cra = acc(v.who);
+  const someDone = v.items.some(x => x.done);
+  const state = someDone ? "done" : (MV_STATE[v.st] ?? "scheduled");
+  mvInsert({
+    code: mvCode(), ss: v.ss, kind: MV_KIND[v.kind], planned: v.d,
+    monitor: cra === "NULL" ? acc("林敏") : cra, days: v.days,
+    state,
+    confirmed: state === "proposed" ? null : dayBefore(v.d, 10),
+    performed: state === "done" ? v.d : null,
+    reported: null,
+    /* 抽样比例只在原型明写了的那一条上落库 —— 其余留空，
+       表示"这次没有单独定过"，而不是默认 100%。 */
+    sdv: /抽样 30%/.test(v.items.map(x => x.t).join("")) ? 30 : null,
+    items: v.items
+  });
 });
 P(``);
 
@@ -485,6 +835,127 @@ TIMESHEET.forEach(t => {
 });
 P(``);
 
+P(`-- ── 中心可行性调查：选址的账 ───────────────────────────────`);
+P(`-- 报价模型算「这个项目要花多少人天」，这张表算「这家能不能出病人」。`);
+/* 原型里 st 写的是「已入选（SS-04）」这样的中文串 —— 库里拆成
+   status 与 study_site_id 两列：一个是状态机，一个是外键。
+   保留原串去解析，等于把状态判断建在文案上，改一个字就全断。 */
+let feasRows = 0;
+FEAS.forEach(f => {
+  const m = /已入选（(SS-\d+)）/.exec(f.st);
+  const selected = !!m;
+  const siteId = m ? `'${uuid5("site:" + m[1])}'` : "NULL";
+  /* 决定日：原型没有这一栏。用调查日推 —— 入选的决定不会在调查当天下，
+     但也不该编一个看起来很精确的日期。取调查日后 14 天，
+     并在注释里说明它是推出来的，不是记录下来的。 */
+  const decided = selected ? new Date(new Date(f.date).getTime() + 14 * 864e5)
+    .toISOString().slice(0, 10) : null;
+  P(`INSERT INTO feasibility (id, code, study_id, hospital, city, dept, pi_name,` +
+    ` surveyed_on, surveyed_by, pt_year, past_n, past_best, compet, ethics_days,` +
+    ` start_days, team_n, pi_commit, elig_pct, status, decided_on, decided_by,` +
+    ` study_site_id, override_reason, reject_reason, actual_rate) VALUES (` +
+    `'${uuid5("feas:" + f.id)}', ${q(f.id)}, '${uuid5("study:" + f.sid)}', ` +
+    `${q(f.hosp)}, ${q(f.city)}, ${q(f.dept)}, ${q(f.pi)}, ` +
+    `${d(f.date)}, ${acc(f.by)}, ${f.q.ptYear}, ${f.q.pastN}, ${f.q.pastBest}, ` +
+    `${f.q.compet}, ${f.q.ethicsDays}, ${f.q.startDays}, ${f.q.teamN}, ` +
+    `${f.q.piCommit}, ${f.q.eligPct == null ? "NULL" : f.q.eligPct}, ` +
+    `${q(selected ? "selected" : "assessing")}, ${d(decided)}, ` +
+    `${selected ? acc(f.by) : "NULL"}, ${siteId}, ${q(f.override)}, NULL, ` +
+    `${f.actual == null ? "NULL" : f.actual});`);
+  feasRows++;
+});
+P(``);
+
+P(`-- ── 投标：报出去的价，赢没赢 ───────────────────────────────`);
+P(`-- 不回写开标结果，报价模型就是自说自话。`);
+/* 原型里 st 是中文串、金额是万元、win 是成交价（失标时是对手的价）。
+   `win: null` 在原型里既表示"待定"也表示"问不到" —— 库里分得开：
+   待定的 status='pending'（约束禁止有价），失标的 win 可以为 NULL。 */
+const BID_ST = { "待定": "pending", "中标": "won", "失标": "lost" };
+let bidRows = 0;
+BIDS.forEach(b => {
+  const st = BID_ST[b.st];
+  /* 决定日：原型没有这一栏。投标 → 开标通常一到两个月，取投标日 + 45 天。
+     它是推出来的，不是记录下来的 —— 和可行性的 decided_on 同一个处理。 */
+  const decided = st === "pending" ? null
+    : new Date(new Date(b.sub).getTime() + 45 * 864e5).toISOString().slice(0, 10);
+  P(`INSERT INTO bid (id, code, sponsor, name, submitted_on, sites, subjects,` +
+    ` our_quote_cents, our_person_days, status, decided_on, winning_price_cents,` +
+    ` owner_account_id, note) VALUES (` +
+    `'${uuid5("bid:" + b.id)}', ${q(b.id)}, ${q(b.sp)}, ${q(b.name)}, ${d(b.sub)}, ` +
+    `${b.sites}, ${b.subjects}, ${cents(b.ours)}, ${b.md}, ${q(st)}, ${d(decided)}, ` +
+    `${b.win == null ? "NULL" : cents(b.win)}, ${acc(b.by)}, ${q(b.note)});`);
+  bidRows++;
+});
+P(``);
+
+P(`-- ── 合同变更：亏损第二大原因就是 scope creep 没有变更单 ────────`);
+const CHG_KIND = {
+  "方案修订 · 访视增加": "visit_add", "方案修订 · 检查项增加": "exam_add",
+  "例数调整": "subject_adj", "中心增减": "site_adj",
+  "周期延长": "extend", "单价调整": "price_adj"
+};
+const CHG_ST = { "待提出": "draft", "已提交": "submitted",
+  "已签署": "signed", "未获批": "rejected" };
+let chgRows = 0;
+CHANGES.forEach(c => {
+  const st = CHG_ST[c.st];
+  const decided = ["signed", "rejected"].includes(st)
+    ? new Date(new Date(c.raised).getTime() + 30 * 864e5).toISOString().slice(0, 10)
+    : null;
+  /* 未获批的那条金额是 NULL —— **不是 0**。
+     0 表示"谈过了，对方不给钱，我们认了"（已签署但零元）；
+     NULL 表示"没有对应金额"，那正是 scope creep 的定义。 */
+  P(`INSERT INTO contract_change (id, code, study_id, study_site_id, kind,` +
+    ` raised_on, raised_by, what, person_days_impact, per_subject, amount_cents,` +
+    ` status, decided_on, note) VALUES (` +
+    `'${uuid5("chg:" + c.id)}', ${q(c.id)}, '${uuid5("study:" + c.sid)}', ` +
+    `${c.ss ? `'${uuid5("site:" + c.ss)}'` : "NULL"}, ${q(CHG_KIND[c.kind])}, ` +
+    `${d(c.raised)}, ${acc(c.by)}, ${q(c.what)}, ${c.mdImpact}, ` +
+    `${c.perSubject ? "true" : "false"}, ${c.amt == null ? "NULL" : cents(c.amt)}, ` +
+    `${q(st)}, ${d(decided)}, ${q(c.note || null)});`);
+  chgRows++;
+});
+P(``);
+
+P(`-- ── 里程碑：达成 → 开票 → 回款 ───────────────────────────────`);
+P(`-- 只记**已达成**的。未来的里程碑是从入组速度推出来的预测，不落库 ——`);
+P(`-- 预测混进台账会凭空造出现金流，而那正是现金流预测最容易骗人的地方。`);
+const MS_CODE = { "合同签署": "contract", "中心启动 SIV": "siv", "入组过半": "half",
+  "入组达成 80%": "eighty", "中心结题": "closeout" };
+/* 原型的 inv 是中文串 + 一个 paid 布尔，两者有冗余（"已回款" 必然 paid）。
+   库里收敛成一个三态：pending / invoiced / paid。 */
+const MS_STATE = m => m.paid ? "paid" : m.inv === "已开票" ? "invoiced" : "pending";
+let msRows = 0;
+MILES.forEach(m => {
+  const st = MS_STATE(m);
+  /* 开票日：原型只给了到期日。按客户账期倒推 —— 到期日减账期。
+     它是推出来的，不是记录下来的，和别处一样在注释里说明。 */
+  const site = SITES.find(x => x.id === m.ss);
+  const sponsor = site ? STUDIES.find(x => x.id === site.sid)?.sponsor : null;
+  const terms = payDays((CLIENT_META[sponsor] || {}).pay);
+  const dueOn = m.due && m.due !== "—" ? m.due : null;
+  /* 到期日减账期。**再和达成日取较晚的那个** ——
+     原型的 due 有几条只比 hit 晚 60 天，而那个客户的账期是 90 天，
+     直接倒推会把开票日算到达成日之前。开不出那样的票，
+     库里的 milestone_dates 约束也不让（它挡住的正是这种编造）。 */
+  const invOn = st === "pending" ? null
+    : dueOn
+      ? [new Date(new Date(dueOn).getTime() - terms * 864e5).toISOString().slice(0, 10),
+         m.hit].sort().at(-1)
+      : m.hit;
+  /* 回款日：已回款的按到期日当天记 —— 原型没有这一栏，
+     而"回款日必须不早于开票日"这条约束需要一个值。 */
+  const paidOn = st === "paid" ? (dueOn ?? m.hit) : null;
+  P(`INSERT INTO milestone (id, code, study_site_id, plan_code, amount_cents,` +
+    ` reached_on, state, invoiced_on, due_on, paid_on) VALUES (` +
+    `'${uuid5("ms:"+m.id)}', ${q(m.id)}, '${uuid5("site:"+m.ss)}', ` +
+    `${q(MS_CODE[m.name])}, ${cents(m.amt)}, ${d(m.hit)}, ${q(st)}, ` +
+    `${d(invOn)}, ${d(st === "pending" ? null : dueOn ?? m.hit)}, ${d(paidOn)});`);
+  msRows++;
+});
+P(``);
+
 P(`-- ── 合同条款：筛败费率与管理分摊（原型里是两个写死的常量） ─────`);
 P(`UPDATE study SET screen_fail_fee_rate = 0.350, overhead_rate = ${RATE.overhead};`);
 P(``);
@@ -525,4 +996,5 @@ fs.writeFileSync(OUT, text);
 console.log(`db/seeds/001_demo.sql 已生成（${L.length} 行）` +
   `｜角色 ${Object.keys(ROLE_DEF).length} · 账号 ${USERS.length} · 分组 ${GROUPS.length}` +
   ` · 项目 ${STUDIES.length} · 中心 ${SITES.length} · 受试者 ${subjRows} · 访视 ${visitRows}` +
-  ` · 费率卡 ${RATES.length} · 工时 ${tsRows}`);
+  ` · 费率卡 ${RATES.length} · 工时 ${tsRows} · 可行性 ${feasRows}` +
+  ` · 投标 ${bidRows} · 变更 ${chgRows} · 客户 ${SPONSORS.length} · 里程碑 ${msRows}`);

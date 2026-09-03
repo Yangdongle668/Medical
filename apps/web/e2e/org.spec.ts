@@ -9,6 +9,36 @@ import { test, expect } from "@playwright/test";
      ③ 没有 manage 的人进来，得到的是一句话，不是一串 403。
    ════════════════════════════════════════════════════════════════════ */
 
+test.describe("导航与页面一一对应", () => {
+  /* 这里原来盯的是**还没建的那一页**：挑一个待建模块，点进去，
+     断言它说得出自己将来要回答什么。那条测试响过五次 ——
+     经营驾驶舱 → 合同变更 → 监查访视 → 立项与建档 → 中心文件与物资，
+     每一次都红在"找不到 coming-soon"上，而每一次的原因都是它盯的那一页交付了。
+
+     现在没有待建页了，于是它翻过来：**侧栏里的每一个入口都得落到真页面**。
+     守的还是同一条不变量 —— 「库里给了这个模块」与「界面上有这个入口」
+     必须一致 —— 只是从"待建的那一页在"变成了"一页都不待建"。
+     往后再加模块，忘了在 main.tsx 登记路由，这条立刻会红。 */
+  for (const [role, count] of [["crc", 14], ["inst", 4], ["boss", 19]] as const) {
+    test(`${role} 的每一个入口都点得进真页面`, async ({ page }) => {
+      /* **点链接，不是逐个 page.goto。** 整页重载会把 MSW 的 service worker
+         连同 mock 场景一起重来一遍，十九次就是三十秒 —— 第一版正是这么写的，
+         三条全部超时，而超时报的是"页面打不开"，跟它要盯的事毫无关系。
+         点链接走的是客户端路由，也更接近用户真的在做的事。 */
+      await page.goto(`/sites?as=${role}`);
+      const links = page.locator(".rail nav a");
+      await expect(links).toHaveCount(count);
+      for (let i = 0; i < count; i++) {
+        const link = links.nth(i);
+        const name = (await link.textContent())?.trim();
+        await link.click();
+        await expect(page.getByTestId("coming-soon"),
+          `「${name}」落回了「这一页还没建」`).toHaveCount(0);
+      }
+    });
+  }
+});
+
 test.describe("经营层：组织与权限", () => {
   test.beforeEach(async ({ page }) => { await page.goto("/sites?as=boss"); });
 
@@ -20,13 +50,6 @@ test.describe("经营层：组织与权限", () => {
     await expect(nav).toContainText("经营");
     await expect(nav).toContainText("系统");
     await expect(nav.getByRole("link", { name: "组织与权限" })).toBeVisible();
-  });
-
-  test("还没建的页有入口，点进去说得出它将来要回答什么", async ({ page }) => {
-    await page.getByRole("link", { name: "经营驾驶舱" }).click();
-    await expect(page.getByTestId("coming-soon")).toBeVisible();
-    /* 不是一句"敬请期待" —— 说的是这一页该有什么 */
-    await expect(page.locator(".card")).toContainText("在手项目");
   });
 
   test("建号 → 台账里立刻有他 → 停用要理由", async ({ page }) => {

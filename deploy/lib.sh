@@ -81,3 +81,41 @@ dc() { "${DC[@]}" --project-directory "$HERE" -f "$HERE/docker-compose.yml" "$@"
   code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${port}/v1/study-sites")
   [ "$code" = "401" ] || 死 "未认证请求返回 $code，应为 401 —— 守卫没生效。"
 }
+
+# ── 口令对不对得上 ────────────────────────────────────────────────────
+# `deploy/initdb/20-roles.sh` 只在**数据卷第一次初始化**时跑。
+# 卷已经存在、而 .env 里的口令是后来才生成的（.env 丢过、被删过、
+# 或者在另一台机器上生成过），角色里存的还是旧口令 ——
+# 于是迁移那一步直接撞上：
+#
+#     password authentication failed for user "sitedesk"   (28P01)
+#
+# 那条报错说的是"口令不对"，而真正的原因是"卷比 .env 老"。
+# 这两件事的解法完全相反，所以要在迁移之前分清楚。
+验口令() {
+  dc exec -T -e PGPASSWORD="$(读取 SITEDESK_DB_OWNER_PASSWORD)" db \
+    psql -U sitedesk -d "$(读取 POSTGRES_DB || echo sitedesk)" -c 'SELECT 1' \
+    >/dev/null 2>&1
+}
+
+口令对不上() {
+  红 "✗ 数据库拒绝了 deploy/.env 里的口令（sitedesk / 28P01）。"
+  echo
+  灰 "  这几乎总是同一件事：**数据卷比 deploy/.env 老。**"
+  灰 "  角色口令只在卷第一次初始化时写入（deploy/initdb/20-roles.sh），"
+  灰 "  之后再改 .env 不会同步过去。"
+  echo
+  echo "  两条路，选一条："
+  echo
+  echo "  ① 库里的数据还要 —— 把角色口令改成 .env 里现在这一份："
+  echo
+  echo "     ./deploy/reset-db-password.sh"
+  echo
+  echo "  ② 库里的数据不要了（演示环境通常是这种）—— 连卷一起重来："
+  echo
+  echo "     docker compose --project-directory deploy -f deploy/docker-compose.yml down -v"
+  echo "     ./deploy/deploy.sh${1:+ $1}"
+  echo
+  灰 "  ② 会**删掉全部数据**，包括已经录进去的中心、受试者与工时。"
+  exit 1
+}

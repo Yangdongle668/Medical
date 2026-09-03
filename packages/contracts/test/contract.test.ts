@@ -85,6 +85,33 @@ describe("契约约定（不是风格偏好，每条对应一次事故）", () =
     expect(Object.keys(fromCode).length).toBeGreaterThan(0);
   });
 
+  it("**受管辖的键名不能和别处的普通字段重名** —— 重名会连带被删", async () => {
+    /* `maskFields` 按叶子键名递归删除（那是它不认识 schema 也能工作的原因）。
+       所以给 `ContractChange.amountCents` 标一个 price 门，会连带把
+       `SideEffect.amountCents`（补偿单金额、成本归集金额）一起删掉。
+
+       这个失败极难查：没有报错，只是某几个字段在某些角色下不见了，
+       而且只在**跑到那条命令**时才看得见。第一次撞上它花了半小时 ——
+       现在 fieldGates() 里那条断言把它变成一次构建期失败。
+       这条测试钉的是"那条断言还在，而且现在是干净的"。 */
+    const { fieldGates } = await import("../src/kernel/gates.js");
+    expect(() => fieldGates()).not.toThrow();
+
+    const gated = new Set(Object.keys(fieldGates()));
+    for (const [name, sc] of Object.entries<any>(doc.components.schemas)) {
+      /* **只查响应侧。** 脱敏是出口上的事（MaskInterceptor），
+         请求体不过那道门 —— 一个受管辖的键名出现在 `XxxRequest` 里
+         是正常的：`createBid` 的请求带 ourQuoteCents，
+         而它的响应 `Bid` 里那一栏是标了门的。 */
+      if (name.endsWith("Request")) continue;
+      for (const [k, p] of Object.entries<any>(sc.properties ?? {}))
+        if (gated.has(k))
+          expect(p["x-gated-by"],
+            `${name}.${k} 没标门，但 ${k} 在别处被标了 —— 它会被一起删掉`)
+            .toBeTruthy();
+    }
+  });
+
   it("openapi.yaml 与 zod 定义一致 —— 产物不得手改", () => {
     execFileSync("npx", ["tsx", "scripts/gen-openapi.ts"], { cwd: ROOT, stdio: "pipe" });
     const now = fs.readFileSync(SPEC, "utf8");

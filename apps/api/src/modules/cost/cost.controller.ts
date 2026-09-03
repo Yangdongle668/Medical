@@ -39,6 +39,11 @@ const CreateRate = z.object({
   note: z.string().max(200).optional()
 });
 
+const PnlQ = PageQuery.extend({
+  studyId: Uuid.optional(),
+  lossOnly: QueryBool.optional()
+});
+
 @Controller("/v1")
 export class CostController {
   constructor(
@@ -104,6 +109,9 @@ export class CostController {
       months: z.coerce.number().int().min(1).max(60).optional()
     }))) q: { months?: number }
   ) { return this.svc.sitePnlTrend(id, q.months); }
+
+  @Get("/pnl") @Operation("listPnl")
+  listPnl(@Query(new ZodPipe(PnlQ)) q: z.infer<typeof PnlQ>) { return this.svc.listPnl(q); }
 
   @Get("/study-sites/:id/pnl") @Operation("getSitePnl")
   pnl(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.sitePnl(id); }

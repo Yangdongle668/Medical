@@ -130,7 +130,50 @@ const CLOSE_CHECKS: Checker[] = [
   }
 ];
 
-const REGISTRY: Record<string, Checker[]> = { siv: SIV_CHECKS, closed: CLOSE_CHECKS };
+/** 推进到「伦理递交」：机构办得先受理。
+ *
+ *  形式审查只看材料齐不齐，不评价科学性 —— 但它是一道真闸门：
+ *  **材料不齐就受理，后面所有环节都会带着这个缺口往下走。**
+ *  递到伦理的那一份，正是机构受理时点过的那一份。
+ *
+ *  受理挂的是 (study_id, hospital)，不是 study_site —— 受理发生在建档
+ *  之前（迁移 0038），所以这里按中心的项目与医院去找，而不是按中心 id。 */
+const irbNeedsAcceptance: Checker = async (client, siteId) => {
+  const { rows } = await client.query<{
+    state: string; code: string; origin: string; missing: string
+  }>(
+    `SELECT a.state, a.code, a.origin,
+            COALESCE(string_agg(d.name, '、') FILTER (WHERE NOT d.present), '') AS missing
+       FROM study_site s
+       JOIN site_acceptance a
+         ON a.study_id = s.study_id AND a.hospital = s.hospital
+       LEFT JOIN acceptance_doc d ON d.acceptance_id = a.id
+      WHERE s.id = $1
+      GROUP BY a.state, a.code, a.origin`, [siteId]);
+  const a = rows[0];
+  if (!a)
+    return { code: "site-acceptance", module: "instac", status: "unmet",
+             message: "还没向机构办递交立项材料 —— 受理是医院承接项目的第一道闸门" };
+  if (a.state === "accepted")
+    return { code: "site-acceptance", status: "ok",
+             /* 系统外登记的受理照样放行，但要说出它是登记的 ——
+                「凭什么放行」的答案是一张本系统没见过的受理通知。 */
+             message: a.origin === "registered"
+               ? `机构已受理（${a.code}，系统外受理登记）`
+               : `机构已受理（${a.code}）` };
+  return {
+    code: "site-acceptance", module: "instac", status: "unmet",
+    message: a.missing
+      ? `${a.code} 尚未受理，缺 ${a.missing.split("、").length} 项材料：${a.missing}`
+      : `${a.code} 材料已齐，等机构办出具受理通知`
+  };
+};
+
+const IRB_CHECKS: Checker[] = [irbNeedsAcceptance];
+
+const REGISTRY: Record<string, Checker[]> = {
+  irb_submit: IRB_CHECKS, siv: SIV_CHECKS, closed: CLOSE_CHECKS
+};
 
 export async function evaluateGate(
   client: PoolClient, siteId: string, to: string

@@ -60,6 +60,14 @@ export const StartupChecklist = z.object({
   description: "启动慢一个月，这个中心的整条收入曲线右移一个月。"
 });
 
+/** 汇总视角：**同一份口径，但不带 items**。
+ *
+ *  「中心启动清单」那一页问的是"哪几个中心卡住了"，不是"某个中心还差哪几项"
+ *  —— 后者是详情页的事。把 items 一起下发的话，
+ *  15 个中心就是 15 × 16 项，而那一页一项都不画。 */
+export const StartupSummary = StartupChecklist.omit({ items: true })
+  .meta({ id: "StartupSummary" });
+
 /* ── 人员 ────────────────────────────────────────────────────────── */
 export const ROLE_KINDS = ["CRA", "CRC", "PM", "QA", "DM"] as const;
 export const RoleKind = z.enum(ROLE_KINDS).meta({ id: "RoleKind" });
@@ -85,6 +93,37 @@ export const Staff = z.object({
 }).meta({
   id: "Staff",
   description: "account 回答「谁能登录、看得到什么」；staff 回答「他是什么工种、带谁、谁接他」。"
+});
+
+/** 备案名册的一行 —— **不是 Staff 的子集，是另一个问题的答案**。
+ *
+ *  Staff 回答「这个人在我方是什么情况」：职级、城市、带教、继任、
+ *  一共带几个中心、为什么停用。那是我方的人事账。
+ *
+ *  SiteStaff 回答「我这几个中心上有谁」：姓名、工种、证书到期日、
+ *  在哪几个中心、从哪天起。机构办备案要的就是这些，
+ *  多一列都是别人的事 —— 尤其是**中心数**：Staff 里那个数的是全部派工，
+ *  机构办拿到它就知道了这个 CRC 在别家医院还带着几个。
+ *  所以这里的 sites 与 siteCount 都只在本行范围内算。 */
+export const SiteStaff = z.object({
+  accountId: Uuid,
+  displayName: z.string(),
+  roleKind: RoleKind,
+  gcpExpiresOn: DateOnly.nullable(),
+  gcpDaysLeft: z.int().nullable().describe("负数表示已过期 —— 过期即不得开展工作"),
+  /** 停用的人**留在名册上**：他上周还在中心里出现过，
+   *  备案表上把他抹掉，核查时那几次访视就成了无人签字的记录。 */
+  active: z.boolean(),
+  sites: z.array(z.object({
+    id: Uuid, code: Code, hospital: z.string(),
+    studyShortName: z.string(),
+    since: DateOnly.describe("这次派工的起始日")
+  })).describe("**只含本行范围内的中心**")
+}).meta({
+  id: "SiteStaff",
+  description:
+    "备案视角的人员：我看得到的中心上，在岗的 CRA / CRC 是谁、证书还有效吗。\n" +
+    "PI 不在其中 —— 他是医院自己的人，证书归医院管，我方手里那份不会更新。"
 });
 
 /* ── 交接 ────────────────────────────────────────────────────────── */

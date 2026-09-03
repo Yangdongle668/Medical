@@ -6,7 +6,8 @@ import { commandResult, WithReason } from "../kernel/command.js";
 import {
   Subject, SubjectState, SubjectVisit, VisitStatus, SiteFunnel,
   ScreenFailReason, WithdrawReason,
-  QualityEvent, QualityKind, QualityState, SubjectPayment, SaeLedger,
+  QualityEvent, QualityKind, QualityState, QualitySeverity, SubjectPayment, SaeLedger,
+  DataQuery, QueryStats,
   Soa, SoaVisit
 } from "./model.js";
 
@@ -339,6 +340,159 @@ define({
   action: "closeQA",
   params: ById,
   body: WithReason,
+  response: commandResult(QualityEvent),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+/* ── 数据质疑（EDC Query）：闭环的两端 ────────────────────────────
+   原型自己写着：QUERIES 里 by:"数据管理" 出现了 5 次，
+   但系统里没有数据管理这个角色 —— 质疑凭空产生、凭空关闭。
+   这一组补的就是「谁提的、谁负责答、谁判定能关」。 */
+
+define({
+  id: "listDataQueries", method: "get", path: "/v1/data-queries",
+  layer: "L1", context: CTX,
+  summary: "数据质疑",
+  description:
+    "质疑是 `kind = 'query'` 的质量事件 —— **不是另一张表**。" +
+    "再建一张，「本中心还有几条未关闭的质量事件」就有两个答案。\n\n" +
+    "默认按**挂得最久的排最前**：挂了 21 天的那条比今天刚提的紧急得多。\n" +
+    "CRC 用 `mine=true` 看「待我回复」；DM 用 `state=pending_review` 看「待我关闭」。",
+  query: PageQuery.extend({
+    studySiteId: Uuid.optional(),
+    subjectId: Uuid.optional(),
+    state: z.array(QualityState).optional(),
+    /** 只看指派给我的 —— CRC 的默认视角。 */
+    mine: QueryBool.optional(),
+    /** 只看我提的 —— DM / CRA 的「我发起的」。 */
+    raisedByMe: QueryBool.optional(),
+    /** 只看挂起超过 7 天且仍待回复的 —— 该打电话的那些。 */
+    staleOnly: QueryBool.optional()
+  }),
+  response: page(DataQuery)
+});
+
+define({
+  id: "getQueryStats", method: "get", path: "/v1/data-queries/stats",
+  layer: "L1", context: CTX,
+  summary: "质疑负荷与中心分布",
+  description:
+    "**平均挂起天数把未关闭的也算进去。** 只算已关闭的话，" +
+    "一条永远不关的质疑就永远不进分母 —— 越拖越好看，" +
+    "而「平均 4.2 天，目标 5 天」底下压着一条挂了 21 天没人管的。\n\n" +
+    "每中心给的是密度**和集中度**：扎堆在一个表单上是方案难填（改 eCRF 或培训材料），" +
+    "散在七八个表单上才是这家中心的录入质量（改人）。只给密度，" +
+    "「高不一定是中心差」就只是一句免责声明。",
+  query: z.object({ studySiteId: Uuid.optional(), mine: QueryBool.optional() }),
+  response: QueryStats
+});
+
+define({
+  id: "raiseDataQuery", method: "post", path: "/v1/data-queries",
+  layer: "L1", context: CTX, status: 201,
+  summary: "发起数据质疑",
+  description:
+    "**质疑不该凭空出现 —— 发起人要留名。** DM 与 CRA 都可以发起" +
+    "（CRA 的 SDV 产出恰恰就是质疑；此前 CRA 只能「看到」质疑、不能「提出」）。\n\n" +
+    "责任 CRC **在这一刻固化**：默认取受试者的 CRC，" +
+    "此后交接不改写它 —— 否则「这条挂了 21 天是谁的 21 天」没有答案。" +
+    "受试者没有责任 CRC 且未显式指派时拒绝创建：无人认领的质疑等于没提。",
+  action: "raiseQ",
+  body: z.object({
+    subjectId: Uuid,
+    form: z.string().trim().min(1).max(80),
+    fieldName: z.string().trim().min(2).max(80),
+    /** 疑点与要求核实的方向。太短的质疑，中心答不了。 */
+    detail: z.string().trim().min(10).max(2000),
+    ownerAccountId: Uuid.optional(),
+    severity: QualitySeverity.optional()
+  }),
+  response: commandResult(DataQuery),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+define({
+  id: "answerDataQuery", method: "post", path: "/v1/data-queries/{id}:answer",
+  layer: "L2", context: CTX,
+  summary: "中心回复质疑",
+  description:
+    "回复要写清**核实结果与源数据依据** —— 只写「已修正」的回复，" +
+    "DM 判定不了，核查时也说明不了任何事。\n\n" +
+    "回复之后状态是「已回复待关闭」，**不是已关闭**：" +
+    "回复了不等于问题解决了，判定权在 DM。",
+  action: "subjWrite",
+  params: ById,
+  body: z.object({ answer: z.string().trim().min(10).max(2000) }),
+  response: commandResult(DataQuery),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+define({
+  id: "closeDataQuery", method: "post", path: "/v1/data-queries/{id}:close",
+  layer: "L2", context: CTX,
+  summary: "关闭数据质疑",
+  description:
+    "**只有 DM 能关**（`closeQ`）—— 这是与质量事件关闭（`closeQA`）不同的一条路：" +
+    "机构质控事件的关闭权在机构，数据质疑的关闭权在数据管理，两条线不能混。\n\n" +
+    "只能关「已回复待关闭」的：没有回复而直接关闭，" +
+    "「已关闭」这三个字就只是把问题从列表上抹掉。",
+  action: "closeQ",
+  params: ById,
+  body: WithReason,
+  response: commandResult(DataQuery),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+define({
+  id: "returnDataQuery", method: "post", path: "/v1/data-queries/{id}:return",
+  layer: "L2", context: CTX,
+  summary: "退回数据质疑",
+  description:
+    "回复不充分，退回中心重答。**退回必须说明为什么** —— " +
+    "不说理由的退回，是把「凭空产生」的毛病搬到闭环的另一端：" +
+    "CRC 只知道弹回来了，不知道要补什么。",
+  action: "closeQ",
+  params: ById,
+  body: WithReason,
+  response: commandResult(DataQuery),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+define({
+  id: "chaseDataQuery", method: "post", path: "/v1/data-queries/{id}:chase",
+  layer: "L2", context: CTX,
+  summary: "电话催办并记录",
+  description:
+    "挂过 7 天之后，靠系统提醒已经不够了。**但「我们催过了」如果没有记录，" +
+    "它在核查和跟申办方对账时就等于没发生过** —— 所以催办是一个要落库的动作，" +
+    "不是一句提示。只能催「待中心回复」的。",
+  action: "raiseQ",
+  params: ById,
+  body: WithReason,
+  response: commandResult(DataQuery),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+define({
+  id: "setCapaPlan", method: "post", path: "/v1/quality-events/{id}:capa",
+  layer: "L2", context: CTX,
+  summary: "写纠正与预防措施（CAPA）",
+  description:
+    "**写措施的人不能自己验证关闭。** 这里是 `capaWrite`（责任人：CRC/CRA/PM/QA），" +
+    "验证关闭是 `closeQA`（只有 QA 与机构办）—— 与数据质疑那条" +
+    "（回复的人不能自己关闭）是同一条规矩。\n\n" +
+    "措施要写到**预防**那一层。「集中补签并留痕」是纠正 ——" +
+    "补完签名下个月照样缺；预防是把签名完整性做进每周自查清单并留痕。" +
+    "只做纠正不做预防的 CAPA，等于把同一个核查风险往后推了一个季度。\n\n" +
+    "质疑不走这条路：它有自己的闭环（回复 → 判定）。",
+  action: "capaWrite",
+  params: ById,
+  body: z.object({
+    plan: z.string().trim().min(10).max(2000),
+    /** 不填就是指给自己 —— 谁提出整改谁负责是常态。 */
+    ownerAccountId: Uuid.optional(),
+    dueOn: DateOnly
+  }),
   response: commandResult(QualityEvent),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });

@@ -3,25 +3,50 @@ import type { INestApplication } from "@nestjs/common";
 import { boot, resetDb, as, type Caller } from "./harness.js";
 import { randomUUID } from "node:crypto";
 
-let app: INestApplication, boss: Caller;
+let app: INestApplication, boss: Caller, admin: Caller;
 
 beforeAll(async () => {
   resetDb(); app = await boot(); boss = await as(app, "lingyuan");
+  /* 受理的门是 `accept` —— 经营层没有它。 */
+  admin = await as(app, "admin");
 }, 120_000);
 afterAll(async () => { await app?.close(); });
 
 /** 每个用例自建一个新中心 —— 依赖种子里的某个特定状态，第一个用例跑完后面就没得用了。
- *  新建的中心处在 intake，推进到 irb_submit 不经过闸门。 */
+ *
+ *  **顺带把机构受理办到位**：迁移 0038 之后「伦理递交」也有闸门了
+ *  （机构没受理，材料递不到伦理）。这个文件测的是幂等，不是闸门 ——
+ *  受理没办的话，下面每一条都会红在一个跟幂等毫无关系的 422 上。 */
 let seq = 0;
 async function freshSite() {
   const study = (await boss.get("/v1/studies?limit=1")).body.items[0];
-  const code = `SS-IDEM${String(++seq).padStart(2, "0")}`;
+  const n = ++seq;
+  /* 医院名带序号：受理挂 (study_id, hospital)，同名会撞上
+     「一家医院在同一个项目上只有一次立项受理」那条唯一约束。 */
+  const hospital = `幂等测试医院${n}`;
   const r = await boss.post("/v1/study-sites", {
-    studyId: study.id, code, hospital: "幂等测试医院", dept: "科", city: "北京",
+    studyId: study.id, code: `SS-IDEM${String(n).padStart(2, "0")}`,
+    hospital, dept: "科", city: "北京",
     piName: "测试研究者", contracted: 5, unitPriceCents: 1000000
   });
   expect(r.status).toBe(201);
+  await 办完受理(study.id, hospital);
   return r.body as { id: string; code: string };
+}
+
+/** 递交立项材料 → 机构勾齐 → 予以受理。
+ *  用管理员而不是机构办张慧敏：她的行范围是「北京协和医院」，
+ *  而这里建的是「幂等测试医院N」—— 范围之外 = 不存在（404），不是 403。 */
+async function 办完受理(studyId: string, hospital: string) {
+  const ac = await boss.post("/v1/site-acceptances",
+    { studyId, hospital, docs: ["立项申请表", "方案及研究者手册"] });
+  expect(ac.status, `递交立项材料失败：${JSON.stringify(ac.body)}`).toBe(201);
+  for (const d of ac.body.docs)
+    expect((await admin.post(
+      `/v1/site-acceptances/${ac.body.id}/docs/${d.seq}:set`, { present: true },
+      { "Idempotency-Key": randomUUID() })).status).toBe(201);
+  expect((await admin.post(`/v1/site-acceptances/${ac.body.id}:accept`, {},
+    { "Idempotency-Key": randomUUID() })).status).toBe(201);
 }
 const NEXT = "irb_submit";
 

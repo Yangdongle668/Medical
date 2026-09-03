@@ -801,13 +801,19 @@ export class ClinicalService {
       kind: string; severity: string; state: string; title: string; detail: string;
       auto_generated: boolean; raised_by: string; raised_on: Date; closed_at: Date | null;
       occurred_at: Date | null; reported_at: Date | null; source_event_id: string | null;
+      category: string | null; capa_plan: string | null;
+      capa_owner_account_id: string | null; capa_owner_name: string | null;
+      capa_due_on: Date | null;
     }>(`SELECT q.id, q.code, q.study_site_id, s.code AS site_code, q.subject_id,
                su.screening_no, q.visit_id, q.kind, q.severity, q.state, q.title,
                q.detail, q.auto_generated, q.raised_by, q.raised_on, q.closed_at,
-               q.occurred_at, q.reported_at, q.source_event_id
+               q.occurred_at, q.reported_at, q.source_event_id,
+               q.category, q.capa_plan, q.capa_owner_account_id,
+               co.display_name AS capa_owner_name, q.capa_due_on
           FROM quality_event q
           JOIN study_site s ON s.id = q.study_site_id
           LEFT JOIN subject su ON su.id = q.subject_id
+          LEFT JOIN account co ON co.id = q.capa_owner_account_id
          WHERE ${conds.join(" AND ")}
          ORDER BY q.raised_on DESC, q.id DESC LIMIT ${add(q.limit + 1)}`, params);
 
@@ -827,7 +833,21 @@ export class ClinicalService {
          都来自那一层，否则同一个数会在两处慢慢分叉。 */
       reportHours: r.occurred_at
         ? saeReportHours({ occurredAt: r.occurred_at, reportedAt: r.reported_at })
-        : null
+        : null,
+      category: r.category,
+      capaPlan: r.capa_plan,
+      capaOwnerAccountId: r.capa_owner_account_id,
+      capaOwnerName: r.capa_owner_name,
+      capaDueOn: day(r.capa_due_on),
+      /* 已关闭的不再谈期限 —— 一条已经整改完的事件，「逾期几天」没有意义，
+         而给它一个正数会让它混进"欠账"统计。 */
+      capaOverdueDays: (() => {
+        if (r.state === "closed" || !r.capa_due_on) return null;
+        const over = between(day(r.capa_due_on)!, today);
+        return over > 0 ? over : null;
+      })(),
+      /* **已指派、还没提交措施**：它不是「正在整改」，是有人欠着一份措施。 */
+      owesCapaPlan: r.capa_owner_account_id !== null && r.capa_plan === null
     }));
     return { items, nextCursor: rows.length > q.limit ? items.at(-1)?.id ?? null : null };
   }
@@ -1119,6 +1139,56 @@ export class ClinicalService {
         "这条记录不能删，只能整改关闭",
       ref: late.rows[0]!.id, studySiteId: siteId
     }];
+  }
+
+  /** 写纠正与预防措施。
+   *
+   *  **写措施的人不能自己验证关闭** —— 这里是 `capaWrite`，
+   *  验证关闭是 `closeQA`。与数据质疑那条（回复的人不能自己关闭）
+   *  是同一条规矩。 */
+  async setCapaPlan(id: string, b: { plan: string; ownerAccountId?: string; dueOn: string }) {
+    const c = ctx();
+    const p = principal();
+    const { rows } = await c.client.query<{
+      id: string; code: string; kind: string; state: string; study_site_id: string;
+      capa_plan: string | null; raised_on: Date;
+    }>(`SELECT id, code, kind, state, study_site_id, capa_plan, raised_on
+          FROM quality_event WHERE id = $1`, [id]);
+    if (!rows[0]) throw notFound("质量事件");
+    const q = rows[0];
+
+    if (q.state === "closed")
+      this.invariant("capa-on-closed", `${q.code} 已经关闭，不再改整改措施`);
+    /* 质疑有自己的闭环（回复 → 判定）。给它挂一份整改措施，
+       读的人会以为质疑也要走整改流程，而它不走。 */
+    if (q.kind === "query")
+      this.invariant("capa-not-on-query",
+        `${q.code} 是数据质疑 —— 它走回复与判定，不走 CAPA`);
+    /* 期限早于问题提出日，是把整改倒着排 —— 多半是填错了年份。 */
+    if (Date.parse(b.dueOn) < Date.parse(day(q.raised_on)!))
+      this.invariant("capa-due-before-found",
+        `整改期限 ${b.dueOn} 早于问题提出日 ${day(q.raised_on)}`);
+
+    const owner = b.ownerAccountId ?? p.accountId;
+    await c.client.query(
+      `UPDATE quality_event
+          SET capa_plan = $2, capa_owner_account_id = $3, capa_due_on = $4
+        WHERE id = $1`, [id, b.plan, owner, b.dueOn]);
+    await this.audit.write({
+      action: "写整改措施", targetType: "quality_event", targetId: q.code,
+      before: { capaPlan: q.capa_plan }, after: { capaPlan: b.plan, dueOn: b.dueOn },
+      reason: b.plan.slice(0, 200), studySiteId: q.study_site_id });
+
+    const one = await this.listQualityEvents({ limit: 1, id });
+    return {
+      data: one.items[0]!,
+      sideEffects: [{
+        type: "CapaPlanned",
+        summary: `${q.code} 的整改措施已提交，期限 ${b.dueOn} —— ` +
+          "**验证关闭在 QA 那边，写措施的人不能自己关**",
+        ref: id, studySiteId: q.study_site_id
+      }] as Effect[]
+    };
   }
 
   async closeQualityEvent(id: string, b: { reason: string }) {

@@ -15,6 +15,9 @@ import { DEFAULT_STARTUP_ITEMS } from "@sitedesk/contracts";
 
 let app: INestApplication;
 let boss: Caller, crcWu: Caller, crcGuo: Caller, cra: Caller, inst: Caller;
+/* 立项受理的门是 `accept`，经营层没有它；而机构办张慧敏的行范围只到协和，
+   测试新建的医院在她范围之外（= 不存在，404）。所以用管理员。 */
+let admin: Caller;
 const K = () => ({ "Idempotency-Key": randomUUID() });
 
 beforeAll(async () => {
@@ -24,6 +27,7 @@ beforeAll(async () => {
   crcGuo = await as(app, "guoxiaoxu");
   cra    = await as(app, "linmin");
   inst   = await as(app, "zhanghm");
+  admin  = await as(app, "admin");
 }, 120_000);
 afterAll(async () => { await app?.close(); });
 
@@ -170,13 +174,28 @@ describe("SIV 闸门：Phase 3 的 unavailable 占位现在是真查询了", () 
 
        现在以策略为准收口：每一次推进都要写原因，缺了就是 422。 */
     const study = (await boss.get("/v1/studies?limit=1")).body.items[0];
+    const hospital = `原因校验测试医院-${randomUUID().slice(0, 8)}`;
     const created = await boss.post("/v1/study-sites", {
       studyId: study.id, code: `RS-${randomUUID().slice(0, 8)}`,
-      hospital: "原因校验测试医院", dept: "科", city: "北京",
+      hospital, dept: "科", city: "北京",
       piName: "测试研究者", contracted: 5, unitPriceCents: 1000000
     });
     expect(created.status).toBe(201);
     const id = created.body.id;
+
+    /* 迁移 0038 之后「伦理递交」也有闸门：机构没受理，材料递不到伦理。
+       这条测的是**缺原因**，所以先把受理办掉 ——
+       否则下面那三条会红在一个跟"原因"毫无关系的闸门上，
+       而报错文案会把人引向完全错误的方向（正是这条断言当初挖出来的那种毛病）。 */
+    const ac = await boss.post("/v1/site-acceptances",
+      { studyId: study.id, hospital, docs: ["立项申请表", "方案及研究者手册"] });
+    expect(ac.status, JSON.stringify(ac.body)).toBe(201);
+    for (const d of ac.body.docs)
+      expect((await admin.post(
+        `/v1/site-acceptances/${ac.body.id}/docs/${d.seq}:set`,
+        { present: true }, K())).status).toBe(201);
+    expect((await admin.post(
+      `/v1/site-acceptances/${ac.body.id}:accept`, {}, K())).status).toBe(201);
 
     /* 可逆节点也一样要写 —— 敏感与否看的是动作，不是目标状态 */
     const missing = await boss.post(`/v1/study-sites/${id}:advance`,

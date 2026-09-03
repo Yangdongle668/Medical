@@ -16,6 +16,9 @@ export * from "./site/staffing.js";
 export * from "./clinical/model.js";
 export * from "./clinical/accountability.js";
 export * from "./cost/model.js";
+export * from "./bizdev/model.js";
+export * from "./finance/model.js";
+export * from "./oversight/model.js";
 
 /* 端点定义有副作用（注册到 registry），必须被导入 */
 import "./platform/api.js";
@@ -25,3 +28,6 @@ import "./site/api.js";
 import "./clinical/api.js";
 import "./clinical/accountability.js";
 import "./cost/api.js";
+import "./bizdev/api.js";
+import "./finance/api.js";
+import "./oversight/api.js";

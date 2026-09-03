@@ -20,8 +20,40 @@ import { EnrollmentPage } from "./features/enrollment/EnrollmentPage.js";
 import { ScreenPage } from "./features/enrollment/ScreenPage.js";
 import { StaffPage } from "./features/staff/StaffPage.js";
 import { AuditPage } from "./features/audit/AuditPage.js";
+import { DashPage } from "./features/dashboard/DashPage.js";
+import { PnlPage } from "./features/cost/PnlPage.js";
+import { PeoplePage } from "./features/staff/PeoplePage.js";
+import { SubjectsPage } from "./features/subject/SubjectsPage.js";
+import { PrescreenPage } from "./features/subject/PrescreenPage.js";
+import { PaymentsPage } from "./features/subject/PaymentsPage.js";
+import { EthicsPage } from "./features/ethics/EthicsPage.js";
+import { StartupSummaryPage } from "./features/site/StartupSummaryPage.js";
+import { MaterialPage } from "./features/material/MaterialPage.js";
+import { PmPage } from "./features/workbench/PmPage.js";
+import { TeamPage } from "./features/workbench/TeamPage.js";
+import { ApprovalsPage } from "./features/workbench/ApprovalsPage.js";
+import { SchedulePage } from "./features/workbench/SchedulePage.js";
+import { PiPage } from "./features/external/PiPage.js";
+import { InstPage } from "./features/external/InstPage.js";
+import { InstQcPage } from "./features/external/InstQcPage.js";
+import { InstRegistryPage } from "./features/external/InstRegistryPage.js";
+import { FeasPage } from "./features/bizdev/FeasPage.js";
+import { PricePage } from "./features/bizdev/PricePage.js";
+import { BidPage } from "./features/bizdev/BidPage.js";
+import { ChangePage } from "./features/bizdev/ChangePage.js";
+import { BillPage } from "./features/finance/BillPage.js";
+import { ClientPage } from "./features/finance/ClientPage.js";
+import { CashPage } from "./features/finance/CashPage.js";
+import { QueryPage } from "./features/dataquery/QueryPage.js";
+import { DmPage } from "./features/dataquery/DmPage.js";
+import { MonPage } from "./features/oversight/MonPage.js";
+import { QaAuditPage } from "./features/oversight/QaAuditPage.js";
+import { IntakePage } from "./features/bizdev/IntakePage.js";
+import { AcceptPage } from "./features/instac/AcceptPage.js";
+import { IsfPage } from "./features/isf/IsfPage.js";
 import { ComingSoon } from "./shell/ComingSoon.js";
 import { MODULES } from "./shell/modules.js";
+import { MOCK_ROLES, type MockRole } from "./mocks/roles.js";
 import "./shell/styles.css";
 
 /* 已经建好的页 —— 按路径登记。
@@ -38,7 +70,40 @@ const BUILT: Record<string, React.ReactElement> = {
   "/enr": <EnrollmentPage />,
   "/screen": <ScreenPage />,
   "/staff": <StaffPage />,
-  "/trail": <AuditPage />
+  "/trail": <AuditPage />,
+  "/dash": <DashPage />,
+  "/pnl": <PnlPage />,
+  "/people": <PeoplePage />,
+  "/subjects": <SubjectsPage />,
+  "/prescreen": <PrescreenPage />,
+  "/payments": <PaymentsPage />,
+  "/ethics": <EthicsPage />,
+  "/startup": <StartupSummaryPage />,
+  "/material": <MaterialPage />,
+  "/pm": <PmPage />,
+  "/team": <TeamPage />,
+  "/approvals": <ApprovalsPage />,
+  "/sched": <SchedulePage />,
+  "/pi": <PiPage />,
+  "/inst": <InstPage />,
+  "/inst/qc": <InstQcPage />,
+  "/inst/registry": <InstRegistryPage />,
+  "/feas": <FeasPage />,
+  "/price": <PricePage />,
+  "/bid": <BidPage />,
+  "/change": <ChangePage />,
+  "/bill": <BillPage />,
+  "/clients": <ClientPage />,
+  "/cash": <CashPage />,
+  "/queries": <QueryPage />,
+  "/dm": <DmPage />,
+  "/monitoring": <MonPage />,
+  /* `/trail` 是**操作留痕**（谁改了什么），`/audit` 是**质量稽查**（我方查自己）。
+     中文都叫"审计/稽查"，但它们毫无关系 —— 两个页面组件因此不同名。 */
+  "/audit": <QaAuditPage />,
+  "/intake": <IntakePage />,
+  "/inst/intake": <AcceptPage />,
+  "/isf": <IsfPage />
 };
 
 /* 45 个模块的路由。同一个路径被几个模块共用是正常的
@@ -80,13 +145,20 @@ const USE_MOCKS = import.meta.env.DEV || import.meta.env.VITE_USE_MOCKS === "1";
 
 /** mock 模式下用 `?as=boss` 换一个身份看同一个页面。
  *  存进 sessionStorage 是因为换页面要保持住 —— 这套界面里
- *  「同一个按钮，谁点得动」是要看得见的差别，翻一页就丢了等于没有。 */
-function mockRoleFromUrl(): "crc" | "boss" {
+ *  「同一个按钮，谁点得动」是要看得见的差别，翻一页就丢了等于没有。
+ *
+ *  **外部两个身份（inst / pi）不是凑数的。** 它们的行范围
+ *  （本院 / 本人担任研究者的中心）比内部窄，而"窄"这件事
+ *  只有真的换过去看一眼才发现得了 —— 界面上少了哪几行、
+ *  哪个按钮点不动。mock 里扮不了外部角色，那四页就等于没测过。 */
+function mockRoleFromUrl(): MockRole {
   const q = new URLSearchParams(location.search).get("as");
+  const ok = (v: string | null): v is MockRole =>
+    v !== null && (MOCK_ROLES as readonly string[]).includes(v);
   try {
-    if (q === "boss" || q === "crc") { sessionStorage.setItem("sitedesk.as", q); return q; }
+    if (ok(q)) { sessionStorage.setItem("sitedesk.as", q); return q; }
     const saved = sessionStorage.getItem("sitedesk.as");
-    if (saved === "boss" || saved === "crc") return saved;
+    if (ok(saved)) return saved;
   } catch { /* 隐私模式下 sessionStorage 会抛 —— 退回默认身份即可 */ }
   return "crc";
 }

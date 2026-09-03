@@ -1,12 +1,28 @@
 import { http, HttpResponse } from "msw";
 import { allEndpoints, SITE_STATES, DEFAULT_HANDOVER_ITEMS } from "@sitedesk/contracts";
+import { feasibilityScore, feasibilityBias, reviewBids, scopeCreep, changeDays,
+  arAging, cashFlow, roundCents, WORKDAYS_PER_MONTH, DAYS_PER_MONTH, type CashIn }
+  from "@sitedesk/calc";
 import { siteRevenue, siteCost, siteMargin, CALC_VERSION,
   saeTimeliness, saeReportHours, type CostEntry } from "@sitedesk/calc";
+import { queryLoad, siteQueryDensity, densityVerdict, QUERY_STALE_DAYS }
+  from "@sitedesk/calc";
+import { monitorPlan, monitorDue, mvrLoad, mvrLagDays, travelEstimateCents, MVR_DUE_DAYS }
+  from "@sitedesk/calc";
+import { gradeSite, capaEffectiveness } from "@sitedesk/calc";
+import { intakeMath, filingGap, INTAKE_GM_GATE } from "@sitedesk/calc";
+import { isfVerdict, isfSummary, isfRank, type IsfCategory } from "@sitedesk/calc";
 import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
-import { makeScenario, SITES_LIST, STAFF_LIST, FUNNELS, AUDIT_ENTRIES,
+import { IDENTITIES, type MockRole } from "./roles.js";
+import type { MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
+  MockMonitorVisit, MockAudit, MockIntake,
+  MockAcceptance, MockIsf } from "./scenario.js";
+import { CLIENTS } from "./scenario.js";
+import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
   mkTimesheet, WORK_TYPE_META,
+  type MockSubject, type MockPayment,
   type Scenario, type MockVisit, type MockHandover, type MockRateCard,
   type MockTimesheet } from "./scenario.js";
 
@@ -46,58 +62,227 @@ export const currentScenario = () => scenario;
 
 /** mock 身份。切换它可以看到「同一个接口，不同的人看到不同的列、
  *  以及同一个按钮，不同的人点不点得动」。
- *  由 URL 上的 `?as=boss` 驱动（见 main.tsx），所以 e2e 里换个人只要换个地址。 */
-let mockRole: "crc" | "boss" = "crc";
-export const setMockRole = (r: "crc" | "boss") => { mockRole = r; };
-
-/** 与种子里的 role_action / role_field **逐字**同一套口径。
+ *  由 URL 上的 `?as=boss` 驱动（见 main.tsx），所以 e2e 里换个人只要换个地址。
  *
- *  抹平任何一条，界面上最要紧的差别就在 mock 上消失了，
- *  而真库上一登录就撞见 —— 这套 mock 存在的意义正是提前撞见它们：
- *
- *  · **CRC 没有 advance**：清单做完了，最后那一下也不归他按
- *  · **CRC 没有 cost**：他填工时，却看不到自己值多少钱
- *  · **只有 boss 有 rateWrite**：费率卡是经营层的事
- *  · **boss 没有 subject**：钱看得全，受试者明细反而看不到 */
-const ROLE = {
-  crc: {
-    id: "a-wutong", login: "wutong", name: "吴桐",
-    role: { id: "r-crc", code: "crc", name: "临床协调员 CRC" },
-    rowRule: "assigned", fields: ["subject"],
-    actions: ["ethics", "subjRead", "subjWrite", "timeWrite"],
-    /* **module_key，不是路径。** 这里曾经写的是 ["today","sites",…]，
-       而真接口给的是 role_module 里的键 —— 两者恰好长得像，
-       所以在导航还是写死数组的时候看不出区别。侧栏改成按模块出之后，
-       一份路径清单会让 mock 模式下的导航整个空掉。
-       取值与迁移 0026 里 crc 的授予一致。 */
-    modules: ["crc", "mysite", "startup", "sched", "subj", "prescreen", "ethics",
-      "query", "capa", "isf", "material", "pay", "handover", "time"]
-  },
-  boss: {
-    id: "a-lingyuan", login: "lingyuan", name: "凌远",
-    role: { id: "r-boss", code: "boss", name: "经营层" },
-    rowRule: "all", fields: ["cost", "margin", "price", "staff"],
-    actions: ["advance", "approve", "bid", "manage", "rateWrite",
-      "subjRead", "timeWrite"],
-    modules: ["dash", "intake", "sites", "enr", "screen", "client", "cash", "bid",
-      "change", "staff", "people", "time", "pnl", "bill", "qa", "mon", "price",
-      "org", "trail"]
-  }
-} as const;
+ *  四个身份的目录在 `mocks/roles.ts`，与迁移 0026 逐字同源。 */
+let mockRole: MockRole = "crc";
+export const setMockRole = (r: MockRole) => { mockRole = r; };
+const identity = () => IDENTITIES[mockRole];
 
+/** mock 的行范围。
+ *
+ *  **只对 hospital 与 pi 两条规则生效。** assigned（CRC / CRA）在这里
+ *  演不出来：mock 没有 site_assignment 那张表，而硬编一份"吴桐带哪几个"
+ *  会凭空立起第四套口径。所以内部身份照旧看到全部三个中心 ——
+ *  这一点写在这里，免得有人把它当成"mock 里 RLS 是通的"。
+ *
+ *  外部两条必须是真的：机构工作台与研究者工作台**整页的内容就是"看得窄"**，
+ *  看不窄，那两页画得出来也说不出话。 */
+function visibleSiteIds(): Set<string> {
+  const me = identity();
+  const keep =
+    me.rowRule === "hospital" ? SITES_LIST.filter(s => s.hospital === me.orgRef)
+    : me.rowRule === "pi"     ? SITES_LIST.filter(s => s.piAccountId === me.id)
+    : SITES_LIST;
+  return new Set(keep.map(s => s.id));
+}
+const siteInScope = (id: string) => visibleSiteIds().has(id);
+/** 范围内的中心本身。**不要拿 inScope() 去筛它们** ——
+ *  中心行上那两个键叫 `id` / `code`，不叫 `studySiteId` / `siteCode`，
+ *  于是 inScope 会走到"两个键都没有，原样放行"那一支，
+ *  一行都不筛而且不报错。 */
+function visibleSites() {
+  const ids = visibleSiteIds();
+  return SITES_LIST.filter(s => ids.has(s.id));
+}
+/** 按中心代号收敛一批行 —— 范围外的**不是空值，是不存在**。 */
+function inScope<T extends { studySiteId?: string; siteCode?: string }>(xs: T[]): T[] {
+  const ids = visibleSiteIds();
+  const codes = new Set(SITES_LIST.filter(s => ids.has(s.id)).map(s => s.code));
+  return xs.filter(x =>
+    x.studySiteId !== undefined ? ids.has(x.studySiteId)
+    : x.siteCode !== undefined  ? codes.has(x.siteCode)
+    : true);
+}
+
+
+/** 看得见的数据质疑。**外部方一条都没有** ——
+ *  行策略上就关掉了（迁移 0032），不是靠"没有这个模块"挡着。 */
+function visibleQueries() {
+  if (identity().isExternal) return [];
+  return inScope(scenario.dataQueries);
+}
+
+/** 按 id 取一条质疑，顺带把"范围外 = 不存在"这条统一掉。 */
+function findQuery(url: string, re: RegExp):
+  { q: MockQuery } | { problem: Response } {
+  const id = seg(url, re);
+  const q = visibleQueries().find(x => x.id === id);
+  return q ? { q } : { problem: HttpResponse.json(
+    problem("not-found", 404, "数据质疑不存在"), { status: 404 }) };
+}
+
+/** 不变量被破坏时的那个 422。**invariant 名字要带上** ——
+ *  界面靠它区分"缺材料"和"存根只读"，靠 detail 文案区分是做不到的。 */
+function invariant(name: string, detail: string) {
+  return HttpResponse.json(
+    { ...problem("invariant-violated", 422, detail), invariant: name },
+    { status: 422 });
+}
+
+/** 看得见的立项受理。
+ *
+ *  **这一张跟质疑、监查相反：外部方不但看得见，它本来就是给对方看的。**
+ *  但行那一维照旧收敛 —— 机构办按医院，我方按派工 / 分组。
+ *
+ *  而且**不能用 inScope()**：受理发生在建档之前，
+ *  那两条 studySiteId 为空的记录会被 inScope 当成"两个键都没有"原样放行，
+ *  于是机构办能看到别家医院递的材料。这里按医院与中心两条路各判各的。 */
+function visibleAcceptances(): MockAcceptance[] {
+  const me = identity();
+  const ids = visibleSiteIds();
+  const hospitals = new Set(visibleSites().map(s => s.hospital));
+  /* 机构办的行范围是"本院"—— 它认的是医院名，不是中心 id，
+     所以那两条还没建档的受理它照样看得到。 */
+  if (me.rowRule === "hospital")
+    return scenario.acceptances.filter(a => a.hospital === me.orgRef);
+  if (me.rowRule === "all") return scenario.acceptances;
+  return scenario.acceptances.filter(a =>
+    (a.studySiteId !== null && ids.has(a.studySiteId)) || hospitals.has(a.hospital));
+}
+function findAcceptance(url: string, re: RegExp):
+  { a: MockAcceptance } | { problem: Response } {
+  const id = seg(url, re);
+  const a = visibleAcceptances().find(x => x.id === id);
+  return a ? { a } : { problem: HttpResponse.json(
+    problem("not-found", 404, "立项受理不存在"), { status: 404 }) };
+}
+function acceptanceDto(a: MockAcceptance) {
+  return {
+    ...a,
+    presentDocs: a.docs.filter(d => d.present).length,
+    /* **缺的是哪几份 —— 名字，不是数目。** 补正通知要写的正是这几个名字。 */
+    missingDocs: a.docs.filter(d => !d.present).map(d => d.name)
+  };
+}
+
+/** 看得见的中心文件。**机构办翻得到本院那摞纸** ——
+ *  研究者文件夹本来就放在医院里，对它藏起来，
+ *  系统里的台账和现场那一摞就对不上了。 */
+function visibleIsf(): MockIsf[] { return inScope(scenario.isf); }
+
+/** 状态是**算出来的**，mock 也要算 —— 写死在 fixture 里，
+ *  跑到下个季度它就开始撒谎，而页面看起来一切正常。 */
+function isfDto(i: MockIsf) {
+  return { ...i, ...isfVerdict({
+    category: i.category as IsfCategory, present: i.present,
+    expiresOn: i.expiresOn, leadDays: null,
+    quantity: i.quantity, reorderAt: i.reorderAt
+  }, TODAY_STR) };
+}
+
+/** 看得见的监查访视。**外部方一条都没有** ——
+ *  监查策略不能交给被监查的一方（迁移 0033 的行策略）。 */
+function visibleMonitorVisits() {
+  if (identity().isExternal) return [];
+  return inScope(scenario.monitorVisits);
+}
+function findVisit(url: string, re: RegExp):
+  { v: MockMonitorVisit } | { problem: Response } {
+  const id = seg(url, re);
+  const v = visibleMonitorVisits().find(x => x.id === id);
+  return v ? { v } : { problem: HttpResponse.json(
+    problem("not-found", 404, "监查访视不存在"), { status: 404 }) };
+}
+/** 服务端算出来的那几个派生字段 —— mock 也要算，否则页面在两边不一样。 */
+function monitorDto(v: MockMonitorVisit) {
+  const lag = mvrLagDays(
+    { performedOn: v.performedOn, reportSubmittedOn: v.reportSubmittedOn }, TODAY_STR);
+  const notYetThere = v.state === "proposed" || v.state === "scheduled";
+  const over = notYetThere
+    ? Math.round((Date.parse(TODAY_STR) - Date.parse(v.plannedOn)) / 86_400_000) : 0;
+  return mask({
+    ...v,
+    openItems: v.items.filter(i => i.doneAt === null).length,
+    mvrLagDays: lag,
+    mvrOverdue: v.reportSubmittedOn === null && lag !== null && lag > MVR_DUE_DAYS,
+    visitOverdueDays: over > 0 ? over : null
+  });
+}
+
+/** 看得见的内部稽查。**外部方一条都没有** ——
+ *  把自查报告给被查方看，下一次自查就查不出东西了。 */
+function visibleAudits() {
+  if (identity().isExternal) return [];
+  return inScope(scenario.audits);
+}
+function findAudit(url: string, re: RegExp):
+  { a: MockAudit } | { problem: Response } {
+  const id = seg(url, re);
+  const a = visibleAudits().find(x => x.id === id);
+  return a ? { a } : { problem: HttpResponse.json(
+    problem("not-found", 404, "内部稽查不存在"), { status: 404 }) };
+}
+const auditDto = (a: MockAudit) => ({
+  ...a,
+  openFindings: a.findings.filter(f => f.state === "open").length,
+  repeatFindings: a.findings.filter(f => f.repeatOf !== null).length
+});
+
+/** 质量事件的 CAPA 派生字段 —— 服务端算什么，这里算什么。 */
+function qualityDto(e: Scenario["qualityEvents"][number]) {
+  const over = e.capaDueOn && e.state !== "closed"
+    ? Math.round((Date.parse(TODAY_STR) - Date.parse(e.capaDueOn)) / 86_400_000) : 0;
+  return {
+    ...e,
+    category: e.category ?? null,
+    capaPlan: e.capaPlan ?? null,
+    capaOwnerAccountId: e.capaOwnerAccountId ?? null,
+    capaOwnerName: e.capaOwnerName ?? null,
+    capaDueOn: e.capaDueOn ?? null,
+    capaOverdueDays: over > 0 ? over : null,
+    /* **已指派、还没写措施** —— 它不是「正在整改」，是有人欠着一份措施。 */
+    owesCapaPlan: !!e.capaOwnerAccountId && !e.capaPlan
+  };
+}
+
+/** 立项申请的派生字段 —— 毛利率与保本合同额由 calc 算，mock 不另写一份。
+ *  **毛利率尤其不能是行上的一个数**：能自己报毛利率的申请，门槛就形同虚设。 */
+function intakeDto(x: MockIntake) {
+  const m = intakeMath({
+    contractCents: x.contractCents, estimatedCostCents: x.estimatedCostCents,
+    plannedSubjects: x.plannedSubjects, plannedSites: x.plannedSites
+  });
+  return mask({
+    ...x,
+    grossCents: m.grossCents,
+    ...(m.grossMargin !== null ? { grossMargin: m.grossMargin } : {}),
+    belowGate: m.belowGate,
+    ...(m.perSubjectCents !== null ? { perSubjectCents: m.perSubjectCents } : {}),
+    breakEvenContractCents: m.breakEvenContractCents,
+    subjectsPerSite: m.subjectsPerSite
+  });
+}
+/** 立项对外部方整表关闭 —— 看得到我们按什么毛利率接项目，下一轮就不用谈了。 */
+const visibleIntake = () => identity().isExternal ? [] : scenario.intake;
+
+const TODAY_STR = new Date().toISOString().slice(0, 10);
 
 const me = () => {
-  const r = ROLE[mockRole];
+  const r = identity();
+  const scope = visibleSiteIds();
   return {
     account: {
       id: r.id, login: r.login, displayName: r.name,
-      role: { ...r.role, isExternal: false },
-      team: { id: "t1", code: "G-01", name: "华东华南组" },
-      isExternal: false, orgRef: null, status: "active",
+      role: { ...r.role, isExternal: r.isExternal },
+      /* 外部方**没有分组** —— 分组是我方承接项目的单位，
+         给机构办安一个「华东华南组」会让"我的团队"那一页凭空成立。 */
+      team: r.isExternal ? null : { id: "t1", code: "G-01", name: "华东华南组" },
+      isExternal: r.isExternal, orgRef: r.orgRef, status: "active",
       joinedOn: "2024-03-01", disabledAt: null, disabledReason: null,
       lastLoginAt: new Date().toISOString()
     },
-    scopeLabel: `${SITES_LIST.length} 个中心 · 1 个项目`,
+    scopeLabel: `${scope.size} 个中心 · 1 个项目`,
     permissions: {
       rowRule: r.rowRule, fields: [...r.fields],
       actions: [...r.actions], modules: [...r.modules]
@@ -108,9 +293,36 @@ const me = () => {
   };
 };
 
+/* 列权限在 mock 里也要**删字段**，不是置 null。
+   置 null 的话前端会写成 `?? "—"`，而真库上那个字段根本不在 ——
+   `undefined ?? "—"` 也是 "—"，看起来一样；
+   但"整列不画"和"画一列横杠"是两种不同的界面，
+   只有真库那一侧会暴露出来。 */
+const canSeeSubject = () => identity().fields.includes("subject");
+
+function maskSubject(s: MockSubject) {
+  if (canSeeSubject()) return { ...s, randomizationNo: s.randomizationNo ?? undefined };
+  const { screeningNo: _n, randomizationNo: _r, ...rest } = s;
+  return rest as Omit<MockSubject, "screeningNo" | "randomizationNo">;
+}
+function maskPayment(p: MockPayment) {
+  if (canSeeSubject()) return p;
+  const { screeningNo: _n, ...rest } = p;
+  return rest as Omit<MockPayment, "screeningNo">;
+}
+const subjectFrom = (request: Request, re: RegExp) => {
+  const [, id] = new URL(request.url).pathname.match(re) ?? [];
+  return scenario.subjects.find(x => x.id === id);
+};
+const notFoundSubject = () =>
+  HttpResponse.json(problem("not-found", 404, "受试者不存在"), { status: 404 });
+
 const daysBetween = (a: string, b: string) =>
   Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
 const todayStr = () => new Date().toISOString().slice(0, 10);
+/** 某个日期往后 n 天。**用 UTC 算** —— 本地时区在夏令时切换那两天会差一天。 */
+const shiftStr = (from: string, n: number) =>
+  new Date(Date.parse(from + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
 
 /** 按窗口关闭日升序 —— CRC 每天第一件事是看「今天谁到期」 */
 const byWindow = (a: MockVisit, b: MockVisit) => a.windowTo.localeCompare(b.windowTo);
@@ -260,12 +472,17 @@ export const scenarioHandlers = [
 
   http.get(pathToRegExp("/v1/subject-visits"), ({ request }) => {
     const q = new URL(request.url).searchParams;
-    let items = scenario.visits.map(withDaysLeft);
+    let items = inScope(scenario.visits).map(withDaysLeft);
     const subjectId = q.get("subjectId");
     if (subjectId) items = items.filter(v => v.subjectId === subjectId);
     if (q.get("outOfWindow") === "true") items = items.filter(v => v.outOfWindow);
     const status = q.getAll("status");
     if (status.length) items = items.filter(v => status.includes(v.status));
+    /* 待 PI 确认 = 已完成、但还没签字。**在服务端筛** ——
+       前端取一页回来自己挑，访视上了几百条之后第一页全是历史，
+       研究者工作台就永远是空的。 */
+    if (q.get("pendingPi") === "true")
+      items = items.filter(v => v.status === "done" && !v.piConfirmedAt);
     items.sort(byWindow);
     return HttpResponse.json({ items, nextCursor: null });
   }),
@@ -275,7 +492,10 @@ export const scenarioHandlers = [
   http.get(pathToRegExp("/v1/subject-visits/{id}"), ({ request }) => {
     const [, id] = new URL(request.url).pathname.match(/\/subject-visits\/([^/?]+)/) ?? [];
     const v = scenario.visits.find(x => x.id === id);
-    if (!v) return HttpResponse.json(problem("not-found", 404, "访视不存在"), { status: 404 });
+    /* 范围之外与不存在**同样是 404** —— 给 403 等于承认"它存在但不给你看"，
+       那本身就是一条信息。 */
+    if (!v || !siteInScope(v.studySiteId))
+      return HttpResponse.json(problem("not-found", 404, "访视不存在"), { status: 404 });
     return HttpResponse.json(withDaysLeft(v));
   }),
 
@@ -286,6 +506,23 @@ export const scenarioHandlers = [
     if (!v) return HttpResponse.json(problem("not-found", 404, "访视不存在"), { status: 404 });
     const t = v.tasks.find(x => x.seq === Number(seq));
     if (t && !t.doneAt) t.doneAt = new Date().toISOString();
+    return HttpResponse.json({ data: withDaysLeft(v), sideEffects: [] }, { status: 201 });
+  }),
+
+  /* PI 确认。**只有该中心的 PI 本人能按** —— 服务端那条 I3 在这里
+     演成两半：别的角色没有 piConfirm 动作（按钮画不出来），
+     范围外的访视 404（连行都看不到）。 */
+  http.post(pathToRegExp("/v1/subject-visits/{id}:confirm"), ({ request }) => {
+    const id = seg(request.url, /\/subject-visits\/([^/:]+):confirm/);
+    const v = scenario.visits.find(x => x.id === id);
+    if (!v || !siteInScope(v.studySiteId)) return HttpResponse.json(
+      problem("not-found", 404, "访视不存在"), { status: 404 });
+    if (!identity().actions.includes("piConfirm")) return HttpResponse.json(
+      problem("forbidden", 403, "只有该中心的研究者可以确认访视"), { status: 403 });
+    if (v.status !== "done") return HttpResponse.json(
+      problem("invariant-violated", 422, "访视尚未完成，没有可确认的内容"), { status: 422 });
+    v.piConfirmedAt = new Date().toISOString();
+    v.piConfirmedByName = identity().name;
     return HttpResponse.json({ data: withDaysLeft(v), sideEffects: [] }, { status: 201 });
   }),
 
@@ -410,12 +647,989 @@ export const scenarioHandlers = [
     });
   }),
 
-  http.get(pathToRegExp("/v1/quality-events"), () =>
-    HttpResponse.json({ items: scenario.qualityEvents, nextCursor: null })),
+  http.post(pathToRegExp("/v1/study-sites/{id}/ip-movements"), async ({ request }) => {
+    const id = seg(request.url, /\/study-sites\/([^/]+)\/ip-movements/);
+    const b = await request.json() as {
+      kind: string; quantity: number; movedOn?: string;
+      subjectRef?: string; refNo?: string; note?: string };
+    const m = {
+      id: `ip-${scenario.ipMovements.length + 1}`, studySiteId: id!,
+      movedOn: b.movedOn ?? todayStr(), kind: b.kind, quantity: b.quantity,
+      subjectRef: b.subjectRef ?? null, refNo: b.refNo ?? null, note: b.note ?? null
+    };
+    /* **只追加。** mock 里也不提供改与删 —— 提供了的话，
+       前端迟早会长出一个"编辑"按钮，而真后端根本没有那个入口。 */
+    scenario.ipMovements.push(m);
+    return HttpResponse.json(m, { status: 201 });
+  }),
+
+  /* ── 生物样本 ──────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/study-sites/{id}/specimens"), ({ request }) => {
+    const id = seg(request.url, /\/study-sites\/([^/]+)\/specimens/);
+    const q = new URL(request.url).searchParams;
+    let items = scenario.specimens.filter(x => x.studySiteId === id);
+    if (q.get("openOnly") === "true") items = items.filter(x => !x.closed);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/study-sites/{id}/specimens"), async ({ request }) => {
+    const id = seg(request.url, /\/study-sites\/([^/]+)\/specimens/);
+    const b = await request.json() as {
+      subjectRef: string; kind: string; collectedOn: string; trackingNo?: string };
+    const x = {
+      id: `sp-${scenario.specimens.length + 1}`, studySiteId: id!,
+      subjectRef: b.subjectRef, kind: b.kind, collectedOn: b.collectedOn,
+      shippedOn: null, receivedOn: null, discardedOn: null,
+      trackingNo: b.trackingNo ?? null, closed: false
+    };
+    scenario.specimens.push(x);
+    return HttpResponse.json(x, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/specimens/{id}:advance"), async ({ request }) => {
+    const id = seg(request.url, /\/specimens\/([^/:]+):advance/);
+    const x = scenario.specimens.find(y => y.id === id);
+    if (!x) return HttpResponse.json(problem("not-found", 404, "样本不存在"), { status: 404 });
+    const b = await request.json() as { stage: string; on: string };
+    if (b.stage === "shipped") x.shippedOn = b.on;
+    if (b.stage === "received") x.receivedOn = b.on;
+    if (b.stage === "discarded") x.discardedOn = b.on;
+    /* 闭环 = 收到 **或** 销毁。两个都没有就是在路上不知去向 ——
+       这个布尔是算出来的，不是存的，和后端同一条口径。 */
+    x.closed = !!(x.receivedOn || x.discardedOn);
+    return HttpResponse.json({ data: x, sideEffects: [] }, { status: 201 });
+  }),
+
+  /* ── 启动清单汇总 ──────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/startup-checklists"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    /* **走同一个 checklistFor** —— 汇总另算一遍的话，
+       汇总页和详情页会在"逾期"这一栏上对不上，
+       而那正是这条端点的测试里花了最多力气钉住的东西。 */
+    let items = visibleSites().map(s => {
+      const { items: _items, ...summary } = checklistFor(s.id);
+      return summary;
+    });
+    if (q.get("blockedOnly") === "true") items = items.filter(x => x.blockingOpen > 0);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.get(pathToRegExp("/v1/quality-events"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = inScope(scenario.qualityEvents);
+    const kinds = q.getAll("kind");
+    if (kinds.length) items = items.filter(e => kinds.includes(e.kind));
+    return HttpResponse.json({ items: items.map(qualityDto), nextCursor: null });
+  }),
+
+  /* 写整改措施。**写措施的人不能自己验证关闭** ——
+     这里是 capaWrite，关闭是 closeQA（上面那个端点）。 */
+  http.post(pathToRegExp("/v1/quality-events/{id}:capa"), async ({ request }) => {
+    const id = seg(request.url, /\/quality-events\/([^/:]+):capa/);
+    const b = await request.json() as { plan?: string; dueOn?: string };
+    const e = inScope(scenario.qualityEvents).find(x => x.id === id);
+    if (!e) return HttpResponse.json(
+      problem("not-found", 404, "质量事件不存在"), { status: 404 });
+    if (!identity().actions.includes("capaWrite")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能写整改措施"), { status: 403 });
+    /* 质疑有自己的闭环（回复 → 判定），不挂 CAPA。 */
+    if (e.kind === "query") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${e.code} 是数据质疑 —— 它走回复与判定，不走 CAPA`), { status: 422 });
+    if ((b.plan ?? "").trim().length < 10) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：整改措施至少 10 个字"),
+      { status: 422 });
+    if (b.dueOn && b.dueOn < e.raisedOn) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `整改期限 ${b.dueOn} 早于问题提出日 ${e.raisedOn}`), { status: 422 });
+    e.capaPlan = b.plan!.trim();
+    e.capaDueOn = b.dueOn ?? null;
+    e.capaOwnerAccountId = identity().id;
+    e.capaOwnerName = identity().name;
+    return HttpResponse.json({
+      data: qualityDto(e),
+      sideEffects: [{ type: "CapaPlanned", ref: e.id,
+        summary: `${e.code} 的整改措施已提交，期限 ${b.dueOn} —— ` +
+          "验证关闭在 QA 那边，写措施的人不能自己关" }]
+    }, { status: 201 });
+  }),
+
+  /* 关闭质量事件。**机构提出的由机构关** —— 这条规则在服务端，
+     这里只演它的另一半：没有 closeQA 的角色连按钮都看不到，
+     而带着 closeQA 的机构办按下去要真的让那一行从"未了结"里消失。 */
+  http.post(pathToRegExp("/v1/quality-events/{id}:close"), async ({ request }) => {
+    const id = seg(request.url, /\/quality-events\/([^/:]+):close/);
+    const b = await request.json() as { reason?: string };
+    const q = scenario.qualityEvents.find(x => x.id === id);
+    if (!q || (q.studySiteId !== undefined && !siteInScope(q.studySiteId)))
+      return HttpResponse.json(
+        problem("not-found", 404, "质量事件不存在"), { status: 404 });
+    if (!identity().actions.includes("closeQA")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能关闭质量事件"), { status: 403 });
+    /* 整改说明是**必填**（契约里的 WithReason，最短 4 个字）。
+       mock 上放行一次真库会拒的提交，等于把这条规则藏到集成测试才暴露。 */
+    if (!b.reason || b.reason.trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：整改说明至少 4 个字"),
+      { status: 422 });
+    q.state = "closed";
+    return HttpResponse.json({ data: q, sideEffects: [] }, { status: 201 });
+  }),
+
+  /* ── 立项与建档 ──────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/intake-applications/board"), () => {
+    const open = visibleIntake().filter(x => x.state === "submitted").map(intakeDto);
+    const studies = (identity().isExternal ? [] : scenario.studies).map(st => {
+      const g = filingGap(st.plannedSites, st.builtSites);
+      return mask({
+        studyId: st.id, studyCode: st.code, shortName: st.shortName,
+        clientName: st.clientName, phase: st.phase,
+        plannedSubjects: st.plannedSubjects,
+        plannedSites: g.plannedSites, builtSites: g.builtSites,
+        missingSites: g.missing, filedRatio: g.filedRatio,
+        contractCents: st.contractCents
+      });
+    }).sort((a, b) => b.missingSites - a.missingSites
+      || a.studyCode.localeCompare(b.studyCode));
+    return HttpResponse.json(mask({
+      open: open.length,
+      belowGate: open.filter(x => x.belowGate).length,
+      openContractCents: visibleIntake()
+        .filter(x => x.state === "submitted")
+        .reduce((n, x) => n + x.contractCents, 0),
+      gmGate: INTAKE_GM_GATE,
+      studies,
+      missingSites: studies.reduce((n, s) => n + s.missingSites, 0),
+      calcVersion: CALC_VERSION
+    }));
+  }),
+
+  http.get(pathToRegExp("/v1/intake-applications"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = visibleIntake().map(intakeDto);
+    const states = q.getAll("state");
+    if (states.length) items = items.filter(x => states.includes(x.state));
+    if (q.get("mine") === "true")
+      items = items.filter(x => x.submittedBy === identity().id);
+    if (q.get("belowGateOnly") === "true") items = items.filter(x => x.belowGate);
+    /* 越线的排最前 —— 按提交日排的话它会沉在底下。 */
+    items = [...items].sort((a, b) => Number(b.belowGate) - Number(a.belowGate)
+      || b.submittedOn.localeCompare(a.submittedOn));
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/intake-applications"), async ({ request }) => {
+    const b = await request.json() as Record<string, never> & {
+      drug: string; sponsorName: string; phase: string; indication: string;
+      plannedSites: number; plannedSubjects: number; enrollMonths: number;
+      contractCents: number; estimatedCostCents: number; note?: string;
+    };
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能提交立项申请"), { status: 403 });
+    const me = identity();
+    const row: MockIntake = {
+      id: `np-${scenario.intake.length + 1}`,
+      code: `NP-2026-${String(20 + scenario.intake.length).slice(-3)}`,
+      drug: b.drug, sponsorName: b.sponsorName, phase: b.phase,
+      indication: b.indication,
+      plannedSites: b.plannedSites, plannedSubjects: b.plannedSubjects,
+      enrollMonths: b.enrollMonths,
+      contractCents: b.contractCents, estimatedCostCents: b.estimatedCostCents,
+      note: b.note ?? null,
+      submittedBy: me.id, submittedByName: me.name, submittedOn: TODAY_STR,
+      state: "submitted", decidedByName: null, decidedOn: null,
+      decisionNote: null, studyId: null, studyCode: null
+    };
+    scenario.intake.unshift(row);
+    const m = intakeMath({
+      contractCents: b.contractCents, estimatedCostCents: b.estimatedCostCents,
+      plannedSubjects: b.plannedSubjects, plannedSites: b.plannedSites
+    });
+    return HttpResponse.json({
+      data: intakeDto(row),
+      sideEffects: [{ type: "IntakeSubmitted", ref: row.id,
+        summary: m.belowGate
+          ? `${row.code} 已提交 —— 测算毛利率低于 ` +
+            `${Math.round(INTAKE_GM_GATE * 100)}% 门槛，必须过经营层那一关`
+          : `${row.code} 已提交，等待经营层审批` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/intake-applications/{id}:decide"), async ({ request }) => {
+    const id = seg(request.url, /\/intake-applications\/([^/:]+):decide/);
+    const b = await request.json() as { result: string; reason?: string };
+    const x = visibleIntake().find(a => a.id === id);
+    if (!x) return HttpResponse.json(
+      problem("not-found", 404, "立项申请不存在"), { status: 404 });
+    if (!identity().actions.includes("approve")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能审批立项"), { status: 403 });
+    if (x.state !== "submitted") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${x.code} 已经${x.state === "approved" ? "批准" : "退回"}过了`), { status: 422 });
+    /* **提交人不能批准自己的申请** —— 与工时审批同一条规矩。 */
+    if (x.submittedBy === identity().id) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${x.code} 是你自己提交的 —— 立项审批不能自己批自己`), { status: 422 });
+
+    if (b.result === "returned") {
+      if (!b.reason || b.reason.trim().length < 4) return HttpResponse.json(
+        problem("invariant-violated", 422,
+          "退回必须写理由 —— 不说为什么，提交人只能猜"), { status: 422 });
+      x.state = "returned";
+      x.decidedByName = identity().name;
+      x.decidedOn = TODAY_STR;
+      x.decisionNote = b.reason.trim();
+      return HttpResponse.json({
+        data: intakeDto(x),
+        sideEffects: [{ type: "IntakeReturned", ref: x.id,
+          summary: `${x.code} 已退回 ${x.submittedByName} —— ${b.reason.trim()}` }]
+      }, { status: 201 });
+    }
+
+    /* 批准 = 同时建出项目档案。约束上两者互为充要条件，
+       所以这里也不能只走一半 —— 否则 mock 上跑得通的流程到真库上会被拒。 */
+    const code = `HJ-2026-${String(100 + scenario.studies.length).slice(-3)}`;
+    scenario.studies.push({
+      id: `st-${scenario.studies.length + 1}`, code,
+      shortName: x.drug.slice(0, 8), clientName: x.sponsorName, phase: x.phase,
+      plannedSubjects: x.plannedSubjects, plannedSites: x.plannedSites,
+      builtSites: 0, contractCents: x.contractCents
+    });
+    x.state = "approved";
+    x.decidedByName = identity().name;
+    x.decidedOn = TODAY_STR;
+    x.decisionNote = b.reason ?? null;
+    x.studyId = `st-${scenario.studies.length}`;
+    x.studyCode = code;
+    return HttpResponse.json({
+      data: intakeDto(x),
+      sideEffects: [{ type: "IntakeApproved", ref: x.id,
+        summary: `${x.drug} 已批准立项，方案编号 ${code} —— ` +
+          `合同写了 ${x.plannedSites} 个中心，现在一个都还没建档` }]
+    }, { status: 201 });
+  }),
+
+  /* ── 内部稽查 ────────────────────────────────────────────────────
+     机构质控是医院查我们，稽查是我们自己查自己。**对外部方整表关闭。** */
+  http.get(pathToRegExp("/v1/internal-audits/board"), () => {
+    const as_ = visibleAudits();
+    const evs = inScope(scenario.qualityEvents).filter(e => e.kind !== "query");
+    const cat = (e: typeof evs[number]) => e.category ?? e.kind;
+
+    const repeats = as_.flatMap(a => a.findings)
+      .filter(f => f.repeatOf !== null)
+      .map(f => {
+        const src = scenario.qualityEvents.find(e => e.id === f.repeatOf);
+        return {
+          category: src ? cat(src) : "未知",
+          sourceClosed: src ? src.state === "closed" : false
+        };
+      });
+
+    const sites = visibleSites().map(site => {
+      const q = inScope(scenario.qualityEvents).filter(e => e.studySiteId === site.id);
+      const stale = scenario.dataQueries.filter(
+        d => d.studySiteId === site.id && d.state === "open" && d.ageDays > QUERY_STALE_DAYS);
+      const input = {
+        severeOpen: q.filter(e => e.state !== "closed" && e.kind !== "sae_late"
+          && (e.severity === "major" || e.severity === "critical")).length,
+        minorOpen: q.filter(e => e.state !== "closed" && e.kind !== "sae_late"
+          && e.severity === "minor").length,
+        saeLate: q.filter(e => e.state !== "closed" && e.kind === "sae_late").length,
+        staleQueries: stale.length,
+        capaRepeats: as_.filter(a => a.studySiteId === site.id)
+          .flatMap(a => a.findings).filter(f => f.repeatOf !== null).length
+      };
+      return {
+        studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+        ...gradeSite(input), ...input
+      };
+    }).sort((a, b) => b.penalty - a.penalty || a.siteCode.localeCompare(b.siteCode));
+
+    const capaEvents = evs.map(e => ({
+      category: cat(e),
+      closed: e.state === "closed",
+      owesPlan: !!e.capaOwnerAccountId && !e.capaPlan
+    }));
+    return HttpResponse.json({
+      openAudits: as_.filter(a => a.state !== "closed").length,
+      openFindings: as_.flatMap(a => a.findings).filter(f => f.state === "open").length,
+      repeatFindings: repeats.length,
+      owesCapaPlan: capaEvents.filter(e => e.owesPlan).length,
+      capa: capaEffectiveness(capaEvents, repeats),
+      sites, calcVersion: CALC_VERSION
+    });
+  }),
+
+  http.get(pathToRegExp("/v1/internal-audits"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = visibleAudits();
+    const kinds = q.getAll("kind");
+    if (kinds.length) items = items.filter(a => kinds.includes(a.kind));
+    if (q.get("openOnly") === "true") items = items.filter(a => a.state !== "closed");
+    items = [...items].sort((a, b) => b.auditedOn.localeCompare(a.auditedOn));
+    return HttpResponse.json({ items: items.map(auditDto), nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/internal-audits"), async ({ request }) => {
+    const b = await request.json() as {
+      studySiteId: string; kind: string; auditedOn?: string; scope: string;
+    };
+    /* **audit 不是 closeQA。** 机构办有 closeQA —— 借它来发起内部稽查，
+       等于让被稽查的一方能对我方发起稽查。 */
+    if (!identity().actions.includes("audit")) return HttpResponse.json(
+      problem("forbidden", 403, "只有质量保证能发起内部稽查"), { status: 403 });
+    const site = SITES_LIST.find(x => x.id === b.studySiteId);
+    if (!site || !siteInScope(site.id)) return HttpResponse.json(
+      problem("not-found", 404, "中心不存在"), { status: 404 });
+    if ((b.scope ?? "").trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422,
+        "请求参数不符合契约：稽查范围至少 4 个字 —— 空范围的稽查等于没查"),
+      { status: 422 });
+
+    const me = identity();
+    const row: MockAudit = {
+      id: `au-${scenario.audits.length + 1}`,
+      code: `AU-2026-${String(100 + scenario.audits.length).slice(-3)}`,
+      studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+      kind: b.kind, auditedOn: b.auditedOn ?? TODAY_STR,
+      auditorAccountId: me.id, auditorName: me.name,
+      scope: b.scope.trim(), state: "open", closedAt: null, findings: []
+    };
+    scenario.audits.unshift(row);
+    return HttpResponse.json({
+      data: auditDto(row),
+      sideEffects: [{ type: "InternalAuditOpened", ref: row.id,
+        summary: `${row.code} 已对 ${site.code} 发起 —— 发现项逐条记，全部关闭时自动结案` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/internal-audits/{id}:finding"), async ({ request }) => {
+    const r = findAudit(request.url, /\/internal-audits\/([^/:]+):finding/);
+    if ("problem" in r) return r.problem;
+    const b = await request.json() as {
+      severity: string; finding: string; repeatOf?: string;
+    };
+    if (!identity().actions.includes("audit")) return HttpResponse.json(
+      problem("forbidden", 403, "只有质量保证能记稽查发现"), { status: 403 });
+    if (r.a.state === "closed") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${r.a.code} 已结案 —— 新发现要新开一次稽查`), { status: 422 });
+    if ((b.finding ?? "").trim().length < 10) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：发现描述至少 10 个字"),
+      { status: 422 });
+
+    const src = b.repeatOf
+      ? scenario.qualityEvents.find(e => e.id === b.repeatOf) : undefined;
+    if (b.repeatOf && !src) return HttpResponse.json(
+      problem("not-found", 404, "质量事件不存在"), { status: 404 });
+    /* 源事件必须早于本次稽查 —— 指向一条今天才提出的，那不是复发，
+       而"复发"这个判定会把整类问题判成 CAPA 无效。 */
+    if (src && src.raisedOn >= r.a.auditedOn) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${src.code} 提出于 ${src.raisedOn}，不早于本次稽查 ${r.a.auditedOn} —— 那不是复发`),
+      { status: 422 });
+
+    const seq = r.a.findings.length;
+    r.a.findings.push({
+      seq, severity: b.severity, finding: b.finding.trim(),
+      repeatOf: b.repeatOf ?? null, repeatOfCode: src?.code ?? null,
+      repeatAfterClose: src ? src.state === "closed" : null,
+      state: "open", verification: null, closedAt: null
+    });
+    if (r.a.state === "open") r.a.state = "remediating";
+    return HttpResponse.json({
+      data: auditDto(r.a),
+      sideEffects: [{ type: "AuditFindingAdded", ref: r.a.id,
+        summary: b.repeatOf
+          ? `${r.a.code} 记下一条复发发现 —— 同类问题的 CAPA 判定会因此变成「无效」`
+          : `${r.a.code} 已记下第 ${seq + 1} 条发现` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/internal-audits/{id}/findings/{seq}:close"),
+    async ({ request }) => {
+      const r = findAudit(request.url, /\/internal-audits\/([^/]+)\/findings\//);
+      if ("problem" in r) return r.problem;
+      const seq = Number(seg(request.url, /\/findings\/(\d+):close/));
+      const b = await request.json() as { verification?: string };
+      if (!identity().actions.includes("audit")) return HttpResponse.json(
+        problem("forbidden", 403, "只有质量保证能验证关闭"), { status: 403 });
+      /* 「已整改」三个字不是验证 —— 核查时看的是"你怎么确认它真的改了"。 */
+      if ((b.verification ?? "").trim().length < 10) return HttpResponse.json(
+        problem("validation-failed", 422,
+          "请求参数不符合契约：验证说明至少 10 个字 —— 「已整改」三个字不是验证"),
+        { status: 422 });
+      const f = r.a.findings.find(x => x.seq === seq);
+      if (!f) return HttpResponse.json(
+        problem("not-found", 404, "稽查发现不存在"), { status: 404 });
+      if (f.state === "closed") return HttpResponse.json(
+        problem("invariant-violated", 422,
+          `${r.a.code} 第 ${seq + 1} 条已经关闭`), { status: 422 });
+      f.state = "closed";
+      f.verification = b.verification!.trim();
+      f.closedAt = new Date().toISOString();
+      const left = r.a.findings.filter(x => x.state === "open").length;
+      if (left === 0) { r.a.state = "closed"; r.a.closedAt = new Date().toISOString(); }
+      return HttpResponse.json({
+        data: auditDto(r.a),
+        sideEffects: [{ type: "AuditFindingClosed", ref: r.a.id,
+          summary: left === 0
+            ? `${r.a.code} 全部发现项已验证关闭，稽查自动结案`
+            : `${r.a.code} 第 ${seq + 1} 条已验证关闭，还剩 ${left} 条` }]
+      }, { status: 201 });
+    }),
+
+  /* ── 监查访视 ────────────────────────────────────────────────────
+     **外部方一条都看不到**（迁移 0033 的行策略）：一个机构办看得到
+     我们打算什么时候去、抽多少比例，等于把监查策略交给了被监查的一方。 */
+  /* ── 立项受理 ──────────────────────────────────────────────── */
+
+  http.get(pathToRegExp("/v1/site-acceptances"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = visibleAcceptances();
+    const states = q.getAll("state");
+    if (states.length) items = items.filter(a => states.includes(a.state));
+    if (q.get("openOnly") === "true") items = items.filter(a => a.state !== "accepted");
+    if (q.get("studyId")) items = items.filter(a => a.studyId === q.get("studyId"));
+    items = [...items].sort((a, b) => b.submittedOn.localeCompare(a.submittedOn));
+    return HttpResponse.json({ items: items.map(acceptanceDto), nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/site-acceptances/{id}/docs/{seq}:set"),
+    async ({ request }) => {
+      const found = findAcceptance(request.url, /site-acceptances\/([^/]+)\/docs/);
+      if ("problem" in found) return found.problem;
+      const { a } = found;
+      if (a.origin === "registered")
+        return invariant("acceptance-registered-readonly",
+          `${a.code} 是系统外受理的登记存根，不能在这里勾材料清单 —— ` +
+          "它记的是一件已经发生过的事");
+      if (a.state === "accepted")
+        return invariant("acceptance-frozen",
+          `${a.code} 已受理，材料清单不能再改 —— 受理通知已经发出去了`);
+      const seqNo = Number(request.url.match(/docs\/(\d+):set/)?.[1] ?? -1);
+      const doc = a.docs.find(d => d.seq === seqNo);
+      if (!doc) return HttpResponse.json(
+        problem("not-found", 404, "立项材料不存在"), { status: 404 });
+      doc.present = ((await request.json()) as { present: boolean }).present;
+      return HttpResponse.json(
+        { data: acceptanceDto(a), sideEffects: [] }, { status: 201 });
+    }),
+
+  http.post(pathToRegExp("/v1/site-acceptances/{id}:accept"), ({ request }) => {
+    const found = findAcceptance(request.url, /site-acceptances\/([^:]+):accept/);
+    if ("problem" in found) return found.problem;
+    const { a } = found;
+    if (a.origin === "registered")
+      return invariant("acceptance-registered-readonly",
+        `${a.code} 是系统外受理的登记存根，不能在这里再受理一次`);
+    if (a.state === "accepted")
+      return invariant("acceptance-already", `${a.code} 已经受理过了`);
+    /* **材料不齐不予受理，而且要列出缺的那几份的名字** ——
+       一句"材料不齐"会让递交方把八份重寄一遍，而重寄之后缺的还是那两份。 */
+    const missing = a.docs.filter(d => !d.present).map(d => d.name);
+    if (missing.length)
+      return invariant("acceptance-docs-missing",
+        `尚缺 ${missing.length} 项材料，不予受理：${missing.join("、")}`);
+    a.state = "accepted";
+    a.acceptedOn = TODAY_STR;
+    a.acceptedByName = identity().name;
+    return HttpResponse.json({
+      data: acceptanceDto(a),
+      sideEffects: [{
+        type: "SiteAccepted",
+        summary: `${a.code} 已受理并转伦理审查 —— ` +
+          (a.studySiteId
+            ? "该中心现在可以推进到「伦理递交」"
+            : "**该中心还没进台账** —— 受理了但没建档，成本已经在发生"),
+        ref: a.id
+      }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/site-acceptances/{id}:amend"), async ({ request }) => {
+    const found = findAcceptance(request.url, /site-acceptances\/([^:]+):amend/);
+    if ("problem" in found) return found.problem;
+    const { a } = found;
+    if (a.origin === "registered")
+      return invariant("acceptance-registered-readonly",
+        `${a.code} 是系统外受理的登记存根，不能在这里发补正通知`);
+    if (a.state === "accepted")
+      return invariant("acceptance-already", `${a.code} 已经受理，不能再发补正通知`);
+    const b = await request.json() as { reason: string };
+    a.state = "amend";
+    a.amendNote = b.reason;
+    const missing = a.docs.filter(d => !d.present).map(d => d.name);
+    return HttpResponse.json({
+      data: acceptanceDto(a),
+      sideEffects: [{
+        type: "AcceptanceAmendRequested",
+        summary: `已向 ${a.submittedByName} 发出补正通知` +
+          (missing.length ? `：${missing.join("、")}` : ""),
+        ref: a.id
+      }]
+    }, { status: 201 });
+  }),
+
+  /* ── 中心文件与物资 ────────────────────────────────────────── */
+
+  http.get(pathToRegExp("/v1/isf-items"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    const cats = q.getAll("category");
+    let rows = visibleIsf();
+    if (q.get("studySiteId")) rows = rows.filter(i => i.studySiteId === q.get("studySiteId"));
+    if (cats.length) rows = rows.filter(i => cats.includes(i.category));
+    let items = rows.map(isfDto);
+    /* 齐备率按**全部清单**算，不按筛过之后的 —— 只看不齐备的那一栏时，
+       齐备率会变成 0%，而那个数字毫无意义。 */
+    const summary = { ...isfSummary(items), calcVersion: CALC_VERSION };
+    if (q.get("openOnly") === "true") items = items.filter(i => i.status !== "ok");
+    items = [...items].sort((a, b) => isfRank(a) - isfRank(b)
+      || a.siteCode.localeCompare(b.siteCode)
+      || a.item.localeCompare(b.item));
+    return HttpResponse.json({ items, summary });
+  }),
+
+  http.post(pathToRegExp("/v1/isf-items/{id}:update"), async ({ request }) => {
+    const id = seg(request.url, /isf-items\/([^:]+):update/);
+    const i = visibleIsf().find(x => x.id === id);
+    if (!i) return HttpResponse.json(
+      problem("not-found", 404, "中心文件不存在"), { status: 404 });
+    const b = await request.json() as {
+      present?: boolean; expiresOn?: string | null;
+      quantity?: number | null; note?: string;
+    };
+    const present = b.present ?? i.present;
+    const expiresOn = b.expiresOn !== undefined ? b.expiresOn : i.expiresOn;
+    /* 不在的东西没有到期日 —— 缺失与过期是两种缺，混起来会互相顶替。 */
+    if (!present && expiresOn)
+      return invariant("isf-missing-has-expiry",
+        `${i.item} 标为缺失，就不该还有到期日 —— 先决定它到底在不在`);
+    if (b.quantity != null && i.reorderAt === null)
+      return invariant("isf-stock-needs-reorder",
+        `${i.item} 没有补货线 —— 填了库存也判不出够不够`);
+    i.present = present;
+    i.expiresOn = expiresOn;
+    if (b.quantity !== undefined) i.quantity = b.quantity;
+    if (b.note) i.note = b.note;
+    i.checkedOn = TODAY_STR;
+    i.checkedByName = identity().name;
+    const items = visibleIsf().filter(x => x.studySiteId === i.studySiteId).map(isfDto);
+    return HttpResponse.json({
+      data: {
+        items: [...items].sort((a, b2) => isfRank(a) - isfRank(b2)
+          || a.item.localeCompare(b2.item)),
+        summary: { ...isfSummary(items), calcVersion: CALC_VERSION }
+      },
+      sideEffects: []
+    }, { status: 201 });
+  }),
+
+  http.get(pathToRegExp("/v1/monitor-visits/board"), () => {
+    const vs = visibleMonitorVisits();
+    const sites = visibleSites().map(site => {
+      /* 风险信号从 mock 已有的两本台账里取 —— 手搓一份"这个中心几分"
+         等于给这个系统开第三套口径。 */
+      const q = scenario.qualityEvents.filter(
+        e => e.studySiteId === site.id && e.state !== "closed");
+      const stale = scenario.dataQueries.filter(
+        d => d.studySiteId === site.id && d.state === "open" && d.ageDays > QUERY_STALE_DAYS);
+      const plan = monitorPlan({
+        severeOpen: q.filter(e => e.kind !== "sae_late"
+          && (e.severity === "major" || e.severity === "critical")).length,
+        minorOpen: q.filter(e => e.kind !== "sae_late" && e.severity === "minor").length,
+        saeLate: q.filter(e => e.kind === "sae_late").length,
+        staleQueries: stale.length,
+        daysSinceEnroll: FUNNELS.find(f => f.studySiteId === site.id)?.enrolled ? 10 : null
+      });
+      const mine = vs.filter(v => v.studySiteId === site.id);
+      const last = mine.filter(v => v.performedOn)
+        .map(v => v.performedOn!).sort().at(-1) ?? null;
+      return {
+        studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+        siteState: site.state,
+        band: plan.band, riskScore: plan.score,
+        intervalDays: plan.intervalDays, sdvSamplePct: plan.sdvSamplePct,
+        reasons: plan.reasons,
+        lastVisitOn: last,
+        ...monitorDue(last, plan.intervalDays, TODAY_STR),
+        neverVisited: last === null,
+        openVisits: mine.filter(v => v.state !== "reported").length
+      };
+    }).sort((a, b) =>
+      (b.overdueDays ?? -1) - (a.overdueDays ?? -1)
+      || Number(b.neverVisited) - Number(a.neverVisited)
+      || b.riskScore - a.riskScore
+      || a.siteCode.localeCompare(b.siteCode));
+
+    const upcoming = vs.filter(v =>
+      (v.state === "proposed" || v.state === "scheduled")
+      && Date.parse(v.plannedOn) <= Date.now() + 28 * 86_400_000);
+    return HttpResponse.json(mask({
+      load: mvrLoad(vs.map(v => ({
+        performedOn: v.performedOn, reportSubmittedOn: v.reportSubmittedOn
+      })), TODAY_STR),
+      sites,
+      upcomingVisits: upcoming.length,
+      upcomingDays: upcoming.reduce((n, v) => n + v.days, 0),
+      travelEstimateCents: travelEstimateCents(upcoming.length, 285_000),
+      calcVersion: CALC_VERSION
+    }));
+  }),
+
+  http.get(pathToRegExp("/v1/monitor-visits"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = visibleMonitorVisits();
+    const kinds = q.getAll("kind"), states = q.getAll("state");
+    if (kinds.length) items = items.filter(v => kinds.includes(v.kind));
+    if (states.length) items = items.filter(v => states.includes(v.state));
+    if (q.get("mine") === "true")
+      items = items.filter(v => v.monitorAccountId === identity().id);
+    if (q.get("openOnly") === "true") items = items.filter(v => v.state !== "reported");
+    items = [...items].sort((a, b) => a.plannedOn.localeCompare(b.plannedOn));
+    return HttpResponse.json({ items: items.map(monitorDto), nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/monitor-visits"), async ({ request }) => {
+    const b = await request.json() as {
+      studySiteId: string; kind: string; plannedOn: string;
+      days: number; sdvSamplePct?: number; note?: string; items: string[];
+    };
+    if (!identity().actions.includes("monitor")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能排监查访视"), { status: 403 });
+    const site = SITES_LIST.find(x => x.id === b.studySiteId);
+    if (!site || !siteInScope(site.id)) return HttpResponse.json(
+      problem("not-found", 404, "中心不存在"), { status: 404 });
+    if (site.state === "closed") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${site.code} 已关闭 —— 关闭之后还要去，说明关闭那一步没做完`), { status: 422 });
+
+    const me = identity();
+    const row: MockMonitorVisit = {
+      id: `mv-${scenario.monitorVisits.length + 1}`,
+      code: `MV-2026-${String(100 + scenario.monitorVisits.length).slice(-3)}`,
+      studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+      studyShortName: "艾瑞替尼 III",
+      kind: b.kind, plannedOn: b.plannedOn,
+      monitorAccountId: me.id, monitorName: me.name,
+      days: b.days, state: "proposed",
+      confirmedOn: null, performedOn: null, reportSubmittedOn: null,
+      sdvSamplePct: b.sdvSamplePct ?? null, note: b.note ?? null,
+      items: b.items.map((task, seq) => ({ seq, task, doneAt: null, doneByName: null }))
+    };
+    scenario.monitorVisits.push(row);
+    return HttpResponse.json({
+      data: monitorDto(row),
+      sideEffects: [{ type: "MonitorVisitPlanned", ref: row.id,
+        summary: `${row.code} 已排到 ${b.plannedOn}（${b.items.length} 项跟进项）` +
+          " —— 还要与中心确认时间" }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/monitor-visits/{id}:confirm"), async ({ request }) => {
+    const r = findVisit(request.url, /\/monitor-visits\/([^/:]+):confirm/);
+    if ("problem" in r) return r.problem;
+    if (!identity().actions.includes("monitor")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能改监查排期"), { status: 403 });
+    if (r.v.state !== "proposed") return HttpResponse.json(
+      problem("invariant-violated", 422, `${r.v.code} 已经确认过了`), { status: 422 });
+    r.v.state = "scheduled";
+    r.v.confirmedOn = TODAY_STR;
+    return HttpResponse.json({
+      data: monitorDto(r.v),
+      sideEffects: [{ type: "MonitorVisitConfirmed", ref: r.v.id,
+        summary: `${r.v.code} 已与 ${r.v.hospital} 确认 ${r.v.plannedOn}` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/monitor-visits/{id}:perform"), async ({ request }) => {
+    const r = findVisit(request.url, /\/monitor-visits\/([^/:]+):perform/);
+    if ("problem" in r) return r.problem;
+    if (!identity().actions.includes("monitor")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能登记到现场"), { status: 403 });
+    if (r.v.state === "proposed") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${r.v.code} 还没与中心确认时间 —— 先确认`), { status: 422 });
+    if (r.v.state !== "scheduled") return HttpResponse.json(
+      problem("invariant-violated", 422, `${r.v.code} 已经登记过到现场`), { status: 422 });
+    r.v.state = "done";
+    r.v.performedOn = TODAY_STR;
+    return HttpResponse.json({
+      data: monitorDto(r.v),
+      sideEffects: [{ type: "MonitorVisitPerformed", ref: r.v.id,
+        summary: `${r.v.code} 已登记到现场（${TODAY_STR}）—— ` +
+          `监查报告请在 ${MVR_DUE_DAYS} 天内提交` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/monitor-visits/{id}/items/{seq}:done"),
+    async ({ request }) => {
+      const r = findVisit(request.url, /\/monitor-visits\/([^/]+)\/items\//);
+      if ("problem" in r) return r.problem;
+      const seq = Number(seg(request.url, /\/items\/(\d+):done/));
+      const b = await request.json() as { done: boolean };
+      if (!identity().actions.includes("monitor")) return HttpResponse.json(
+        problem("forbidden", 403, "你的角色不能改跟进项"), { status: 403 });
+      /* 报告交上去之后跟进项冻结 —— 交上去的报告和台账对不上，
+         比台账上少一项严重得多。 */
+      if (r.v.state === "reported") return HttpResponse.json(
+        problem("invariant-violated", 422,
+          `${r.v.code} 的报告已提交，跟进项不能再改 —— 要改就出一份补充报告`),
+        { status: 422 });
+      const it = r.v.items.find(x => x.seq === seq);
+      if (!it) return HttpResponse.json(
+        problem("not-found", 404, "跟进项不存在"), { status: 404 });
+      it.doneAt = b.done ? new Date().toISOString() : null;
+      it.doneByName = b.done ? identity().name : null;
+      return HttpResponse.json({ data: monitorDto(r.v), sideEffects: [] }, { status: 201 });
+    }),
+
+  http.post(pathToRegExp("/v1/monitor-visits/{id}:report"), async ({ request }) => {
+    const r = findVisit(request.url, /\/monitor-visits\/([^/:]+):report/);
+    if ("problem" in r) return r.problem;
+    if (!identity().actions.includes("monitor")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能提交监查报告"), { status: 403 });
+    if (r.v.state === "reported") return HttpResponse.json(
+      problem("invariant-violated", 422, `${r.v.code} 的报告已经提交过了`), { status: 422 });
+    if (r.v.state !== "done") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${r.v.code} 还没登记到现场 —— 没去过的访视写不出监查报告`), { status: 422 });
+    const open = r.v.items.filter(i => i.doneAt === null);
+    /* 拦的时候要说得出拦在哪几项 —— 一句「条件不满足」对要交报告的人没用。 */
+    if (open.length) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `还有 ${open.length} 项跟进项未关闭，监查报告无法提交：` +
+        open.slice(0, 5).map(i => i.task).join("；")), { status: 422 });
+    r.v.state = "reported";
+    r.v.reportSubmittedOn = TODAY_STR;
+    const lag = mvrLagDays(
+      { performedOn: r.v.performedOn, reportSubmittedOn: TODAY_STR }, TODAY_STR);
+    return HttpResponse.json({
+      data: monitorDto(r.v),
+      sideEffects: [{ type: "MonitorReportSubmitted", ref: r.v.id,
+        summary: `${r.v.code} 监查报告已提交，距现场 ${lag} 天` +
+          (lag !== null && lag > MVR_DUE_DAYS ? ` —— 超过 ${MVR_DUE_DAYS} 天时限` : "") }]
+    }, { status: 201 });
+  }),
+
+  /* ── 数据质疑 ────────────────────────────────────────────────────
+     **外部方一条都看不到。** 这不是"外部方没有这个模块"那种柔性隔离 ——
+     行策略上直接关掉（迁移 0032），因为机构办是外部的质量反馈闭环、
+     DM 是内部的数据质量闭环，混在一起的后果不是多几行，而是
+     机构质控页上「本院未关闭质量事件」这个数会把 EDC 质疑也算进去。 */
+  http.get(pathToRegExp("/v1/data-queries"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = visibleQueries();
+    const states = q.getAll("state");
+    if (states.length) items = items.filter(x => states.includes(x.state));
+    if (q.get("mine") === "true")
+      items = items.filter(x => x.ownerAccountId === identity().id);
+    /* 真接口按 raised_by_account 比对；mock 的行上没存账号 id，
+       按姓名比是它的近似。**不要把这条当成规则本身** —— 规则在服务端。 */
+    if (q.get("raisedByMe") === "true")
+      items = items.filter(x => x.raisedByName === identity().name);
+    if (q.get("staleOnly") === "true")
+      items = items.filter(x => x.state === "open" && x.ageDays > QUERY_STALE_DAYS);
+    /* 挂得最久的排最前 —— 与服务端同一条排序。 */
+    items = [...items].sort((a, b) => b.ageDays - a.ageDays || a.code.localeCompare(b.code));
+    return HttpResponse.json({ items: items.map(mask), nextCursor: null });
+  }),
+
+  http.get(pathToRegExp("/v1/data-queries/stats"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let rows = visibleQueries();
+    if (q.get("mine") === "true")
+      rows = rows.filter(x => x.ownerAccountId === identity().id);
+
+    const bySite = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const list = bySite.get(r.studySiteId);
+      if (list) list.push(r); else bySite.set(r.studySiteId, [r]);
+    }
+    const sites = [...bySite.entries()].map(([id, rs]) => {
+      const d = siteQueryDensity({
+        studySiteId: id,
+        enrolled: FUNNELS.find(f => f.studySiteId === id)?.enrolled ?? 0,
+        queries: rs.map(r => ({ ageDays: r.ageDays, state: r.state as never, form: r.form }))
+      });
+      return {
+        ...d, siteCode: rs[0]!.siteCode, hospital: rs[0]!.hospital,
+        verdict: densityVerdict(d)
+      };
+    }).sort((a, b) =>
+      (b.perSubject ?? -1) - (a.perSubject ?? -1)
+      || b.total - a.total || a.siteCode.localeCompare(b.siteCode));
+
+    return HttpResponse.json({
+      load: queryLoad(rows.map(r => ({ ageDays: r.ageDays, state: r.state as never }))),
+      sites, calcVersion: CALC_VERSION
+    });
+  }),
+
+  http.post(pathToRegExp("/v1/data-queries"), async ({ request }) => {
+    const b = await request.json() as {
+      subjectId?: string; form?: string; fieldName?: string; detail?: string;
+    };
+    if (!identity().actions.includes("raiseQ")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能发起数据质疑"), { status: 403 });
+    const su = scenario.subjects.find(x => x.id === b.subjectId);
+    if (!su) return HttpResponse.json(
+      problem("not-found", 404, "受试者不存在"), { status: 404 });
+    if ((b.fieldName ?? "").trim().length < 2) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：字段名至少 2 个字"),
+      { status: 422 });
+    if ((b.detail ?? "").trim().length < 10) return HttpResponse.json(
+      problem("validation-failed", 422,
+        "请求参数不符合契约：质疑内容需写清疑点与要求核实的方向（至少 10 个字）"),
+      { status: 422 });
+    /* 责任 CRC 从受试者取，并在这一刻固化。取不到就不给建 ——
+       无人认领的质疑等于没提。 */
+    if (!su.crcName) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${su.screeningNo} 还没有责任 CRC —— 请先指派，否则这条质疑没有人认领`),
+      { status: 422 });
+
+    const site = SITES_LIST.find(x => x.id === su.studySiteId)!;
+    const row: MockQuery = {
+      id: `q-${scenario.dataQueries.length + 1}`,
+      code: `Q-${1191 + scenario.dataQueries.length}`,
+      studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+      studyShortName: "艾瑞替尼 III",
+      subjectId: su.id, screeningNo: su.screeningNo,
+      form: b.form!, fieldName: b.fieldName!.trim(), detail: b.detail!.trim(),
+      severity: "minor", state: "open",
+      raisedBy: identity().role.code === "dm" ? "dm" : "cra",
+      raisedByName: identity().name, raisedOn: TODAY_STR,
+      ownerAccountId: null, ownerName: su.crcName,
+      answer: null, answeredOn: null, returnedReason: null,
+      chaseCount: 0, lastChasedOn: null,
+      closedAt: null, resolution: null, ageDays: 0, stale: false
+    };
+    scenario.dataQueries.unshift(row);
+    return HttpResponse.json({
+      data: mask(row),
+      sideEffects: [{ type: "DataQueryRaised", ref: row.id,
+        summary: `${row.code} 已发起，指派给 ${su.crcName}（${row.form} · ${row.fieldName}）` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/data-queries/{id}:answer"), async ({ request }) => {
+    const r = findQuery(request.url, /\/data-queries\/([^/:]+):answer/);
+    if ("problem" in r) return r.problem;
+    const b = await request.json() as { answer?: string };
+    if (!identity().actions.includes("subjWrite")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能回复数据质疑"), { status: 403 });
+    if ((b.answer ?? "").trim().length < 10) return HttpResponse.json(
+      problem("validation-failed", 422,
+        "请求参数不符合契约：回复需写清核实结果与源数据依据（至少 10 个字）"),
+      { status: 422 });
+    if (r.q.state !== "open") return HttpResponse.json(
+      problem("invariant-violated", 422, `${r.q.code} 不在「待中心回复」`), { status: 422 });
+    r.q.state = "pending_review";
+    r.q.answer = b.answer!.trim();
+    r.q.answeredOn = TODAY_STR;
+    r.q.stale = false;
+    return HttpResponse.json({
+      data: mask(r.q),
+      sideEffects: [{ type: "DataQueryAnswered", ref: r.q.id,
+        summary: `${r.q.code} 已回复，挂起 ${r.q.ageDays} 天 —— 等数据管理判定；回复了不等于关闭了` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/data-queries/{id}:close"), async ({ request }) => {
+    const r = findQuery(request.url, /\/data-queries\/([^/:]+):close/);
+    if ("problem" in r) return r.problem;
+    const b = await request.json() as { reason?: string };
+    /* **closeQ，不是 closeQA。** 质量事件的关闭门管不到数据质疑，
+       反过来也一样 —— 两条线共用一张表，但不共用一个动作。 */
+    if (!identity().actions.includes("closeQ")) return HttpResponse.json(
+      problem("forbidden", 403, "只有数据管理能关闭数据质疑"), { status: 403 });
+    if (!b.reason || b.reason.trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：判定说明至少 4 个字"),
+      { status: 422 });
+    if (r.q.state !== "pending_review") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${r.q.code} 中心还没有回复 —— 关掉它等于把问题从列表上抹掉，而不是解决`),
+      { status: 422 });
+    r.q.state = "closed";
+    r.q.closedAt = new Date().toISOString();
+    r.q.resolution = b.reason.trim();
+    r.q.stale = false;
+    return HttpResponse.json({
+      data: mask(r.q),
+      sideEffects: [{ type: "DataQueryClosed", ref: r.q.id,
+        summary: `${r.q.code} 已关闭，共挂起 ${r.q.ageDays} 天` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/data-queries/{id}:return"), async ({ request }) => {
+    const r = findQuery(request.url, /\/data-queries\/([^/:]+):return/);
+    if ("problem" in r) return r.problem;
+    const b = await request.json() as { reason?: string };
+    if (!identity().actions.includes("closeQ")) return HttpResponse.json(
+      problem("forbidden", 403, "只有数据管理能退回数据质疑"), { status: 403 });
+    if (!b.reason || b.reason.trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：退回理由至少 4 个字"),
+      { status: 422 });
+    if (r.q.state !== "pending_review") return HttpResponse.json(
+      problem("invariant-violated", 422, `${r.q.code} 没有可退回的回复`), { status: 422 });
+    r.q.state = "open";
+    r.q.returnedReason = b.reason.trim();
+    r.q.stale = r.q.ageDays > QUERY_STALE_DAYS;
+    return HttpResponse.json({
+      data: mask(r.q),
+      sideEffects: [{ type: "DataQueryReturned", ref: r.q.id,
+        summary: `${r.q.code} 已退回 ${r.q.ownerName} —— ${b.reason.trim()}` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/data-queries/{id}:chase"), async ({ request }) => {
+    const r = findQuery(request.url, /\/data-queries\/([^/:]+):chase/);
+    if ("problem" in r) return r.problem;
+    const b = await request.json() as { reason?: string };
+    if (!identity().actions.includes("raiseQ")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能催办"), { status: 403 });
+    if (!b.reason || b.reason.trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约：催办记录至少 4 个字"),
+      { status: 422 });
+    if (r.q.state !== "open") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${r.q.code} 不在「待中心回复」 —— 现在球不在中心那边`), { status: 422 });
+    r.q.chaseCount += 1;
+    r.q.lastChasedOn = TODAY_STR;
+    return HttpResponse.json({
+      data: mask(r.q),
+      sideEffects: [{ type: "DataQueryChased", ref: r.q.id,
+        summary: `已记录对 ${r.q.hospital} 的第 ${r.q.chaseCount} 次催办：${r.q.code}` +
+          (r.q.chaseCount >= 3
+            ? " —— 催到第三次还没回，该升级到 PM 而不是再打一个电话" : "") }]
+    }, { status: 201 });
+  }),
+
+  /* 备案名册。行范围**在这里也要收** —— 这一页整页的内容就是
+     "我这几个中心上有谁"，不收就成了"全公司的人"。
+     而且中心列表要按范围重算：机构办不该数得出这个 CRC
+     在别家医院还带着几个。 */
+  http.get(pathToRegExp("/v1/site-staff"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    const ids = visibleSiteIds();
+    let items = SITE_STAFF
+      .map(p => ({ ...p, sites: p.sites.filter(x => ids.has(x.id)) }))
+      .filter(p => p.sites.length > 0);
+    const kind = q.get("roleKind");
+    if (kind) items = items.filter(p => p.roleKind === kind);
+    const site = q.get("studySiteId");
+    if (site) items = items
+      .map(p => ({ ...p, sites: p.sites.filter(x => x.id === site) }))
+      .filter(p => p.sites.length > 0);
+    if (q.get("gcpProblem") === "true")
+      items = items.filter(p => p.gcpDaysLeft === null || p.gcpDaysLeft <= 60);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
 
   http.get(pathToRegExp("/v1/study-sites"), ({ request }) => {
     const only = new URL(request.url).searchParams.get("startupInvalidated");
-    const items = SITES_LIST.map(s => siteDto(s.id)!)
+    const items = visibleSites().map(s => siteDto(s.id)!)
       .filter(s => only === null || s.startupInvalidated === (only === "true"));
     return HttpResponse.json({ items, nextCursor: null });
   }),
@@ -472,7 +1686,8 @@ export const scenarioHandlers = [
 
   http.get(pathToRegExp("/v1/study-sites/{id}"), ({ request }) => {
     const id = seg(request.url, /\/study-sites\/([^/?]+)/);
-    const dto = siteDto(id);
+    /* 范围之外与不存在**同样是 404**（规约 I2）。 */
+    const dto = siteInScope(id) ? siteDto(id) : null;
     return dto ? HttpResponse.json(dto)
       : HttpResponse.json(problem("not-found", 404, "中心不存在"), { status: 404 });
   }),
@@ -596,6 +1811,377 @@ export const scenarioHandlers = [
     }, { status: 201 });
   }),
 
+  /* ── 中心可行性调查 ────────────────────────────────────────────
+     **评分走 @sitedesk/calc，mock 不另写一份。** 在 mock 里手搓一遍
+     等于给这套口径开了第三个入口（服务端、calc、mock），
+     而三套迟早分叉 —— 分叉那天，一家医院会因为看哪个页面拿到不同的结论。 */
+  http.get(pathToRegExp("/v1/feasibility/calibration"), () => {
+    const sel = scenario.feasibility.filter(f => f.status === "selected");
+    const rows = sel.map(feasDto);
+    const withActual = rows.filter(x => x.bias !== null);
+    const overrides = rows.filter(x => x.score.total < 65);
+    return HttpResponse.json({
+      selected: withActual.length,
+      meanBias: withActual.length
+        ? withActual.reduce((n, x) => n + x.bias!, 0) / withActual.length : null,
+      overrides: overrides.length,
+      overridesGoneBad: overrides.filter(
+        x => x.actualRate !== null && x.actualRate < 1).length,
+      calcVersion: CALC_VERSION
+    });
+  }),
+
+  http.get(pathToRegExp("/v1/feasibility"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = scenario.feasibility.map(feasDto);
+    const status = q.getAll("status");
+    if (status.length) items = items.filter(f => status.includes(f.status));
+    if (q.get("overrideOnly") === "true")
+      items = items.filter(f => f.status === "selected" && f.score.total < 65);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/feasibility/{id}:decide"), async ({ request }) => {
+    const id = seg(request.url, /\/feasibility\/([^/:]+):decide/);
+    const b = await request.json() as { decision: string; reason?: string };
+    const f = scenario.feasibility.find(x => x.id === id);
+    if (!f) return HttpResponse.json(
+      problem("not-found", 404, "可行性调查不存在"), { status: 404 });
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能定选址"), { status: 403 });
+    if (f.status !== "assessing") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${f.code} 已经定过了 —— 决定不能改，要改就重新做一次调查`), { status: 422 });
+
+    const score = feasibilityScore(f.answers);
+    const reason = (b.reason ?? "").trim();
+    /* **低分入选不拦，但必须写理由。** mock 上放行一次真库会拒的提交，
+       等于把这条规则藏到集成测试才暴露 —— 而这条规则正是这一页的核心。 */
+    const needsReason = b.decision === "rejected" || score.total < 65;
+    if (needsReason && reason.length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, b.decision === "rejected"
+        ? "拒绝必须写理由 —— 申办方问「为什么没选这家」时，「评分不够」不是答案"
+        : `${f.code} 评分 ${Math.round(score.total)} 分，低于 65 分。` +
+          "入选它不被阻止，但必须写下理由"), { status: 422 });
+
+    f.status = b.decision as MockFeas["status"];
+    f.decidedOn = todayStr();
+    f.decidedByName = identity().name;
+    f.overrideReason = b.decision === "selected" && reason ? reason : null;
+    f.rejectReason = b.decision === "rejected" ? reason : null;
+
+    const sideEffects = b.decision === "selected" && score.total < 65
+      ? [{ type: "FeasibilityOverride",
+           summary: `${f.hospital} 评分 ${Math.round(score.total)} 分入选 —— ` +
+             `预测月入组约 ${score.predictedPerMonth.toFixed(1)} 例，理由已记入审计轨迹`,
+           ref: f.id }]
+      : [];
+    return HttpResponse.json({ data: feasDto(f), sideEffects }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/feasibility/{id}:actual"), async ({ request }) => {
+    const id = seg(request.url, /\/feasibility\/([^/:]+):actual/);
+    const b = await request.json() as { actualRate: number };
+    const f = scenario.feasibility.find(x => x.id === id);
+    if (!f) return HttpResponse.json(
+      problem("not-found", 404, "可行性调查不存在"), { status: 404 });
+    if (f.status !== "selected") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${f.code} 没有入选 —— 只有入选的中心谈得上实际入组速度`), { status: 422 });
+    f.actualRate = b.actualRate;
+    const dto = feasDto(f);
+    const sideEffects = dto.bias !== null && (dto.bias < 0.5 || dto.bias > 2)
+      ? [{ type: "FeasibilityBias",
+           summary: `实际是预测的 ${(dto.bias * 100).toFixed(0)}%`, ref: f.id }]
+      : [];
+    return HttpResponse.json({ data: dto, sideEffects }, { status: 201 });
+  }),
+
+  /* ── 投标 ────────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/bids/review"), () =>
+    HttpResponse.json(mask({
+      ...reviewBids(scenario.bids.map(b => ({
+        status: b.status, ourQuoteCents: b.ourQuoteCents,
+        ourPersonDays: b.ourPersonDays, subjects: b.subjects,
+        winningPriceCents: b.winningPriceCents
+      }))),
+      calcVersion: CALC_VERSION
+    }))),
+
+  http.get(pathToRegExp("/v1/bids"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = scenario.bids.map(bidDto);
+    const status = q.getAll("status");
+    if (status.length) items = items.filter(b => status.includes(b.status));
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/bids/{id}:decide"), async ({ request }) => {
+    const id = seg(request.url, /\/bids\/([^/:]+):decide/);
+    const b = await request.json() as
+      { result: string; winningPriceCents?: number | null };
+    const bid = scenario.bids.find(x => x.id === id);
+    if (!bid) return HttpResponse.json(
+      problem("not-found", 404, "投标不存在"), { status: 404 });
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能回写开标结果"), { status: 403 });
+    if (bid.status !== "pending") return HttpResponse.json(
+      problem("invariant-violated", 422, `${bid.code} 已经出过结果了`), { status: 422 });
+
+    const win = b.winningPriceCents ?? null;
+    /* **中标必须知道自己签了多少** —— 那个数就在合同上。 */
+    if (b.result === "won" && win === null) return HttpResponse.json(
+      problem("validation-failed", 422,
+        "中标必须填成交价 —— 不填的话这一标永远进不了报价偏差统计"), { status: 422 });
+
+    bid.status = b.result as MockBid["status"];
+    bid.decidedOn = todayStr();
+    bid.winningPriceCents = win;
+
+    const gap = win !== null && win > 0
+      ? (bid.ourQuoteCents - win) / win : null;
+    const sideEffects = gap !== null && Math.abs(gap) >= 0.15
+      ? [{ type: "BidDecided",
+           summary: gap > 0
+             ? `我们比成交价高 ${(gap * 100).toFixed(0)}% —— 去「报价偏差复盘」看看是不是系统性的`
+             : `我们比成交价低 ${(-gap * 100).toFixed(0)}% —— 报低了同样要查`,
+           ref: bid.id }]
+      : b.result === "lost" && win === null
+        ? [{ type: "BidDecided",
+             summary: "没有成交价，这一标不进偏差统计 —— " +
+               "「不知道对方报了多少」不会被当成「和我们一样」",
+             ref: bid.id }]
+        : [];
+    return HttpResponse.json({ data: bidDto(bid), sideEffects }, { status: 201 });
+  }),
+
+  /* ── 合同变更 ─────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/contract-changes/scope-creep"), () =>
+    HttpResponse.json(mask({
+      ...scopeCreep(scenario.changes.map(c => ({
+        status: c.status, personDaysImpact: c.personDaysImpact,
+        perSubject: c.perSubject, affectedSubjects: c.affectedSubjects,
+        amountCents: c.amountCents
+      })), crcDayCost()),
+      calcVersion: CALC_VERSION
+    }))),
+
+  http.get(pathToRegExp("/v1/contract-changes"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = scenario.changes.map(changeDto);
+    const status = q.getAll("status");
+    if (status.length) items = items.filter(c => status.includes(c.status));
+    if (q.get("uncoveredOnly") === "true")
+      items = items.filter(c => c.status !== "signed");
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/contract-changes/{id}:settle"), async ({ request }) => {
+    const id = seg(request.url, /\/contract-changes\/([^/:]+):settle/);
+    const b = await request.json() as
+      { status: string; settledCents?: number | null };
+    const c = scenario.changes.find(x => x.id === id);
+    if (!c) return HttpResponse.json(
+      problem("not-found", 404, "变更单不存在"), { status: 404 });
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能推进变更单"), { status: 403 });
+    if (["signed", "rejected"].includes(c.status)) return HttpResponse.json(
+      problem("invariant-violated", 422, `${c.code} 已经了结了`), { status: 422 });
+
+    /* **签署必须填金额，哪怕是 0。** 0 是「谈过了对方不给」，
+       不填是「还没谈」—— 前者是决策，后者是欠账。 */
+    const amount = b.settledCents ?? null;
+    if (b.status === "signed" && amount === null) return HttpResponse.json(
+      problem("validation-failed", 422,
+        "签署必须填金额，哪怕是 0 —— 0 表示「谈过了对方不给」，不填表示「还没谈」"),
+      { status: 422 });
+
+    c.status = b.status as MockChange["status"];
+    c.decidedOn = ["signed", "rejected"].includes(b.status) ? todayStr() : null;
+    if (b.status === "signed") c.amountCents = amount;
+
+    const total = changeDays({
+      status: c.status, personDaysImpact: c.personDaysImpact,
+      perSubject: c.perSubject, affectedSubjects: c.affectedSubjects,
+      amountCents: c.amountCents
+    });
+    const sideEffects = b.status === "rejected"
+      ? [{ type: "ScopeCreepRecorded",
+           summary: `${c.kindLabel}未获批 —— ${total.toFixed(1)} 人天没有对应金额。` +
+             "下次报价时这就是该加进去的成本",
+           ref: c.id }]
+      : [];
+    return HttpResponse.json({ data: changeDto(c), sideEffects }, { status: 201 });
+  }),
+
+  /* ── 里程碑 · 客户 · 现金流 ─────────────────────────────────── */
+  http.get(pathToRegExp("/v1/milestones/plan"), () =>
+    HttpResponse.json({ items: MS_PLAN })),
+
+  http.get(pathToRegExp("/v1/milestones/ar-aging"), () =>
+    HttpResponse.json(mask({
+      ...arAging(scenario.milestones
+        .filter(m => m.state === "invoiced")
+        .map(m => ({
+          amountCents: m.milestoneCents,
+          daysToDue: daysApart(todayStr(), m.dueOn!)
+        }))),
+      calcVersion: CALC_VERSION
+    }))),
+
+  http.get(pathToRegExp("/v1/milestones"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let rows = scenario.milestones.slice();
+    const state = q.getAll("state");
+    if (state.length) rows = rows.filter(m => state.includes(m.state));
+    if (q.get("receivableOnly") === "true")
+      rows = rows.filter(m => m.state === "invoiced");
+    if (q.get("overdueOnly") === "true")
+      rows = rows.filter(m =>
+        m.state === "invoiced" && daysApart(todayStr(), m.dueOn!) < 0);
+    /* **逾期最久的排最前，已回款的沉到最后** —— 与服务端同一条排序。 */
+    rows.sort((a, b) =>
+      Number(a.state === "paid") - Number(b.state === "paid")
+      || (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999")
+      || b.reachedOn.localeCompare(a.reachedOn));
+    return HttpResponse.json({ items: rows.map(msDto), nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/milestones/{id}:invoice"), ({ request }) => {
+    const id = seg(request.url, /\/milestones\/([^/:]+):invoice/);
+    const m = scenario.milestones.find(x => x.id === id);
+    if (!m) return HttpResponse.json(
+      problem("not-found", 404, "里程碑不存在"), { status: 404 });
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能开票"), { status: 403 });
+    if (m.state !== "pending") return HttpResponse.json(
+      problem("invariant-violated", 422, `${m.code} 已经开过票了`), { status: 422 });
+
+    /* 到期日 = 今天 + **客户账期**，算出来就固化 —— 客户之后改账期不回溯。 */
+    const terms = CLIENTS.find(c => c.name === m.clientName)?.paymentTermsDays ?? 60;
+    m.state = "invoiced";
+    m.invoicedOn = todayStr();
+    m.dueOn = shiftStr(todayStr(), terms);
+    return HttpResponse.json({
+      data: msDto(m),
+      sideEffects: [{ type: "MilestoneReached",
+        summary: `${m.code} 已开票，账期 ${terms} 天 —— ${m.dueOn} 到期`, ref: m.id }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/milestones/{id}:pay"), ({ request }) => {
+    const id = seg(request.url, /\/milestones\/([^/:]+):pay/);
+    const m = scenario.milestones.find(x => x.id === id);
+    if (!m) return HttpResponse.json(
+      problem("not-found", 404, "里程碑不存在"), { status: 404 });
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能登记回款"), { status: 403 });
+    if (m.state === "pending") return HttpResponse.json(
+      problem("invariant-violated", 422, `${m.code} 还没开票 —— 没有票的钱记不进来`),
+      { status: 422 });
+    /* **已回款的不能改回去** —— 钱到账是不可撤销的事实。 */
+    if (m.state === "paid") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${m.code} 已经登记过回款了 —— 钱到账是不可撤销的事实，写错了要走冲销`),
+      { status: 422 });
+
+    const late = daysApart(m.dueOn!, todayStr());
+    m.state = "paid";
+    m.paidOn = todayStr();
+    return HttpResponse.json({
+      data: msDto(m),
+      sideEffects: [{ type: "MilestoneReached",
+        summary: late > 0 ? `${m.code} 已回款，比约定晚了 ${late} 天` : `${m.code} 已回款`,
+        ref: m.id }]
+    }, { status: 201 });
+  }),
+
+  http.get(pathToRegExp("/v1/clients"), () =>
+    HttpResponse.json({
+      items: CLIENTS.map(c => {
+        const ms = scenario.milestones.filter(m => m.clientName === c.name);
+        const open = ms.filter(m => m.state === "invoiced");
+        return mask({
+          ...c,
+          paidCents: ms.filter(m => m.state === "paid")
+            .reduce((n, m) => n + m.milestoneCents, 0),
+          receivableCents: open.reduce((n, m) => n + m.milestoneCents, 0),
+          overdueCents: open
+            .filter(m => daysApart(todayStr(), m.dueOn!) < 0)
+            .reduce((n, m) => n + m.milestoneCents, 0),
+          /* 没有在途应收时是 null，不是 0。 */
+          meanArDays: open.length
+            ? open.reduce((n, m) => n + daysApart(m.invoicedOn!, todayStr()), 0) / open.length
+            : null
+        });
+      }),
+      nextCursor: null
+    })),
+
+  http.patch(pathToRegExp("/v1/clients/{id}"), async ({ request }) => {
+    const id = seg(request.url, /\/clients\/([^/?]+)/);
+    const b = await request.json() as
+      { paymentTermsDays?: number; note?: string | null };
+    const c = CLIENTS.find(x => x.id === id);
+    if (!c) return HttpResponse.json(
+      problem("not-found", 404, "客户不存在"), { status: 404 });
+    if (!identity().actions.includes("manage")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能改客户档案"), { status: 403 });
+    if (b.paymentTermsDays !== undefined) c.paymentTermsDays = b.paymentTermsDays;
+    if (b.note !== undefined) c.note = b.note;
+    /* **不动任何已开出去的票** —— 到期日在开票那一刻就固化了。 */
+    return HttpResponse.json(mask({ ...c,
+      paidCents: 0, receivableCents: 0, overdueCents: 0, meanArDays: null }));
+  }),
+
+  http.get(pathToRegExp("/v1/cash-forecast"), ({ request }) => {
+    const n = Number(new URL(request.url).searchParams.get("months") ?? 6);
+    const ins: CashIn[] = [];
+    let recordGapCents = 0, recordGapCount = 0;
+    for (const m of scenario.milestones) {
+      if (m.state === "paid") continue;
+      if (m.state === "invoiced" && m.dueOn) {
+        const d = daysApart(todayStr(), m.dueOn);
+        ins.push({
+          amountCents: m.milestoneCents,
+          month: Math.max(1, Math.ceil(d / DAYS_PER_MONTH)),
+          label: `${m.code} ${m.hospital} ${m.planLabel}`,
+          kind: d < 0 ? "overdue" : "invoiced"
+        });
+      } else {
+        /* 待开票：**它是已经发生的事实**（里程碑达成了），只是流程没走完。
+           所以进现金，但同时也是"记录缺口"要提醒的那一笔。 */
+        ins.push({
+          amountCents: m.milestoneCents, month: Math.min(3, n),
+          label: `${m.code} ${m.hospital} ${m.planLabel}（待开票）`, kind: "pending"
+        });
+        recordGapCents += m.milestoneCents; recordGapCount++;
+      }
+    }
+    /* 每月刚性支出：在职人力 × 现行费率 × 月均工作日。 */
+    const day = crcDayCost();
+    const heads = STAFF_LIST.filter(s => s.active);
+    const burn = roundCents(heads.length * day * WORKDAYS_PER_MONTH);
+    const t = todayStr();
+    const f = cashFlow(ins, burn, n, t.slice(0, 7), recordGapCents);
+    const toMonth = (m: typeof f.months[number]) => ({
+      month: m.month, inCents: m.inCents, outCents: m.outCents,
+      netCents: m.netCents, cumCents: m.cumCents,
+      items: m.items.map(i =>
+        ({ label: i.label, inflowCents: i.amountCents, kind: i.kind }))
+    });
+    return HttpResponse.json(mask({
+      months: f.months.map(toMonth),
+      burnCents: f.burnCents, headcount: heads.length,
+      troughCents: f.troughCents, troughMonth: f.troughMonth,
+      stress: {
+        months: f.stress.months.map(toMonth),
+        troughCents: f.stress.troughCents, troughMonth: f.stress.troughMonth
+      },
+      recordGapCents, recordGapCount, calcVersion: CALC_VERSION
+    }));
+  }),
+
   http.get(pathToRegExp("/v1/rate-cards"), () =>
     HttpResponse.json({
       items: scenario.rateCards.map(mask),
@@ -662,6 +2248,20 @@ export const scenarioHandlers = [
     return HttpResponse.json(pnlFor(id, dto));
   }),
 
+  /* 全部中心的损益。**走同一个 pnlFor** —— mock 里为汇总另写一遍
+     I8' 的话，这个系统就有了第四套口径（服务端、calc、mock 单中心、
+     mock 汇总），而"汇总页和详情页对不上"正是它最先长出来的样子。 */
+  http.get(pathToRegExp("/v1/pnl"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = visibleSites()
+      .map(x => { const dto = siteDto(x.id); return dto ? pnlFor(x.id, dto) : null; })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    if (q.get("lossOnly") === "true")
+      items = items.filter(x => typeof x.grossProfitCents === "number"
+        && x.grossProfitCents < 0);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
   /* ── 入组漏斗 ────────────────────────────────────────────────────
      三个中心造出三种形状，因为这两页要回答的正是"哪一种"：
        SS-01 预筛多、筛败高 —— 要谈方案修订
@@ -670,8 +2270,9 @@ export const scenarioHandlers = [
      全给一样的数的话，页面画得出来，但它想说的话一句也说不出来。 */
   http.get(pathToRegExp("/v1/enrollment"), ({ request }) => {
     const q = new URL(request.url).searchParams;
+    const all = inScope(FUNNELS);
     const items = q.get("behindOnly") === "true"
-      ? FUNNELS.filter(f => f.enrolled < f.contracted) : FUNNELS;
+      ? all.filter(f => f.enrolled < f.contracted) : all;
     return HttpResponse.json({ items, nextCursor: null });
   }),
 
@@ -686,6 +2287,132 @@ export const scenarioHandlers = [
     const actor = q.get("actorLogin");
     if (actor) items = items.filter(e => e.actorLogin === actor);
     return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  /* ── 受试者 ──────────────────────────────────────────────────────
+     筛选号受列权限管辖：**没权限时把字段删掉**，不是置 null。
+     mock 里也要照做 —— 置 null 的话前端会写成 `?? "—"`，
+     到了真库上那个字段根本不在，`undefined ?? "—"` 也是 "—"，
+     看起来一样；但"整列不画"和"画一列横杠"是两种不同的界面，
+     而只有真库那一侧会暴露出来。 */
+  http.get(pathToRegExp("/v1/subjects"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = inScope(scenario.subjects).map(maskSubject);
+    const states = q.getAll("state");
+    if (states.length) items = items.filter(x => states.includes(x.state));
+    const site = q.get("studySiteId");
+    if (site) items = items.filter(x => x.studySiteId === site);
+    if (q.get("outOfWindow") === "true")
+      items = items.filter(x => x.nextVisit?.outOfWindow);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/subjects"), async ({ request }) => {
+    const b = await request.json() as { studySiteId: string; screeningNo: string };
+    if (scenario.subjects.some(x => x.screeningNo === b.screeningNo))
+      return HttpResponse.json(problem("invariant-violated", 422,
+        `筛选号 ${b.screeningNo} 在这个中心已经用过了`), { status: 422 });
+    const site = SITES_LIST.find(x => x.id === b.studySiteId);
+    const s = {
+      id: `u-${scenario.subjects.length + 1}`, studySiteId: b.studySiteId,
+      siteCode: site?.code ?? "SS-??", screeningNo: b.screeningNo,
+      randomized: false, randomizationNo: null, state: "prescreen",
+      icfSignedOn: null, enrolledOn: null, exitedOn: null,
+      screenFailReason: null, withdrawReason: null, crcName: me().account.displayName,
+      visitsDone: 0, visitsPlanned: 0, nextVisit: null
+    };
+    scenario.subjects.push(s);
+    return HttpResponse.json(maskSubject(s), { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/subjects/{id}:sign-icf"), async ({ request }) => {
+    const s = subjectFrom(request, /\/subjects\/([^/:]+):sign-icf/);
+    if (!s) return notFoundSubject();
+    const b = await request.json() as { signedOn: string };
+    if (b.signedOn > todayStr())
+      return HttpResponse.json(problem("invariant-violated", 422,
+        "知情签署日不能晚于今天"), { status: 422 });
+    s.icfSignedOn = b.signedOn; s.state = "screening";
+    s.visitsPlanned = 8; s.visitsDone = 0;
+    return HttpResponse.json({ data: maskSubject(s), sideEffects: [
+      { type: "ScreeningVisitsScheduled", summary: "已按 SOA 生成筛选期访视窗口" }
+    ] }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/subjects/{id}:enroll"), async ({ request }) => {
+    const s = subjectFrom(request, /\/subjects\/([^/:]+):enroll/);
+    if (!s) return notFoundSubject();
+    const b = await request.json() as { randomizationNo: string; enrolledOn: string };
+    s.state = "enrolled"; s.randomized = true;
+    s.randomizationNo = b.randomizationNo; s.enrolledOn = b.enrolledOn;
+    return HttpResponse.json({ data: maskSubject(s), sideEffects: [
+      { type: "SubjectEnrolled", summary: `已入组，随机号 ${b.randomizationNo}` }
+    ] }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/subjects/{id}:screen-fail"), async ({ request }) => {
+    const s = subjectFrom(request, /\/subjects\/([^/:]+):screen-fail/);
+    if (!s) return notFoundSubject();
+    const b = await request.json() as { reason: string; failedOn: string };
+    s.state = "screen_failed"; s.screenFailReason = b.reason;
+    s.exitedOn = b.failedOn; s.nextVisit = null;
+    return HttpResponse.json({ data: maskSubject(s), sideEffects: [
+      /* 筛败不是失败，是收入 —— 副作用里要说出来 */
+      { type: "ScreenFailFeeAccrued", summary: "筛败补偿已计入收入（I8′）" }
+    ] }, { status: 201 });
+  }),
+
+  /* ── 受试者补偿 ────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/subject-payments"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = scenario.payments.map(maskPayment);
+    if (q.get("unpaid") === "true") items = items.filter(p => !p.paidOn);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/subject-payments/{id}:pay"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname
+      .match(/\/subject-payments\/([^/:]+):pay/) ?? [];
+    const p = scenario.payments.find(x => x.id === id);
+    if (!p) return HttpResponse.json(problem("not-found", 404, "补偿记录不存在"), { status: 404 });
+    const b = await request.json() as { paidOn: string; receiptRef: string };
+    p.paidOn = b.paidOn; p.receiptRef = b.receiptRef;
+    return HttpResponse.json({ data: maskPayment(p), sideEffects: [] }, { status: 201 });
+  }),
+
+  /* ── 伦理递交 ──────────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/study-sites/{id}/regulatory-submissions"), ({ request }) => {
+    const [, id] = new URL(request.url).pathname
+      .match(/\/study-sites\/([^/]+)\/regulatory-submissions/) ?? [];
+    return HttpResponse.json({
+      items: scenario.submissions.filter(x => x.studySiteId === id), nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/study-sites/{id}/regulatory-submissions"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname
+      .match(/\/study-sites\/([^/]+)\/regulatory-submissions/) ?? [];
+    const b = await request.json() as
+      { kind: string; submittedOn: string; refNo?: string; note?: string };
+    const x = {
+      id: `sub-${scenario.submissions.length + 1}`, studySiteId: id!,
+      kind: b.kind, submittedOn: b.submittedOn,
+      /* **递交了不等于批下来了** —— 新建的一律 pending */
+      decision: "pending", decidedOn: null,
+      refNo: b.refNo ?? null, note: b.note ?? null
+    };
+    scenario.submissions.push(x);
+    return HttpResponse.json(x, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/regulatory-submissions/{id}:decide"), async ({ request }) => {
+    const [, id] = new URL(request.url).pathname
+      .match(/\/regulatory-submissions\/([^/:]+):decide/) ?? [];
+    const x = scenario.submissions.find(y => y.id === id);
+    if (!x) return HttpResponse.json(problem("not-found", 404, "递交记录不存在"), { status: 404 });
+    const b = await request.json() as { decision: string; decidedOn: string; note?: string };
+    x.decision = b.decision; x.decidedOn = b.decidedOn;
+    if (b.note) x.note = b.note;
+    return HttpResponse.json({ data: x, sideEffects: [] }, { status: 201 });
   }),
 
   /* ── 人员与交接 ──────────────────────────────────────────────── */
@@ -782,6 +2509,85 @@ function seg(url: string, re: RegExp): string {
   return new URL(url).pathname.match(re)?.[1] ?? "";
 }
 
+/** 可行性调查的一行。评分**现算**（走 calc），不存 ——
+ *  存下来的分数会在口径升级之后悄悄变成历史值，
+ *  而这一页要的恰恰是"按现在这套口径，这家该得多少分"。 */
+function feasDto(f: MockFeas) {
+  const score = feasibilityScore(f.answers);
+  return {
+    ...f,
+    score: { ...score, calcVersion: CALC_VERSION },
+    bias: f.actualRate === null
+      ? null : feasibilityBias(f.actualRate, score.predictedPerMonth)
+  };
+}
+
+/** 一条投标。**价格受 price 列权限管辖，走 mask()**（契约派生的门），
+ *  不在这里手抄一份"哪些字段该删"。 */
+function bidDto(b: MockBid) {
+  const gap = b.winningPriceCents !== null && b.winningPriceCents > 0
+    ? (b.ourQuoteCents - b.winningPriceCents) / b.winningPriceCents : null;
+  const { winningPriceCents, ...rest } = b;
+  return mask({
+    ...rest,
+    daysPerSubject: b.subjects > 0 ? b.ourPersonDays / b.subjects : 0,
+    /* 成交价未知时**这个键不出现** —— 与服务端同一条规矩。 */
+    ...(winningPriceCents !== null ? { winningPriceCents } : {}),
+    gap
+  });
+}
+
+/** CRC 人天成本：从现行费率卡取，**不写常量** —— 与服务端同源。 */
+const crcDayCost = () => {
+  const t = todayStr();
+  return scenario.rateCards.find(c =>
+    c.roleKind === "CRC" && c.level === null
+    && c.validFrom <= t && (c.validTo === null || c.validTo >= t))?.dayCostCents ?? 0;
+};
+
+function changeDto(c: MockChange) {
+  const total = changeDays({
+    status: c.status, personDaysImpact: c.personDaysImpact,
+    perSubject: c.perSubject, affectedSubjects: c.affectedSubjects,
+    amountCents: c.amountCents
+  });
+  const { amountCents: settledCents, ...rest } = c;
+  return mask({
+    ...rest,
+    totalPersonDays: total,
+    /* 已签署的不算白做 —— 哪怕金额是 0：那是谈过之后的决定。 */
+    ...(c.status !== "signed"
+      ? { uncoveredCents: Math.round(total * crcDayCost()) } : {}),
+    ...(settledCents !== null ? { settledCents } : {})
+  });
+}
+
+/** 两个**日历日**之间相差几天。与服务端同一个式子。 */
+const daysApart = (a: string, b: string) =>
+  Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86_400_000);
+
+/** 一条里程碑。**逾期天数现算** —— 存下来的话，
+ *  这个 mock 每过一天就会和真库差一天。 */
+function msDto(m: MockMilestone) {
+  const open = m.state === "invoiced" && m.dueOn !== null;
+  const daysToDue = open ? daysApart(todayStr(), m.dueOn!) : null;
+  return mask({
+    ...m,
+    daysToDue,
+    /* 「没逾期」和「逾期 0 天」是两回事 —— 前者给 null。 */
+    overdueDays: daysToDue !== null && daysToDue < 0 ? -daysToDue : null
+  });
+}
+
+/** 里程碑计划表。与迁移 0031 的 milestone_plan 逐字同源。 */
+const MS_PLAN = [
+  { code: "contract", label: "合同签署",     ratio: 0.10, seq: 1 },
+  { code: "siv",      label: "中心启动 SIV", ratio: 0.15, seq: 2 },
+  { code: "half",     label: "入组过半",     ratio: 0.25, seq: 3 },
+  { code: "eighty",   label: "入组达成 80%", ratio: 0.25, seq: 4 },
+  { code: "closeout", label: "中心结题",     ratio: 0.25, seq: 5 }
+];
+
 /** 状态机顺序取自契约，不在 mock 里另立一份。 */
 const nextState = (cur: string) => SITE_STATES[SITE_STATES.indexOf(cur as never) + 1] ?? null;
 
@@ -791,8 +2597,8 @@ function siteDto(id: string) {
   return {
     id: s.id, code: s.code,
     study: { id: "st1", code: "HJ-2024-017", shortName: "艾瑞替尼 III" },
-    hospital: s.hospital, dept: "肝胆外科", city: "北京",
-    piName: "陈国栋", piAccountId: null,
+    hospital: s.hospital, dept: s.dept, city: s.city,
+    piName: s.piName, piAccountId: s.piAccountId,
     state: scenario.siteState[s.id] ?? s.state, contracted: 30,
     irbApprovedOn: "2024-10-18",
     sivOn: scenario.sivOn[s.id] ?? null,
@@ -807,7 +2613,10 @@ function siteDto(id: string) {
     startupInvalidated: PAST_SIV.includes(scenario.siteState[s.id] ?? s.state)
       && scenario.startupItems.some(
         i => i.studySiteId === s.id && i.isBlocking && !i.doneAt),
-    ...(mockRole === "boss"
+    /* 按**列权限**判，不按角色名判。写成 `mockRole === "boss"` 的那一版，
+       加一个同样看得到 price 的身份时会静默漏掉它 ——
+       而真库那一侧看的从来都是 role_field。 */
+    ...(identity().fields.includes("price")
       ? { unitPriceCents: 5800000, startupFeeCents: 17600000 } : {})
   };
 }
@@ -863,7 +2672,7 @@ function gateFor(siteId: string) {
  *  界面据此判断"有没有这一块"，两边差一点都会露馅。 */
 const GATES = fieldGates();
 const mask = <T,>(v: T): T =>
-  maskFields({ active: true, fields: ROLE[mockRole].fields }, GATES, v);
+  maskFields({ active: true, fields: identity().fields }, GATES, v);
 
 /** 成本三件套受 cost 列权限管辖 —— 一线填工时，但看不到自己值多少钱。 */
 const stripCost = (t: MockTimesheet) => mask(t);
@@ -950,7 +2759,11 @@ export const contractHandlers = allEndpoints().map(e => {
   const path = pathToRegExp(e.path);
   const fn = () => {
     if (!ex) return new HttpResponse(null, { status: 501 });
-    const body = mockRole === "crc" && ex.bodyWithoutFieldPermission
+    /* 两份示例：一份含全部受管辖字段，一份是无权限时的样子。
+       **除了经营层，其余三个身份都拿不到钱那几列** —— 判据是列权限本身，
+       不是"是不是 CRC"。 */
+    const rich = identity().fields.includes("cost");
+    const body = !rich && ex.bodyWithoutFieldPermission
       ? ex.bodyWithoutFieldPermission : ex.body;
     return body === undefined
       ? new HttpResponse(null, { status: ex.status })
@@ -992,7 +2805,7 @@ function trendFor(id: string, dto: { code: string; hospital: string }, months: n
         month, enrolled: k.enrolled, screenFailed: 0, withdrawn: 0
       };
       /* 与真实后端同一套列权限：一线看得到例数，看不到钱 */
-      return mockRole === "boss" ? {
+      return identity().fields.includes("cost") ? {
         ...base, revenueCents: k.rev, costCents: k.cost,
         personDays: k.cost / 2_11_200,
         grossProfitCents: k.rev - k.cost

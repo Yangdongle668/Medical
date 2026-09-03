@@ -50,7 +50,7 @@ describe("约束不是文档，是数据库拒绝写入", () => {
     tx(async () => {
       await expect(o.query(`
         INSERT INTO account (login, display_name, role_id, is_external, org_ref)
-        VALUES ('newinst','某机构老师',(SELECT id FROM role WHERE code='inst'),true,NULL)`))
+        VALUES ('newinst','某机构老师',(SELECT id FROM role WHERE code='inst' AND tenant_id = app.default_tenant_id()),true,NULL)`))
         .rejects.toThrow(/必须填写 org_ref/);
     }));
 
@@ -58,7 +58,7 @@ describe("约束不是文档，是数据库拒绝写入", () => {
     tx(async () => {
       const { rows } = await o.query(`
         INSERT INTO account (login, display_name, role_id, is_external, org_ref)
-        VALUES ('newpi','某研究者',(SELECT id FROM role WHERE code='pi'),true,NULL) RETURNING id`);
+        VALUES ('newpi','某研究者',(SELECT id FROM role WHERE code='pi' AND tenant_id = app.default_tenant_id()),true,NULL) RETURNING id`);
       expect(rows[0].id).toBeTruthy();
     }));
 

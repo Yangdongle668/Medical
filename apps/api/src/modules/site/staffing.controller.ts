@@ -13,6 +13,11 @@ const StaffQ = PageQuery.extend({
   successionGap: QueryBool.optional(),
   activeOnly: QueryBool.optional()
 });
+const SiteStaffQ = PageQuery.extend({
+  roleKind: RoleKind.optional(),
+  gcpProblem: QueryBool.optional(),
+  studySiteId: Uuid.optional()
+});
 const HandoverQ = PageQuery.extend({ status: HandoverStatus.optional() });
 const CreateHandover = z.object({
   toAccountId: Uuid,
@@ -21,12 +26,19 @@ const CreateHandover = z.object({
   plannedOn: DateOnly
 });
 
+const ChecklistQ = PageQuery.extend({ blockedOnly: QueryBool.optional() });
+
 @Controller("/v1")
 export class StaffingController {
   constructor(
     private readonly svc: StaffingService,
     private readonly idem: IdempotencyService
   ) {}
+
+  @Get("/startup-checklists") @Operation("listStartupChecklists")
+  listChecklists(@Query(new ZodPipe(ChecklistQ)) q: z.infer<typeof ChecklistQ>) {
+    return this.svc.listChecklists(q);
+  }
 
   @Get("/study-sites/:id/startup-items") @Operation("getStartupChecklist")
   checklist(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.checklist(id); }
@@ -52,6 +64,11 @@ export class StaffingController {
 
   @Get("/staff") @Operation("listStaff")
   staff(@Query(new ZodPipe(StaffQ)) q: z.infer<typeof StaffQ>) { return this.svc.listStaff(q); }
+
+  @Get("/site-staff") @Operation("listSiteStaff")
+  siteStaff(@Query(new ZodPipe(SiteStaffQ)) q: z.infer<typeof SiteStaffQ>) {
+    return this.svc.listSiteStaff(q);
+  }
 
   @Get("/handovers") @Operation("listHandovers")
   handovers(@Query(new ZodPipe(HandoverQ)) q: z.infer<typeof HandoverQ>) {

@@ -5,6 +5,7 @@ import {
   type Dropout, type CostEntry
 } from "@sitedesk/calc";
 import { ctx, principal } from "../../infra/ctx.js";
+import { siteScopeSql } from "@sitedesk/policy";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 
@@ -436,6 +437,103 @@ export class CostService {
 
   /* ── 单中心损益 ─────────────────────────────────────────────────── */
 
+  /** 全部中心的损益。**三条查询，不是每个中心三条。**
+   *
+   *  口径不另写一份：把每个中心的输入凑齐之后，走的是和 `sitePnl`
+   *  完全相同的 `siteRevenue` / `siteCost` / `siteMargin`。
+   *  照抄一份算法出来，两处迟早长出分歧 —— 而分歧只有对账那天才看得见。 */
+  async listPnl(q: { limit: number; cursor?: string; studyId?: string; lossOnly?: boolean }) {
+    const c = ctx();
+    const sc = siteScopeSql(principal(), "s");
+    const params: unknown[] = [...sc.params];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
+    const conds = [sc.sql];
+    if (q.studyId) conds.push(`s.study_id = ${add(q.studyId)}`);
+    if (q.cursor) conds.push(`s.code > ${add(q.cursor)}`);
+
+    const sites = await c.client.query<{
+      id: string; code: string; hospital: string; state: string; contracted: number;
+      unit_price_cents: string; startup_fee_cents: string;
+      screen_fail_fee_rate: string; overhead_rate: string;
+    }>(`SELECT s.id, s.code, s.hospital, s.state, s.contracted,
+               s.unit_price_cents, s.startup_fee_cents,
+               st.screen_fail_fee_rate, st.overhead_rate
+          FROM study_site s JOIN study st ON st.id = s.study_id
+         WHERE ${conds.join(" AND ")}
+         ORDER BY s.code LIMIT ${add(q.limit + 1)}`, params);
+
+    const page = sites.rows.slice(0, q.limit);
+    if (!page.length) return { items: [], nextCursor: null };
+    const ids = page.map(r => r.id);
+
+    /* 受试者：计数与每一例脱落的访视完成度，一条查询取回全部中心。
+       脱落扣减要按**每一例**算，不能把比例平均了再乘（见 calc/revenue.ts）——
+       所以这里要的是行，不是聚合。 */
+    const subjects = await c.client.query<{
+      study_site_id: string; state: string; done: string; planned: string;
+    }>(`SELECT su.study_site_id, su.state,
+               (SELECT count(*) FROM subject_visit v
+                 WHERE v.subject_id = su.id AND v.status = 'locked') AS done,
+               (SELECT count(*) FROM visit_template t
+                 WHERE t.study_id = s.study_id)                      AS planned
+          FROM subject su JOIN study_site s ON s.id = su.study_site_id
+         WHERE su.study_site_id = ANY($1)`, [ids]);
+
+    const entries = await c.client.query<{
+      study_site_id: string; cost_cents: string; billable: boolean;
+      hours: string; approved: boolean;
+    }>(`SELECT study_site_id, cost_cents, billable, hours,
+               (approved_at IS NOT NULL) AS approved
+          FROM timesheet_entry
+         WHERE study_site_id = ANY($1) AND voided_at IS NULL`, [ids]);
+
+    const bySite = <T extends { study_site_id: string }>(rows: T[]) => {
+      const m = new Map<string, T[]>();
+      for (const r of rows) m.set(r.study_site_id, [...(m.get(r.study_site_id) ?? []), r]);
+      return m;
+    };
+    const subjBy = bySite(subjects.rows), costBy = bySite(entries.rows);
+
+    const items = page.map(s => {
+      const subs = subjBy.get(s.id) ?? [];
+      const enrolled = subs.filter(x =>
+        ["enrolled", "withdrawn", "completed"].includes(x.state)).length;
+      const screenFailed = subs.filter(x => x.state === "screen_failed").length;
+      const withdrawnRows = subs.filter(x => x.state === "withdrawn");
+      const dropouts: Dropout[] = withdrawnRows.map(r => ({
+        visitsDone: Number(r.done), visitsPlanned: Number(r.planned) }));
+
+      const revenue = siteRevenue({
+        startupFeeCents: Number(s.startup_fee_cents),
+        unitPriceCents: Number(s.unit_price_cents),
+        enrolled, screenFailed,
+        screenFailFeeRate: Number(s.screen_fail_fee_rate),
+        dropouts
+      });
+      const rows = costBy.get(s.id) ?? [];
+      const cost = siteCost(rows.map(r => ({
+        costCents: Number(r.cost_cents), billable: r.billable,
+        hours: Number(r.hours), voided: false })), Number(s.overhead_rate));
+      const unapprovedCostCents = rows
+        .filter(r => !r.approved).reduce((n, r) => n + Number(r.cost_cents), 0);
+      const margin = siteMargin(revenue.total, cost.totalCents, enrolled);
+
+      return this.pnlDto(s, {
+        enrolled, screenFailed, withdrawn: withdrawnRows.length,
+        revenue, cost, unapprovedCostCents, margin
+      });
+    });
+
+    const shown = q.lossOnly
+      /* 亏的：毛利为负。**没有 margin 权限的人筛不出来** —— 那个字段
+         已经被删掉了，这里读到 undefined。与其悄悄给他一份空列表，
+         不如让筛选对他不生效（他本来也看不到毛利那一列）。 */
+      ? items.filter(x => typeof x.grossProfitCents === "number" && x.grossProfitCents < 0)
+      : items;
+
+    return { items: shown, nextCursor: sites.rows.length > q.limit ? page.at(-1)!.code : null };
+  }
+
   async sitePnl(siteId: string) {
     const c = ctx();
     const site = await c.client.query<{
@@ -497,35 +595,54 @@ export class CostService {
       .reduce((n, r) => n + Number(r.cost_cents), 0);
     const margin = siteMargin(revenue.total, cost.totalCents, Number(n.enrolled));
 
+    return this.pnlDto(s, {
+      enrolled: Number(n.enrolled), screenFailed: Number(n.screen_failed),
+      withdrawn: Number(n.withdrawn), revenue, cost, unapprovedCostCents, margin
+    });
+  }
+
+  /** 损益的响应组装。**单中心与汇总共用这一份** ——
+   *  抄两份出来，两处迟早在某一栏上长出分歧，
+   *  而"中心详情页和汇总页对不上"是最难被认领的一类报障。 */
+  private pnlDto(
+    s: { id: string; code: string; hospital: string; state: string; contracted: number },
+    x: {
+      enrolled: number; screenFailed: number; withdrawn: number;
+      revenue: ReturnType<typeof siteRevenue>;
+      cost: ReturnType<typeof siteCost>;
+      unapprovedCostCents: number;
+      margin: ReturnType<typeof siteMargin>;
+    }
+  ) {
     return {
       studySiteId: s.id, siteCode: s.code, hospital: s.hospital, state: s.state,
-      enrolled: Number(n.enrolled), screenFailed: Number(n.screen_failed),
-      withdrawn: Number(n.withdrawn), contracted: s.contracted,
+      enrolled: x.enrolled, screenFailed: x.screenFailed,
+      withdrawn: x.withdrawn, contracted: s.contracted,
       revenue: {
-        startupCents: revenue.startup,
-        enrollmentCents: revenue.enrollment,
-        dropoutDeductionCents: revenue.dropoutDeduction,
-        screenFailFeeCents: revenue.screenFailFee,
-        revenueCents: revenue.total
+        startupCents: x.revenue.startup,
+        enrollmentCents: x.revenue.enrollment,
+        dropoutDeductionCents: x.revenue.dropoutDeduction,
+        screenFailFeeCents: x.revenue.screenFailFee,
+        revenueCents: x.revenue.total
       },
       cost: {
-        directCostCents: cost.directCents,
-        billableCostCents: cost.billableCents,
-        nonBillableCostCents: cost.nonBillableCents,
-        overheadCents: cost.overheadCents,
-        totalCostCents: cost.totalCents,
-        unapprovedCostCents,
-        personDays: cost.personDays,
+        directCostCents: x.cost.directCents,
+        billableCostCents: x.cost.billableCents,
+        nonBillableCostCents: x.cost.nonBillableCents,
+        overheadCents: x.cost.overheadCents,
+        totalCostCents: x.cost.totalCents,
+        unapprovedCostCents: x.unapprovedCostCents,
+        personDays: x.cost.personDays,
         /* 受列权限管辖的字段**不能同时可空**：null 会有两种含义
            （没权限 / 没有值），客户端分不清。所以「没有分母」时省略，
            与"无权限时消失"用同一种表达 —— 客户端只需要处理"它不在"。 */
         ...omitNull({
-          nonBillableShare: cost.nonBillableShare,
-          costPerEnrolledCents: margin.costPerEnrolledCents
+          nonBillableShare: x.cost.nonBillableShare,
+          costPerEnrolledCents: x.margin.costPerEnrolledCents
         })
       },
-      grossProfitCents: margin.grossProfitCents,
-      ...omitNull({ grossMargin: margin.grossMargin }),
+      grossProfitCents: x.margin.grossProfitCents,
+      ...omitNull({ grossMargin: x.margin.grossMargin }),
       calcVersion: CALC_VERSION
     };
   }
