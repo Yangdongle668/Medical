@@ -116,8 +116,8 @@ describe("租户维度（当前单租户，但列与策略已就位）", () => {
       const cl = await o.query(`INSERT INTO client (tenant_id, name)
         VALUES ($1,'他家申办方') RETURNING id`, [T2]);
       const st = await o.query(`INSERT INTO study (tenant_id, code, short_name, client_id,
-        phase, indication, planned_subjects, contract_amount_cents)
-        VALUES ($1,'XX-9999','他家项目',$2,'I期','X',10,100000000) RETURNING id`,
+        phase, indication, planned_subjects, planned_sites, contract_amount_cents)
+        VALUES ($1,'XX-9999','他家项目',$2,'I期','X',10,1,100000000) RETURNING id`,
         [T2, cl.rows[0].id]);
       await o.query(`INSERT INTO study_site (tenant_id, study_id, code, hospital, dept, city,
         pi_name, contracted, unit_price_cents)

@@ -69,8 +69,7 @@ export const MODULES: ModuleDef[] = [
 
   /* ── 经营 ─────────────────────────────────────────────────────── */
   { key: "dash", title: "经营驾驶舱", group: "经营", path: "/dash" },
-  { key: "intake", title: "立项与建档", group: "经营", path: "/intake",
-    todo: "待受理的立项申请：申办方、适应症、预算、要不要接。" },
+  { key: "intake", title: "立项与建档", group: "经营", path: "/intake" },
   { key: "sites", title: "项目 · 中心台账", group: "经营", path: "/sites" },
   { key: "enr", title: "入组进度", group: "经营", path: "/enr" },
   { key: "screen", title: "筛选漏斗与筛败", group: "经营", path: "/screen" },

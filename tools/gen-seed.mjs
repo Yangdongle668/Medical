@@ -47,7 +47,8 @@ const STUDIES = grab("STUDIES"), SITES = grab("SITES"),
       RATE = grab("RATE"), WORKTYPES = grab("WORKTYPES"), TIMESHEET = grab("TIMESHEET"),
       FEAS = grab("FEAS"), BIDS = grab("BIDS"), CHANGES = grab("CHANGES"),
       MILES = grab("MILES"), CLIENT_META = grab("CLIENT_META"),
-      VISITS = grab("VISITS"), ISSUES = grab("ISSUES"), AUDIT = grab("AUDIT");
+      VISITS = grab("VISITS"), ISSUES = grab("ISSUES"), AUDIT = grab("AUDIT"),
+      INTAKE = grab("INTAKE");
 
 const q  = v => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const d  = v => (!v || v === "—") ? "NULL" : `'${v}'`;
@@ -134,10 +135,13 @@ P(``);
 P(`-- ── 项目 ────────────────────────────────────────────────────`);
 P(`-- 金额一律以「分」存 bigint；原型的万元数值在此换算（见迁移 0006）。`);
 for (const s of STUDIES)
+  /* planned_sites 是**合同里写的**中心数，不是已经建档的数量 ——
+     两者之差就是建档滞后（迁移 0037）。原型的 STUDIES 里就有这个数，
+     而 SITES 里实际铺出来的比它少，那个差正是要看见的东西。 */
   P(`INSERT INTO study (id, code, short_name, client_id, phase, indication,` +
-    ` planned_subjects, contract_amount_cents, started_on, ends_on) VALUES (` +
+    ` planned_subjects, planned_sites, contract_amount_cents, started_on, ends_on) VALUES (` +
     `'${uuid5("study:"+s.id)}', ${q(s.id)}, ${q(s.short)}, '${uuid5("client:"+s.sponsor)}', ${q(s.phase)}, ` +
-    `${q(s.indication)}, ${s.planned}, ${cents(s.contract)}, '${s.start}-01', '${s.end}-01');`);
+    `${q(s.indication)}, ${s.planned}, ${s.sites}, ${cents(s.contract)}, '${s.start}-01', '${s.end}-01');`);
 P(``);
 P(`-- ── 分组承接项目：PM 行范围的来源 ────────────────────────────`);
 for (const g of GROUPS) for (const sid of g.studies)
@@ -470,6 +474,20 @@ QUERIES.forEach(qy => {
     `${answer ? d(dayBefore(TODAY, Math.floor(qy.age / 2))) : "NULL"}, ` +
     `${q(dm ? "dm" : "cra")}, ${acc(byName)}, ` +
     `${d(dayBefore(TODAY, qy.age))});`);
+});
+P(``);
+
+/* ── 立项申请 ──────────────────────────────────────────────────
+   原型的 INTAKE 是两条**待经营层审批**的立项申请。它们回答的是
+   「项目是怎么进系统的」——在此之前，`study` 的第一行是凭空出现的。 */
+P(`-- ── 立项申请（原型 INTAKE） ────────────────────────────────────`);
+INTAKE.forEach(x => {
+  P(`INSERT INTO intake_application (code, drug, sponsor_name, phase, indication,` +
+    ` planned_sites, planned_subjects, enroll_months, contract_cents,` +
+    ` estimated_cost_cents, note, submitted_by, submitted_on, state) VALUES (` +
+    `${q(x.id)}, ${q(x.drug)}, ${q(x.sponsor)}, ${q(x.phase)}, ${q(x.indication)}, ` +
+    `${x.sites}, ${x.planned}, ${x.months}, ${cents(x.contract)}, ${cents(x.cost)}, ` +
+    `${q(x.note)}, ${acc(x.by)}, ${d(x.sub)}, 'submitted');`);
 });
 P(``);
 

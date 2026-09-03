@@ -4706,6 +4706,466 @@ paths:
                 title: 服务暂时不可用
                 status: 503
                 code: service-unavailable
+  /v1/intake-applications:
+    get:
+      operationId: listIntakeApplications
+      tags:
+        - bizdev
+      summary: 立项申请
+      description: |-
+        项目是**怎么进系统的**。在此之前 `study` 的第一行是凭空出现的 ——而真实系统里，一个项目要先有人提出来、有人算过账、有人批准。
+
+        **越线的排最前**：低于毛利门槛的必须过经营层那一关，而按提交日排的话，最该看的那几条会沉在底下。
+        对外部方整表关闭 —— 一家医院看得到我们按什么毛利率接项目，下一轮谈判就不用谈了。
+      x-layer: L1
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              $ref: '#/components/schemas/IntakeState'
+        - name: mine
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
+        - name: belowGateOnly
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
+      responses:
+        '200':
+          description: 立项申请
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListIntakeApplicationsResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+    post:
+      operationId: submitIntakeApplication
+      tags:
+        - bizdev
+      summary: 提交立项申请
+      description: |-
+        测算成本是**手填的** —— 报价模型那一页能把它算出来（`quote()`），但立项时未必已经算过。手填的数要能被看出是手填的。
+
+        毛利率与保本合同额由服务端算，不接受调用方传入：一个可以自己报毛利率的申请，门槛就形同虚设。
+      x-layer: L1
+      x-required-action: bid
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 幂等键（uuid）。可选；带上之后 24 小时内重放同一键返回首次结果，离线重放因此不会写两笔。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitIntakeApplicationRequest'
+      responses:
+        '201':
+          description: 提交立项申请
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitIntakeApplicationResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/intake-applications/{id}:decide:
+    post:
+      operationId: decideIntakeApplication
+      tags:
+        - bizdev
+      summary: 批准立项或退回重谈
+      description: |-
+        **提交人不能批准自己的申请** —— 与工时审批同一条规矩。
+
+        批准会在**同一个事务里**建出项目档案（`study`），必要时连客户档案一起建：约束上「已批准」与「有项目档案」互为充要条件，所以不存在「批准了但档案没建」这一格 —— 那是这条流程最容易漏的一格。
+
+        退回必须写理由：不说为什么的退回，提交人只能猜，而猜错的代价是拿着同一份价格再谈一轮。
+      x-layer: L2
+      x-required-action: approve
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideIntakeApplicationRequest'
+      responses:
+        '200':
+          description: 批准立项或退回重谈
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecideIntakeApplicationResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/intake-applications/board:
+    get:
+      operationId: getIntakeBoard
+      tags:
+        - bizdev
+      summary: 待审批总量与建档滞后
+      description: |-
+        **「已建档」小于「合同中心数」= 合同里写了但还没进系统的中心。**
+
+        那几个中心的成本已经在发生（伦理递交、合同谈判、可行性访视），收入却还挂不上号 —— 这是早期成本失控最常见的一种，而在此之前系统里连「合同写了几个中心」这个数都没有。
+      x-layer: L1
+      parameters: []
+      responses:
+        '200':
+          description: 待审批总量与建档滞后
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntakeBoard'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/internal-audits:
     get:
       operationId: listInternalAudits
@@ -17049,6 +17509,248 @@ components:
         - coverage
         - calcVersion
       additionalProperties: false
+    IntakeState:
+      type: string
+      enum:
+        - submitted
+        - approved
+        - returned
+      description: submitted 待审批 → approved 已批准（同时建出项目档案）/ returned 退回重谈
+    IntakeApplication:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        drug:
+          type: string
+        sponsorName:
+          type: string
+        phase:
+          type: string
+        indication:
+          type: string
+        plannedSites:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+        plannedSubjects:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+        enrollMonths:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+        contractCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        estimatedCostCents:
+          x-gated-by: cost
+          description: 【成本与人天】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        grossCents:
+          x-gated-by: margin
+          description: 【毛利与利润率】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        grossMargin:
+          x-gated-by: margin
+          description: 【毛利与利润率】无权限时该字段不出现在响应中（不是 null）
+          type: number
+        belowGate:
+          type: boolean
+        perSubjectCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        breakEvenContractCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        subjectsPerSite:
+          nullable: true
+          type: number
+        note:
+          nullable: true
+          type: string
+        submittedBy:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        submittedByName:
+          type: string
+        submittedOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        state:
+          $ref: '#/components/schemas/IntakeState'
+        decidedByName:
+          nullable: true
+          type: string
+        decidedOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        decisionNote:
+          nullable: true
+          type: string
+        studyId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        studyCode:
+          nullable: true
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+      required:
+        - id
+        - code
+        - drug
+        - sponsorName
+        - phase
+        - indication
+        - plannedSites
+        - plannedSubjects
+        - enrollMonths
+        - belowGate
+        - subjectsPerSite
+        - note
+        - submittedBy
+        - submittedByName
+        - submittedOn
+        - state
+        - decidedByName
+        - decidedOn
+        - decisionNote
+        - studyId
+        - studyCode
+      additionalProperties: false
+      description: '**在立项时就算账，不等做完才知道亏。** 一个项目做完之后算出毛利 8%，那是历史；立项时算出 8%，那是决定。'
+    StudyFiling:
+      type: object
+      properties:
+        studyId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        studyCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        shortName:
+          type: string
+        clientName:
+          type: string
+        phase:
+          type: string
+        plannedSubjects:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        plannedSites:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        builtSites:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        missingSites:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        filedRatio:
+          nullable: true
+          type: number
+          minimum: 0
+          maximum: 1
+        contractCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+      required:
+        - studyId
+        - studyCode
+        - shortName
+        - clientName
+        - phase
+        - plannedSubjects
+        - plannedSites
+        - builtSites
+        - missingSites
+        - filedRatio
+      additionalProperties: false
+    IntakeBoard:
+      type: object
+      properties:
+        open:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        belowGate:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        openContractCents:
+          x-gated-by: price
+          description: 【报价与合同金额】无权限时该字段不出现在响应中（不是 null）
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        gmGate:
+          type: number
+        studies:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudyFiling'
+        missingSites:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        calcVersion:
+          type: string
+      required:
+        - open
+        - belowGate
+        - gmGate
+        - studies
+        - missingSites
+        - calcVersion
+      additionalProperties: false
     MilestoneState:
       type: string
       enum:
@@ -18846,6 +19548,118 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/Handover'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    ListIntakeApplicationsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IntakeApplication'
+        nextCursor:
+          nullable: true
+          description: null 表示已到末页
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+        - items
+        - nextCursor
+      additionalProperties: false
+    SubmitIntakeApplicationRequest:
+      type: object
+      properties:
+        drug:
+          type: string
+          minLength: 2
+          maxLength: 200
+        sponsorName:
+          type: string
+          minLength: 2
+          maxLength: 120
+        phase:
+          type: string
+          minLength: 1
+          maxLength: 20
+        indication:
+          type: string
+          minLength: 2
+          maxLength: 120
+        plannedSites:
+          type: integer
+          minimum: 1
+          maximum: 200
+        plannedSubjects:
+          type: integer
+          minimum: 1
+          maximum: 20000
+        enrollMonths:
+          type: integer
+          minimum: 1
+          maximum: 120
+        contractCents:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        estimatedCostCents:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        note:
+          type: string
+          maxLength: 1000
+      required:
+        - drug
+        - sponsorName
+        - phase
+        - indication
+        - plannedSites
+        - plannedSubjects
+        - enrollMonths
+        - contractCents
+        - estimatedCostCents
+      additionalProperties: false
+    SubmitIntakeApplicationResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/IntakeApplication'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    DecideIntakeApplicationRequest:
+      type: object
+      properties:
+        result:
+          type: string
+          enum:
+            - approved
+            - returned
+        reason:
+          type: string
+          maxLength: 1000
+      required:
+        - result
+      additionalProperties: false
+    DecideIntakeApplicationResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/IntakeApplication'
         sideEffects:
           type: array
           items:

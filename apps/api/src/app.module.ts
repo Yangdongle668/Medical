@@ -36,6 +36,8 @@ import { CostController } from "./modules/cost/cost.controller.js";
 import { FeasibilityService } from "./modules/bizdev/feasibility.service.js";
 import { BidService } from "./modules/bizdev/bid.service.js";
 import { BizdevController } from "./modules/bizdev/bizdev.controller.js";
+import { IntakeService } from "./modules/bizdev/intake.service.js";
+import { IntakeController } from "./modules/bizdev/intake.controller.js";
 import { FinanceService } from "./modules/finance/finance.service.js";
 import { FinanceController } from "./modules/finance/finance.controller.js";
 import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
@@ -46,7 +48,7 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
 @Module({
   controllers: [HealthController, AuthController, IdentityController, SiteController, StaffingController,
                 ClinicalController, DataQueryController, AccountabilityController, CostController,
-                BizdevController, FinanceController, MonitorController,
+                BizdevController, IntakeController, FinanceController, MonitorController,
                 InternalAuditController],
   providers: [
     /* 池子必须能被关掉。`enableShutdownHooks()` 会调 `app.close()`，
@@ -73,7 +75,8 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
     LoginDelivery, NotifyService,
     IdentityService, SiteService, StaffingService,
     ClinicalService, DataQueryService, AccountabilityService, CostService,
-    FeasibilityService, BidService, FinanceService, MonitorService, InternalAuditService,
+    FeasibilityService, BidService, IntakeService, FinanceService, MonitorService,
+    InternalAuditService,
     /* 跨上下文装配：ClinicalOps 只认 ports.ts 里的接口，不 import CostService */
     { provide: VISIT_TIMESHEET_PORT, useExisting: CostService },
     { provide: APP_FILTER, useClass: ProblemFilter },

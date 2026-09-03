@@ -255,3 +255,90 @@ export const ScopeCreep = z.object({
   coverage: Ratio.nullable(),
   calcVersion: z.string()
 }).meta({ id: "ScopeCreep" });
+
+/* ── 立项申请（迁移 0037） ────────────────────────────────────────
+   项目是怎么进系统的。在此之前 `study` 的第一行是凭空出现的 ——
+   而真实系统里，一个项目要先有人提出来、有人算过账、有人批准。 */
+
+export const INTAKE_STATES = ["submitted", "approved", "returned"] as const;
+export const IntakeState = z.enum(INTAKE_STATES).meta({
+  id: "IntakeState",
+  description: "submitted 待审批 → approved 已批准（同时建出项目档案）/ returned 退回重谈"
+});
+
+export const IntakeApplication = z.object({
+  id: Uuid,
+  code: Code,
+  drug: z.string(),
+  /** 申请阶段的申办方**不是客户** —— 建客户档案是批准之后的事，
+   *  提前建，`client` 表里会混进一堆没谈成的公司。 */
+  sponsorName: z.string(),
+  phase: z.string(),
+  indication: z.string(),
+  plannedSites: z.int().positive(),
+  plannedSubjects: z.int().positive(),
+  enrollMonths: z.int().positive(),
+
+  contractCents: gated(z.int().min(0), "price"),
+  /** 测算成本。**它是手填的** —— 报价模型那一页能把它算出来，
+   *  但立项时未必已经算过。 */
+  estimatedCostCents: gated(z.int().min(0), "cost"),
+  grossCents: gated(z.int(), "margin"),
+  /** 毛利率。合同额为 0 时不出现该字段 —— 「白做」和「还没定价」是两回事。 */
+  grossMargin: gated(z.number(), "margin"),
+  /** 低于毛利门槛，必须过经营层那一关。**算不出毛利率的也算越线** ——
+   *  它不是刚好达标，是根本没定价，而那更需要有人看一眼。 */
+  belowGate: z.boolean(),
+  perSubjectCents: gated(z.int().min(0), "price"),
+  /** 按当前测算成本，合同额至少要多少才够门槛。
+   *  **比毛利率更能推动谈判** —— 对方能拿这个数回去算。 */
+  breakEvenContractCents: gated(z.int().min(0), "price"),
+  subjectsPerSite: z.number().nullable(),
+
+  note: z.string().nullable(),
+  submittedBy: Uuid,
+  submittedByName: z.string(),
+  submittedOn: DateOnly,
+  state: IntakeState,
+  decidedByName: z.string().nullable(),
+  decidedOn: DateOnly.nullable(),
+  /** 退回必须写理由 —— 不说为什么的退回，提交人只能猜，
+   *  而猜错的代价是拿着同一份价格再谈一轮。 */
+  decisionNote: z.string().nullable(),
+  /** 批准之后建出来的项目档案。 */
+  studyId: Uuid.nullable(),
+  studyCode: Code.nullable()
+}).meta({
+  id: "IntakeApplication",
+  description:
+    "**在立项时就算账，不等做完才知道亏。** 一个项目做完之后算出毛利 8%，" +
+    "那是历史；立项时算出 8%，那是决定。"
+});
+
+export const StudyFiling = z.object({
+  studyId: Uuid,
+  studyCode: Code,
+  shortName: z.string(),
+  clientName: z.string(),
+  phase: z.string(),
+  plannedSubjects: z.int(),
+  plannedSites: z.int(),
+  builtSites: z.int(),
+  /** 合同里写了但还没进系统的中心数。**它们的成本已经在发生**
+   *  （伦理递交、合同谈判、可行性访视），收入却还挂不上号 ——
+   *  这是早期成本失控最常见的一种。 */
+  missingSites: z.int().min(0),
+  filedRatio: Ratio.nullable(),
+  contractCents: gated(z.int().min(0), "price")
+}).meta({ id: "StudyFiling" });
+
+export const IntakeBoard = z.object({
+  open: z.int(),
+  belowGate: z.int(),
+  openContractCents: gated(z.int().min(0), "price"),
+  gmGate: z.number(),
+  studies: z.array(StudyFiling),
+  /** 全部项目合计还差几个中心没建档。 */
+  missingSites: z.int().min(0),
+  calcVersion: z.string()
+}).meta({ id: "IntakeBoard" });

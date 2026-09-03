@@ -6,7 +6,8 @@ import { commandResult } from "../kernel/command.js";
 import { CentsNonNeg } from "../kernel/primitives.js";
 import {
   Feasibility, FeasibilityAnswers, FeasibilityStatus, FeasibilityCalibration,
-  Bid, BidStatus, BidReview, ContractChange, ChangeKind, ChangeStatus, ScopeCreep
+  Bid, BidStatus, BidReview, ContractChange, ChangeKind, ChangeStatus, ScopeCreep,
+  IntakeApplication, IntakeState, IntakeBoard
 } from "./model.js";
 
 const CTX = "bizdev";
@@ -261,3 +262,87 @@ define({
    而计算引擎独立成一层的理由正是"前后端共用同一份实现"。
    真要落库的是**报出去的价**（投标），不是每一次拖动滑块。 */
 export const _bizdevContext = CTX;
+
+/* ── 立项与建档 ──────────────────────────────────────────────────── */
+
+define({
+  id: "listIntakeApplications", method: "get", path: "/v1/intake-applications",
+  layer: "L1", context: CTX,
+  summary: "立项申请",
+  description:
+    "项目是**怎么进系统的**。在此之前 `study` 的第一行是凭空出现的 ——" +
+    "而真实系统里，一个项目要先有人提出来、有人算过账、有人批准。\n\n" +
+    "**越线的排最前**：低于毛利门槛的必须过经营层那一关，" +
+    "而按提交日排的话，最该看的那几条会沉在底下。\n" +
+    "对外部方整表关闭 —— 一家医院看得到我们按什么毛利率接项目，" +
+    "下一轮谈判就不用谈了。",
+  query: PageQuery.extend({
+    state: z.array(IntakeState).optional(),
+    /** 只看我提交的。 */
+    mine: QueryBool.optional(),
+    /** 只看低于毛利门槛的。 */
+    belowGateOnly: QueryBool.optional()
+  }),
+  response: page(IntakeApplication)
+});
+
+define({
+  id: "getIntakeBoard", method: "get", path: "/v1/intake-applications/board",
+  layer: "L1", context: CTX,
+  summary: "待审批总量与建档滞后",
+  description:
+    "**「已建档」小于「合同中心数」= 合同里写了但还没进系统的中心。**\n\n" +
+    "那几个中心的成本已经在发生（伦理递交、合同谈判、可行性访视），" +
+    "收入却还挂不上号 —— 这是早期成本失控最常见的一种，" +
+    "而在此之前系统里连「合同写了几个中心」这个数都没有。",
+  query: z.object({}),
+  response: IntakeBoard
+});
+
+define({
+  id: "submitIntakeApplication", method: "post", path: "/v1/intake-applications",
+  layer: "L1", context: CTX, status: 201,
+  summary: "提交立项申请",
+  description:
+    "测算成本是**手填的** —— 报价模型那一页能把它算出来（`quote()`），" +
+    "但立项时未必已经算过。手填的数要能被看出是手填的。\n\n" +
+    "毛利率与保本合同额由服务端算，不接受调用方传入：" +
+    "一个可以自己报毛利率的申请，门槛就形同虚设。",
+  action: "bid",
+  body: z.object({
+    drug: z.string().trim().min(2).max(200),
+    sponsorName: z.string().trim().min(2).max(120),
+    phase: z.string().trim().min(1).max(20),
+    indication: z.string().trim().min(2).max(120),
+    plannedSites: z.int().min(1).max(200),
+    plannedSubjects: z.int().min(1).max(20000),
+    enrollMonths: z.int().min(1).max(120),
+    contractCents: z.int().min(0),
+    estimatedCostCents: z.int().min(0),
+    note: z.string().trim().max(1000).optional()
+  }),
+  response: commandResult(IntakeApplication),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+define({
+  id: "decideIntakeApplication", method: "post",
+  path: "/v1/intake-applications/{id}:decide",
+  layer: "L2", context: CTX,
+  summary: "批准立项或退回重谈",
+  description:
+    "**提交人不能批准自己的申请** —— 与工时审批同一条规矩。\n\n" +
+    "批准会在**同一个事务里**建出项目档案（`study`），" +
+    "必要时连客户档案一起建：约束上「已批准」与「有项目档案」互为充要条件，" +
+    "所以不存在「批准了但档案没建」这一格 —— 那是这条流程最容易漏的一格。\n\n" +
+    "退回必须写理由：不说为什么的退回，提交人只能猜，" +
+    "而猜错的代价是拿着同一份价格再谈一轮。",
+  action: "approve",
+  params: ById,
+  body: z.object({
+    result: z.enum(["approved", "returned"]),
+    reason: z.string().trim().max(1000).optional()
+  }),
+  response: commandResult(IntakeApplication),
+  errors: ["invariant-violated", "idempotency-key-reused"]
+});

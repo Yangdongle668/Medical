@@ -9,6 +9,28 @@ import { test, expect } from "@playwright/test";
      ③ 没有 manage 的人进来，得到的是一句话，不是一串 403。
    ════════════════════════════════════════════════════════════════════ */
 
+test.describe("还没建的那几页", () => {
+  test("有入口，点进去说得出它将来要回答什么", async ({ page }) => {
+    /* 挑一个**还没建**的模块。这条测试已经响过四次了：
+       经营驾驶舱 → 合同变更 → 监查访视 → 立项与建档 → 现在是「中心文件与物资」。
+       每一次它都红在"找不到 coming-soon"上，
+       报错看着像导航坏了，实际只是它盯的那一页交付了。
+
+       **这一次还换了身份**：经营层的 19 个模块现在全部建好了，
+       它的侧栏里再也找不到一个待建页 —— 于是哨兵挪到 CRC 那边。
+
+       **响是对的** —— 它是这条不变量的哨兵：
+       「库里给了这个模块」和「界面上有这个入口」必须一致。
+       建好一页却忘了从登记表里删 todo，这条同样会红。
+       （nav.test.ts 里那条逐个点名的断言是它在单测一侧的对偶。） */
+    await page.goto("/subjects");
+    await page.getByRole("link", { name: "中心文件与物资" }).click();
+    await expect(page.getByTestId("coming-soon")).toBeVisible();
+    /* 不是一句"敬请期待" —— 说的是这一页该有什么 */
+    await expect(page.locator(".card")).toContainText("ISF");
+  });
+});
+
 test.describe("经营层：组织与权限", () => {
   test.beforeEach(async ({ page }) => { await page.goto("/sites?as=boss"); });
 
@@ -20,22 +42,6 @@ test.describe("经营层：组织与权限", () => {
     await expect(nav).toContainText("经营");
     await expect(nav).toContainText("系统");
     await expect(nav.getByRole("link", { name: "组织与权限" })).toBeVisible();
-  });
-
-  test("还没建的页有入口，点进去说得出它将来要回答什么", async ({ page }) => {
-    /* 挑一个**还没建**的模块。这条测试已经响过三次了：
-       经营驾驶舱 → 合同变更 → 监查访视 → 现在是「立项与建档」。
-       每一次它都红在"找不到 coming-soon"上，
-       报错看着像导航坏了，实际只是它盯的那一页交付了。
-
-       **响是对的** —— 它是这条不变量的哨兵：
-       「库里给了这个模块」和「界面上有这个入口」必须一致。
-       建好一页却忘了从登记表里删 todo，这条同样会红。
-       （nav.test.ts 里那条逐个点名的断言是它在单测一侧的对偶。） */
-    await page.getByRole("link", { name: "立项与建档" }).click();
-    await expect(page.getByTestId("coming-soon")).toBeVisible();
-    /* 不是一句"敬请期待" —— 说的是这一页该有什么 */
-    await expect(page.locator(".card")).toContainText("立项");
   });
 
   test("建号 → 台账里立刻有他 → 停用要理由", async ({ page }) => {

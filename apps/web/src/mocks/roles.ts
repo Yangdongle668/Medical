@@ -18,7 +18,7 @@
 
 import type { FieldKey, ActionKey } from "@sitedesk/contracts";
 
-export const MOCK_ROLES = ["crc", "cra", "qa", "boss", "dm", "inst", "pi"] as const;
+export const MOCK_ROLES = ["crc", "cra", "pm", "qa", "boss", "dm", "inst", "pi"] as const;
 export type MockRole = (typeof MOCK_ROLES)[number];
 
 export interface MockIdentity {
@@ -61,6 +61,21 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     actions: ["capaWrite", "monitor", "raiseQ", "subjRead", "timeWrite"],
     modules: ["cra", "mysites", "mon", "query", "screen", "feas", "material",
       "time", "qa", "capa", "trail"]
+  },
+  /* **项目总监 PM。** 立项那一页需要两个内部身份才演得出来：
+     PM 提交、经营层批准 —— 而**提交人不能批准自己的申请**这条规矩，
+     只有在两个身份之间切换才看得见。
+     行范围 team 在 mock 上演不出来（没有 team_study 表），
+     所以它看到的是全部中心。 */
+  pm: {
+    id: "a-hanxue", login: "hanxue", name: "韩雪",
+    role: { id: "r-pm", code: "pm", name: "项目总监 PM" },
+    isExternal: false, orgRef: null,
+    rowRule: "team", fields: ["cost", "margin", "price", "subject"],
+    actions: ["advance", "approve", "bid", "capaWrite", "ethics", "monitor",
+      "raiseQ", "subjRead", "subjWrite", "timeWrite"],
+    modules: ["pm", "team", "approve", "intake", "feas", "sites", "enr", "screen",
+      "mon", "change", "qa", "pnl", "trail"]
   },
   /* **质量保证 QA。** 内部稽查那一页只有它点得动 ——
      发起稽查（audit）、验证整改并关闭（closeQA）三个动作里，

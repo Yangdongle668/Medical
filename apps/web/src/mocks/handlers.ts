@@ -10,12 +10,13 @@ import { queryLoad, siteQueryDensity, densityVerdict, QUERY_STALE_DAYS }
 import { monitorPlan, monitorDue, mvrLoad, mvrLagDays, travelEstimateCents, MVR_DUE_DAYS }
   from "@sitedesk/calc";
 import { gradeSite, capaEffectiveness } from "@sitedesk/calc";
+import { intakeMath, filingGap, INTAKE_GM_GATE } from "@sitedesk/calc";
 import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
 import type { MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
-  MockMonitorVisit, MockAudit } from "./scenario.js";
+  MockMonitorVisit, MockAudit, MockIntake } from "./scenario.js";
 import { CLIENTS } from "./scenario.js";
 import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
   mkTimesheet, WORK_TYPE_META,
@@ -183,6 +184,26 @@ function qualityDto(e: Scenario["qualityEvents"][number]) {
     owesCapaPlan: !!e.capaOwnerAccountId && !e.capaPlan
   };
 }
+
+/** 立项申请的派生字段 —— 毛利率与保本合同额由 calc 算，mock 不另写一份。
+ *  **毛利率尤其不能是行上的一个数**：能自己报毛利率的申请，门槛就形同虚设。 */
+function intakeDto(x: MockIntake) {
+  const m = intakeMath({
+    contractCents: x.contractCents, estimatedCostCents: x.estimatedCostCents,
+    plannedSubjects: x.plannedSubjects, plannedSites: x.plannedSites
+  });
+  return mask({
+    ...x,
+    grossCents: m.grossCents,
+    ...(m.grossMargin !== null ? { grossMargin: m.grossMargin } : {}),
+    belowGate: m.belowGate,
+    ...(m.perSubjectCents !== null ? { perSubjectCents: m.perSubjectCents } : {}),
+    breakEvenContractCents: m.breakEvenContractCents,
+    subjectsPerSite: m.subjectsPerSite
+  });
+}
+/** 立项对外部方整表关闭 —— 看得到我们按什么毛利率接项目，下一轮就不用谈了。 */
+const visibleIntake = () => identity().isExternal ? [] : scenario.intake;
 
 const TODAY_STR = new Date().toISOString().slice(0, 10);
 
@@ -691,6 +712,139 @@ export const scenarioHandlers = [
       { status: 422 });
     q.state = "closed";
     return HttpResponse.json({ data: q, sideEffects: [] }, { status: 201 });
+  }),
+
+  /* ── 立项与建档 ──────────────────────────────────────────────── */
+  http.get(pathToRegExp("/v1/intake-applications/board"), () => {
+    const open = visibleIntake().filter(x => x.state === "submitted").map(intakeDto);
+    const studies = (identity().isExternal ? [] : scenario.studies).map(st => {
+      const g = filingGap(st.plannedSites, st.builtSites);
+      return mask({
+        studyId: st.id, studyCode: st.code, shortName: st.shortName,
+        clientName: st.clientName, phase: st.phase,
+        plannedSubjects: st.plannedSubjects,
+        plannedSites: g.plannedSites, builtSites: g.builtSites,
+        missingSites: g.missing, filedRatio: g.filedRatio,
+        contractCents: st.contractCents
+      });
+    }).sort((a, b) => b.missingSites - a.missingSites
+      || a.studyCode.localeCompare(b.studyCode));
+    return HttpResponse.json(mask({
+      open: open.length,
+      belowGate: open.filter(x => x.belowGate).length,
+      openContractCents: visibleIntake()
+        .filter(x => x.state === "submitted")
+        .reduce((n, x) => n + x.contractCents, 0),
+      gmGate: INTAKE_GM_GATE,
+      studies,
+      missingSites: studies.reduce((n, s) => n + s.missingSites, 0),
+      calcVersion: CALC_VERSION
+    }));
+  }),
+
+  http.get(pathToRegExp("/v1/intake-applications"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = visibleIntake().map(intakeDto);
+    const states = q.getAll("state");
+    if (states.length) items = items.filter(x => states.includes(x.state));
+    if (q.get("mine") === "true")
+      items = items.filter(x => x.submittedBy === identity().id);
+    if (q.get("belowGateOnly") === "true") items = items.filter(x => x.belowGate);
+    /* 越线的排最前 —— 按提交日排的话它会沉在底下。 */
+    items = [...items].sort((a, b) => Number(b.belowGate) - Number(a.belowGate)
+      || b.submittedOn.localeCompare(a.submittedOn));
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/intake-applications"), async ({ request }) => {
+    const b = await request.json() as Record<string, never> & {
+      drug: string; sponsorName: string; phase: string; indication: string;
+      plannedSites: number; plannedSubjects: number; enrollMonths: number;
+      contractCents: number; estimatedCostCents: number; note?: string;
+    };
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能提交立项申请"), { status: 403 });
+    const me = identity();
+    const row: MockIntake = {
+      id: `np-${scenario.intake.length + 1}`,
+      code: `NP-2026-${String(20 + scenario.intake.length).slice(-3)}`,
+      drug: b.drug, sponsorName: b.sponsorName, phase: b.phase,
+      indication: b.indication,
+      plannedSites: b.plannedSites, plannedSubjects: b.plannedSubjects,
+      enrollMonths: b.enrollMonths,
+      contractCents: b.contractCents, estimatedCostCents: b.estimatedCostCents,
+      note: b.note ?? null,
+      submittedBy: me.id, submittedByName: me.name, submittedOn: TODAY_STR,
+      state: "submitted", decidedByName: null, decidedOn: null,
+      decisionNote: null, studyId: null, studyCode: null
+    };
+    scenario.intake.unshift(row);
+    const m = intakeMath({
+      contractCents: b.contractCents, estimatedCostCents: b.estimatedCostCents,
+      plannedSubjects: b.plannedSubjects, plannedSites: b.plannedSites
+    });
+    return HttpResponse.json({
+      data: intakeDto(row),
+      sideEffects: [{ type: "IntakeSubmitted", ref: row.id,
+        summary: m.belowGate
+          ? `${row.code} 已提交 —— 测算毛利率低于 ` +
+            `${Math.round(INTAKE_GM_GATE * 100)}% 门槛，必须过经营层那一关`
+          : `${row.code} 已提交，等待经营层审批` }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/intake-applications/{id}:decide"), async ({ request }) => {
+    const id = seg(request.url, /\/intake-applications\/([^/:]+):decide/);
+    const b = await request.json() as { result: string; reason?: string };
+    const x = visibleIntake().find(a => a.id === id);
+    if (!x) return HttpResponse.json(
+      problem("not-found", 404, "立项申请不存在"), { status: 404 });
+    if (!identity().actions.includes("approve")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能审批立项"), { status: 403 });
+    if (x.state !== "submitted") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${x.code} 已经${x.state === "approved" ? "批准" : "退回"}过了`), { status: 422 });
+    /* **提交人不能批准自己的申请** —— 与工时审批同一条规矩。 */
+    if (x.submittedBy === identity().id) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `${x.code} 是你自己提交的 —— 立项审批不能自己批自己`), { status: 422 });
+
+    if (b.result === "returned") {
+      if (!b.reason || b.reason.trim().length < 4) return HttpResponse.json(
+        problem("invariant-violated", 422,
+          "退回必须写理由 —— 不说为什么，提交人只能猜"), { status: 422 });
+      x.state = "returned";
+      x.decidedByName = identity().name;
+      x.decidedOn = TODAY_STR;
+      x.decisionNote = b.reason.trim();
+      return HttpResponse.json({
+        data: intakeDto(x),
+        sideEffects: [{ type: "IntakeReturned", ref: x.id,
+          summary: `${x.code} 已退回 ${x.submittedByName} —— ${b.reason.trim()}` }]
+      }, { status: 201 });
+    }
+
+    /* 批准 = 同时建出项目档案。约束上两者互为充要条件，
+       所以这里也不能只走一半 —— 否则 mock 上跑得通的流程到真库上会被拒。 */
+    const code = `HJ-2026-${String(100 + scenario.studies.length).slice(-3)}`;
+    scenario.studies.push({
+      id: `st-${scenario.studies.length + 1}`, code,
+      shortName: x.drug.slice(0, 8), clientName: x.sponsorName, phase: x.phase,
+      plannedSubjects: x.plannedSubjects, plannedSites: x.plannedSites,
+      builtSites: 0, contractCents: x.contractCents
+    });
+    x.state = "approved";
+    x.decidedByName = identity().name;
+    x.decidedOn = TODAY_STR;
+    x.decisionNote = b.reason ?? null;
+    x.studyId = `st-${scenario.studies.length}`;
+    x.studyCode = code;
+    return HttpResponse.json({
+      data: intakeDto(x),
+      sideEffects: [{ type: "IntakeApproved", ref: x.id,
+        summary: `${x.drug} 已批准立项，方案编号 ${code} —— ` +
+          `合同写了 ${x.plannedSites} 个中心，现在一个都还没建档` }]
+    }, { status: 201 });
   }),
 
   /* ── 内部稽查 ────────────────────────────────────────────────────

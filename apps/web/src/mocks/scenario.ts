@@ -200,6 +200,10 @@ export interface Scenario {
   monitorVisits: MockMonitorVisit[];
   /** 内部稽查与发现项。机构质控是医院查我们，稽查是我们自己查自己。 */
   audits: MockAudit[];
+  /** 立项申请。项目是**怎么进系统的** —— 在此之前第一行是凭空出现的。 */
+  intake: MockIntake[];
+  /** 已立项项目。**合同写了几个中心**是这里唯一的新数据。 */
+  studies: MockStudy[];
   /** 药品流水（I5）。在手数量是**算出来的**，所以这里不存那个数。 */
   ipMovements: {
     id: string; studySiteId: string; movedOn: string; kind: string;
@@ -366,6 +370,8 @@ export function makeScenario(): Scenario {
     dataQueries: makeDataQueries(),
     monitorVisits: makeMonitorVisits(),
     audits: makeAudits(),
+    intake: makeIntake(),
+    studies: makeStudies(),
     ipMovements: makeIpMovements(),
     specimens: makeSpecimens(),
     timesheets: makeTimesheets(),
@@ -1139,6 +1145,67 @@ function makeAudits(): MockAudit[] {
       ]),
     mk("au3", "AU-2026-006", s1, "capa_check", 13, "open",
       "验证 QI-2026-0131（实验室资质过期）关闭后是否建立到期日历", [])
+  ];
+}
+
+export interface MockIntake {
+  id: string; code: string; drug: string; sponsorName: string;
+  phase: string; indication: string;
+  plannedSites: number; plannedSubjects: number; enrollMonths: number;
+  contractCents: number; estimatedCostCents: number;
+  note: string | null;
+  submittedBy: string; submittedByName: string; submittedOn: string;
+  state: string; decidedByName: string | null; decidedOn: string | null;
+  decisionNote: string | null;
+  studyId: string | null; studyCode: string | null;
+}
+export interface MockStudy {
+  id: string; code: string; shortName: string; clientName: string; phase: string;
+  plannedSubjects: number; plannedSites: number; builtSites: number;
+  contractCents: number;
+}
+
+/** 立项申请。两条正好一条越线一条不越 ——
+ *  「低于毛利门槛必须过经营层那一关」只有两条对照才看得出来。 */
+function makeIntake(): MockIntake[] {
+  return [
+    {
+      id: "np1", code: "NP-2026-011",
+      drug: "KY-207 片（JAK 抑制剂）", sponsorName: "科翼医药",
+      phase: "II期", indication: "中重度特应性皮炎",
+      plannedSites: 8, plannedSubjects: 120, enrollMonths: 16,
+      contractCents: 760_0000_00, estimatedCostCents: 604_2000_00,
+      note: "申办方压价两轮，已低于 25% 毛利门槛。若接，需把 CRC 驻场 FTE 从 0.55 压到 0.4。",
+      submittedBy: "a-hanxue", submittedByName: "韩雪", submittedOn: shift(TODAY, -14),
+      state: "submitted", decidedByName: null, decidedOn: null,
+      decisionNote: null, studyId: null, studyCode: null
+    },
+    {
+      id: "np2", code: "NP-2026-012",
+      drug: "恒安宁注射液", sponsorName: "华拓生物",
+      phase: "III期", indication: "急性缺血性脑卒中",
+      plannedSites: 16, plannedSubjects: 480, enrollMonths: 24,
+      contractCents: 2680_0000_00, estimatedCostCents: 1849_2000_00,
+      note: "老客户续单，中心多为已合作医院，启动成本可复用。",
+      submittedBy: "a-hanxue", submittedByName: "韩雪", submittedOn: shift(TODAY, -12),
+      state: "submitted", decidedByName: null, decidedOn: null,
+      decisionNote: null, studyId: null, studyCode: null
+    }
+  ];
+}
+
+/** 已立项项目。**建档滞后那一格靠它** ——
+ *  合同写了 14 个中心、系统里只有 2 个，差的十二个成本已经在发生。 */
+function makeStudies(): MockStudy[] {
+  return [
+    { id: "st1", code: "HJ-2024-017", shortName: "艾瑞替尼 III",
+      clientName: "华拓生物", phase: "III期",
+      plannedSubjects: 240, plannedSites: 14, builtSites: 2,
+      contractCents: 1860_0000_00 },
+    { id: "st2", code: "HJ-2025-003", shortName: "HT-118 II",
+      clientName: "安泰医药", phase: "II期",
+      plannedSubjects: 96, plannedSites: 1, builtSites: 1,
+      contractCents: 920_0000_00 }
   ];
 }
 
