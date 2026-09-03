@@ -9,26 +9,34 @@ import { test, expect } from "@playwright/test";
      ③ 没有 manage 的人进来，得到的是一句话，不是一串 403。
    ════════════════════════════════════════════════════════════════════ */
 
-test.describe("还没建的那几页", () => {
-  test("有入口，点进去说得出它将来要回答什么", async ({ page }) => {
-    /* 挑一个**还没建**的模块。这条测试已经响过四次了：
-       经营驾驶舱 → 合同变更 → 监查访视 → 立项与建档 → 现在是「中心文件与物资」。
-       每一次它都红在"找不到 coming-soon"上，
-       报错看着像导航坏了，实际只是它盯的那一页交付了。
+test.describe("导航与页面一一对应", () => {
+  /* 这里原来盯的是**还没建的那一页**：挑一个待建模块，点进去，
+     断言它说得出自己将来要回答什么。那条测试响过五次 ——
+     经营驾驶舱 → 合同变更 → 监查访视 → 立项与建档 → 中心文件与物资，
+     每一次都红在"找不到 coming-soon"上，而每一次的原因都是它盯的那一页交付了。
 
-       **这一次还换了身份**：经营层的 19 个模块现在全部建好了，
-       它的侧栏里再也找不到一个待建页 —— 于是哨兵挪到 CRC 那边。
-
-       **响是对的** —— 它是这条不变量的哨兵：
-       「库里给了这个模块」和「界面上有这个入口」必须一致。
-       建好一页却忘了从登记表里删 todo，这条同样会红。
-       （nav.test.ts 里那条逐个点名的断言是它在单测一侧的对偶。） */
-    await page.goto("/subjects");
-    await page.getByRole("link", { name: "中心文件与物资" }).click();
-    await expect(page.getByTestId("coming-soon")).toBeVisible();
-    /* 不是一句"敬请期待" —— 说的是这一页该有什么 */
-    await expect(page.locator(".card")).toContainText("ISF");
-  });
+     现在没有待建页了，于是它翻过来：**侧栏里的每一个入口都得落到真页面**。
+     守的还是同一条不变量 —— 「库里给了这个模块」与「界面上有这个入口」
+     必须一致 —— 只是从"待建的那一页在"变成了"一页都不待建"。
+     往后再加模块，忘了在 main.tsx 登记路由，这条立刻会红。 */
+  for (const [role, count] of [["crc", 14], ["inst", 4], ["boss", 19]] as const) {
+    test(`${role} 的每一个入口都点得进真页面`, async ({ page }) => {
+      /* **点链接，不是逐个 page.goto。** 整页重载会把 MSW 的 service worker
+         连同 mock 场景一起重来一遍，十九次就是三十秒 —— 第一版正是这么写的，
+         三条全部超时，而超时报的是"页面打不开"，跟它要盯的事毫无关系。
+         点链接走的是客户端路由，也更接近用户真的在做的事。 */
+      await page.goto(`/sites?as=${role}`);
+      const links = page.locator(".rail nav a");
+      await expect(links).toHaveCount(count);
+      for (let i = 0; i < count; i++) {
+        const link = links.nth(i);
+        const name = (await link.textContent())?.trim();
+        await link.click();
+        await expect(page.getByTestId("coming-soon"),
+          `「${name}」落回了「这一页还没建」`).toHaveCount(0);
+      }
+    });
+  }
 });
 
 test.describe("经营层：组织与权限", () => {

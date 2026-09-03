@@ -11,12 +11,14 @@ import { monitorPlan, monitorDue, mvrLoad, mvrLagDays, travelEstimateCents, MVR_
   from "@sitedesk/calc";
 import { gradeSite, capaEffectiveness } from "@sitedesk/calc";
 import { intakeMath, filingGap, INTAKE_GM_GATE } from "@sitedesk/calc";
+import { isfVerdict, isfSummary, isfRank, type IsfCategory } from "@sitedesk/calc";
 import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
 import type { MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
-  MockMonitorVisit, MockAudit, MockIntake } from "./scenario.js";
+  MockMonitorVisit, MockAudit, MockIntake,
+  MockAcceptance, MockIsf } from "./scenario.js";
 import { CLIENTS } from "./scenario.js";
 import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
   mkTimesheet, WORK_TYPE_META,
@@ -118,6 +120,65 @@ function findQuery(url: string, re: RegExp):
   const q = visibleQueries().find(x => x.id === id);
   return q ? { q } : { problem: HttpResponse.json(
     problem("not-found", 404, "数据质疑不存在"), { status: 404 }) };
+}
+
+/** 不变量被破坏时的那个 422。**invariant 名字要带上** ——
+ *  界面靠它区分"缺材料"和"存根只读"，靠 detail 文案区分是做不到的。 */
+function invariant(name: string, detail: string) {
+  return HttpResponse.json(
+    { ...problem("invariant-violated", 422, detail), invariant: name },
+    { status: 422 });
+}
+
+/** 看得见的立项受理。
+ *
+ *  **这一张跟质疑、监查相反：外部方不但看得见，它本来就是给对方看的。**
+ *  但行那一维照旧收敛 —— 机构办按医院，我方按派工 / 分组。
+ *
+ *  而且**不能用 inScope()**：受理发生在建档之前，
+ *  那两条 studySiteId 为空的记录会被 inScope 当成"两个键都没有"原样放行，
+ *  于是机构办能看到别家医院递的材料。这里按医院与中心两条路各判各的。 */
+function visibleAcceptances(): MockAcceptance[] {
+  const me = identity();
+  const ids = visibleSiteIds();
+  const hospitals = new Set(visibleSites().map(s => s.hospital));
+  /* 机构办的行范围是"本院"—— 它认的是医院名，不是中心 id，
+     所以那两条还没建档的受理它照样看得到。 */
+  if (me.rowRule === "hospital")
+    return scenario.acceptances.filter(a => a.hospital === me.orgRef);
+  if (me.rowRule === "all") return scenario.acceptances;
+  return scenario.acceptances.filter(a =>
+    (a.studySiteId !== null && ids.has(a.studySiteId)) || hospitals.has(a.hospital));
+}
+function findAcceptance(url: string, re: RegExp):
+  { a: MockAcceptance } | { problem: Response } {
+  const id = seg(url, re);
+  const a = visibleAcceptances().find(x => x.id === id);
+  return a ? { a } : { problem: HttpResponse.json(
+    problem("not-found", 404, "立项受理不存在"), { status: 404 }) };
+}
+function acceptanceDto(a: MockAcceptance) {
+  return {
+    ...a,
+    presentDocs: a.docs.filter(d => d.present).length,
+    /* **缺的是哪几份 —— 名字，不是数目。** 补正通知要写的正是这几个名字。 */
+    missingDocs: a.docs.filter(d => !d.present).map(d => d.name)
+  };
+}
+
+/** 看得见的中心文件。**机构办翻得到本院那摞纸** ——
+ *  研究者文件夹本来就放在医院里，对它藏起来，
+ *  系统里的台账和现场那一摞就对不上了。 */
+function visibleIsf(): MockIsf[] { return inScope(scenario.isf); }
+
+/** 状态是**算出来的**，mock 也要算 —— 写死在 fixture 里，
+ *  跑到下个季度它就开始撒谎，而页面看起来一切正常。 */
+function isfDto(i: MockIsf) {
+  return { ...i, ...isfVerdict({
+    category: i.category as IsfCategory, present: i.present,
+    expiresOn: i.expiresOn, leadDays: null,
+    quantity: i.quantity, reorderAt: i.reorderAt
+  }, TODAY_STR) };
 }
 
 /** 看得见的监查访视。**外部方一条都没有** ——
@@ -1021,6 +1082,149 @@ export const scenarioHandlers = [
   /* ── 监查访视 ────────────────────────────────────────────────────
      **外部方一条都看不到**（迁移 0033 的行策略）：一个机构办看得到
      我们打算什么时候去、抽多少比例，等于把监查策略交给了被监查的一方。 */
+  /* ── 立项受理 ──────────────────────────────────────────────── */
+
+  http.get(pathToRegExp("/v1/site-acceptances"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    let items = visibleAcceptances();
+    const states = q.getAll("state");
+    if (states.length) items = items.filter(a => states.includes(a.state));
+    if (q.get("openOnly") === "true") items = items.filter(a => a.state !== "accepted");
+    if (q.get("studyId")) items = items.filter(a => a.studyId === q.get("studyId"));
+    items = [...items].sort((a, b) => b.submittedOn.localeCompare(a.submittedOn));
+    return HttpResponse.json({ items: items.map(acceptanceDto), nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/site-acceptances/{id}/docs/{seq}:set"),
+    async ({ request }) => {
+      const found = findAcceptance(request.url, /site-acceptances\/([^/]+)\/docs/);
+      if ("problem" in found) return found.problem;
+      const { a } = found;
+      if (a.origin === "registered")
+        return invariant("acceptance-registered-readonly",
+          `${a.code} 是系统外受理的登记存根，不能在这里勾材料清单 —— ` +
+          "它记的是一件已经发生过的事");
+      if (a.state === "accepted")
+        return invariant("acceptance-frozen",
+          `${a.code} 已受理，材料清单不能再改 —— 受理通知已经发出去了`);
+      const seqNo = Number(request.url.match(/docs\/(\d+):set/)?.[1] ?? -1);
+      const doc = a.docs.find(d => d.seq === seqNo);
+      if (!doc) return HttpResponse.json(
+        problem("not-found", 404, "立项材料不存在"), { status: 404 });
+      doc.present = ((await request.json()) as { present: boolean }).present;
+      return HttpResponse.json(
+        { data: acceptanceDto(a), sideEffects: [] }, { status: 201 });
+    }),
+
+  http.post(pathToRegExp("/v1/site-acceptances/{id}:accept"), ({ request }) => {
+    const found = findAcceptance(request.url, /site-acceptances\/([^:]+):accept/);
+    if ("problem" in found) return found.problem;
+    const { a } = found;
+    if (a.origin === "registered")
+      return invariant("acceptance-registered-readonly",
+        `${a.code} 是系统外受理的登记存根，不能在这里再受理一次`);
+    if (a.state === "accepted")
+      return invariant("acceptance-already", `${a.code} 已经受理过了`);
+    /* **材料不齐不予受理，而且要列出缺的那几份的名字** ——
+       一句"材料不齐"会让递交方把八份重寄一遍，而重寄之后缺的还是那两份。 */
+    const missing = a.docs.filter(d => !d.present).map(d => d.name);
+    if (missing.length)
+      return invariant("acceptance-docs-missing",
+        `尚缺 ${missing.length} 项材料，不予受理：${missing.join("、")}`);
+    a.state = "accepted";
+    a.acceptedOn = TODAY_STR;
+    a.acceptedByName = identity().name;
+    return HttpResponse.json({
+      data: acceptanceDto(a),
+      sideEffects: [{
+        type: "SiteAccepted",
+        summary: `${a.code} 已受理并转伦理审查 —— ` +
+          (a.studySiteId
+            ? "该中心现在可以推进到「伦理递交」"
+            : "**该中心还没进台账** —— 受理了但没建档，成本已经在发生"),
+        ref: a.id
+      }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/site-acceptances/{id}:amend"), async ({ request }) => {
+    const found = findAcceptance(request.url, /site-acceptances\/([^:]+):amend/);
+    if ("problem" in found) return found.problem;
+    const { a } = found;
+    if (a.origin === "registered")
+      return invariant("acceptance-registered-readonly",
+        `${a.code} 是系统外受理的登记存根，不能在这里发补正通知`);
+    if (a.state === "accepted")
+      return invariant("acceptance-already", `${a.code} 已经受理，不能再发补正通知`);
+    const b = await request.json() as { reason: string };
+    a.state = "amend";
+    a.amendNote = b.reason;
+    const missing = a.docs.filter(d => !d.present).map(d => d.name);
+    return HttpResponse.json({
+      data: acceptanceDto(a),
+      sideEffects: [{
+        type: "AcceptanceAmendRequested",
+        summary: `已向 ${a.submittedByName} 发出补正通知` +
+          (missing.length ? `：${missing.join("、")}` : ""),
+        ref: a.id
+      }]
+    }, { status: 201 });
+  }),
+
+  /* ── 中心文件与物资 ────────────────────────────────────────── */
+
+  http.get(pathToRegExp("/v1/isf-items"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    const cats = q.getAll("category");
+    let rows = visibleIsf();
+    if (q.get("studySiteId")) rows = rows.filter(i => i.studySiteId === q.get("studySiteId"));
+    if (cats.length) rows = rows.filter(i => cats.includes(i.category));
+    let items = rows.map(isfDto);
+    /* 齐备率按**全部清单**算，不按筛过之后的 —— 只看不齐备的那一栏时，
+       齐备率会变成 0%，而那个数字毫无意义。 */
+    const summary = { ...isfSummary(items), calcVersion: CALC_VERSION };
+    if (q.get("openOnly") === "true") items = items.filter(i => i.status !== "ok");
+    items = [...items].sort((a, b) => isfRank(a) - isfRank(b)
+      || a.siteCode.localeCompare(b.siteCode)
+      || a.item.localeCompare(b.item));
+    return HttpResponse.json({ items, summary });
+  }),
+
+  http.post(pathToRegExp("/v1/isf-items/{id}:update"), async ({ request }) => {
+    const id = seg(request.url, /isf-items\/([^:]+):update/);
+    const i = visibleIsf().find(x => x.id === id);
+    if (!i) return HttpResponse.json(
+      problem("not-found", 404, "中心文件不存在"), { status: 404 });
+    const b = await request.json() as {
+      present?: boolean; expiresOn?: string | null;
+      quantity?: number | null; note?: string;
+    };
+    const present = b.present ?? i.present;
+    const expiresOn = b.expiresOn !== undefined ? b.expiresOn : i.expiresOn;
+    /* 不在的东西没有到期日 —— 缺失与过期是两种缺，混起来会互相顶替。 */
+    if (!present && expiresOn)
+      return invariant("isf-missing-has-expiry",
+        `${i.item} 标为缺失，就不该还有到期日 —— 先决定它到底在不在`);
+    if (b.quantity != null && i.reorderAt === null)
+      return invariant("isf-stock-needs-reorder",
+        `${i.item} 没有补货线 —— 填了库存也判不出够不够`);
+    i.present = present;
+    i.expiresOn = expiresOn;
+    if (b.quantity !== undefined) i.quantity = b.quantity;
+    if (b.note) i.note = b.note;
+    i.checkedOn = TODAY_STR;
+    i.checkedByName = identity().name;
+    const items = visibleIsf().filter(x => x.studySiteId === i.studySiteId).map(isfDto);
+    return HttpResponse.json({
+      data: {
+        items: [...items].sort((a, b2) => isfRank(a) - isfRank(b2)
+          || a.item.localeCompare(b2.item)),
+        summary: { ...isfSummary(items), calcVersion: CALC_VERSION }
+      },
+      sideEffects: []
+    }, { status: 201 });
+  }),
+
   http.get(pathToRegExp("/v1/monitor-visits/board"), () => {
     const vs = visibleMonitorVisits();
     const sites = visibleSites().map(site => {

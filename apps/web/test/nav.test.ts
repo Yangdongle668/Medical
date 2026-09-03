@@ -24,14 +24,15 @@ describe("模块登记表", () => {
     for (const m of MODULES) expect(m.path.startsWith("/"), m.key).toBe(true);
   });
 
-  it("还没建的那几页，逐个点名", () => {
+  it("**一页都不剩了** —— 45 个模块全部有页", () => {
     /* 这条断言的用处不是"数得对"，是**两个方向都会红**：
        建好了一页却忘了删 todo → 导航照旧把人带到一张说明页；
        删了 todo 却没在 main.tsx 里登记 → 点进去落回 ComingSoon。
-       两种错都不报错、不变红，只是界面上少了点什么。 */
-    expect(MODULES.filter(m => m.todo).map(m => m.key).sort()).toEqual([
-      "instac", "isf"
-    ]);
+       两种错都不报错、不变红，只是界面上少了点什么。
+
+       现在它空了。**留着这条断言**：往后再加模块时，
+       占位的那一页会立刻在这里显形，而不是等谁点进去才发现。 */
+    expect(MODULES.filter(m => m.todo).map(m => m.key).sort()).toEqual([]);
   });
 
   it("todo 写的是**这一页要回答什么问题**，不是「敬请期待」", () => {

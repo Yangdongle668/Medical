@@ -49,6 +49,8 @@ import { DmPage } from "./features/dataquery/DmPage.js";
 import { MonPage } from "./features/oversight/MonPage.js";
 import { QaAuditPage } from "./features/oversight/QaAuditPage.js";
 import { IntakePage } from "./features/bizdev/IntakePage.js";
+import { AcceptPage } from "./features/instac/AcceptPage.js";
+import { IsfPage } from "./features/isf/IsfPage.js";
 import { ComingSoon } from "./shell/ComingSoon.js";
 import { MODULES } from "./shell/modules.js";
 import { MOCK_ROLES, type MockRole } from "./mocks/roles.js";
@@ -99,7 +101,9 @@ const BUILT: Record<string, React.ReactElement> = {
   /* `/trail` 是**操作留痕**（谁改了什么），`/audit` 是**质量稽查**（我方查自己）。
      中文都叫"审计/稽查"，但它们毫无关系 —— 两个页面组件因此不同名。 */
   "/audit": <QaAuditPage />,
-  "/intake": <IntakePage />
+  "/intake": <IntakePage />,
+  "/inst/intake": <AcceptPage />,
+  "/isf": <IsfPage />
 };
 
 /* 45 个模块的路由。同一个路径被几个模块共用是正常的

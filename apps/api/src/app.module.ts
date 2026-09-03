@@ -19,6 +19,8 @@ import { IdentityService } from "./modules/identity/identity.service.js";
 import { IdentityController } from "./modules/identity/identity.controller.js";
 import { SiteService } from "./modules/site/site.service.js";
 import { SiteController } from "./modules/site/site.controller.js";
+import { AcceptanceService } from "./modules/site/acceptance.service.js";
+import { AcceptanceController } from "./modules/site/acceptance.controller.js";
 import { StaffingService } from "./modules/site/staffing.service.js";
 import { StaffingController } from "./modules/site/staffing.controller.js";
 import { ClinicalService } from "./modules/clinical/clinical.service.js";
@@ -48,6 +50,7 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
 @Module({
   controllers: [HealthController, AuthController, IdentityController, SiteController, StaffingController,
                 ClinicalController, DataQueryController, AccountabilityController, CostController,
+                AcceptanceController,
                 BizdevController, IntakeController, FinanceController, MonitorController,
                 InternalAuditController],
   providers: [
@@ -75,6 +78,7 @@ import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
     LoginDelivery, NotifyService,
     IdentityService, SiteService, StaffingService,
     ClinicalService, DataQueryService, AccountabilityService, CostService,
+    AcceptanceService,
     FeasibilityService, BidService, IntakeService, FinanceService, MonitorService,
     InternalAuditService,
     /* 跨上下文装配：ClinicalOps 只认 ports.ts 里的接口，不 import CostService */

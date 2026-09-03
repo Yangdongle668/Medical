@@ -210,9 +210,14 @@ test.describe("导航", () => {
     await expect(nav.getByRole("link")).toHaveCount(2);
   });
 
-  test("立项受理还没建：导航照出，点进去说清它将来长什么样", async ({ page }) => {
+  test("立项受理点进去是真页面 —— 机构办四个模块全部建好了", async ({ page }) => {
+    /* 这条原来盯的是「还没建：点进去说清它将来长什么样」。
+       立项受理交付之后它照旧要在 —— 守的还是同一条：
+       机构办侧栏里的入口都落到真页面，只是断言从说明页翻成了真内容。 */
     await page.goto("/inst?as=inst");
     await page.getByRole("link", { name: "立项受理" }).click();
-    await expect(page.getByText("受理与退回")).toBeVisible();
+    await expect(page.getByTestId("coming-soon")).toHaveCount(0);
+    await expect(page.getByTestId("ac-summary")).toBeVisible();
+    await expect(page.getByTestId("ac-row").first()).toBeVisible();
   });
 });

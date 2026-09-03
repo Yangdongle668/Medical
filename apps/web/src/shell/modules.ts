@@ -62,8 +62,7 @@ export const MODULES: ModuleDef[] = [
   { key: "handover", title: "交接", group: "项目周期", path: "/handovers" },
 
   /* ── 现场 ─────────────────────────────────────────────────────── */
-  { key: "isf", title: "中心文件与物资", group: "现场", path: "/isf",
-    todo: "ISF 文件清单与缺件、现场物资库存。" },
+  { key: "isf", title: "中心文件与物资", group: "现场", path: "/isf" },
   { key: "material", title: "药品与样本", group: "现场", path: "/material" },
   { key: "pay", title: "受试者补偿", group: "现场", path: "/payments" },
 
@@ -106,8 +105,7 @@ export const MODULES: ModuleDef[] = [
 
   /* ── 机构办公室（外部） ───────────────────────────────────────── */
   { key: "inst", title: "机构工作台", group: "机构办公室", path: "/inst" },
-  { key: "instac", title: "立项受理", group: "机构办公室", path: "/inst/intake",
-    todo: "递到本院的立项申请，受理与退回。" },
+  { key: "instac", title: "立项受理", group: "机构办公室", path: "/inst/intake" },
   { key: "instqc", title: "机构质控", group: "机构办公室", path: "/inst/qc" },
   { key: "instreg", title: "人员备案与准入", group: "机构办公室", path: "/inst/registry" },
 

@@ -41,7 +41,7 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     role: { id: "r-crc", code: "crc", name: "临床协调员 CRC" },
     isExternal: false, orgRef: null,
     rowRule: "assigned", fields: ["subject"],
-    actions: ["capaWrite", "ethics", "subjRead", "subjWrite", "timeWrite"],
+    actions: ["capaWrite", "ethics", "isfWrite", "subjRead", "subjWrite", "timeWrite"],
     /* **module_key，不是路径。** 这里曾经写的是 ["today","sites",…]，
        而真接口给的是 role_module 里的键 —— 两者恰好长得像，
        所以在导航还是写死数组的时候看不出区别。侧栏改成按模块出之后，
@@ -58,7 +58,7 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     role: { id: "r-cra", code: "cra", name: "临床监查员 CRA" },
     isExternal: false, orgRef: null,
     rowRule: "assigned", fields: ["subject"],
-    actions: ["capaWrite", "monitor", "raiseQ", "subjRead", "timeWrite"],
+    actions: ["capaWrite", "isfWrite", "monitor", "raiseQ", "subjRead", "timeWrite"],
     modules: ["cra", "mysites", "mon", "query", "screen", "feas", "material",
       "time", "qa", "capa", "trail"]
   },
@@ -114,14 +114,16 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
       "change", "staff", "people", "time", "pnl", "bill", "qa", "mon", "price",
       "org", "trail"]
   },
-  /* 机构办：**一个动作**（关闭质量事件），没有 subjRead ——
-     所以受试者那几条端点对他会 403，界面上一个都不能碰。 */
+  /* 机构办：**两个动作**（立项受理、关闭质量事件），没有 subjRead ——
+     所以受试者那几条端点对他会 403，界面上一个都不能碰。
+     `accept` **只有它和管理员有**：借 `closeQA` 的话，
+     我方的质量岗就能替医院受理自己递上去的材料。 */
   inst: {
     id: "a-zhanghm", login: "zhanghm", name: "张慧敏",
     role: { id: "r-inst", code: "inst", name: "机构办（外部）" },
     isExternal: true, orgRef: "北京协和医院",
     rowRule: "hospital", fields: ["subject"],
-    actions: ["closeQA"],
+    actions: ["accept", "closeQA"],
     modules: ["inst", "instac", "instqc", "instreg"]
   },
   /* PI：也是一个动作（确认访视）。他有 subjRead，

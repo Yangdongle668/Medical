@@ -119,6 +119,10 @@ const B = baseline();
 const C = yaml.load(fs.readFileSync(
   arg("--current") ?? path.join(ROOT, "openapi.yaml"), "utf8")) as Doc;
 if (!B) { console.log("首次生成：基线 ref 中尚无 openapi.yaml，跳过比对。"); process.exit(0); }
+/* 上一行 exit 之后 B 一定不是 null，但**函数声明体里读不到这个收窄** ——
+   `cmp` 是提升的，TS 得假设它可能在收窄之前被调用。绑一个非空别名，
+   而不是在用它的地方写 `B!`：断言会把下一次真的可能为空也一起吞掉。 */
+const BASE: Doc = B;
 
 const ops = (d: Doc) => {
   const m = new Map<string, { path: string; method: string; op: Op }>();
@@ -207,7 +211,7 @@ function cmp(name: string, o0: Schema, c0: Schema, at = "") {
      只在**一侧**是 $ref 时展开；两侧都是的情况下一行就比出来了，
      展开反而会在递归 schema 上绕不出来。 */
   const [o, c] = (!!o0.$ref !== !!c0.$ref)
-    ? [deref(B, o0), deref(C, c0)]
+    ? [deref(BASE, o0), deref(C, c0)]
     : [o0, c0];
 
   if (o.type && c.type && o.type !== c.type)

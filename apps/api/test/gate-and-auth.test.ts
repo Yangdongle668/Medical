@@ -22,7 +22,7 @@ const 摘掉地址 = (login: string) => db((c) => c.query(
   `DELETE FROM auth_identity i USING account a
     WHERE i.account_id = a.id AND a.login = $1 AND i.provider = 'magic-link'`, [login]));
 
-let app: INestApplication, boss: Caller, pm: Caller;
+let app: INestApplication, boss: Caller, pm: Caller, admin: Caller;
 beforeAll(async () => {
   resetDb(); app = await boot();
   boss = await as(app, "lingyuan");
@@ -30,6 +30,14 @@ beforeAll(async () => {
      经营层没有 subjWrite / ethics —— 拿 boss 去写会得到 403，
      而那个 403 是对的：它说明动作权限确实在把关。 */
   pm = await as(app, "hanxue");
+  /* 受理的门是 `accept`，只有机构办与管理员有 —— 借我方任何一个角色
+     去受理，等于自己受理自己递的材料。
+
+     这里用管理员而不是机构办张慧敏：她的行范围是「北京协和医院」，
+     而这些用例建的是「闸门测试医院N」—— **范围之外 = 不存在（404）**，
+     不是 403。机构办真正走完受理的那一条，在 acceptance.test.ts 里
+     用协和的项目跑。 */
+  admin = await as(app, "admin");
 }, 120_000);
 afterAll(async () => { await app?.close(); });
 
@@ -41,25 +49,80 @@ async function freshSite() {
   const studies = await pm.get("/v1/studies?limit=1");
   expect(studies.status, `取项目失败：${JSON.stringify(studies.body)}`).toBe(200);
   const study = studies.body.items[0];
+  /* 医院名带序号：受理挂的是 (study_id, hospital)，同名医院会撞上
+     「一家医院在同一个项目上只有一次立项受理」那条唯一约束。 */
+  const hospital = `闸门测试医院${++seq}`;
   const r = await boss.post("/v1/study-sites", {
-    studyId: study.id, code: `SS-GATE${String(++seq).padStart(2, "0")}`,
-    hospital: "闸门测试医院", dept: "科", city: "北京",
+    studyId: study.id, code: `SS-GATE${String(seq).padStart(2, "0")}`,
+    hospital, dept: "科", city: "北京",
     piName: "测试研究者", contracted: 5, unitPriceCents: 1000000
   });
   /* 建档失败时不能悄悄往下走：后面的断言会去报一个完全无关的现象 */
   expect(r.status, `建档失败：${JSON.stringify(r.body)}`).toBe(201);
-  return r.body as { id: string; code: string; state: string };
+  return { ...r.body, studyId: study.id, hospital } as {
+    id: string; code: string; state: string; studyId: string; hospital: string;
+  };
 }
 const advance = (id: string, to: string, reason?: string) =>
   boss.post(`/v1/study-sites/${id}:advance`, { to, ...(reason ? { reason } : {}) },
     { "Idempotency-Key": randomUUID() });
 
+/** 把一个中心的立项受理办到「已受理」为止。
+ *
+ *  迁移 0038 之后「伦理递交」不再是无闸门的一步：机构办得先受理。
+ *  于是每一个要推过 irb_submit 的用例都得先走这一段 ——
+ *  **这正是闸门存在的意义**，把它藏进 freshSite 里会让下面的用例
+ *  看起来在测别的东西。 */
+async function 办完受理(studyId: string, hospital: string) {
+  const ac = await pm.post("/v1/site-acceptances",
+    { studyId, hospital, docs: ["立项申请表", "方案及研究者手册", "保险单"] });
+  expect(ac.status, `递交立项材料失败：${JSON.stringify(ac.body)}`).toBe(201);
+  /* 递进去一律未勾 —— 勾是机构办形式审查的动作。 */
+  expect(ac.body.missingDocs).toHaveLength(3);
+  for (const d of ac.body.docs) {
+    const r = await admin.post(`/v1/site-acceptances/${ac.body.id}/docs/${d.seq}:set`,
+      { present: true }, { "Idempotency-Key": randomUUID() });
+    expect(r.status, `勾材料失败：${JSON.stringify(r.body)}`).toBe(201);
+  }
+  const done = await admin.post(`/v1/site-acceptances/${ac.body.id}:accept`, {},
+    { "Idempotency-Key": randomUUID() });
+  expect(done.status, `受理失败：${JSON.stringify(done.body)}`).toBe(201);
+  return done.body.data as { id: string; code: string };
+}
+
 describe("闸门：推进不是给字段赋值，是断言一组事实成立", () => {
-  it("无闸门的节点可以正常推进", async () => {
+  it("**机构没受理，伦理就递不出去** —— 递到伦理的正是机构点过的那一份", async () => {
     const s = await freshSite();
     expect(s.state).toBe("intake");
+    const blocked = await advance(s.id, "irb_submit", "先递了再说");
+    expect(blocked.status).toBe(422);
+    expect(blocked.body.code).toBe("gate-not-satisfied");
+    expect(blocked.body.unmet[0]).toMatchObject(
+      { code: "site-acceptance", module: "instac" });
+    expect(blocked.body.unmet[0].message).toContain("还没向机构办递交");
+
+    /* 递了但没受理，照样不放行 —— 而且它说得出还缺哪几份 */
+    const ac = await pm.post("/v1/site-acceptances",
+      { studyId: s.studyId, hospital: s.hospital, docs: ["立项申请表", "保险单"] });
+    expect(ac.status, JSON.stringify(ac.body)).toBe(201);
+    const half = await boss.get(`/v1/study-sites/${s.id}/gate?to=irb_submit`);
+    expect(half.body.unmet[0].message).toContain("缺 2 项材料");
+    expect(half.body.unmet[0].message).toContain("保险单");
+
+    for (const d of ac.body.docs)
+      expect((await admin.post(
+        `/v1/site-acceptances/${ac.body.id}/docs/${d.seq}:set`, { present: true },
+        { "Idempotency-Key": randomUUID() })).status).toBe(201);
+    /* 材料齐了还不够 —— 齐备不等于受理，出具受理通知是机构的一次决定 */
+    const ready = await boss.get(`/v1/study-sites/${s.id}/gate?to=irb_submit`);
+    expect(ready.body.satisfied).toBe(false);
+    expect(ready.body.unmet[0].message).toContain("材料已齐，等机构办出具受理通知");
+
+    expect((await admin.post(`/v1/site-acceptances/${ac.body.id}:accept`, {},
+      { "Idempotency-Key": randomUUID() })).status).toBe(201);
+
     const r = await advance(s.id, "irb_submit", "材料齐备，已向伦理递交");
-    expect(r.status).toBe(201);
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
     expect(r.body.data.state).toBe("irb_submit");
     expect(r.body.sideEffects[0].type).toBe("SiteStateChanged");
   });
@@ -73,6 +136,7 @@ describe("闸门：推进不是给字段赋值，是断言一组事实成立", (
 
   it("推进到 SIV 被闸门拦下，并逐条说明还差什么", async () => {
     const s = await freshSite();
+    await 办完受理(s.studyId, s.hospital);
     for (const to of ["irb_submit", "irb_approve", "contract"])
       expect((await advance(s.id, to, "推进到下一节点")).status).toBe(201);
 
@@ -87,6 +151,7 @@ describe("闸门：推进不是给字段赋值，是断言一组事实成立", (
 
   it("闸门预检接口在按钮点下去之前就给出答案", async () => {
     const s = await freshSite();
+    await 办完受理(s.studyId, s.hospital);
     /* 逐步断言：不 assert 的循环一旦有一步失败，后面的断言会去报一个
        完全无关的现象（"闸门说 from=intake"），而真正的原因被吞掉了。 */
     for (const to of ["irb_submit", "irb_approve", "contract"]) {

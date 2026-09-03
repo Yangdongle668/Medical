@@ -202,6 +202,11 @@ export interface Scenario {
   audits: MockAudit[];
   /** 立项申请。项目是**怎么进系统的** —— 在此之前第一行是凭空出现的。 */
   intake: MockIntake[];
+  /** 立项受理。**受理发生在建档之前** ——
+   *  所以这里有一条指向的中心在台账里根本还没有。 */
+  acceptances: MockAcceptance[];
+  /** 中心文件与物资。**只存事实** —— 状态由 @sitedesk/calc 按今天算。 */
+  isf: MockIsf[];
   /** 已立项项目。**合同写了几个中心**是这里唯一的新数据。 */
   studies: MockStudy[];
   /** 药品流水（I5）。在手数量是**算出来的**，所以这里不存那个数。 */
@@ -371,6 +376,8 @@ export function makeScenario(): Scenario {
     monitorVisits: makeMonitorVisits(),
     audits: makeAudits(),
     intake: makeIntake(),
+    acceptances: makeAcceptances(),
+    isf: makeIsf(),
     studies: makeStudies(),
     ipMovements: makeIpMovements(),
     specimens: makeSpecimens(),
@@ -1206,6 +1213,133 @@ function makeStudies(): MockStudy[] {
       clientName: "安泰医药", phase: "II期",
       plannedSubjects: 96, plannedSites: 1, builtSites: 1,
       contractCents: 920_0000_00 }
+  ];
+}
+
+export interface MockAcceptanceDoc { seq: number; name: string; present: boolean }
+export interface MockAcceptance {
+  id: string; code: string;
+  studyId: string; studyCode: string; drug: string; sponsorName: string; phase: string;
+  hospital: string; studySiteId: string | null; siteCode: string | null;
+  submittedByName: string; submittedOn: string;
+  state: string; origin: string; amendNote: string | null;
+  acceptedOn: string | null; acceptedByName: string | null;
+  docs: MockAcceptanceDoc[];
+}
+
+/** 立项受理。四条各站一个岗：
+ *   · 一条**材料缺两项**   —— 「不予受理」要说得出缺的是哪两份；
+ *   · 一条**材料已齐未受理** —— 齐备 ≠ 已受理，受理是机构的一次决定；
+ *   · 一条**已发补正**     —— 补正通知里要写着缺什么；
+ *   · 一条**系统外登记存根** —— 没有受理人、没有清单，
+ *     而它的空清单意思是「没人在这儿查过」，不是「八项都齐」。
+ *
+ *  前两条**都还没有对应的中心**（studySiteId 为空）——
+ *  受理发生在建档之前，那正是「受理了但没进台账」的样子。 */
+function makeAcceptances(): MockAcceptance[] {
+  const docs = (...present: boolean[]): MockAcceptanceDoc[] =>
+    ["立项申请表", "临床试验批件 / 备案号", "方案及研究者手册", "组长单位伦理批件",
+     "主要研究者简历与 GCP 证书", "试验用药品检验报告", "保险单", "经费预算明细"]
+      .map((name, seq) => ({ seq, name, present: present[seq] ?? true }));
+  const missing = (a: MockAcceptanceDoc[]) => a;
+  return [
+    {
+      id: "ac1", code: "AC-2026-038",
+      studyId: "st2", studyCode: "HJ-2026-004", drug: "CoroFlex 药物洗脱支架",
+      sponsorName: "捷成医疗", phase: "III期", hospital: "北京协和医院",
+      studySiteId: null, siteCode: null,
+      submittedByName: "何雨薇", submittedOn: shift(TODAY, -16),
+      state: "review", origin: "in_system", amendNote: null,
+      acceptedOn: null, acceptedByName: null,
+      docs: missing(docs(true, true, true, false, true, true, false, true))
+    },
+    {
+      id: "ac2", code: "AC-2026-041",
+      studyId: "st2", studyCode: "HJ-2025-003", drug: "HT-118 注射液（PD-1）",
+      sponsorName: "安泰医药", phase: "II期", hospital: "北京协和医院",
+      studySiteId: null, siteCode: null,
+      submittedByName: "林敏", submittedOn: shift(TODAY, -13),
+      state: "review", origin: "in_system", amendNote: null,
+      acceptedOn: null, acceptedByName: null,
+      docs: docs()
+    },
+    {
+      id: "ac3", code: "AC-2026-042",
+      studyId: "st1", studyCode: "HJ-2024-017", drug: "艾瑞替尼 III",
+      sponsorName: "华拓生物", phase: "III期", hospital: "北京协和医院",
+      studySiteId: null, siteCode: null,
+      submittedByName: "赵坤", submittedOn: shift(TODAY, -25),
+      state: "amend", origin: "in_system",
+      amendNote: "请补齐：保险单、经费预算明细 —— 保险单需覆盖至末例末访后 12 个月。",
+      acceptedOn: null, acceptedByName: null,
+      docs: docs(true, true, true, true, true, true, false, false)
+    },
+    {
+      /* 台账里那个中心早就过了立项 —— 它的受理发生在几年前的医院里，
+         我方系统只拿着一个受理号。**没有受理人不是漏填。** */
+      id: "ac4", code: "AC-2024-001",
+      studyId: "st1", studyCode: "HJ-2024-017", drug: "艾瑞替尼 III",
+      sponsorName: "华拓生物", phase: "III期", hospital: "北京协和医院",
+      studySiteId: "s1", siteCode: "SS-01",
+      submittedByName: "林敏", submittedOn: shift(TODAY, -700),
+      state: "accepted", origin: "registered", amendNote: null,
+      acceptedOn: shift(TODAY, -685), acceptedByName: null,
+      docs: []
+    }
+  ];
+}
+
+export interface MockIsf {
+  id: string; studySiteId: string; siteCode: string; hospital: string;
+  category: string; item: string; present: boolean;
+  expiresOn: string | null; quantity: number | null; reorderAt: number | null;
+  note: string | null; checkedOn: string | null; checkedByName: string | null;
+}
+
+/** 中心文件与物资。**存的全是事实** —— 状态由 calc 按今天算，
+ *  所以这里给的是相对今天的偏移，而不是写死的 good / warn / crit：
+ *  写死的那一版，跑到下个季度就开始撒谎。
+ *
+ *  五种状态各有一条以上：
+ *   · missing 缺失（新护士的 GCP 证书还没交）；
+ *   · expired 已过期（室间质评证书过期 9 天）；
+ *   · due     临期（伦理年度跟踪，提前量 60 天，还剩 40 天）；
+ *   · low     库存不足（知情同意书空白件 4 份 < 补货线 10）；
+ *   · ok      齐备。 */
+function makeIsf(): MockIsf[] {
+  const s1 = SITES[0]!, s2 = SITES[1]!;
+  const mk = (
+    id: string, site: typeof SITES[number], category: string, item: string,
+    extra: Partial<MockIsf> = {}
+  ): MockIsf => ({
+    id, studySiteId: site.id, siteCode: site.code, hospital: site.hospital,
+    category, item, present: true,
+    expiresOn: null, quantity: null, reorderAt: null, note: null,
+    checkedOn: shift(TODAY, -7), checkedByName: "吴桐", ...extra
+  });
+  return [
+    mk("isf1", s1, "dossier", "伦理年度跟踪审查批件",
+      { expiresOn: shift(TODAY, 40),
+        note: "提前 60 天递交年度跟踪审查表，批件到期那天才想起来就晚了" }),
+    mk("isf2", s1, "dossier", "方案 V4.1 签收表", {}),
+    mk("isf3", s1, "credential", "新入组研究护士 GCP 证书",
+      { present: false, checkedOn: shift(TODAY, -3),
+        note: "8 月 12 日到岗，证书尚未提交 —— 在此之前她不能接触源数据" }),
+    mk("isf4", s1, "credential", "研究者授权分工表 DOA",
+      { present: false, note: "新护士未写进授权行；对她而言等于没有授权" }),
+    mk("isf5", s1, "ip", "批次 260711 库存",
+      { quantity: 18, reorderAt: 6, expiresOn: shift(TODAY, 120) }),
+    mk("isf6", s1, "ip", "知情同意书 V3.0 空白件",
+      { quantity: 4, reorderAt: 10, note: "低于补货线，下一批预筛就不够用" }),
+    mk("isf7", s1, "equipment", "中心实验室室间质评证书",
+      { expiresOn: shift(TODAY, -9),
+        note: "已过期 —— 这段时间出的检验报告，核查时会被逐份追问" }),
+    mk("isf8", s1, "equipment", "离心机校准证书", { expiresOn: shift(TODAY, 180) }),
+    mk("isf9", s2, "ip", "批次 260618 效期",
+      { expiresOn: shift(TODAY, 22), quantity: 9, reorderAt: 10,
+        note: "既临期又低于补货线 —— 换批要趁早联系申办方" }),
+    mk("isf10", s2, "dossier", "研究者手册 V6", {}),
+    mk("isf11", s2, "credential", "主要研究者 GCP 证书", { expiresOn: shift(TODAY, 300) })
   ];
 }
 

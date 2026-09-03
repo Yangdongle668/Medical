@@ -48,7 +48,7 @@ const STUDIES = grab("STUDIES"), SITES = grab("SITES"),
       FEAS = grab("FEAS"), BIDS = grab("BIDS"), CHANGES = grab("CHANGES"),
       MILES = grab("MILES"), CLIENT_META = grab("CLIENT_META"),
       VISITS = grab("VISITS"), ISSUES = grab("ISSUES"), AUDIT = grab("AUDIT"),
-      INTAKE = grab("INTAKE");
+      INTAKE = grab("INTAKE"), ACCEPT = grab("ACCEPT"), ISF = grab("ISF");
 
 const q  = v => v == null ? "NULL" : `'${String(v).replace(/'/g, "''")}'`;
 const d  = v => (!v || v === "—") ? "NULL" : `'${v}'`;
@@ -474,6 +474,127 @@ QUERIES.forEach(qy => {
     `${answer ? d(dayBefore(TODAY, Math.floor(qy.age / 2))) : "NULL"}, ` +
     `${q(dm ? "dm" : "cra")}, ${acc(byName)}, ` +
     `${d(dayBefore(TODAY, qy.age))});`);
+});
+P(``);
+
+/* ── 立项受理与中心文件 ────────────────────────────────────────
+   受理挂的是 (study_id, hospital)，不是 study_site —— 原型那两条
+   **一条都找不到对应的中心**，而那不是数据错了：
+   材料先递到医院，受理通过、伦理批下来、合同谈完，中心才进我方台账。 */
+P(`-- ── 立项受理（原型 ACCEPT） ────────────────────────────────────`);
+/* 「形式审查中」与「待受理」在原型里是两个词，但**它们是同一个状态的
+   两种材料齐备度** —— 差别由 acceptance_doc 的勾选算出来，
+   不需要在枚举里多开一格。 */
+const AC_STATE = { "形式审查中": "review", "待受理": "review", "已受理": "accepted" };
+ACCEPT.forEach(a => {
+  const id = uuid5("accept:" + a.id);
+  const st = AC_STATE[a.st] ?? "review";
+  /* 项目那几项抄在行上 —— 受理发生在建档之前，那时候医院对我方的
+     study / client 两张表都没有可见性（迁移 0038 的文件头）。 */
+  const sy = STUDIES.find(x => x.id === a.sid);
+  P(`INSERT INTO site_acceptance (id, code, study_id, study_code, drug,` +
+    ` sponsor_name, phase, hospital, submitted_by,` +
+    ` submitted_on, state, accepted_on, accepted_by) VALUES (` +
+    `'${id}', ${q(a.id)}, '${uuid5("study:"+a.sid)}', ${q(a.sid)}, ${q(a.drug)}, ` +
+    `${q(a.sponsor)}, ${q(sy.phase)}, ${q(a.hosp)}, ${acc(a.by)}, ` +
+    `${d(a.sub)}, ${q(st)}, ` +
+    `${st === "accepted" ? d(a.sub) : "NULL"}, ` +
+    `${st === "accepted" ? acc("张慧敏") : "NULL"});`);
+  a.docs.forEach((doc, k) =>
+    P(`INSERT INTO acceptance_doc (acceptance_id, seq, name, present) VALUES (` +
+      `'${id}', ${k}, ${q(doc[0])}, ${doc[1] ? "true" : "false"});`));
+});
+P(``);
+
+/* ── 既成事实的受理号：台账里那十五个中心 ────────────────────────
+   闸门（gate.ts 的 irb_submit）现在断言「机构受理过才准递伦理」。
+   台账里的中心**全都早就过了立项** —— 它们的受理确实发生过，
+   否则伦理那一步根本走不到。所以这里不是补一条假记录，
+   是把一件已经发生的事记进来。
+
+   但它跟上面那两条不是一回事，而且**差别必须留在库里**：
+   上面两条正在本系统里走形式审查；这十五条的受理发生在几年前的
+   医院里，多数医院的机构办根本不是本系统的用户。
+   原型自己就承认这件事 —— 建档表单上「机构受理号」的提示写着
+   「由医院机构办受理后回填，可留空」。
+
+   于是 origin='registered'：**没有材料清单，也没有受理人**。
+   空清单在这一类记录上要读成「没人在这儿查过」，
+   而不是「八项都齐」—— 两者混起来，界面就会对着一条谁也没审过的
+   记录报「材料齐备」。 */
+P(`-- ── 既成事实的受理号（origin=registered，见迁移 0038） ──────────`);
+/* 日期是**推出来的，不是编的**：机构受理 → 转伦理 → 拿到批件，
+   所以受理通过日取伦理批件日往前 30 天，递交日再往前 15 天。
+   还没拿到批件的中心（SS-13 停在伦理递交）没有这个锚点，
+   退回项目启动月的 15 日 —— 那是它唯一已知的时间坐标。 */
+const acCodes = new Set(ACCEPT.map(a => a.id));
+const acDone = new Set(ACCEPT.map(a => a.sid + "|" + a.hosp));
+const acSerial = {};                                    // 年份 → 已用到第几号
+SITES.filter(s => STATE[s.st] !== "intake").forEach(s => {
+  /* 受理挂 (study_id, hospital)。原型那两条指向的项目 × 医院组合
+     在 SITES 里一个都没有，但这里仍然按键去重 ——
+     一家医院在同一个项目上只有一次立项受理（库上的 UNIQUE 也拦）。 */
+  const key = s.sid + "|" + s.hosp;
+  if (acDone.has(key)) return;
+  acDone.add(key);
+
+  const study = STUDIES.find(x => x.id === s.sid);
+  const anchorDay = (s.ethics && s.ethics !== "—") ? s.ethics : `${study.start}-15`;
+  const acceptedOn = dayBefore(anchorDay, 30);
+  const submittedOn = dayBefore(acceptedOn, 15);
+  const year = acceptedOn.slice(0, 4);
+  /* 编号按受理年份连号。撞上原型那两个号就往后让 ——
+     一个受理号对两条记录，「这个中心受理号是多少」就有两个答案。 */
+  let n = (acSerial[year] ?? 0) + 1, code;
+  do { code = `AC-${year}-${String(n++).padStart(3, "0")}`; } while (acCodes.has(code));
+  acSerial[year] = n - 1;
+  acCodes.add(code);
+
+  /* 递交人取该中心的派驻 CRA —— 立项材料本来就是他递的，
+     而这是库里真实存在的一层关系，不是随手挑一个名字。 */
+  const cra = STAFF.find(x => x.role === "CRA" && x.sites.includes(s.id));
+  const submittedBy = acc(cra?.n);
+  if (submittedBy === "NULL")
+    throw new Error(`中心 ${s.id} 找不到派驻 CRA，受理记录没有递交人`);
+
+  P(`INSERT INTO site_acceptance (id, code, study_id, study_code, drug,` +
+    ` sponsor_name, phase, hospital, study_site_id,` +
+    ` submitted_by, submitted_on, state, origin, accepted_on, accepted_by) VALUES (` +
+    `'${uuid5("accept:" + key)}', ${q(code)}, '${uuid5("study:" + s.sid)}', ` +
+    `${q(s.sid)}, ${q(study.short)}, ${q(study.sponsor)}, ${q(study.phase)}, ` +
+    `${q(s.hosp)}, '${uuid5("site:" + s.id)}', ${submittedBy}, ${d(submittedOn)}, ` +
+    `'accepted', 'registered', ${d(acceptedOn)}, NULL);`);
+});
+P(``);
+
+/* ── 中心文件与物资 ────────────────────────────────────────────
+   **原型的 st（good/warn/crit）一个字都不进库。** 它是从到期日推出来的，
+   而存下来就会过期：六月标"齐备"的那一项，十月已经是缺项。
+   这里只存事实 —— 在不在、什么时候到期、还剩几份。 */
+P(`-- ── 中心文件与物资（原型 ISF：只存事实，状态由 calc 算） ──────────`);
+const ISF_CAT = { "研究者文件夹": "dossier", "人员资质": "credential",
+                  "试验用药品": "ip", "检验与设备": "equipment" };
+/* 从备注里把事实抠出来。**能抠出日期的就存日期**，
+   抠不出来的（"未更新授权行"）落到 present=false —— 一份没有把新护士
+   写进去的授权表，对那位护士而言就是没有授权。 */
+const ISF_FACT = {
+  "伦理年度跟踪审查":            { expires: "2026-10-18" },
+  "新入组研究护士 GCP 证书":      { present: false },
+  "研究者授权分工表 DOA":         { present: false },
+  "批次 260711 库存":            { qty: 18, reorder: 6 },
+  "中心实验室室间质评证书":        { expires: "2026-09-30" },
+  "离心机校准证书":              { expires: "2027-02-14" },
+  "知情同意书 V3.0 空白件":       { qty: 4, reorder: 10 },
+  "批次 260618 效期":            { expires: "2026-09-15", qty: 9, reorder: 10 }
+};
+ISF.forEach(i => {
+  const f = ISF_FACT[i.item] ?? {};
+  P(`INSERT INTO isf_item (study_site_id, category, item, present, expires_on,` +
+    ` quantity, reorder_at, note, checked_on, checked_by) VALUES (` +
+    `'${uuid5("site:"+i.ss)}', ${q(ISF_CAT[i.cat] ?? "dossier")}, ${q(i.item)}, ` +
+    `${f.present === false ? "false" : "true"}, ${d(f.expires)}, ` +
+    `${f.qty ?? "NULL"}, ${f.reorder ?? "NULL"}, ${q(i.note)}, ` +
+    `${d(dayBefore(TODAY, 7))}, ${acc("吴桐")});`);
 });
 P(``);
 
