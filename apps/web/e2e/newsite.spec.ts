@@ -12,10 +12,11 @@ import { test, expect } from "@playwright/test";
    它们的成本已经在发生，收入却挂不上号。
 
    这条测试走的是那条真正的路：台账 → 建档 → 新中心出现在台账上，
-   且**停在「合同签署」**（不是直接就绪）—— 启动要另走闸门那条流。
+   且**停在「立项」** —— 与库里的 `state DEFAULT 'intake'`（迁移 0004）一致。
+   建档不等于启动：它下一步是伦理递交，而那道闸门要机构先受理。
    ════════════════════════════════════════════════════════════════════ */
 
-test("建一个中心：填表 → 落到台账上 → 停在合同签署", async ({ page }) => {
+test("建一个中心：填表 → 落到台账上 → 停在立项", async ({ page }) => {
   /* `?as=boss`：看得见价钱的身份，建档表单上才有那两栏。
      下面第二个用例验的正是"看不见价钱的人也能建档"。 */
   await page.goto("/sites?as=boss");
@@ -51,9 +52,10 @@ test("建一个中心：填表 → 落到台账上 → 停在合同签署", asyn
   await expect(row).toContainText("罗明远");
   await expect(row).toContainText("24");
 
-  /* **停在「合同签署」** —— 建档不等于启动。
-     直接就绪的话，启动清单那道闸门就被绕过去了。 */
-  await expect(row).toContainText("合同签署");
+  /* **停在「立项」** —— 与库里的 state DEFAULT 'intake' 一致。
+     建档不等于启动：下一步是伦理递交，而那道闸门要机构先受理。
+     直接跳到「合同签署」的话，状态机的前三格就被凭空跳过了。 */
+  await expect(row).toContainText("立项");
 });
 
 test("必填没齐，建档按钮不亮 —— 而不是按下去再报错", async ({ page }) => {
@@ -118,4 +120,65 @@ test("中心编号撞车：服务端拦下，理由摆在表单上", async ({ pa
   /* 失败留在页面上，不用吐司 —— 吐司会自己消失，而失败要人读完再决定。 */
   await expect(page.getByTestId("new-site-problem")).toContainText("SS-01");
   await expect(page.getByTestId("new-site-form")).toBeVisible();
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   建档 → 闸门拦下 → **就地递交立项材料**。
+
+   ── 为什么递交入口在这里，而不是只在立项受理页 ──────────────────
+   立项受理页（/inst/intake）属于 `instac` 模块，而按迁移 0039 的授予，
+   **只有管理员同时拿得到 `instac` 模块和 `advance` 动作** ——
+   PM 有 advance 但没这个模块，机构办有模块但没 advance。
+   于是那个入口实际上只有管理员按得到，而真正需要它的是带项目的 PM。
+
+   闸门拦在中心详情页上，那就是这件事该发生的地方。而且这个中心
+   自己知道它属于哪个项目、在哪家医院 —— 不用再挑一遍，
+   挑错了闸门照样不放行，错得还很难看出来。
+   ════════════════════════════════════════════════════════════════════ */
+test("新建的中心：伦理递交被闸门拦下，就地递交材料后放行", async ({ page }) => {
+  await page.goto("/sites?as=boss");
+  await expect(page.getByTestId("site-row").first()).toBeVisible();
+
+  await page.getByTestId("new-site").click();
+  await page.getByTestId("ns-study").selectOption({ index: 1 });
+  await page.getByTestId("ns-code").fill("SS-88");
+  await page.getByTestId("ns-hospital").fill("山东大学齐鲁医院");
+  await page.getByTestId("ns-dept").fill("血液科");
+  await page.getByTestId("ns-city").fill("济南");
+  await page.getByTestId("ns-pi").fill("柳承志");
+  await page.getByTestId("ns-contracted").fill("20");
+  await page.getByTestId("ns-price").fill("58000");
+  await page.getByTestId("new-site-submit").click();
+  await expect(page.getByTestId("toast")).toContainText("SS-88 已建档");
+
+  /* 进详情：停在「立项」，下一步是伦理递交 */
+  await page.getByTestId("site-row").filter({ hasText: "SS-88" })
+    .getByTestId("open-site").click();
+  await expect(page.getByTestId("flow").locator("li.now")).toHaveText("立项");
+
+  /* 闸门拦下，而且说得出还差什么 —— 不是一个变灰的按钮 */
+  await expect(page.getByTestId("gate-blocked")).toBeVisible();
+  const unmet = page.getByTestId("unmet");
+  await expect(unmet).toContainText("还没向机构办递交立项材料");
+  await expect(unmet).toContainText("instac");
+
+  /* **就地办掉。** 项目与医院来自这个中心自己，不用挑。 */
+  const inline = page.getByTestId("gate-submit-acceptance");
+  await expect(inline).toBeVisible();
+  await inline.getByTestId("submit-acceptance").click();
+  await expect(page.getByTestId("sa-fixed")).toContainText("山东大学齐鲁医院");
+  /* 挑项目和医院的那两个控件在这里不该出现 */
+  await expect(page.getByTestId("sa-study")).toHaveCount(0);
+  await expect(page.getByTestId("sa-hospital")).toHaveCount(0);
+
+  await page.getByTestId("submit-acceptance-submit").click();
+  /* 断言的是**吐司区**而不是某一条吐司：建档那一条还没消失（寿命 4.2 秒），
+     两条同时在屏幕上，按 testid 取单条会撞上 strict mode。 */
+  await expect(page.getByTestId("toasts")).toContainText("山东大学齐鲁医院");
+
+  /* 递交之后闸门换了一句话：球到了医院那边 ——
+     材料一律未勾，所以缺的是八项。 */
+  await expect(page.getByTestId("unmet")).toContainText("缺 8 项材料");
+  /* 递过了就不再给递交表 —— 这一条已经不是受托方能办的了 */
+  await expect(page.getByTestId("gate-submit-acceptance")).toHaveCount(0);
 });

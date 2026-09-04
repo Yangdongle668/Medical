@@ -83,6 +83,10 @@ const TODAY = new Date();
 export interface MockSite {
   id: string; code: string; hospital: string; dept: string; city: string;
   piName: string; piAccountId: string | null; state: string;
+  /** 属于哪个项目。种子那三个都在 st1 下，所以缺省即 st1；
+   *  建档出来的中心带着人挑的那一个 —— 立项受理闸门比对的键之一
+   *  正是 (study_id, hospital)。 */
+  studyId?: string;
   contracted?: number; unitPriceCents?: number; startupFeeCents?: number;
   sivPlannedOn?: string | null;
 }

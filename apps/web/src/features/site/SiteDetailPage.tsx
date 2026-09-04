@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { SITE_STATE_LABEL, SITE_ORDER } from "./states.js";
+import { SubmitAcceptanceForm } from "../instac/SubmitAcceptanceForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    中心详情 = 状态机 + 闸门。
@@ -27,7 +28,7 @@ import { SITE_STATE_LABEL, SITE_ORDER } from "./states.js";
 interface Site {
   id: string; code: string; hospital: string; dept: string; city: string;
   piName: string; state: string; contracted: number;
-  study: { code: string; shortName: string };
+  study: { id: string; code: string; shortName: string };
   irbApprovedOn: string | null; sivOn: string | null;
   sivPlannedOn: string | null; fpiOn: string | null;
   /* 受列权限管辖：无权限时**字段不在**，不是 null */
@@ -49,6 +50,10 @@ export function SiteDetailPage() {
   const [site, setSite] = useState<Site | null>(null);
   const [gate, setGate] = useState<Gate | null>(null);
   const [canAdvance, setCanAdvance] = useState<boolean | null>(null);
+  /** 递交立项材料要 `advance` —— 与推进同一个动作：
+   *  两者都是「把这个中心往前推一格」，只是一个推的是自己的状态机，
+   *  一个推的是医院那一侧的流程。 */
+  const [canSubmitAcceptance, setCanSubmitAcceptance] = useState(false);
   const [reason, setReason] = useState("");
   const [effects, setEffects] = useState<SideEffect[] | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
@@ -65,8 +70,10 @@ export function SiteDetailPage() {
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    void loadMe().then(m => setCanAdvance(m.permissions.actions.includes("advance")))
-      .catch(() => setCanAdvance(null));
+    void loadMe().then(m => {
+      setCanAdvance(m.permissions.actions.includes("advance"));
+      setCanSubmitAcceptance(m.permissions.actions.includes("advance"));
+    }).catch(() => setCanAdvance(null));
   }, []);
 
   if (!site) return <p className="muted">加载中…</p>;
@@ -134,6 +141,22 @@ export function SiteDetailPage() {
                     {u.module === "startup" && (
                       <Link to={`/sites/${id}/startup`} className="btn go"
                         data-testid="go-startup">去处理</Link>
+                    )}
+                    {/* 「还没递交立项材料」是这张清单上**唯一一条受托方
+                        自己就能办掉的** —— 其余几条要么是本方的活
+                        （启动清单），要么球在医院那边（等受理通知）。
+                        所以这一条给的不是「去处理」的链接，是当场就能填的表：
+                        项目与医院都来自这个中心自己，不用再挑一遍。 */}
+                    {u.code === "site-acceptance" && canSubmitAcceptance
+                      && u.message.includes("还没") && (
+                      <span data-testid="gate-submit-acceptance">
+                        <SubmitAcceptanceForm
+                          fixed={{
+                            studyId: site.study.id, hospital: site.hospital,
+                            label: `${site.study.code} · ${site.study.shortName}`
+                          }}
+                          onCreated={() => void load()} />
+                      </span>
                     )}
                   </li>
                 ))}
