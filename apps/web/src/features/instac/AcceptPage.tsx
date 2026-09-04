@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
+import { SubmitAcceptanceForm } from "./SubmitAcceptanceForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    立项受理（机构办）。
@@ -64,6 +65,9 @@ export function AcceptPage() {
   if (!me || !rows) return <p className="muted">加载中…</p>;
 
   const canAccept = me.permissions.actions.includes("accept");
+  /* 递交要 `advance`（受托方那一侧），受理要 `accept`（机构那一侧）——
+     **两端两个动作**，一个人同时有两样是管理员的情形，不是常态。 */
+  const canSubmit = me.permissions.actions.includes("advance");
   const open = rows.filter(a => a.state !== "accepted");
   const missing = open.filter(a => a.missingDocs.length > 0);
   /* 「受理了但中心还没进台账」—— 建档滞后在医院这一侧的样子。 */
@@ -109,6 +113,10 @@ export function AcceptPage() {
       )}
       {said && <p className="muted" data-testid="ac-said">{said}</p>}
 
+      {/* 递交入口。此前只有受理这一端 —— 于是待受理的记录只能来自 seed，
+          新建档的中心递不进来，而 irb_submit 那道闸门就成了一堵墙。 */}
+      {canSubmit && <SubmitAcceptanceForm onCreated={() => void reload()} />}
+
       <div className="stack">
         {rows.length === 0 && (
           <p className="muted" data-testid="ac-empty">没有递到本院的立项申请。</p>
@@ -132,7 +140,11 @@ export function AcceptPage() {
             </div>
 
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              {a.sponsorName}｜方案 <span className="mono">{a.studyCode}</span>｜
+              {/* 医院名此前不在行上 —— 机构办自己看是「本院」不必说，
+                  但受托方与管理员这一页上摆着好几家医院递的材料，
+                  少了这一栏就分不清哪条是哪家的。 */}
+              <b>{a.hospital}</b>｜{a.sponsorName}｜
+              方案 <span className="mono">{a.studyCode}</span>｜
               递交人 {a.submittedByName} · {a.submittedOn}｜
               {a.siteCode
                 ? <>中心 <span className="mono">{a.siteCode}</span></>

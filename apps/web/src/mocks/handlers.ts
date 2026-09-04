@@ -1099,6 +1099,38 @@ export const scenarioHandlers = [
     return HttpResponse.json({ items: items.map(acceptanceDto), nextCursor: null });
   }),
 
+  /* 递交立项材料。**要排在 {id}/docs 那几条之前**，否则
+     `/v1/site-acceptances` 这条通配会先吃掉带 id 的路径。
+     （严格说 `[^/]+` 跨不过斜杠所以不排也行，但顺序是一眼看得出来的，
+     那条推理不是 —— 哪天正则改一个字符，靠推理成立的那一版会静默走错。） */
+  http.post(pathToRegExp("/v1/site-acceptances"), async ({ request }) => {
+    const b = await request.json() as {
+      studyId: string; hospital: string; docs: string[];
+    };
+    if (!identity().actions.includes("advance")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能递交立项材料"), { status: 403 });
+    if (scenario.acceptances.some(
+      a => a.studyId === b.studyId && a.hospital === b.hospital))
+      return HttpResponse.json(problem("invariant-violated", 422,
+        `${b.hospital} 这个项目已经递过了`), { status: 422 });
+
+    const me = identity();
+    const row: MockAcceptance = {
+      id: `ac-new-${scenario.acceptances.length + 1}`,
+      code: `AC-2026-${String(30 + scenario.acceptances.length).slice(-3)}`,
+      studyId: b.studyId, studyCode: "HJ-2024-017",
+      drug: "艾瑞替尼", sponsorName: "恒瑞医药", phase: "III 期",
+      hospital: b.hospital, studySiteId: null, siteCode: null,
+      submittedByName: me.name, submittedOn: TODAY_STR,
+      state: "review", origin: "in_system", amendNote: null,
+      acceptedOn: null, acceptedByName: null,
+      /* **一律未勾** —— 勾是机构办形式审查的动作。 */
+      docs: b.docs.map((name, seq) => ({ seq, name, present: false }))
+    };
+    scenario.acceptances.unshift(row);
+    return HttpResponse.json(acceptanceDto(row), { status: 201 });
+  }),
+
   http.post(pathToRegExp("/v1/site-acceptances/{id}/docs/{seq}:set"),
     async ({ request }) => {
       const found = findAcceptance(request.url, /site-acceptances\/([^/]+)\/docs/);
@@ -1628,6 +1660,27 @@ export const scenarioHandlers = [
       .filter(p => p.sites.length > 0);
     if (q.get("gcpProblem") === "true")
       items = items.filter(p => p.gcpDaysLeft === null || p.gcpDaysLeft <= 60);
+    return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  /* 项目列表。**在此之前它没有场景层处理器** —— 落到契约兜底层，
+     回的是 examples.json 里那份静态示例，于是它给出的 `id`
+     跟 `scenario.studies` 里的 st1 / st2 对不上。
+
+     没有任何一个页面因此报错：中心建档、递交立项材料这两张表
+     照样有下拉可选，选了也照样提交成功 —— 只是挂到了一个
+     库里不存在的项目上。这类"看起来全对"的错，
+     只有让两边用同一份数据才防得住。 */
+  http.get(pathToRegExp("/v1/studies"), () => {
+    /* 外部方（机构办 / PI）看不到项目全表 —— 与立项看板同一条口径。 */
+    const items = (identity().isExternal ? [] : scenario.studies).map(st => ({
+      id: st.id, code: st.code, shortName: st.shortName,
+      sponsorName: st.clientName, phase: st.phase,
+      indication: "非小细胞肺癌", plannedSubjects: st.plannedSubjects,
+      startedOn: "2024-11-01", endsOn: null,
+      ...(identity().fields.includes("price")
+        ? { contractAmountCents: st.contractCents } : {})
+    }));
     return HttpResponse.json({ items, nextCursor: null });
   }),
 

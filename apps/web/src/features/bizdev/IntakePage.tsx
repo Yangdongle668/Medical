@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { yuan, pct } from "../cost/money.js";
+import { NewIntakeForm } from "./NewIntakeForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    立项与建档。
@@ -77,6 +78,9 @@ export function IntakePage() {
   if (!me || !rows || !board) return <p className="muted">加载中…</p>;
 
   const canDecide = me.permissions.actions.includes("approve");
+  /* 提交立项要 `bid`，批准要 `approve` —— **两个动作两个人**。
+     同一个人两样都有时他仍然批不了自己的申请（服务端那条规矩）。 */
+  const canSubmit = me.permissions.actions.includes("bid");
   const seesPrice = board.openContractCents !== undefined;
   const open = rows.filter(x => x.state === "submitted");
 
@@ -139,6 +143,12 @@ export function IntakePage() {
         </div>
       )}
       {said && <p className="muted" data-testid="intake-said">{said}</p>}
+
+      {/* 提交入口。此前这一页只能批准与退回 —— 于是「立项」这条流程
+          只处理得了 seed 里已经躺着的那几份申请。 */}
+      {canSubmit && (
+        <NewIntakeForm gmGate={board.gmGate} seesPrice={seesPrice} onCreated={() => void reload()} />
+      )}
 
       {/* ── 申请 ─────────────────────────────────────────────────── */}
       <div className="stack" style={{ marginBottom: 16 }}>

@@ -39,7 +39,7 @@ test("建一个中心：填表 → 落到台账上 → 停在合同签署", asyn
   await page.getByTestId("ns-contracted").fill("24");
   await page.getByTestId("ns-price").fill("61000");
 
-  await page.getByTestId("ns-submit").click();
+  await page.getByTestId("new-site-submit").click();
 
   /* 建完说一句 —— 这一页不会自己变个样子，没有这句话人会再按一次。 */
   await expect(page.getByTestId("toast")).toContainText("SS-99 已建档");
@@ -60,7 +60,7 @@ test("必填没齐，建档按钮不亮 —— 而不是按下去再报错", asy
   await page.goto("/sites?as=boss");
   await page.getByTestId("new-site").click();
 
-  await expect(page.getByTestId("ns-submit")).toBeDisabled();
+  await expect(page.getByTestId("new-site-submit")).toBeDisabled();
 
   await page.getByTestId("ns-study").selectOption({ index: 1 });
   await page.getByTestId("ns-code").fill("SS-98");
@@ -69,11 +69,11 @@ test("必填没齐，建档按钮不亮 —— 而不是按下去再报错", asy
   await page.getByTestId("ns-city").fill("杭州");
   await page.getByTestId("ns-pi").fill("周敏");
   /* 合同例数还没填 —— 按钮仍然不该亮 */
-  await expect(page.getByTestId("ns-submit")).toBeDisabled();
+  await expect(page.getByTestId("new-site-submit")).toBeDisabled();
 
   await page.getByTestId("ns-contracted").fill("18");
   await page.getByTestId("ns-price").fill("52000");
-  await expect(page.getByTestId("ns-submit")).toBeEnabled();
+  await expect(page.getByTestId("new-site-submit")).toBeEnabled();
 });
 
 test("看不见价钱的人也能建档 —— 建档是运营动作，不是商务动作", async ({ page }) => {
@@ -95,8 +95,8 @@ test("看不见价钱的人也能建档 —— 建档是运营动作，不是商
   await page.getByTestId("ns-contracted").fill("16");
 
   /* 没有价钱那两栏，必填也就齐了 —— 按钮该亮 */
-  await expect(page.getByTestId("ns-submit")).toBeEnabled();
-  await page.getByTestId("ns-submit").click();
+  await expect(page.getByTestId("new-site-submit")).toBeEnabled();
+  await page.getByTestId("new-site-submit").click();
   await expect(page.getByTestId("toast")).toContainText("SS-97 已建档");
 });
 
@@ -113,7 +113,7 @@ test("中心编号撞车：服务端拦下，理由摆在表单上", async ({ pa
   await page.getByTestId("ns-pi").fill("测试");
   await page.getByTestId("ns-contracted").fill("10");
   await page.getByTestId("ns-price").fill("50000");
-  await page.getByTestId("ns-submit").click();
+  await page.getByTestId("new-site-submit").click();
 
   /* 失败留在页面上，不用吐司 —— 吐司会自己消失，而失败要人读完再决定。 */
   await expect(page.getByTestId("new-site-problem")).toContainText("SS-01");

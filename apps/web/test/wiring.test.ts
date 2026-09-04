@@ -61,9 +61,6 @@ const writes = allEndpoints()
 /** 服务端有、界面上暂时没有入口的写端点。**每一条都要写清楚为什么。**
  *  接上一个就从这里删一行 —— 这张表只许变短。 */
 const NOT_YET: Record<string, string> = {
-  submitIntakeApplication: "立项申请提交：IntakePage 目前只有看板与判定，没有提交表单",
-  submitSiteAcceptance: "机构受理提交：AcceptPage 接了受理/补正，没接机构那一侧的提交",
-  planMonitorVisit: "排监查访视：MonPage 接了确认/执行/勾项/交报告，没接排期",
   createBid: "新建投标：BidPage 只有复盘与列表",
   createFeasibility: "新建可行性：FeasPage 只有列表与判定",
   recordFeasibilityActual: "回填可行性实际值：同上，且要等中心真的入组之后",
