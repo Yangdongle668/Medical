@@ -523,7 +523,7 @@ web 自己那套写法（`.card.stack` + `.spread` 当卡头），桥接段把�
 这套语言上，所以迁移不必先改 89 处标记。每一条都写了删除条件，
 逐页迁到 `.card-h`/`.card-b` 之后一段段删掉。
 
-### 写端点：60 / 75 已接线（2026-09）
+### 写端点：75 / 75 全部接线（2026-09）
 
 契约里 132 个端点，其中 **75 个是写端点**。清点了一遍前端到底调了哪些 ——
 **60 个已接，15 个在服务端跑着但界面上没有任何入口**。
@@ -543,10 +543,36 @@ web 自己那套写法（`.card.stack` + `.spread` 当卡头），桥接段把�
 而事实是这件事不归他管。建档出来的中心停在「合同签署」，
 推进仍要走启动清单那道闸门（`e2e/newsite.spec.ts` 四条断言）。
 
-剩下 14 个：`submitIntakeApplication`、`submitSiteAcceptance`、
-`planMonitorVisit`、`createBid`、`createFeasibility`、`recordFeasibilityActual`、
-`createContractChange`、`addAuditFinding`、`reportSae`、`reportSaeSubmitted`、
-`withdrawSubject`、`enterVisitToEdc`、`replaceSoa`、`replaceStartupTemplate`。
+其余 14 个按同一条思路补齐，每一条都把它那个**不显形的后果**
+摆在按下去之前：
+
+- **发起端**：`submitIntakeApplication`（提交前就把服务端会算出的毛利率
+  说一遍，低于门槛时给的是**保本合同额** —— 百分比谈判桌上用不上）、
+  `submitSiteAcceptance`（清单由请求带来不是服务端规则，各院不同；
+  递进去一律未勾，勾是形式审查的动作）、`planMonitorVisit`（跟进项在
+  排期时就写下来 —— 事后补的清单只会写成已经做过的事）；
+- **商务**：`createBid`（人天必填 —— 只记价格，丢标后答不出"是人天估多了
+  还是费率高了"）、`createFeasibility`（`eligPct` 做成明确的「这次问了吗」
+  开关，因为它的空值是「当时没问过」不是 0%）、`recordFeasibilityActual`
+  （契约称它「整套评分唯一能自我修正的地方」）、`createContractChange`
+  （人天影响允许负数 —— 只记加不记减的台账，累计出来的数永远偏大）；
+- **临床与稽查**：`reportSae`（发生时刻**不预填当前时间** —— 预填等于替人
+  回答了那个决定及时率的问题）、`reportSaeSubmitted`（超 24 小时会在同一个
+  事务里生成一条不可删除的超时事件，按下去之前就说清楚）、`withdrawSubject`
+  （收入按已完成访视比例计、剩余访视一并作废，两个后果都先说）、
+  `enterVisitToEdc`、`addAuditFinding`（复发指向**质量事件的外键，不是编号
+  字符串** —— 原型拿字符串去找，找不到就静默丢掉）；
+- **两份模板**：`replaceStartupTemplate` 落在中心启动清单汇总页，
+  `replaceSoa` 落在立项页的项目登记表里（`getStartupTemplate` / `getSoa`
+  这两个 GET 此前也一次没调过）。共同的约束是**改模板不追溯已经落成行的
+  那些**：启动清单在建档那一刻铺开，访视在排期那一刻落行。SOA 上
+  `scheduledCount > 0` 的那几行直接不给删除按钮 —— 删掉它，那些访视就指向
+  一个不存在的定义，**报表里它们还在，SOA 上它们不存在**。
+
+新增 `apps/web/src/shell/CreateForm.tsx`：这八九个入口长得几乎一样，
+各写一遍的话「失败到底留在哪儿」会有八九种答案。三条固定下来 ——
+成功用吐司、失败留在页面上（两者寿命不一样）；必填没齐时按钮不亮，
+而不是按下去再由服务端说第三栏没填；收起来不清空。
 
 ### 判为要修但尚未交付的两条
 

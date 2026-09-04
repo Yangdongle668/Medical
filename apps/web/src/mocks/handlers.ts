@@ -21,7 +21,8 @@ import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
-import type { MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
+import type { MockSoaVisit,
+  MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
   MockMonitorVisit, MockAudit, MockIntake,
   MockAcceptance, MockIsf } from "./scenario.js";
 import { CLIENTS } from "./scenario.js";
@@ -784,6 +785,92 @@ export const scenarioHandlers = [
   }),
 
   /* ── 启动清单汇总 ──────────────────────────────────────────────── */
+  /* 启动清单模板。**此前前端一次都没调过它** —— 那份决定每个新中心
+     怎么开工的清单，只有直接读库才知道长什么样。 */
+  /* 访视计划表。**此前 getSoa / replaceSoa 前端一个都没调过** ——
+     于是「这个项目有几次访视、窗口多宽」只有读库才知道。 */
+  http.get(pathToRegExp("/v1/studies/{id}/visit-template"), ({ request }) => {
+    const id = seg(request.url, /\/studies\/([^/]+)\/visit-template/);
+    const soa = scenario.soa[id];
+    if (!soa) return HttpResponse.json(
+      problem("not-found", 404, "项目不存在"), { status: 404 });
+    return HttpResponse.json(soa);
+  }),
+
+  http.post(pathToRegExp("/v1/studies/{id}/visit-template:replace"),
+    async ({ request }) => {
+      const id = seg(request.url, /\/studies\/([^/:]+)\/visit-template:replace/);
+      const b = await request.json() as {
+        visits: Omit<MockSoaVisit, "scheduledCount">[]; reason: string;
+      };
+      if (!identity().actions.includes("manage")) return HttpResponse.json(
+        problem("forbidden", 403, "只有管理员能修订访视计划表"), { status: 403 });
+      const soa = scenario.soa[id];
+      if (!soa) return HttpResponse.json(
+        problem("not-found", 404, "项目不存在"), { status: 404 });
+
+      /* **已经排出去的 seq 不能删，也不能改锚点。**
+         删掉它，那些访视就指向了一个不存在的定义 ——
+         报表里它们还在，SOA 上它们不存在。 */
+      const kept = new Set(b.visits.map(v => v.seq));
+      const dropped = soa.visits.filter(v => v.scheduledCount > 0 && !kept.has(v.seq));
+      if (dropped.length) return HttpResponse.json(problem("invariant-violated", 422,
+        `${dropped.map(v => v.visitCode).join("、")} 已经排出过访视，删不掉 —— ` +
+        "删掉它，那些访视就指向了一个不存在的定义"), { status: 422 });
+      for (const v of b.visits) {
+        const old = soa.visits.find(x => x.seq === v.seq);
+        if (old && old.scheduledCount > 0 && old.anchor !== v.anchor)
+          return HttpResponse.json(problem("invariant-violated", 422,
+            `${old.visitCode} 已经排出过访视，锚点改不了`), { status: 422 });
+      }
+
+      soa.visits = b.visits.map(v => ({
+        ...v,
+        scheduledCount: soa.visits.find(x => x.seq === v.seq)?.scheduledCount ?? 0
+      }));
+      soa.lastReason = b.reason;
+      soa.lastChangedAt = new Date().toISOString();
+      soa.lastChangedByName = identity().name;
+
+      return HttpResponse.json({ data: soa, sideEffects: [
+        { type: "SoaRevised",
+          summary: `访视计划表已修订为 ${b.visits.length} 次访视 —— ` +
+            "只影响此后才排出来的访视，已排的不动" }
+      ] }, { status: 201 });
+    }),
+
+  http.get(pathToRegExp("/v1/startup-template"), () =>
+    HttpResponse.json(scenario.startupTemplate)),
+
+  http.post(pathToRegExp("/v1/startup-template:replace"), async ({ request }) => {
+    const b = await request.json() as {
+      items: { sortOrder: number; category: string; item: string;
+        isBlocking: boolean; dueOffset: number }[];
+      reason: string;
+    };
+    if (!identity().actions.includes("manage")) return HttpResponse.json(
+      problem("forbidden", 403, "只有管理员能改启动清单模板"), { status: 403 });
+
+    const t = scenario.startupTemplate;
+    const before = t.items.length;
+    /* **版本号加一，旧版本不删** —— 中心的 startupTemplateVersion
+       要指得回去，否则「这个中心当初照着什么铺的」就没有答案。
+       mock 里不留历史版本（没人查得到它），但版本号照样往上走。 */
+    t.version += 1;
+    t.items = b.items;
+    t.reason = b.reason;
+    t.updatedAt = new Date().toISOString();
+    t.updatedByName = identity().name;
+
+    const d = b.items.length - before;
+    return HttpResponse.json({ data: t, sideEffects: [
+      { type: "StartupTemplatePublished",
+        summary: `启动清单模板已发布第 ${t.version} 版（${b.items.length} 项` +
+          `${d === 0 ? "" : d > 0 ? `，多了 ${d} 项` : `，少了 ${-d} 项`}）` +
+          " —— 只对此后建档的中心生效" }
+    ] }, { status: 201 });
+  }),
+
   http.get(pathToRegExp("/v1/startup-checklists"), ({ request }) => {
     const q = new URL(request.url).searchParams;
     /* **走同一个 checklistFor** —— 汇总另算一遍的话，
