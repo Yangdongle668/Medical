@@ -178,7 +178,9 @@ export function PricePage() {
             : "还没有可比的历史中心"} />
       </div>
 
-      <div className="grid-2" style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) 2fr", gap: 14, alignItems: "start" }}>
+      {/* `grid g12` = 左窄右宽（1 : 1.9）。原来这里是一个不存在的
+          `.grid-2` 类加一整行内联样式 —— 类名没人定义，实际生效的是内联那份。 */}
+      <div className="grid g12" style={{ alignItems: "start" }}>
         <div className="card stack">
           <div className="spread">
             <h3>项目参数</h3>

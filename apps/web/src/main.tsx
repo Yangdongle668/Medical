@@ -54,6 +54,7 @@ import { IsfPage } from "./features/isf/IsfPage.js";
 import { ComingSoon } from "./shell/ComingSoon.js";
 import { MODULES } from "./shell/modules.js";
 import { MOCK_ROLES, type MockRole } from "./mocks/roles.js";
+import { ToastHost } from "@sitedesk/ui/react";
 import "./shell/styles.css";
 
 /* 已经建好的页 —— 按路径登记。
@@ -172,7 +173,11 @@ async function boot() {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
       <ErrorBoundary scope="root">
-        <RouterProvider router={router} />
+        {/* 吐司宿主在**边界之内、路由之外**：一次写操作发生了要说一句，
+            而换一页不该把那句话吞掉 —— 大多数写操作恰恰会跟着一次跳转。 */}
+        <ToastHost>
+          <RouterProvider router={router} />
+        </ToastHost>
       </ErrorBoundary>
     </StrictMode>
   );

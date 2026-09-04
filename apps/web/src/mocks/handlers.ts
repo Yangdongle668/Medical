@@ -57,7 +57,11 @@ type Example = {
 const EX = examples as unknown as Record<string, Example>;
 
 let scenario: Scenario = makeScenario();
-export const resetScenario = () => { scenario = makeScenario(); };
+export const resetScenario = () => {
+  scenario = makeScenario();
+  /* 建档出来的中心也要清掉 —— 它们不在 scenario 里，在 SITES_LIST 上。 */
+  SITES_LIST.length = SEED_SITES;
+};
 export const currentScenario = () => scenario;
 
 /** mock 身份。切换它可以看到「同一个接口，不同的人看到不同的列、
@@ -1634,6 +1638,34 @@ export const scenarioHandlers = [
     return HttpResponse.json({ items, nextCursor: null });
   }),
 
+  /* 中心建档。**要有状态** —— 兜底层会回一份静态示例，
+     于是"建完之后台账上多一行"这件事在 mock 下看不出来，
+     而那正是这个表单唯一要证明的事。 */
+  http.post(pathToRegExp("/v1/study-sites"), async ({ request }) => {
+    const b = await request.json() as {
+      code: string; hospital: string; dept: string; city: string; piName: string;
+      contracted: number; unitPriceCents?: number; startupFeeCents?: number;
+      sivPlannedOn?: string | null;
+    };
+    if (SITES_LIST.some(s => s.code === b.code))
+      return HttpResponse.json(
+        problem("invariant-violated", 422, `中心编号 ${b.code} 已存在`), { status: 422 });
+
+    const site = {
+      id: `s-new-${SITES_LIST.length + 1}`, code: b.code,
+      hospital: b.hospital, dept: b.dept, city: b.city,
+      piName: b.piName, piAccountId: null,
+      /* 建档出来的中心停在「合同签署」—— 与后端一致。
+         推进要走 :advance，而那要先过启动清单的闸门。 */
+      state: "contract", contracted: b.contracted,
+      ...(b.unitPriceCents !== undefined ? { unitPriceCents: b.unitPriceCents } : {}),
+      ...(b.startupFeeCents !== undefined ? { startupFeeCents: b.startupFeeCents } : {}),
+      sivPlannedOn: b.sivPlannedOn ?? null
+    };
+    SITES_LIST.push(site);
+    return HttpResponse.json(siteDto(site.id), { status: 201 });
+  }),
+
   /* ── 中心详情 · 闸门 · 推进 ─────────────────────────────────────
      具体路径排在 `/v1/study-sites/{id}` 前面。
      严格说不排也行 —— `[^/]+(\?|$)` 里的 `[^/]+` 跨不过斜杠，
@@ -2599,13 +2631,15 @@ function siteDto(id: string) {
     study: { id: "st1", code: "HJ-2024-017", shortName: "艾瑞替尼 III" },
     hospital: s.hospital, dept: s.dept, city: s.city,
     piName: s.piName, piAccountId: s.piAccountId,
-    state: scenario.siteState[s.id] ?? s.state, contracted: 30,
+    state: scenario.siteState[s.id] ?? s.state, contracted: s.contracted ?? 30,
     irbApprovedOn: "2024-10-18",
     sivOn: scenario.sivOn[s.id] ?? null,
     /* 有启动清单的那个中心才排了 SIV —— 清单项的到期日就是相对它算的。
-       不要按 state 判断：推进之后 state 就变了，而计划日不会因此消失。 */
-    sivPlannedOn: scenario.startupItems.some(i => i.studySiteId === s.id)
-      ? scenario.sivPlannedOn : null,
+       不要按 state 判断：推进之后 state 就变了，而计划日不会因此消失。
+       建档出来的中心还没有清单，它填的计划日直接用自己那份。 */
+    sivPlannedOn: s.sivPlannedOn !== undefined ? s.sivPlannedOn
+      : scenario.startupItems.some(i => i.studySiteId === s.id)
+        ? scenario.sivPlannedOn : null,
     fpiOn: scenario.fpiOn[s.id] ?? null,
     /* 与后端 INVALIDATED 同一条判定式：已过 SIV，却还挂着未完成的阻塞项。
        mock 里也**算出来**而不是写死 —— 撤销一个阻塞项之后，
@@ -2617,9 +2651,16 @@ function siteDto(id: string) {
        加一个同样看得到 price 的身份时会静默漏掉它 ——
        而真库那一侧看的从来都是 role_field。 */
     ...(identity().fields.includes("price")
-      ? { unitPriceCents: 5800000, startupFeeCents: 17600000 } : {})
+      ? {
+        unitPriceCents: s.unitPriceCents ?? 5800000,
+        startupFeeCents: s.startupFeeCents ?? 17600000
+      } : {})
   };
 }
+
+/** 种子中心的条数。建档会往 `SITES_LIST` 里推，重置时截回这里 ——
+ *  不截的话，跑第二个用例时上一个用例建的中心还在台账上。 */
+const SEED_SITES = SITES_LIST.length;
 
 /** 「已经启动过了」的那几个状态 —— 与后端 site.service.ts 的 INVALIDATED 同源。 */
 const PAST_SIV = ["siv", "enrolling", "enrolled", "followup", "closed"];

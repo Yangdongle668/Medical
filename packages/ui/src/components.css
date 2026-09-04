@@ -1,0 +1,496 @@
+/* ══════════════════════════════════════════════════════════════════
+   INSTRUMENT —— 组件层
+
+   **逐字取自 prototype/parts/01-head.html 的 `<style>`，令牌那一段除外**
+   （令牌在 tokens.css，两处都定义就等于两份都对不上而没人知道哪份是真的）。
+
+   ── 为什么这个文件到今天才出现 ──────────────────────────────────
+   tokens.css 的文件头写着"逐字取自 prototype"。那句话对了一半：
+   取的是 `:root{}` 里的 28 个色值，后面那 420 行组件样式没跟过来。
+   于是 web 端各页各写各的 CSS，共享的只有颜色 —— 而颜色是这套语言里
+   最不吃劲的一层。量出来的结果：原型 ~130 个类，web 端 ~55 个，
+   交集只有 `.btn` 和 `.card`，且这两个的定义还是相反的。
+
+   最要命的是 `.card`。原型的第一句话是"界面是一个平面，不是一摞卡片"，
+   `.card{background:none;border:0}` 就是那句话的实现。web 端把它写成了
+   带边框圆角的盒子 —— 一个字没差，意思全反了。
+
+   ── 缺的三类东西在这里补齐 ─────────────────────────────────────
+   图表（.chart/.legend/.gridline/.axis-t）、悬浮层（.drawer/.modal/.scrim）、
+   反馈（.toast/.tip）。web 端此前是 0 个 `<svg>`、0 个抽屉、0 个吐司，
+   不是"做得不一样"，是整类没有。配套的 React 原语见 src/react/。
+
+   ── 底部有一段「桥接」 ─────────────────────────────────────────
+   现存 41 个页面用的是 web 自己那套写法（`.card.stack` + `.spread` 当卡头）。
+   桥接段把那套写法映射到这套语言上，**所以迁移不必先改 89 处标记**。
+   逐页迁到 `.card-h`/`.card-b` 之后，桥接段就可以一段段删掉。
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── 基底 ─────────────────────────────────────────────────────── */
+.mono, .num, .tnum, .cd, .subjid { font-variant-numeric: tabular-nums; }
+.mono { font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: -.01em; }
+.num { font-variant-numeric: tabular-nums; letter-spacing: -.03em; font-weight: 600; }
+::selection { background: var(--accent-soft); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ── 控件 ─────────────────────────────────────────────────────── */
+.sel, .inp {
+  font: inherit; font-size: 13px; padding: 6px 10px;
+  border: 1px solid var(--line-2); border-radius: 6px;
+  background: var(--surface); color: var(--ink);
+  transition: border-color var(--t) var(--ease);
+}
+.sel { padding-right: 26px; }
+.sel:hover, .inp:hover { border-color: var(--ink-3); }
+.inp::placeholder { color: var(--ink-3); }
+
+.seg { display: inline-flex; background: var(--surface-2); border-radius: 7px; padding: 2px; gap: 2px; }
+.seg button {
+  border: 0; background: none; padding: 4px 11px; font-size: 12.5px; cursor: pointer;
+  color: var(--ink-3); border-radius: 5px; white-space: nowrap;
+  transition: all var(--t) var(--ease);
+}
+.seg button[aria-pressed="true"] {
+  background: var(--surface); color: var(--ink); font-weight: 500;
+  box-shadow: 0 1px 2px rgba(17, 17, 18, .07);
+}
+:root[data-theme="dark"] .seg button[aria-pressed="true"],
+:root:not([data-theme="light"]) .seg button[aria-pressed="true"] {
+  box-shadow: none; background: var(--surface-3);
+}
+.seg button:not([aria-pressed="true"]):hover { color: var(--ink); }
+
+.btn {
+  border: 1px solid var(--line-2); background: var(--surface); border-radius: 6px;
+  padding: 6px 12px; font-size: 13px; cursor: pointer; color: var(--ink-2);
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  transition: all var(--t) var(--ease);
+}
+.btn:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); border-color: var(--ink-3); }
+.btn:active:not(:disabled) { transform: translateY(.5px); }
+.btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+/* 主按钮是**墨色**，不是强调色。强调色是指示灯，满屏强调等于没有强调。 */
+.btn-p { background: var(--ink); border-color: var(--ink); color: var(--surface); font-weight: 500; }
+.btn-p:hover:not(:disabled) {
+  background: var(--ink); border-color: var(--ink); color: var(--surface); opacity: .86;
+}
+
+/* .chip 是**可按的筛选片**（aria-pressed），不是状态徽章。
+   徽章是 .pill —— 两者长得像，但一个是控件一个是标签，
+   混用的后果是"看起来能点的地方点不动"。 */
+.chip {
+  border: 1px solid var(--line-2); background: var(--surface); border-radius: 99px;
+  padding: 3px 11px; font-size: 12px; cursor: pointer; color: var(--ink-2);
+  transition: all var(--t) var(--ease);
+}
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.chip:not([aria-pressed="true"]):hover { border-color: var(--ink-3); color: var(--ink); }
+
+/* ── 区块：发丝线与留白分区，不用盒子 ─────────────────────────── */
+.card { background: none; border: 0; border-radius: 0; min-width: 0; }
+.card-h {
+  padding: 0 0 12px; border-bottom: 1px solid var(--line-2);
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+}
+.card-h h3 { font-size: 15px; font-weight: 600; letter-spacing: -.02em; white-space: nowrap; flex: none; }
+.card-h .sub { font-size: 12px; color: var(--ink-3); flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.card-h .sp { flex: 1; }
+.card-b { padding: 18px 0 0; }
+
+.grid { display: grid; gap: 28px; }
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g21 { grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); }
+.g12 { grid-template-columns: minmax(0, 1fr) minmax(0, 1.9fr); }
+.stack { display: flex; flex-direction: column; gap: 22px; }
+/* 栅格/弹性子项的 min-width 默认是 auto —— 不许比内容最小宽度还窄。
+   一个不肯换行的东西（九格流程条）会把容器顶宽，容器再把整页顶宽。
+   这一条是 390px 不横向溢出的第二道防线（第一道是 .table-wrap）。 */
+.stack > * { min-width: 0; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ── 指标：仪表盘刻度组，被竖线分隔的数字，不是磁贴 ───────────── */
+.stat, .kpi {
+  background: none; border: 0; border-radius: 0; padding: 0 0 0 20px;
+  text-align: left; width: 100%; display: block; position: relative; min-width: 0;
+}
+.grid > .stat:first-child, .grid > .kpi:first-child { padding-left: 0; }
+.grid > .stat::before, .grid > .kpi::before {
+  content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; width: 1px; background: var(--line);
+}
+.grid > .stat:first-child::before, .grid > .kpi:first-child::before { display: none; }
+.kpi { cursor: pointer; transition: opacity var(--t) var(--ease); }
+.kpi:hover { opacity: .62; }
+.kpi-l, .stat .kpi-l {
+  font-family: "DM Mono", monospace; font-size: 10px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); display: flex; align-items: center; gap: 5px;
+}
+.kpi-v {
+  font-size: 31px; font-weight: 600; margin-top: 9px; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: -.04em;
+}
+.kpi-v small { font-size: 14px; font-weight: 400; color: var(--ink-3); margin-left: 2px; letter-spacing: -.01em; }
+.stat .num { font-size: 26px; letter-spacing: -.04em; line-height: 1; }
+.stat .num small { font-weight: 400; letter-spacing: -.01em; }
+.kpi-f { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-top: 10px; }
+.kpi-d { font-size: 12px; display: flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.kpi-note, .stat .note { font-size: 11.5px; color: var(--ink-3); margin-top: 4px; line-height: 1.5; }
+.stat-hi .num { color: var(--accent); }
+
+.mini { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: 0; }
+.mini > div { padding: 0 0 0 22px; position: relative; }
+.mini > div:first-child { padding-left: 0; }
+.mini > div + div::before {
+  content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; width: 1px; background: var(--line);
+}
+.mini .v {
+  font-size: 23px; font-weight: 600; line-height: 1.05; margin-top: 8px;
+  font-variant-numeric: tabular-nums; letter-spacing: -.035em;
+}
+
+/* ── 状态：安静。颜色只在真正危急时抬高音量 ───────────────────── */
+.pill {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px;
+  padding: 2px 7px; border-radius: 5px; font-weight: 500; white-space: nowrap;
+  background: var(--surface-2); color: var(--ink-2); font-variant-numeric: tabular-nums;
+}
+.p-good { color: var(--good); background: var(--good-soft); }
+.p-warn { color: var(--warn); background: var(--warn-soft); }
+.p-crit { color: var(--crit); background: var(--crit-soft); }
+.p-neut { color: var(--ink-2); background: var(--surface-2); }
+.p-acc { color: var(--accent); background: var(--accent-soft); }
+.dot { width: 5px; height: 5px; border-radius: 99px; flex: none; display: inline-block; }
+.t-good { color: var(--good); }
+.t-warn { color: var(--warn); }
+.t-crit { color: var(--crit); }
+.t-mut { color: var(--ink-3); }
+.stripe { position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; border-radius: 2px; }
+
+/* ── 表格：无外框，发丝线分隔，数字列右对齐等宽 ───────────────── */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left; font-family: "DM Mono", monospace; font-size: 10px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); font-weight: 400; padding: 0 12px 9px;
+  border-bottom: 1px solid var(--line-2); white-space: nowrap; background: var(--surface);
+}
+th:first-child { padding-left: 2px; }
+th:last-child { padding-right: 2px; }
+th.s { cursor: pointer; user-select: none; transition: color var(--t) var(--ease); }
+th.s:hover { color: var(--ink); }
+th .ar { opacity: .35; margin-left: 3px; }
+th[aria-sort] .ar { opacity: 1; color: var(--accent); }
+td { padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; line-height: 1.45; }
+td:first-child { padding-left: 2px; }
+td:last-child { padding-right: 2px; }
+tbody tr:last-child td { border-bottom: 0; }
+tfoot td { border-top: 1px solid var(--line-2); border-bottom: 0; padding-top: 12px; }
+tr.clk { cursor: pointer; }
+tr.clk:hover td { background: var(--surface-2); }
+.ta-r { text-align: right; }
+.tnum { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; letter-spacing: -.015em; }
+.t-main { font-weight: 500; }
+.t-sub { font-size: 11.5px; color: var(--ink-3); line-height: 1.4; }
+
+/* ── 图表 ─────────────────────────────────────────────────────── */
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.gridline { stroke: var(--line); stroke-width: 1; }
+.axis-t { fill: var(--ink-3); font-size: 10px; font-family: "DM Mono", monospace; }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); align-items: center; }
+.legend i {
+  width: 14px; height: 2px; border-radius: 2px; display: inline-block;
+  margin-right: 7px; vertical-align: middle;
+}
+.tip {
+  position: fixed; z-index: 200; pointer-events: none; background: var(--ink); color: var(--surface);
+  border-radius: 8px; padding: 9px 11px; font-size: 12px; box-shadow: var(--pop);
+  opacity: 0; transition: opacity 90ms var(--ease); max-width: 270px;
+}
+.tip.on { opacity: 1; }
+.tip-t {
+  font-family: "DM Mono", monospace; font-size: 9.5px; letter-spacing: .09em;
+  text-transform: uppercase; opacity: .55; margin-bottom: 5px;
+}
+.tip-r { display: flex; align-items: center; gap: 14px; justify-content: space-between; line-height: 1.75; }
+.tip-r b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.tip-r span { opacity: .8; }
+.bartrack { background: var(--surface-2); border-radius: 99px; overflow: hidden; position: relative; }
+.barfill { height: 100%; border-radius: 99px; transition: width 260ms var(--ease); }
+
+/* ── 悬浮层：只有这里有卡片、圆角与投影 ───────────────────────── */
+.scrim {
+  position: fixed; inset: 0; background: rgba(12, 12, 14, .28); backdrop-filter: blur(2px);
+  z-index: 100; opacity: 0; transition: opacity 180ms var(--ease);
+}
+.scrim.on { opacity: 1; }
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(600px, 96vw);
+  background: var(--surface); z-index: 101; transform: translateX(100%);
+  transition: transform 260ms var(--ease); display: flex; flex-direction: column;
+  box-shadow: var(--pop); border-left: 1px solid var(--line);
+}
+.drawer.on { transform: translateX(0); }
+.drawer-h {
+  padding: 24px 28px 18px; border-bottom: 1px solid var(--line);
+  display: flex; gap: 14px; align-items: flex-start;
+}
+.drawer-b { padding: 24px 28px 56px; overflow-y: auto; flex: 1; }
+.modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -48%) scale(.985); z-index: 101;
+  width: min(500px, 94vw); background: var(--surface); border-radius: 12px; opacity: 0;
+  transition: opacity 160ms var(--ease), transform 160ms var(--ease);
+  box-shadow: var(--pop); border: 1px solid var(--line);
+}
+.modal.on { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.modal .drawer-h { padding: 20px 22px 16px; }
+.x {
+  border: 0; background: none; cursor: pointer; color: var(--ink-3); font-size: 15px;
+  line-height: 1; padding: 5px 7px; border-radius: 6px; transition: all var(--t) var(--ease);
+}
+.x:hover { background: var(--surface-2); color: var(--ink); }
+
+/* ── 反馈 ─────────────────────────────────────────────────────── */
+.toasts {
+  position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); z-index: 300;
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+}
+.toast {
+  background: var(--ink); color: var(--surface); padding: 10px 16px; border-radius: 9px;
+  font-size: 13px; box-shadow: var(--pop); animation: tin 220ms var(--ease);
+  display: flex; gap: 9px; align-items: center; max-width: 88vw;
+}
+.toast i { width: 5px; height: 5px; border-radius: 99px; background: var(--good); flex: none; }
+.toast.warn i { background: var(--warn); }
+.toast.crit i { background: var(--crit); }
+@keyframes tin { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* ── 排版元件 ─────────────────────────────────────────────────── */
+.section-t {
+  font-family: "DM Mono", monospace; font-size: 10px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-3); margin: 0 0 12px;
+}
+.hr { height: 1px; background: var(--line); border: 0; margin: 22px 0; }
+.empty { padding: 36px 8px; text-align: center; color: var(--ink-3); font-size: 12.5px; }
+.note { font-size: 12px; color: var(--ink-3); line-height: 1.65; }
+.formula {
+  background: var(--surface-2); border-left: 2px solid var(--accent); padding: 14px 16px;
+  font-family: "DM Mono", monospace; font-size: 11.5px; color: var(--ink-2); line-height: 1.85;
+  overflow-x: auto; white-space: pre-wrap; border-radius: 0 8px 8px 0;
+}
+.formula b { color: var(--ink); font-weight: 500; }
+input[type=range] { width: 100%; accent-color: var(--accent); height: 20px; cursor: pointer; }
+.slider-h {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12.5px; margin-bottom: 3px; color: var(--ink-2);
+}
+.slider-h b {
+  font-variant-numeric: tabular-nums; font-size: 13.5px; color: var(--ink);
+  font-weight: 600; letter-spacing: -.02em;
+}
+.cbx { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; cursor: pointer; font-size: 13px; line-height: 1.5; }
+.cbx input { margin: 2px 0 0; accent-color: var(--accent); flex: none; width: 15px; height: 15px; cursor: pointer; }
+.cbx span { transition: color var(--t) var(--ease); }
+.cbx.done span { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* ── 角色与临床元件 ───────────────────────────────────────────── */
+.who { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--ink-2); }
+.avatar {
+  width: 26px; height: 26px; border-radius: 99px; background: var(--surface-2); color: var(--ink-2);
+  display: grid; place-items: center; font-size: 11px; font-weight: 600; flex: none;
+}
+.who b { font-weight: 600; color: var(--ink); }
+.who .r { font-size: 11px; color: var(--ink-3); }
+.tcard {
+  border: 1px solid var(--line); border-radius: 10px; position: relative;
+  background: var(--surface); transition: border-color var(--t) var(--ease);
+}
+.tcard:hover { border-color: var(--line-2); }
+.tcard.crit { border-color: color-mix(in srgb, var(--crit) 32%, var(--line)); }
+.tcard.warn { border-color: color-mix(in srgb, var(--warn) 32%, var(--line)); }
+.tcard-h { padding: 14px 16px 11px; display: flex; gap: 12px; align-items: flex-start; }
+.cd { font-variant-numeric: tabular-nums; font-weight: 600; line-height: 1; letter-spacing: -.035em; }
+.subjid {
+  font-family: "DM Mono", monospace; font-size: 11.5px; padding: 1px 6px; border-radius: 4px;
+  background: var(--surface-2); color: var(--ink-2); letter-spacing: 0;
+}
+.winbar { position: relative; height: 18px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
+.winbar .ok { position: absolute; top: 0; bottom: 0; background: var(--accent-soft); }
+.winbar .now { position: absolute; top: -1px; bottom: -1px; width: 2px; background: var(--ink); border-radius: 2px; }
+.winbar .lbl {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 9.5px; font-family: "DM Mono", monospace; color: var(--ink-3);
+}
+.qbox {
+  width: 100%; font: inherit; font-size: 13px; padding: 10px 12px; border: 1px solid var(--line-2);
+  border-radius: 8px; background: var(--surface); color: var(--ink); resize: vertical;
+  min-height: 64px; transition: border-color var(--t) var(--ease);
+}
+.qbox:hover { border-color: var(--ink-3); }
+.apr { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; position: relative; background: var(--surface); }
+.apr.flag { border-color: color-mix(in srgb, var(--warn) 30%, var(--line)); }
+.daybar { display: flex; gap: 2px; height: 22px; border-radius: 6px; overflow: hidden; }
+.daybar div { flex: 1; display: grid; place-items: center; font-size: 9.5px; font-family: "DM Mono", monospace; }
+
+/* 警示区块：一条左规则，不是一整条色带 —— 整条色带会把
+   "这里有一件要紧事"变成"这一片都是要紧事"。 */
+.card.alert { padding-left: 18px; position: relative; }
+.card.alert::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; width: 2px; border-radius: 2px; }
+.card.alert-crit::before { background: var(--crit); }
+.card.alert-warn::before { background: var(--warn); }
+.card.alert-crit .card-h h3 { color: var(--crit); }
+.card.alert-warn .card-h h3 { color: var(--warn); }
+
+/* 联系状态：一个安静的文字控件，不是黑色药丸 */
+.ct {
+  border: 0; background: var(--surface-2); border-radius: 5px; padding: 2px 8px;
+  font-size: 11.5px; cursor: pointer; color: var(--ink-2); font-weight: 500;
+  transition: all var(--t) var(--ease);
+}
+.ct:hover { background: var(--surface-3); color: var(--ink); }
+.ct-good { color: var(--good); background: var(--good-soft); }
+.ct-warn { color: var(--warn); background: var(--warn-soft); }
+.ct-crit { color: var(--crit); background: var(--crit-soft); }
+
+/* ── 品牌标记 ─────────────────────────────────────────────────── */
+.brand-mark {
+  width: 22px; height: 22px; flex: none; border-radius: 5px;
+  background: var(--ink); color: var(--surface);
+  display: grid; place-items: center; font-size: 11px; font-weight: 700; letter-spacing: 0;
+}
+.brand-name { font-size: 14.5px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; }
+.brand-sub {
+  font-family: "DM Mono", monospace; font-size: 9.5px; color: var(--ink-3);
+  letter-spacing: .1em; text-transform: uppercase; margin-top: 1px;
+}
+
+/* ── 登录 ─────────────────────────────────────────────────────── */
+.login {
+  position: fixed; inset: 0; z-index: 200; background: var(--ground);
+  display: grid; place-items: center; padding: 32px 20px; overflow-y: auto;
+}
+.login[hidden] { display: none; }
+.login-box {
+  width: 100%; max-width: 400px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 12px; padding: 32px 32px 26px;
+}
+.login-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 28px; }
+.login-box h2 { font-size: 20px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 6px; }
+.login-sub { margin: 0 0 22px; font-size: 12.5px; line-height: 1.7; color: var(--ink-3); }
+.login-err {
+  border-left: 2px solid var(--crit); background: var(--surface-2); padding: 8px 11px;
+  font-size: 12.5px; color: var(--crit); margin-bottom: 14px; line-height: 1.6;
+}
+.login-go { width: 100%; justify-content: center; padding: 9px 12px; font-size: 13.5px; }
+/* 主入口之外的那几栏（口令、开发登录）收在一条分隔线之下 ——
+   它们是"另一条路"，不是"下一步"。 */
+.login-demo { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line); }
+.login-demo .section-t { margin-bottom: 10px; }
+.login-foot { margin-top: 20px; font-size: 11px; line-height: 1.7; color: var(--ink-3); }
+@media (max-width: 520px) { .login-box { padding: 24px 20px 20px; } }
+
+/* ── 响应式 ───────────────────────────────────────────────────── */
+@media (max-width: 1240px) {
+  .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 28px; }
+  .g21, .g12, .g3 { grid-template-columns: minmax(0, 1fr); }
+  .grid > .stat:nth-child(3)::before, .grid > .kpi:nth-child(3)::before { display: none; }
+  .grid > .stat:nth-child(odd), .grid > .kpi:nth-child(odd) { padding-left: 0; }
+  .grid > .stat:nth-child(odd)::before, .grid > .kpi:nth-child(odd)::before { display: none; }
+}
+@media (max-width: 860px) {
+  .g4, .g2 { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .grid > .stat, .grid > .kpi { padding-left: 0; }
+  .grid > .stat::before, .grid > .kpi::before { display: none; }
+  .mini { grid-template-columns: repeat(2, 1fr); gap: 20px 0; }
+  .mini > div { padding-left: 20px; }
+  .mini > div:nth-child(odd) { padding-left: 0; }
+  .mini > div:nth-child(odd)::before { display: none; }
+  .drawer-h, .drawer-b { padding-left: 20px; padding-right: 20px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   桥接段 —— 现存写法 → 这套语言
+
+   web 端 41 个页面里有 89 处 `.card`，其中 77 处是 `.card.stack`，
+   卡头用的是 `.spread` 而不是 `.card-h`。要么改 89 处标记，
+   要么在这里把那套写法接上去。选后者：**改标记的风险在页面，
+   改样式的风险在一处**，而且逐页迁移时这一段可以一段段删。
+
+   删除条件写在每一条上面。删干净了，这个标题也就没了。
+   ══════════════════════════════════════════════════════════════════ */
+
+/* 【删除条件：该页改用 .card-b 承载内容】
+   原型里 `.stack` 是**页面级**的堆叠（卡片之间 22px），卡片内部的间距
+   由 `.card-b` 的 padding 管。web 端把 `.card.stack` 当成了"一个卡片，
+   它的孩子竖着排"，于是同一个类同时承担两种间距。
+
+   分开：裸 `.stack` 用原型的 22px，`.card.stack`（卡内）收到 14px。
+   不分开的话卡片里每两行之间都空 22px，一屏装不下三条。 */
+.card.stack { gap: 14px; }
+
+/* 【删除条件：该页改用 .card-h / .card-b】
+   `.spread` 当卡头用时，补上 .card-h 的那条发丝线。
+   没有这条线，扁平化之后相邻两个 section 会糊成一片 ——
+   扁平不等于没有分隔，分隔从盒子边框换成了一条线。 */
+.card > .spread:first-child {
+  padding: 0 0 12px; border-bottom: 1px solid var(--line-2);
+  align-items: baseline; flex-wrap: wrap;
+}
+.card > .spread:first-child h3 { font-size: 15px; letter-spacing: -.02em; }
+.spread { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; }
+
+/* 【删除条件：该页改用 .card-h / .card-b】
+   另外 34 处卡头是一个裸的 `<h3>`（启动清单的分组、质量台账的每一段）。
+   同样给它 .card-h 那条线 —— 否则扁平化之后一页上七八个分组会连成一片，
+   而分组正是这几页唯一的结构。 */
+.card > h3:first-child {
+  font-size: 15px; letter-spacing: -.02em;
+  padding: 0 0 12px; margin-bottom: 4px; border-bottom: 1px solid var(--line-2);
+}
+
+/* 【删除条件：该页改用 .pill / .p-*】
+   web 的 `.chip.good|warn|crit|flat` 是**徽章**，不是可按的筛选片。
+   按 .pill 的样子渲染，免得不可点的东西长得像控件。 */
+.chip.good, .chip.warn, .chip.crit, .chip.flat {
+  cursor: default; border-color: transparent; border-radius: 5px;
+  padding: 2px 7px; font-size: 11.5px; font-weight: 500;
+}
+.chip.good { background: var(--good-soft); color: var(--good); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.chip.crit { background: var(--crit-soft); color: var(--crit); }
+.chip.flat { background: var(--surface-2); color: var(--ink-2); }
+.chip.good:hover, .chip.warn:hover, .chip.crit:hover, .chip.flat:hover { border-color: transparent; }
+
+/* 【删除条件：该页改用 .btn-p】 */
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--surface); font-weight: 500; }
+.btn.primary:hover:not(:disabled) {
+  background: var(--ink); border-color: var(--ink); color: var(--surface); opacity: .86;
+}
+
+/* 【删除条件：该页改用 .kpi-l / .kpi-v / .kpi-note】
+   web 的 `.stat-*` 三件套对应原型的 `.kpi-*`。尺寸按原型走，
+   但 `.stats` 用 auto-fit 而不是固定四列 —— 页面上的指标数不固定
+   （有没有钱那两项取决于字段权限），写死四列会在三项时留一个空格。 */
+.stats { display: grid; gap: 0; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.stats > .stat { padding: 0 0 0 20px; }
+.stats > .stat:first-child { padding-left: 0; }
+.stats > .stat::before {
+  content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; width: 1px; background: var(--line);
+}
+.stats > .stat:first-child::before { display: none; }
+.stat .stat-l {
+  font-family: "DM Mono", monospace; font-size: 10px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.stat .stat-v {
+  font-size: 26px; font-weight: 600; margin-top: 9px; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: -.04em;
+}
+.stat .stat-n { color: var(--ink-3); font-size: 11.5px; margin-top: 4px; line-height: 1.5; }
+@media (max-width: 860px) {
+  .stats { gap: 18px 0; }
+  .stats > .stat { padding-left: 0; }
+  .stats > .stat::before { display: none; }
+}

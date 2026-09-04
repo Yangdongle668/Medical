@@ -77,7 +77,17 @@ const TODAY = new Date();
    于是「PI 只看自己签字的中心」这条行范围在 mock 上根本演不出来 ——
    三个中心的 pi_account_id 一样，PI 身份看到的就是全部。
    外部角色那四页的全部内容就是"看得窄"，看不窄等于那四页没测过。 */
-const SITES = [
+/** 中心。**建档出来的那些也进这张表** —— 所以字段要显式声明：
+ *  推断出来的类型不接受多出来的 `contracted`，而建档时人填了几例
+ *  正是那一栏要显示的东西。缺省值给种子数据用。 */
+export interface MockSite {
+  id: string; code: string; hospital: string; dept: string; city: string;
+  piName: string; piAccountId: string | null; state: string;
+  contracted?: number; unitPriceCents?: number; startupFeeCents?: number;
+  sivPlannedOn?: string | null;
+}
+
+const SITES: MockSite[] = [
   { id: "s1", code: "SS-01", hospital: "北京协和医院", dept: "肝胆外科", city: "北京",
     piName: "陈国栋", piAccountId: "a-chenguod", state: "enrolling" },
   { id: "s2", code: "SS-07", hospital: "中山大学肿瘤防治中心", dept: "肿瘤内科", city: "广州",
