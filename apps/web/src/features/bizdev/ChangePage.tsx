@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { yuan, pct, days } from "../cost/money.js";
+import { NewChangeForm } from "./NewChangeForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    合同变更。
@@ -186,6 +187,10 @@ export function ChangePage() {
         </div>
       )}
       {said && <p className="muted" data-testid="change-said">{said}</p>}
+
+      {/* 登记入口。此前只有结算 —— 于是「先记下来，再去谈」这条
+          顺序在界面上是反的：没谈成的变更根本进不了系统。 */}
+      {canWrite && <NewChangeForm onCreated={() => void reload()} />}
 
       <label className="field" style={{ maxWidth: 280, marginBottom: 12 }}>
         <span>

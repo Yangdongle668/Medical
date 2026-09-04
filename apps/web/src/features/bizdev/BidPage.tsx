@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { yuan, pct, days } from "../cost/money.js";
+import { NewBidForm } from "./NewBidForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    投标与报价闭环。
@@ -166,6 +167,9 @@ export function BidPage() {
         </div>
       )}
       {said && <p className="muted" data-testid="bid-said">{said}</p>}
+
+      {/* 登记入口。此前只有复盘与中标回填 —— 标是投不进去的。 */}
+      {canWrite && <NewBidForm onCreated={() => void reload()} />}
 
       <div className="table-wrap">
         <table>

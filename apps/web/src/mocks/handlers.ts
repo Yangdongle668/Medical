@@ -1,5 +1,10 @@
 import { http, HttpResponse } from "msw";
-import { allEndpoints, SITE_STATES, DEFAULT_HANDOVER_ITEMS } from "@sitedesk/contracts";
+import { allEndpoints, SITE_STATES, DEFAULT_HANDOVER_ITEMS,
+  CHANGE_KIND_LABEL } from "@sitedesk/contracts";
+
+/** 变更类型的键。中文名从契约来，**不在 mock 里另抄一份** ——
+ *  抄一份的后果不是不一致告警，是两份都对不上而没人知道哪份是真的。 */
+type ChangeKindKey = keyof typeof CHANGE_KIND_LABEL;
 import { feasibilityScore, feasibilityBias, reviewBids, scopeCreep, changeDays,
   arAging, cashFlow, roundCents, WORKDAYS_PER_MONTH, DAYS_PER_MONTH, type CashIn }
   from "@sitedesk/calc";
@@ -1926,6 +1931,40 @@ export const scenarioHandlers = [
     return HttpResponse.json({ items, nextCursor: null });
   }),
 
+  /* 登记一次可行性。**排在 {id}:decide 之前** —— 与其它成对的
+     "集合 POST / 单条命令 POST" 一样，具体路径在前是一眼看得出来的。 */
+  http.post(pathToRegExp("/v1/feasibility"), async ({ request }) => {
+    const b = await request.json() as {
+      studyId: string; hospital: string; city: string; dept: string;
+      piName: string; surveyedOn: string; answers: MockFeas["answers"];
+    };
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能登记可行性调查"), { status: 403 });
+    /* 同一个项目对同一家医院的同一个科室只能有一份 ——
+       重复了就没人知道该看哪一份（真库上是数据库直接拒绝）。 */
+    if (scenario.feasibility.some(f => f.study.id === b.studyId
+      && f.hospital === b.hospital && f.dept === b.dept))
+      return HttpResponse.json(problem("invariant-violated", 422,
+        `${b.hospital} ${b.dept} 在这个项目下已经有一份可行性调查了`), { status: 422 });
+
+    const st = scenario.studies.find(x => x.id === b.studyId);
+    const me = identity();
+    const row: MockFeas = {
+      id: `f-new-${scenario.feasibility.length + 1}`,
+      code: `FS-2026-${String(40 + scenario.feasibility.length).slice(-3)}`,
+      study: { id: b.studyId, code: st?.code ?? "HJ-2024-017",
+        shortName: st?.shortName ?? "艾瑞替尼 III" },
+      hospital: b.hospital, city: b.city, dept: b.dept, piName: b.piName,
+      surveyedOn: b.surveyedOn, surveyedByName: me.name,
+      answers: b.answers,
+      status: "assessing", decidedOn: null, decidedByName: null,
+      studySiteId: null, siteCode: null,
+      overrideReason: null, rejectReason: null, actualRate: null
+    };
+    scenario.feasibility.unshift(row);
+    return HttpResponse.json(feasDto(row), { status: 201 });
+  }),
+
   http.post(pathToRegExp("/v1/feasibility/{id}:decide"), async ({ request }) => {
     const id = seg(request.url, /\/feasibility\/([^/:]+):decide/);
     const b = await request.json() as { decision: string; reason?: string };
@@ -2001,6 +2040,29 @@ export const scenarioHandlers = [
     return HttpResponse.json({ items, nextCursor: null });
   }),
 
+  http.post(pathToRegExp("/v1/bids"), async ({ request }) => {
+    const b = await request.json() as {
+      sponsor: string; name: string; submittedOn: string;
+      sites: number; subjects: number;
+      ourQuoteCents: number; ourPersonDays: number; note?: string;
+    };
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能登记投标"), { status: 403 });
+
+    const row: MockBid = {
+      id: `b-new-${scenario.bids.length + 1}`,
+      code: `B-2026-${String(20 + scenario.bids.length).slice(-2)}`,
+      sponsor: b.sponsor, name: b.name, submittedOn: b.submittedOn,
+      sites: b.sites, subjects: b.subjects,
+      ourQuoteCents: b.ourQuoteCents, ourPersonDays: b.ourPersonDays,
+      /* 新登记的标一律待定 —— 中标与否是后面回填的一次决定。 */
+      status: "pending", decidedOn: null, winningPriceCents: null,
+      ownerName: identity().name, note: b.note ?? null
+    };
+    scenario.bids.unshift(row);
+    return HttpResponse.json(bidDto(row), { status: 201 });
+  }),
+
   http.post(pathToRegExp("/v1/bids/{id}:decide"), async ({ request }) => {
     const id = seg(request.url, /\/bids\/([^/:]+):decide/);
     const b = await request.json() as
@@ -2059,6 +2121,37 @@ export const scenarioHandlers = [
     if (q.get("uncoveredOnly") === "true")
       items = items.filter(c => c.status !== "signed");
     return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/contract-changes"), async ({ request }) => {
+    const b = await request.json() as {
+      studyId: string; studySiteId?: string | null; kind: string;
+      raisedOn: string; what: string; personDaysImpact: number;
+      perSubject: boolean; note?: string;
+    };
+    if (!identity().actions.includes("bid")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能登记合同变更"), { status: 403 });
+
+    const st = scenario.studies.find(x => x.id === b.studyId);
+    const site = b.studySiteId
+      ? SITES_LIST.find(x => x.id === b.studySiteId) ?? null : null;
+    const row: MockChange = {
+      id: `c-new-${scenario.changes.length + 1}`,
+      code: `CO-2026-${String(20 + scenario.changes.length).slice(-2)}`,
+      study: { id: b.studyId, code: st?.code ?? "HJ-2024-017",
+        shortName: st?.shortName ?? "艾瑞替尼 III" },
+      studySiteId: site?.id ?? null, siteCode: site?.code ?? null,
+      kind: b.kind, kindLabel: CHANGE_KIND_LABEL[b.kind as ChangeKindKey] ?? b.kind,
+      raisedOn: b.raisedOn, raisedByName: identity().name, what: b.what,
+      personDaysImpact: b.personDaysImpact, perSubject: b.perSubject,
+      /* 每例的口径按合同例数乘开；一次性就是那一个数。 */
+      affectedSubjects: b.perSubject ? (site?.contracted ?? 30) : 1,
+      amountCents: null,
+      /* **先记下来，再去谈** —— 所以新登记的一律是「待提出」。 */
+      status: "draft", decidedOn: null, note: b.note ?? null
+    };
+    scenario.changes.unshift(row);
+    return HttpResponse.json(changeDto(row), { status: 201 });
   }),
 
   http.post(pathToRegExp("/v1/contract-changes/{id}:settle"), async ({ request }) => {

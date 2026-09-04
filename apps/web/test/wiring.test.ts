@@ -61,10 +61,6 @@ const writes = allEndpoints()
 /** 服务端有、界面上暂时没有入口的写端点。**每一条都要写清楚为什么。**
  *  接上一个就从这里删一行 —— 这张表只许变短。 */
 const NOT_YET: Record<string, string> = {
-  createBid: "新建投标：BidPage 只有复盘与列表",
-  createFeasibility: "新建可行性：FeasPage 只有列表与判定",
-  recordFeasibilityActual: "回填可行性实际值：同上，且要等中心真的入组之后",
-  createContractChange: "新建合同变更：ChangePage 只有列表与结算",
   addAuditFinding: "补一条稽查发现：QaAuditPage 接了开稽查与关发现，没接加发现",
   reportSae: "SAE 上报：录 SAE 的界面还没建",
   reportSaeSubmitted: "SAE 已递交监管：同上",
