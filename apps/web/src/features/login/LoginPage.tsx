@@ -85,101 +85,122 @@ export function LoginPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* 登录页用原型的 `.login` / `.login-box` 那一套：整页是 ground 色，
+     中间一个**有边框的盒子**。这是这套语言里为数不多的例外 ——
+     其余地方 `.card` 是平面，因为界面是一个平面；而登录页上没有"其余"，
+     那个盒子就是全部内容，它需要一条边界把自己和空白分开。 */
   return (
-    <div style={{ maxWidth: 420, margin: "12vh auto", padding: "0 20px" }}>
-      <h1 style={{ fontSize: 20, marginBottom: 6 }}>临床中心台</h1>
-      <p className="muted" style={{ marginTop: 0 }}>
-        常规入口是一次性链接 —— 不必记密码，也就没有写在便利贴上的密码。
-        内部账号也可以用口令登录（下面那一栏）。
-      </p>
-
-      {/* 从一条已经失效的链接进来时的引导。
-          在此之前这里只有一句服务端原话（"链接无效、已过期或已被使用"），
-          没有下一步 —— 而链接是生产环境唯一的入口，
-          一个走到死胡同的人除了关掉页面没有别的事可做。 */}
-      {linkDead && (
-        <div className="problem stack" data-testid="link-expired" style={{ marginTop: 18 }}>
-          <strong>这条链接已经不能用了</strong>
-          <p className="muted" style={{ margin: 0 }}>
-            一次性链接 15 分钟有效、而且只能用一次 —— 已经点开过、或者放久了，
-            都会走到这里。<b>在下面填你的登录名，重新要一条。</b>
-          </p>
+    <div className="login">
+      <div className="login-box">
+        <div className="login-brand">
+          <span className="brand-mark">台</span>
+          <div>
+            <div className="brand-name">临床中心台</div>
+            <div className="brand-sub">SiteDesk</div>
+          </div>
         </div>
-      )}
 
-      <div className="card stack" style={{ marginTop: 18 }}>
-        <label className="field">
-          <span>登录名</span>
-          <input value={login} data-testid="login-input" autoComplete="username"
-            onChange={e => setLogin(e.target.value)} placeholder="例如 wutong" />
-        </label>
-        <button className="btn primary" data-testid="request-link"
-          disabled={busy || !login.trim()}
-          onClick={() => void go(async () => {
-            const r = await requestLink(login.trim());
-            setSent(r.message);
-            setLinkDead(false);
-            setDevToken(r.devToken ?? null);
-          })}>
-          {linkDead ? "重新发一条登录链接" : "发送登录链接"}
-        </button>
+        <h2>登录</h2>
+        <p className="login-sub">
+          常规入口是一次性链接 —— 不必记密码，也就没有写在便利贴上的密码。
+          内部账号也可以用口令登录（下面那一栏）。
+        </p>
 
-        {sent && <p className="muted" data-testid="link-sent">{sent}</p>}
-
-        {devToken && (
-          <div className="stack">
-            <p className="muted">
-              开发环境回显了链接令牌（生产环境**不会**回显，它只走邮件/短信）：
-            </p>
-            <button className="btn" data-testid="redeem"
-              onClick={() => void go(async () => { await redeem(devToken); nav("/today"); })}>
-              用这个令牌登录
-            </button>
+        {/* 从一条已经失效的链接进来时的引导。
+            在此之前这里只有一句服务端原话（"链接无效、已过期或已被使用"），
+            没有下一步 —— 而链接是生产环境唯一的入口，
+            一个走到死胡同的人除了关掉页面没有别的事可做。 */}
+        {linkDead && (
+          <div className="login-err" data-testid="link-expired">
+            <strong>这条链接已经不能用了</strong>
+            <div>
+              一次性链接 15 分钟有效、而且只能用一次 —— 已经点开过、或者放久了，
+              都会走到这里。<b>在下面填你的登录名，重新要一条。</b>
+            </div>
           </div>
         )}
-      </div>
 
-      <details style={{ marginTop: 16 }} data-testid="password-panel">
-        <summary className="muted" style={{ cursor: "pointer" }}>用口令登录</summary>
-        <div className="card stack" style={{ marginTop: 10 }}>
-          <p className="muted" style={{ margin: 0 }}>
-            内部账号可以设口令。出厂管理员是 <b className="mono">admin</b>，
-            初始口令也是 <b className="mono">admin</b> —— <b>登进去第一件事就是改掉它</b>。
-          </p>
+        <div className="stack" style={{ gap: 14 }}>
           <label className="field">
             <span>登录名</span>
-            <input value={pwLogin} data-testid="pw-login" autoComplete="username"
-              onChange={e => setPwLogin(e.target.value)} placeholder="admin" />
+            <input value={login} data-testid="login-input" autoComplete="username"
+              onChange={e => setLogin(e.target.value)} placeholder="例如 wutong" />
           </label>
-          <label className="field">
-            <span>口令</span>
-            <input type="password" value={pw} data-testid="pw-password"
-              autoComplete="current-password"
-              onChange={e => setPw(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && pwLogin.trim() && pw) void doPasswordLogin(); }} />
-          </label>
-          <button className="btn primary" data-testid="pw-submit"
-            disabled={busy || !pwLogin.trim() || !pw}
-            onClick={() => void doPasswordLogin()}>
-            登录
+          <button className="btn btn-p login-go" data-testid="request-link"
+            disabled={busy || !login.trim()}
+            onClick={() => void go(async () => {
+              const r = await requestLink(login.trim());
+              setSent(r.message);
+              setLinkDead(false);
+              setDevToken(r.devToken ?? null);
+            })}>
+            {linkDead ? "重新发一条登录链接" : "发送登录链接"}
           </button>
-        </div>
-      </details>
 
-      <details style={{ marginTop: 16 }} data-testid="dev-panel">
-        <summary className="muted" style={{ cursor: "pointer" }}>开发登录（生产不存在）</summary>
-        <div className="stack" style={{ marginTop: 10 }}>
-          {DEV_LOGINS.map(d => (
-            <button key={d.login} className="btn" data-testid={`dev-${d.login}`}
-              disabled={busy}
-              onClick={() => void go(async () => { await devLogin(d.login); nav("/today"); })}>
-              {d.who}
-            </button>
-          ))}
-        </div>
-      </details>
+          {sent && <p className="note" data-testid="link-sent" style={{ margin: 0 }}>{sent}</p>}
 
-      {err && <div className="problem" data-testid="login-error" style={{ marginTop: 14 }}>{err}</div>}
+          {devToken && (
+            <div className="stack" style={{ gap: 10 }}>
+              <p className="note" style={{ margin: 0 }}>
+                开发环境回显了链接令牌（生产环境**不会**回显，它只走邮件/短信）：
+              </p>
+              <button className="btn" data-testid="redeem"
+                onClick={() => void go(async () => { await redeem(devToken); nav("/today"); })}>
+                用这个令牌登录
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="login-demo">
+          <details data-testid="password-panel">
+            <summary className="section-t" style={{ cursor: "pointer", margin: 0 }}>
+              用口令登录
+            </summary>
+            <div className="stack" style={{ gap: 14, marginTop: 12 }}>
+              <p className="note" style={{ margin: 0 }}>
+                内部账号可以设口令。出厂管理员是 <b className="mono">admin</b>，
+                初始口令也是 <b className="mono">admin</b> —— <b>登进去第一件事就是改掉它</b>。
+              </p>
+              <label className="field">
+                <span>登录名</span>
+                <input value={pwLogin} data-testid="pw-login" autoComplete="username"
+                  onChange={e => setPwLogin(e.target.value)} placeholder="admin" />
+              </label>
+              <label className="field">
+                <span>口令</span>
+                <input type="password" value={pw} data-testid="pw-password"
+                  autoComplete="current-password"
+                  onChange={e => setPw(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && pwLogin.trim() && pw) void doPasswordLogin(); }} />
+              </label>
+              <button className="btn btn-p login-go" data-testid="pw-submit"
+                disabled={busy || !pwLogin.trim() || !pw}
+                onClick={() => void doPasswordLogin()}>
+                登录
+              </button>
+            </div>
+          </details>
+
+          <details data-testid="dev-panel" style={{ marginTop: 16 }}>
+            <summary className="section-t" style={{ cursor: "pointer", margin: 0 }}>
+              开发登录（生产不存在）
+            </summary>
+            <div className="stack" style={{ gap: 8, marginTop: 12 }}>
+              {DEV_LOGINS.map(d => (
+                <button key={d.login} className="btn" data-testid={`dev-${d.login}`}
+                  disabled={busy}
+                  onClick={() => void go(async () => { await devLogin(d.login); nav("/today"); })}>
+                  {d.who}
+                </button>
+              ))}
+            </div>
+          </details>
+        </div>
+
+        {err && <div className="login-err" data-testid="login-error"
+          style={{ marginTop: 14, marginBottom: 0 }}>{err}</div>}
+      </div>
     </div>
   );
 }

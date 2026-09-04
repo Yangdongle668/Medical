@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { call } from "../../api/client.js";
 import { SITE_STATE_LABEL } from "../site/states.js";
+import { NewSiteForm } from "./NewSiteForm.js";
 
 interface Site {
   id: string; code: string; hospital: string; dept: string; city: string;
@@ -21,11 +22,12 @@ export function SitesPage() {
      没有"只看正常的"那一档 —— 界面上没人会想要它。 */
   const [onlyBad, setOnlyBad] = useState(false);
 
-  useEffect(() => {
-    call<{ items: Site[] }>("listStudySites",
+  const load = useCallback(() => {
+    void call<{ items: Site[] }>("listStudySites",
       { query: { limit: 50, ...(onlyBad ? { startupInvalidated: true } : {}) } })
       .then(r => setSites(r.items));
   }, [onlyBad]);
+  useEffect(load, [load]);
 
   /* 「有没有这一列」由数据决定，不由角色判断 —— 前端不重算权限。
      后端把无权限的字段删掉了，这里就少一列，仅此而已。 */
@@ -38,6 +40,10 @@ export function SitesPage() {
         <h2>我的中心</h2>
         <p>行范围由登录身份推导；**列**同理 —— 看得到中心，不等于看得到它的价钱。</p>
       </div>
+
+      {/* 建档入口。此前这一页只能看：`createStudySite` 在服务端跑着，
+          界面上没有入口，于是中心只进得来 seed 灌的那些。 */}
+      <NewSiteForm showPrice={showPrice} onCreated={load} />
 
       {/* 「事后失效」在台账上的落点。
           撤销一个已完成的启动阻塞项之后，系统**刻意不回退状态机**

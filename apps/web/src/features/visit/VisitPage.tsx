@@ -71,6 +71,18 @@ export function VisitPage() {
     await load();
   }
 
+  /** 标记已录入 EDC。断网时照样能按 —— 与勾任务、完成访视同一条路，
+   *  进发件箱，联网后自己发出去。 */
+  async function markEdc() {
+    setBusy(true); setProblem(null);
+    try {
+      await call("enterVisitToEdc", { params: { id }, body: {} });
+      await load();
+    } catch (e) {
+      if (e instanceof ApiError) setProblem(e.problem); else throw e;
+    } finally { setBusy(false); }
+  }
+
   async function submit() {
     setBusy(true); setProblem(null);
     try {
@@ -170,6 +182,46 @@ export function VisitPage() {
               {outOfWindow && <span className="chip crit">超窗提交</span>}
             </div>
           </section>
+        )}
+
+        {/* ── 录入 EDC ────────────────────────────────────────────────
+            **完成访视和录进 EDC 是两件事。** 访视做完了，数据还躺在
+            原始病历上 —— 而数据管理那边看到的是"这一例还没有数"。
+            5 个工作日内录入才算及时；超时不阻断，但进及时率统计。
+
+            此前这一步在界面上标不了：访视能完成、能确认，就是没法说
+            "数已经录进去了"，于是那个及时率永远只有分母。 */}
+        {done && visit.edcStatus === "pending" && (
+          <section className="card stack" data-testid="edc-block">
+            <div className="card-h">
+              <h3>录入 EDC</h3>
+              <span className="sub">完成访视和录进 EDC 是两件事</span>
+            </div>
+            <div className="card-b stack">
+              {visit.edcDaysLate != null && visit.edcDaysLate > 0
+                ? <div className="problem" data-testid="edc-late">
+                    已超出 5 个工作日 <b className="num">{visit.edcDaysLate}</b> 天 ——
+                    <b>不阻断，但进及时率统计</b>。
+                  </div>
+                : <p className="note" style={{ margin: 0 }}>
+                    访视完成后 5 个工作日内录入才算及时。
+                  </p>}
+              <div className="row">
+                <button className="btn btn-p" data-testid="edc-entered"
+                  disabled={busy || !!pending("enterVisitToEdc", { id })}
+                  onClick={() => void markEdc()}>
+                  {pending("enterVisitToEdc", { id }) ? "已排进发件箱" : "标记已录入 EDC"}
+                </button>
+                {pending("enterVisitToEdc", { id }) &&
+                  <span className="chip flat" data-testid="edc-queued">待发</span>}
+              </div>
+            </div>
+          </section>
+        )}
+        {done && visit.edcStatus === "entered" && (
+          <p className="muted" data-testid="edc-done">
+            <span className="chip good">已录入 EDC</span>
+          </p>
         )}
 
         {problem && (

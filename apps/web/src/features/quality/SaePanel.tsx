@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
-import { call } from "../../api/client.js";
+import { useCallback, useEffect, useState } from "react";
+import { useToast } from "@sitedesk/ui/react";
+import { call, ApiError, type ProblemDetails } from "../../api/client.js";
+import { CreateForm, Field, Area } from "../../shell/CreateForm.js";
+import { loadMe } from "../login/me.js";
 
 /* ════════════════════════════════════════════════════════════════════
    SAE 台账与 24 小时及时率（I6）。
@@ -36,10 +39,42 @@ const when = (iso: string | null) => iso ? iso.replace("T", " ").slice(0, 16) : 
 
 export function SaePanel({ studySiteId }: { studySiteId: string }) {
   const [led, setLed] = useState<Ledger | null>(null);
-  useEffect(() => {
-    call<Ledger>("listSaeEvents", { params: { id: studySiteId }, query: { limit: 50 } })
+  const [canWrite, setCanWrite] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  /** 正在给哪一条补上报时刻 —— 行内，因为要对着"发生时刻"那一行填。 */
+  const [reportingId, setReportingId] = useState<string | null>(null);
+  const [reportedAt, setReportedAt] = useState("");
+  const say = useToast();
+
+  const load = useCallback(() => {
+    void call<Ledger>("listSaeEvents", { params: { id: studySiteId }, query: { limit: 50 } })
       .then(setLed).catch(() => setLed(null));
   }, [studySiteId]);
+  useEffect(load, [load]);
+
+  useEffect(() => {
+    void loadMe()
+      .then(m => setCanWrite(m.permissions.actions.includes("subjWrite")))
+      .catch(() => setCanWrite(false));
+  }, []);
+
+  /** 登记「已上报」。**超过 24 小时的，服务端会在同一个事务里
+   *  生成一条 sae_late 质量事件** —— 不可跳过，也不能人工删除，
+   *  只能整改关闭。所以按下去之前界面上要说清这一点。 */
+  const markReported = async (e: Sae) => {
+    setBusy(true); setProblem(null);
+    try {
+      const r = await call<{ sideEffects: { summary: string }[] }>(
+        "reportSaeSubmitted",
+        { params: { id: e.id }, body: { reportedAt: new Date(reportedAt).toISOString() } });
+      load();
+      setReportingId(null); setReportedAt("");
+      say(r.sideEffects[0]?.summary ?? `${e.code} 已登记上报`);
+    } catch (err) {
+      if (err instanceof ApiError) setProblem(err.problem); else throw err;
+    } finally { setBusy(false); }
+  };
 
   if (!led) return null;
   const t = led.timeliness;
@@ -52,6 +87,17 @@ export function SaePanel({ studySiteId }: { studySiteId: string }) {
           口径 {t.calcVersion}
         </span>
       </div>
+
+      {problem && (
+        <div className="problem" data-testid="sae-problem">
+          <strong>{problem.title}</strong>
+          {problem.detail && <div>{problem.detail}</div>}
+        </div>
+      )}
+
+      {/* 登记入口。此前这一格只能看 —— 而「录一条 SAE」正是它
+          要服务的那个动作发生的时刻。 */}
+      {canWrite && <ReportSaeForm studySiteId={studySiteId} onCreated={load} />}
 
       {t.total === 0 ? (
         /* 「还没有 SAE」和「及时率 100%」是两回事。
@@ -121,6 +167,48 @@ export function SaePanel({ studySiteId }: { studySiteId: string }) {
                       <> · 经过 <b className="num">{e.reportHours.toFixed(1)}</b> 小时</>
                     )}
                   </div>
+
+                  {/* 还没上报的那几条，补上报时刻。**这是唯一能让
+                      「还在计时」变成「已上报」的动作** —— 没有它，
+                      一条 SAE 只能永远挂在计时里，然后被算成迟报。 */}
+                  {canWrite && !e.reportedAt && (
+                    reportingId === e.id ? (
+                      <div className="stack" style={{ gap: 8, marginTop: 8 }}>
+                        <label className="field">
+                          <span>
+                            上报时刻 <span className="t-mut">
+                              · 递交监管的那一刻，不是现在录入的这一刻</span>
+                          </span>
+                          <input type="datetime-local" value={reportedAt}
+                            data-testid={`sae-reported-at-${e.id}`}
+                            onChange={ev => setReportedAt(ev.target.value)} />
+                        </label>
+                        {/* 超 24 小时的后果，按下去之前就说清楚。 */}
+                        {late && (
+                          <div className="problem" data-testid="sae-late-warn">
+                            这一条已经超过 24 小时。登记之后服务端会在
+                            <b>同一个事务里</b>生成一条超时质量事件 ——
+                            它<b>不可跳过、也不能人工删除</b>，只能整改关闭。
+                          </div>
+                        )}
+                        <div className="row">
+                          <button className="btn btn-p" data-testid={`sae-report-save-${e.id}`}
+                            disabled={busy || !reportedAt}
+                            onClick={() => void markReported(e)}>登记已上报</button>
+                          <button className="btn link"
+                            onClick={() => { setReportingId(null); setReportedAt(""); }}>
+                            取消
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button className="btn" style={{ marginTop: 8 }}
+                        data-testid={`sae-report-${e.id}`}
+                        onClick={() => {
+                          setReportingId(e.id); setReportedAt(""); setProblem(null);
+                        }}>登记已上报</button>
+                    )
+                  )}
                 </li>
               );
             })}
@@ -128,5 +216,68 @@ export function SaePanel({ studySiteId }: { studySiteId: string }) {
         </>
       )}
     </section>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   登记一条 SAE。
+
+   ── 发生时刻不能默认成"现在" ────────────────────────────────────
+   契约原话：`occurredAt` 是**发生（或研究者知悉）**的时刻，不是录入时刻 ——
+   **两者混为一谈，及时率就永远是 100%。**
+
+   所以这一栏没有"填上现在"的便利按钮，也不预填当前时间：
+   预填等于替人回答了那个决定及时率的问题，而他多半会直接按下去。
+
+   ── 上报时刻可以留空 ───────────────────────────────────────────
+   先记事件、上报之后再补是常态（那正是台账上"还在计时"那几条）。
+   留空不是漏填，所以旁边说清楚它意味着什么。
+   ════════════════════════════════════════════════════════════════════ */
+function ReportSaeForm({ studySiteId, onCreated }:
+  { studySiteId: string; onCreated: () => void }) {
+  const [title, setTitle] = useState("");
+  const [detail, setDetail] = useState("");
+  const [occurredAt, setOccurredAt] = useState("");
+  const [reportedAt, setReportedAt] = useState("");
+
+  const ready = !!(title.trim() && detail.trim().length >= 4 && occurredAt);
+
+  return (
+    <CreateForm
+      testid="new-sae" cta="登记一条 SAE" title="严重不良事件登记"
+      sub="发生时刻决定及时率 —— 它不是录入时刻" ready={ready}
+      note={<>上报时刻可以留空，之后在台账上补 —— 那几条会显示为「还在计时」。</>}
+      onSubmit={async () => {
+        await call("reportSae", {
+          params: { id: studySiteId },
+          body: {
+            title: title.trim(), detail: detail.trim(),
+            occurredAt: new Date(occurredAt).toISOString(),
+            ...(reportedAt ? { reportedAt: new Date(reportedAt).toISOString() } : {})
+          }
+        });
+        const said = `SAE「${title.trim()}」已登记`;
+        setTitle(""); setDetail(""); setOccurredAt(""); setReportedAt("");
+        onCreated();
+        return said;
+      }}>
+      <Field label="事件名称" v={title} on={setTitle} testid="sae-title"
+        placeholder="例：III 度中性粒细胞减少伴发热" />
+      <Area label="经过" hint="至少 4 字" v={detail} on={setDetail} testid="sae-detail" rows={3}
+        placeholder="例：受试者于第 2 周期 D8 出现寒战高热，血常规示 ANC 0.4×10⁹/L，收入院予以升白与抗感染治疗。" />
+
+      <div className="grid-form">
+        <Field label="发生（或研究者知悉）时刻" hint="不是现在" v={occurredAt}
+          on={setOccurredAt} testid="sae-occurred" type="datetime-local" />
+        <Field label="上报时刻" hint="可留空，之后再补" v={reportedAt}
+          on={setReportedAt} testid="sae-reported" type="datetime-local" />
+      </div>
+
+      <div className="derive">
+        <b>发生时刻不是录入时刻。</b>
+        两者混为一谈，及时率就永远是 100% —— 所以这一栏不预填当前时间：
+        预填等于替人回答了那个决定及时率的问题，而他多半会直接按下去。
+      </div>
+    </CreateForm>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { yuan } from "../cost/money.js";
+import { PlanVisitForm } from "./PlanVisitForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    监查访视。
@@ -178,6 +179,12 @@ export function MonPage() {
         </div>
       )}
       {said && <p className="muted" data-testid="mon-said">{said}</p>}
+
+      {/* 排期入口。此前确认、执行、勾项、交报告都接了，就是排不出去 ——
+          于是板子上那句「逾期 41 天没人去」看得见，办不了。 */}
+      {canWrite && (
+        <PlanVisitForm sites={board.sites} onCreated={() => void reload()} />
+      )}
 
       <div className="row" style={{ gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
         {/* ── 排期 ─────────────────────────────────────────────── */}

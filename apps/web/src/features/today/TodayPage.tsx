@@ -9,6 +9,10 @@ export interface Visit {
   id: string; screeningNo?: string; siteCode: string;
   visitLabel: string; targetDate: string; windowFrom: string; windowTo: string;
   daysLeft: number | null; outOfWindow: boolean; status: string;
+  /** 录入 EDC 的状态。**完成访视和录进 EDC 是两件事** ——
+   *  访视完成后 5 个工作日内录入才算及时，超时不阻断，但进及时率统计。 */
+  edcStatus?: "pending" | "entered" | "queried";
+  edcDaysLate?: number | null;
   tasks: { seq: number; task: string; doneAt: string | null }[];
 }
 

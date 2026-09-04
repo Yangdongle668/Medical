@@ -92,6 +92,17 @@ export function QaAuditPage() {
   const [scope, setScope] = useState("");
   const [closing, setClosing] = useState<{ a: Audit; seq: number } | null>(null);
   const [verification, setVerification] = useState("");
+  /** 正在给哪一次稽查记发现项。行内展开，不弹层 ——
+   *  记发现是对着上面那份范围说明写的，弹层会把它盖住。 */
+  const [findingOn, setFindingOn] = useState<string | null>(null);
+  const [fSeverity, setFSeverity] = useState("minor");
+  const [fText, setFText] = useState("");
+  const [fRepeatOf, setFRepeatOf] = useState("");
+  /** 可以被指为「源事件」的历史质量事件。**必须是外键，不是编号字符串** ——
+   *  原型拿字符串去找源事件，找不到就静默丢掉，
+   *  而复发这个指标存在的全部理由就是抓这件事。 */
+  const [events, setEvents] = useState<
+    { id: string; code: string; title: string; siteCode: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -108,6 +119,10 @@ export function QaAuditPage() {
     void call<{ items: Site[] }>("listStudySites", { query: { limit: 200 } })
       .then(r => { setSites(r.items); setSiteId(s => s || r.items[0]?.id || ""); })
       .catch(() => setSites([]));
+    /* 历史质量事件，给「这一条是复发」那个选择器用。 */
+    void call<{ items: { id: string; code: string; title: string; siteCode: string }[] }>(
+      "listQualityEvents", { query: { limit: 200 } })
+      .then(r => setEvents(r.items)).catch(() => setEvents([]));
   }, []);
 
   if (!me || !rows || !board) return <p className="muted">加载中…</p>;
@@ -125,6 +140,26 @@ export function QaAuditPage() {
       await reload();
       setOpening(false); setScope("");
       setSaid(r.sideEffects[0]?.summary ?? "已发起");
+    } catch (e) {
+      if (e instanceof ApiError) setProblem(e.problem); else throw e;
+    } finally { setBusy(false); }
+  };
+
+  /** 记一条发现。**中间这一步此前在界面上写不下来** ——
+   *  于是一次稽查要么空着结案，要么只能靠 seed 里预置的发现项。 */
+  const addFinding = async (a: Audit) => {
+    setBusy(true); setProblem(null); setSaid(null);
+    try {
+      const r = await call<{ sideEffects: { summary: string }[] }>("addAuditFinding", {
+        params: { id: a.id },
+        body: {
+          severity: fSeverity, finding: fText.trim(),
+          ...(fRepeatOf ? { repeatOf: fRepeatOf } : {})
+        }
+      });
+      await reload();
+      setFindingOn(null); setFText(""); setFRepeatOf("");
+      setSaid(r.sideEffects[0]?.summary ?? `${a.code} 记下了一条发现`);
     } catch (e) {
       if (e instanceof ApiError) setProblem(e.problem); else throw e;
     } finally { setBusy(false); }
@@ -321,6 +356,70 @@ export function QaAuditPage() {
               <span className={`chip ${STATE[a.state].chip}`}>{STATE[a.state].text}</span>
             </div>
             <p className="muted" style={{ margin: 0, fontSize: 13 }}>{a.scope}</p>
+
+            {/* 记一条发现。此前只能开稽查与关发现 —— 中间那一步
+                「到底查出了什么」在界面上写不下来，于是一次稽查
+                要么空着结案，要么只能靠 seed 里预置的发现项。 */}
+            {a.state !== "closed" && canAudit && (
+              findingOn === a.id ? (
+                <div className="stack" style={{ gap: 10 }} data-testid="audit-finding-form">
+                  <div className="grid-form">
+                    <label className="field">
+                      <span>严重程度</span>
+                      <select value={fSeverity} data-testid="af-severity"
+                        onChange={e => setFSeverity(e.target.value)}>
+                        <option value="minor">一般</option>
+                        <option value="major">严重</option>
+                        <option value="critical">重大</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>
+                        这一条是复发吗
+                        <span className="t-mut"> · 指向此前那条同一个问题的事件</span>
+                      </span>
+                      <select value={fRepeatOf} data-testid="af-repeat"
+                        onChange={e => setFRepeatOf(e.target.value)}>
+                        <option value="">— 不是复发 —</option>
+                        {events.map(ev => (
+                          <option key={ev.id} value={ev.id}>
+                            {ev.code} · {ev.siteCode} · {ev.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <label className="field">
+                    <span>发现 <span className="t-mut">· 至少 10 字</span></span>
+                    <textarea rows={2} value={fText} data-testid="af-text"
+                      placeholder="例：抽查 20 份原始病历，3 份的合并用药记录与 EDC 不一致，且无更正说明。"
+                      onChange={e => setFText(e.target.value)} />
+                  </label>
+                  <div className="derive">
+                    <b>复发要指向具体那一条，用外键不是编号字符串。</b>
+                    原型拿字符串去找源事件，找不到就静默丢掉 ——
+                    而「同类问题是否复发」这个指标存在的全部理由就是抓这件事。
+                    <br />
+                    源事件必须<b>早于本次稽查</b>：指向一条今天才提出的事件，那不是复发。
+                  </div>
+                  <div className="row">
+                    <button className="btn btn-p" data-testid={`af-submit-${a.id}`}
+                      disabled={busy || fText.trim().length < 10}
+                      onClick={() => void addFinding(a)}>记下这一条</button>
+                    <button className="btn link"
+                      onClick={() => { setFindingOn(null); setFText(""); setFRepeatOf(""); }}>
+                      取消
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button className="btn" data-testid={`audit-add-finding-${a.id}`}
+                  onClick={() => {
+                    setFindingOn(a.id); setFText(""); setFRepeatOf("");
+                    setFSeverity("minor"); setProblem(null);
+                  }}>记一条发现</button>
+              )
+            )}
 
             {a.findings.length === 0
               ? <p className="muted" style={{ margin: 0, fontSize: 12 }}

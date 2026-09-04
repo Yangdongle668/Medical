@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { call } from "../../api/client.js";
+import { loadMe } from "../login/me.js";
 import { SITE_STATE_LABEL } from "./states.js";
+import { StartupTemplateEditor } from "./StartupTemplateEditor.js";
 
 /* ════════════════════════════════════════════════════════════════════
    中心启动清单（各中心汇总）。
@@ -26,6 +28,15 @@ interface Row {
 export function StartupSummaryPage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [blockedOnly, setBlockedOnly] = useState(false);
+  /** 改模板要 `manage` —— 它决定此后**每一个**新中心怎么开工，
+   *  不是某一个中心的事。 */
+  const [canManage, setCanManage] = useState(false);
+
+  useEffect(() => {
+    void loadMe()
+      .then(m => setCanManage(m.permissions.actions.includes("manage")))
+      .catch(() => setCanManage(false));
+  }, []);
 
   useEffect(() => {
     void call<{ items: Row[] }>("listStartupChecklists",
@@ -53,6 +64,11 @@ export function StartupSummaryPage() {
           {blocked.length > 0 && <> <b>{blocked.length} 个还有阻塞项没清</b>。</>}
         </p>
       </div>
+
+      {/* 模板放在汇总页的最上面：这一页回答「各中心启动到哪一步了」，
+          而模板回答「新中心要走哪几步」—— 后者是前者的来源。
+          此前它只在库里，`getStartupTemplate` 前端一次都没调过。 */}
+      <StartupTemplateEditor canManage={canManage} />
 
       {late.length > 0 && (
         <div className="problem" role="alert" data-testid="siv-late" style={{ marginBottom: 14 }}>

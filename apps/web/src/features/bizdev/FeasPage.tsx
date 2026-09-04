@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
+import { NewFeasibilityForm } from "./NewFeasibilityForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    中心可行性调查。
@@ -88,6 +89,10 @@ export function FeasPage() {
   const [deciding, setDeciding] = useState<
     { id: string; decision: "selected" | "rejected" } | null>(null);
   const [reason, setReason] = useState("");
+  /** 正在回填哪一条的实际月入组 —— 行内编辑，不弹层：
+   *  这一格是拿着预测那一行对照着填的，弹层会把参照物盖住。 */
+  const [actualFor, setActualFor] = useState<string | null>(null);
+  const [actual, setActual] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -103,6 +108,22 @@ export function FeasPage() {
   if (!me || !rows || !cal) return <p className="muted">加载中…</p>;
 
   const canDecide = me.permissions.actions.includes("bid");
+
+  /** 回填实际月入组。**评分唯一能自我修正的地方** —— 预测与实际摆在一起，
+   *  下一次报价才有东西可以校准，而不是又一次「我觉得这家不错」。 */
+  const saveActual = async (id: string) => {
+    setBusy(true); setProblem(null); setSaid(null);
+    try {
+      const r = await call<{ data: Feas; sideEffects: { summary: string }[] }>(
+        "recordFeasibilityActual",
+        { params: { id }, body: { actualRate: Number(actual) } });
+      await reload();
+      setActualFor(null); setActual("");
+      setSaid(r.sideEffects[0]?.summary ?? `${r.data.hospital} 的实际入组已回填`);
+    } catch (e) {
+      if (e instanceof ApiError) setProblem(e.problem); else throw e;
+    } finally { setBusy(false); }
+  };
 
   const decide = async () => {
     if (!deciding) return;
@@ -190,6 +211,10 @@ export function FeasPage() {
         </div>
       )}
       {said && <p className="muted" data-testid="feas-said">{said}</p>}
+
+      {/* 登记入口。此前这一页只能对已有的调查做入选/不选的判定 ——
+          而「这家医院查过没有」本身就没法从界面上记下来。 */}
+      {canDecide && <NewFeasibilityForm onCreated={() => void reload()} />}
 
       <div className="stack">
         {shown.map(f => {
@@ -285,6 +310,36 @@ export function FeasPage() {
                 )}
                 {f.status === "assessing" && !canDecide && (
                   <span className="muted">你的角色不能定选址</span>
+                )}
+                {/* 回填实际月入组。**只有已入选的中心谈得上实际入组速度** ——
+                    没选的那家没有"实际"，评估中的那家还没开始。
+
+                    契约把这一条叫做「整套评分唯一能自我修正的地方」：
+                    没有它，评分只是一套自洽的说法，而自洽的说法
+                    在第一次争议里会被「我觉得这家不错」覆盖掉。 */}
+                {f.status === "selected" && canDecide && (
+                  actualFor === f.id ? (
+                    <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                      <input value={actual} type="number" data-testid={`feas-actual-input-${f.id}`}
+                        aria-label="实际月入组（例/月）" placeholder="例/月"
+                        style={{ width: 96 }}
+                        onChange={e => setActual(e.target.value)} />
+                      <button className="btn btn-p" data-testid={`feas-actual-save-${f.id}`}
+                        disabled={busy || actual === "" || Number(actual) < 0}
+                        onClick={() => void saveActual(f.id)}>存下来</button>
+                      <button className="btn link"
+                        onClick={() => { setActualFor(null); setActual(""); }}>取消</button>
+                    </span>
+                  ) : (
+                    <button className="btn" data-testid={`feas-actual-${f.id}`}
+                      onClick={() => {
+                        setActualFor(f.id);
+                        setActual(f.actualRate === null ? "" : String(f.actualRate));
+                        setProblem(null);
+                      }}>
+                      {f.actualRate === null ? "回填实际月入组" : "改实际月入组"}
+                    </button>
+                  )
                 )}
               </div>
 

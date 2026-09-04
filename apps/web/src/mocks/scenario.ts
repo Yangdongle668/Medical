@@ -77,7 +77,17 @@ const TODAY = new Date();
    于是「PI 只看自己签字的中心」这条行范围在 mock 上根本演不出来 ——
    三个中心的 pi_account_id 一样，PI 身份看到的就是全部。
    外部角色那四页的全部内容就是"看得窄"，看不窄等于那四页没测过。 */
-const SITES = [
+/** 中心。**建档出来的那些也进这张表** —— 所以字段要显式声明：
+ *  推断出来的类型不接受多出来的 `contracted`，而建档时人填了几例
+ *  正是那一栏要显示的东西。缺省值给种子数据用。 */
+export interface MockSite {
+  id: string; code: string; hospital: string; dept: string; city: string;
+  piName: string; piAccountId: string | null; state: string;
+  contracted?: number; unitPriceCents?: number; startupFeeCents?: number;
+  sivPlannedOn?: string | null;
+}
+
+const SITES: MockSite[] = [
   { id: "s1", code: "SS-01", hospital: "北京协和医院", dept: "肝胆外科", city: "北京",
     piName: "陈国栋", piAccountId: "a-chenguod", state: "enrolling" },
   { id: "s2", code: "SS-07", hospital: "中山大学肿瘤防治中心", dept: "肿瘤内科", city: "广州",
@@ -176,6 +186,13 @@ export interface Scenario {
   sivOn: Record<string, string>;
   fpiOn: Record<string, string>;
   startupItems: MockStartupItem[];
+  /** 启动清单模板。**这一份决定此后每个新中心怎么开工** ——
+   *  与 startupItems 不是一回事：那是某个中心已经铺开的行，
+   *  改模板不影响它们（清单在建档那一刻就定下来了）。 */
+  startupTemplate: MockStartupTemplate;
+  /** 项目的访视计划表。CRC 在「今天」那一页看到的任务清单
+   *  正是从这里落下来的 —— 访视排期时连 visitCode、windowDays 一起抄走。 */
+  soa: Record<string, MockSoa>;
   handovers: MockHandover[];
   /** 完成访视时累积产生的质量事件，供台账页读取 */
   qualityEvents: {
@@ -391,6 +408,8 @@ export function makeScenario(): Scenario {
     sivPlannedOn: SIV_PLANNED,
     sivOn: {}, fpiOn: {},
     startupItems: makeStartupItems("s3"),
+    startupTemplate: makeStartupTemplate(),
+    soa: { st1: makeSoa("st1", TASKS_ONCO), st2: makeSoa("st2", TASKS_IO) },
     handovers: [makeHandover()]
   };
 }
@@ -414,6 +433,64 @@ function makeStartupItems(siteId: string): MockStartupItem[] {
       overdueDays: overdue > 0 ? overdue : null
     };
   });
+}
+
+export interface MockSoaVisit {
+  seq: number; visitCode: string; visitLabel: string;
+  anchor: "icf" | "enroll"; offsetDays: number; windowDays: number;
+  compensationCents: number; tasks: string[]; scheduledCount: number;
+}
+export interface MockSoa {
+  studyId: string; visits: MockSoaVisit[];
+  lastChangedAt: string | null; lastChangedByName: string | null;
+  lastReason: string | null;
+}
+
+/** 六次访视：筛选 + 五个周期。**前两次 scheduledCount 大于 0** ——
+ *  那是这张表上唯一要紧的约束：已经排出去的删不掉，
+ *  删掉它，那些访视就指向了一个不存在的定义。 */
+function makeSoa(studyId: string, tasks: string[]): MockSoa {
+  const visits: MockSoaVisit[] = [
+    { seq: 0, visitCode: "SCR", visitLabel: "筛选期访视",
+      anchor: "icf", offsetDays: 0, windowDays: 7,
+      compensationCents: 30000, tasks: ["知情同意签署", "入排标准核查", "基线实验室检查"],
+      scheduledCount: 12 }
+  ];
+  for (let c = 1; c <= 5; c++)
+    visits.push({
+      seq: c, visitCode: `C${c}D1`, visitLabel: `C${c}D1 第 ${c} 周期给药`,
+      anchor: "enroll", offsetDays: 21 * (c - 1), windowDays: 3,
+      compensationCents: 20000, tasks: [...tasks],
+      /* 排过的只有前两个周期 —— 后面几个还没到。 */
+      scheduledCount: c <= 2 ? 8 : 0
+    });
+  return {
+    studyId, visits,
+    lastChangedAt: "2026-05-09T03:10:00Z", lastChangedByName: "凌远",
+    lastReason: "方案 v2.1 修订：C1D1 窗口由 ±2 天放宽到 ±3 天。"
+  };
+}
+
+export interface MockStartupTemplate {
+  version: number;
+  items: { sortOrder: number; category: string; item: string;
+    isBlocking: boolean; dueOffset: number }[];
+  updatedAt: string | null; updatedByName: string | null; reason: string | null;
+}
+
+/** 模板与 `makeStartupItems` **同源**（都用 DEFAULT_STARTUP_ITEMS）——
+ *  另写一份的代价不是重复，是分歧：模板上 16 项、建档铺 6 项，
+ *  于是"改了模板，新中心为什么还是老样子"没人答得上来。 */
+function makeStartupTemplate(): MockStartupTemplate {
+  return {
+    version: 3,
+    items: DEFAULT_STARTUP_ITEMS.map((d, i) => ({
+      sortOrder: i, category: d.category, item: d.item,
+      isBlocking: d.blocking, dueOffset: d.dueOffset
+    })),
+    updatedAt: "2026-06-18T09:20:00Z", updatedByName: "凌远",
+    reason: "把「保险单」提为阻塞项 —— 上一轮核查提出两个中心开工时保险未生效。"
+  };
 }
 
 function makeHandover(): MockHandover {

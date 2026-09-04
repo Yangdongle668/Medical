@@ -1,20 +1,29 @@
 @import "@sitedesk/ui/tokens.css";
+@import "@sitedesk/ui/components.css";
 
 /* ══════════════════════════════════════════════════════════════════
-   外壳。令牌来自 packages/ui，这里只管布局。
+   外壳。**令牌与组件都来自 packages/ui，这里只管两件事**：
+   基底（body / 标题 / 焦点环）与这个应用自己的那几个部件。
 
-   横向滚动条在 390px 上等于「这个页面没做手机」，而 CRC 一半时间
-   是在医院走廊上用手机看的。防线有两道，量过之后才知道哪道真在受力：
+   ── 这个文件曾经有 284 行，其中大半是重画组件 ──────────────────
+   `.card` 在这里是带边框圆角的盒子，而原型的第一句话是
+   "界面是一个平面，不是一摞卡片"，它那边写的是
+   `.card{background:none;border:0}`。一个类名，两个相反的定义 ——
+   共享的只有颜色令牌，于是颜色一致而其它全不一致。
+   组件层移进 packages/ui/components.css 之后，这里只剩下真正
+   属于 web 端的东西：外壳布局，和原型里没有的那几个部件
+   （离线发件箱、闸门横幅、推导链）。
 
+   ── 横向滚动的两道防线，量过之后才知道哪道在受力 ────────────────
    ① **`.table-wrap { overflow-x: auto }` 是承重的那道。**
       去掉它，390px 上立刻溢出 185px（e2e/layout.spec.ts 实测）。
       宽表格应该在自己的容器里滚，而不是把整页拖着一起滚。
-   ② `minmax(0, 1fr)` 是第二道。1fr 的最小尺寸是 auto，理论上会被
-      长内容撑开；有了 ① 之后它并不吃力 —— 但留着，因为下一个宽组件
-      未必记得给自己加滚动容器。
-
-   **两道都留，但别搞错哪道在受力。**
+   ② `minmax(0, 1fr)` / `.stack > * { min-width: 0 }` 是第二道
+      （后者现在在 components.css 里）。有了 ① 之后它并不吃力 ——
+      但留着，因为下一个宽组件未必记得给自己加滚动容器。
    ══════════════════════════════════════════════════════════════════ */
+
+/* ── 基底 ─────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body {
@@ -22,49 +31,70 @@ body {
   font-family: "DM Sans", "PingFang SC", "Source Han Sans SC", "Microsoft YaHei",
     -apple-system, system-ui, sans-serif;
   font-size: 13.5px; line-height: 1.55; letter-spacing: -.006em;
-  -webkit-font-smoothing: antialiased;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
 }
-h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.02em; text-wrap: balance; }
+h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -.02em; text-wrap: balance; }
 button { font: inherit; color: inherit; letter-spacing: inherit; cursor: pointer; }
 a { color: var(--accent); text-underline-offset: 2px; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
-.num, .mono { font-variant-numeric: tabular-nums; }
-.mono { font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 /* ── 外壳布局 ─────────────────────────────────────────────────── */
 .app { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100%; }
 .rail {
   background: var(--ground); border-right: 1px solid var(--line);
-  position: sticky; top: 0; height: 100vh; overflow-y: auto;
-  display: flex; flex-direction: column; padding: 18px 12px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; scrollbar-width: thin;
+  display: flex; flex-direction: column; padding: 0 12px 20px;
 }
-.rail h1 { font-size: 14px; padding: 0 10px 14px; letter-spacing: -.01em; }
+/* 品牌区按原型的 .brand 走：字号 14.5、上下留白比导航项大一档 ——
+   它是这一列的"标题"，不是第一个导航项。 */
+.rail h1 {
+  font-size: 14.5px; padding: 24px 12px 18px; letter-spacing: -.02em; line-height: 1.2;
+}
 .rail nav { display: flex; flex-direction: column; gap: 2px; }
+
+/* 导航项 = 原型的 .nav-item。当前项不铺底色，而是在左边立一条
+   2px 的强调色竖线 —— 铺底色会让侧栏出现第二个"卡片"，
+   而整套语言的前提是这里只有一个平面。 */
 .rail a {
-  display: block; padding: 7px 10px; border-radius: 6px;
-  color: var(--ink-2); text-decoration: none; transition: background 140ms;
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 6px;
+  color: var(--ink-2); text-decoration: none; font-size: 13.5px; position: relative;
+  transition: color var(--t) var(--ease), background var(--t) var(--ease);
 }
-.rail a:hover { background: var(--surface-2); color: var(--ink); }
-.rail a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-/* 分组：标题很轻，只在扫一眼时起路标作用，不跟链接抢注意力。 */
+.rail a:hover { color: var(--ink); background: var(--surface-2); }
+.rail a[aria-current="page"] { color: var(--ink); font-weight: 500; }
+.rail a[aria-current="page"]::before {
+  content: ""; position: absolute; left: -12px; top: 7px; bottom: 7px; width: 2px;
+  background: var(--accent); border-radius: 0 2px 2px 0;
+}
+
+/* 分组标题 = 原型的 .nav-group：等宽小字、字距拉开、全大写。
+   它要能被扫到，但不该跟链接抢注意力。 */
 .nav-group { display: flex; flex-direction: column; gap: 2px; }
-.nav-group + .nav-group { margin-top: 10px; }
+.nav-group + .nav-group { margin-top: 4px; }
 .nav-group-title {
-  padding: 0 10px 4px; font-size: 11px; letter-spacing: .04em;
-  color: var(--ink-3); text-transform: none;
+  font-family: "DM Mono", monospace; font-size: 9.5px; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--ink-3); padding: 18px 12px 7px;
 }
+.nav-group:first-child .nav-group-title { padding-top: 4px; }
 /* 「这一页还没建」的记号。用一个点而不是"WIP"之类的字：
    它要能被看见，但不该在侧栏里排成一列噪音。 */
-.nav-todo { color: var(--ink-3); margin-left: 5px; }
+.nav-todo { color: var(--ink-3); margin-left: auto; }
 
 .rail .who {
-  margin-top: auto; padding: 10px; border-top: 1px solid var(--line);
-  color: var(--ink-3); font-size: 12px;
+  margin-top: auto; padding: 16px 12px 4px; border-top: 1px solid var(--line);
+  color: var(--ink-3); font-size: 11px; line-height: 1.6;
+  display: block; align-items: initial;
 }
-.main { min-width: 0; padding: 22px clamp(14px, 3vw, 32px) 64px; }
-.page-head { margin-bottom: 18px; }
-.page-head h2 { font-size: 19px; }
-.page-head p { margin: 4px 0 0; color: var(--ink-3); }
+
+.main {
+  min-width: 0; padding: 34px clamp(18px, 3vw, 40px) 88px;
+  max-width: 1520px; width: 100%;
+}
+/* 页头 = 原型的 .view-head。标题大一档、正文限宽 78ch ——
+   一行超过 78 个字符之后眼睛回不到下一行的行首。 */
+.page-head { margin-bottom: 30px; max-width: 78ch; }
+.page-head h2 { font-size: 26px; line-height: 1.15; letter-spacing: -.03em; }
+.page-head p { margin: 9px 0 0; color: var(--ink-3); font-size: 13.5px; line-height: 1.65; }
 
 /* ── 手机：导航收到顶部，横向滚动只发生在它自己身上 ─────────── */
 @media (max-width: 720px) {
@@ -74,116 +104,85 @@ a { color: var(--accent); text-underline-offset: 2px; }
     gap: 6px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line);
     padding: 10px 12px;
   }
-  .rail h1 { padding: 0 8px 0 0; white-space: nowrap; }
+  .rail h1 { padding: 0 8px 0 0; white-space: nowrap; font-size: 13.5px; }
   .rail nav { flex-direction: row; gap: 4px; }
   /* 手机上导航是横向滚动条，分组标题会把它切碎 —— 收起来，
      链接自己首尾相连地滚。 */
   .nav-group { flex-direction: row; gap: 4px; }
   .nav-group + .nav-group { margin-top: 0; margin-left: 8px; }
   .nav-group-title { display: none; }
-  .rail a { white-space: nowrap; }
+  .rail a { white-space: nowrap; padding: 6px 11px; }
+  .rail a[aria-current="page"] { background: var(--surface-2); }
+  .rail a[aria-current="page"]::before { display: none; }
   .rail .who { display: none; }
+  .main { padding: 22px 16px 72px; }
+  .page-head h2 { font-size: 22px; }
 }
 
-/* ── 组件 ─────────────────────────────────────────────────────── */
-.card {
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: 10px; padding: 14px 16px;
-}
-/* 栅格项的 `min-width` 默认是 auto —— 也就是"不许比内容的最小宽度还窄"。
-   于是卡片里任何一个不肯换行的东西（.flow 那条九格流程条）会把卡片顶宽，
-   卡片再把页面顶宽，横向滚动条就出现在**整页**上而不是那条流程条上。
-   与 .app 的 `minmax(0, 1fr)` 是同一件事的两种写法。 */
-.stack { display: grid; gap: 10px; }
-.stack > * { min-width: 0; }
-.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.spread { display: flex; gap: 12px; align-items: baseline; justify-content: space-between; }
+/* ── 表格容器：滚动发生在容器内部，页面本身永不横向滚动 ─────────
+   表格本身的样式在 components.css（无外框、发丝线、等宽数字列）。
+   这里只留承重的那一条。 */
+.table-wrap { overflow-x: auto; scrollbar-width: thin; }
+table { min-width: 560px; }
+
 .muted { color: var(--ink-3); }
 
-.chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 500;
-  border: 1px solid transparent; white-space: nowrap;
-}
-.chip.good { background: var(--good-soft); color: var(--good); }
-.chip.warn { background: var(--warn-soft); color: var(--warn); }
-.chip.crit { background: var(--crit-soft); color: var(--crit); }
-.chip.flat { background: var(--surface-2); color: var(--ink-2); }
+/* ══════════════════════════════════════════════════════════════════
+   以下是**原型里没有的部件** —— 它们回答的是原型没遇到的问题
+   （离线、幂等重放、闸门推导），所以在这里，不在 components.css。
+   写法照这套语言：左规则而不是整块着色，发丝线而不是边框。
+   ══════════════════════════════════════════════════════════════════ */
 
-.btn {
-  border: 1px solid var(--line-2); background: var(--surface); color: var(--ink);
-  border-radius: 7px; padding: 7px 13px; font-weight: 500;
-  transition: background 140ms, border-color 140ms;
-}
-.btn:hover:not(:disabled) { background: var(--surface-2); }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
-
-/* 表格：**滚动发生在容器内部**，页面本身永不横向滚动 */
-.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
-table { border-collapse: collapse; width: 100%; min-width: 560px; }
-th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
-th { color: var(--ink-3); font-weight: 500; font-size: 12px; background: var(--ground); }
-tr:last-child td { border-bottom: 0; }
-tbody tr:hover { background: var(--surface-2); }
-
-.tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .tasks li {
   display: flex; gap: 10px; align-items: center;
-  padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 2px; border-bottom: 1px solid var(--line);
 }
-.tasks li.done { background: var(--good-soft); border-color: transparent; }
+.tasks li:last-child { border-bottom: 0; }
+.tasks li.done span { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
 .tasks li span { min-width: 0; overflow-wrap: anywhere; }
+.tasks li .grow { flex: 1 1 auto; }
 
+/* 副作用清单：一次写操作**还改了什么**。左规则，不是整块底色。 */
 .effects { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .effects li {
   border-left: 2px solid var(--accent); background: var(--accent-soft);
   padding: 9px 12px; border-radius: 0 8px 8px 0;
 }
-.effects li .t { font-size: 11px; color: var(--accent); font-weight: 600; letter-spacing: .02em; }
+.effects li .t {
+  font-family: "DM Mono", monospace; font-size: 9.5px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--accent);
+}
 .effects li.pending { border-left-color: var(--warn); background: var(--warn-soft); }
 .effects li.pending .t { color: var(--warn); }
 
+/* 失败留在页面上，不用吐司 —— 吐司会自己消失，而失败要人读完再决定。 */
 .problem {
-  border: 1px solid var(--crit-line, var(--line-2)); background: var(--crit-soft);
-  color: var(--crit); border-radius: 8px; padding: 11px 13px;
+  border-left: 2px solid var(--crit); background: var(--crit-soft);
+  color: var(--crit); border-radius: 0 8px 8px 0; padding: 11px 13px;
 }
 .problem ul { margin: 6px 0 0; padding-left: 18px; }
-
-label.field { display: grid; gap: 5px; }
-label.field > span { color: var(--ink-3); font-size: 12px; }
-input, textarea, select {
-  font: inherit; color: var(--ink); background: var(--surface);
-  border: 1px solid var(--line-2); border-radius: 7px; padding: 7px 10px;
-  width: 100%; max-width: 100%;
-}
 
 /* ── 中心状态机 ───────────────────────────────────────────────────
    横向的流程条，在 390px 上必然放不下九个节点（九格约 654px）。
    与表格同一条处置：**滚动发生在它自己的容器里**，页面不跟着横滚。
 
-   这里要两条规则配合，各自负责一半，缺一条都会溢出 ——
-   而且**溢出的样子不一样**，量过才知道谁在管什么（e2e/layout 实测 390px）：
-
-   · 去掉 `.stack > * { min-width: 0 }` → 溢出 281px，元凶是 `section.card`
-     本身被顶到 671px：卡片跟着内容长大了。
+   两条规则各管一半，缺一条都会溢出，而且**溢出的样子不一样**
+   （e2e/layout 实测 390px）：
+   · 去掉 `.stack > * { min-width: 0 }` → 溢出 281px，元凶是
+     `section.card` 本身被顶到 671px：卡片跟着内容长大了。
    · 去掉本处的 `overflow-x: auto` → 溢出 264px，元凶是流程条的 `li`
-     跑到了 654px，而卡片没动：卡片不肯长大了，内容却无处可去。
-
-   所以：min-width 让卡片守住宽度，overflow-x 给内容一个去处。 */
+     跑到了 654px，而卡片没动：卡片不肯长大，内容却无处可去。 */
 .flow {
   display: flex; gap: 6px; margin: 0; padding: 0 0 4px; list-style: none;
   overflow-x: auto; scrollbar-width: thin;
 }
 .flow li {
-  flex: none; padding: 5px 11px; border-radius: 999px; font-size: 12px;
+  flex: none; padding: 4px 11px; border-radius: 99px; font-size: 12px;
   background: var(--surface-2); color: var(--ink-3); white-space: nowrap;
 }
 .flow li.past { background: var(--good-soft); color: var(--good); }
-.flow li.now {
-  background: var(--accent); color: var(--accent-ink); font-weight: 600;
-}
+.flow li.now { background: var(--ink); color: var(--surface); font-weight: 500; }
 
 /* ── 闸门未满足项 ─────────────────────────────────────────────────
    一条一行，模块名在前、去处理在后 —— 眼睛从左到右就是
@@ -191,26 +190,22 @@ input, textarea, select {
 .unmet { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .unmet li {
   display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
-  padding: 9px 12px; border-radius: 8px;
+  padding: 9px 12px; border-radius: 0 8px 8px 0;
   background: var(--warn-soft); border-left: 2px solid var(--warn);
 }
 .unmet li > span:not(.chip) { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
 
 /* ── 闸门横幅：阻塞项不是进度条上的一段 ─────────────────────────── */
-.gatebar { display: flex; gap: 12px; align-items: baseline; }
-.gatebar strong { font-size: 22px; line-height: 1.1; }
-.gatebar.blocked { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
-.gatebar.clear { background: var(--good-soft); border-color: transparent; color: var(--good); }
+.gatebar { display: flex; gap: 12px; align-items: baseline; padding: 12px 14px; border-radius: 8px; }
+.gatebar strong { font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.gatebar.blocked { background: var(--warn-soft); color: var(--warn); }
+.gatebar.clear { background: var(--good-soft); color: var(--good); }
 .gatebar span { color: var(--ink-2); }
 .gatebar.blocked span b { color: var(--warn); }
 
-/* ── 键值表 ───────────────────────────────────────────────────── */
-.kv {
-  display: grid; grid-template-columns: max-content minmax(0, 1fr);
-  gap: 7px 18px; margin: 0;
-}
-.kv dt { color: var(--ink-3); font-size: 12px; }
-.kv dd { margin: 0; }
+/* 键值表。列宽用 max-content 而不是原型的固定 96px ——
+   这里的名目是中文，长短差得多（"中心编号" vs "首例受试者入组日"）。 */
+.kv { grid-template-columns: max-content minmax(0, 1fr); gap: 7px 18px; }
 
 /* 链接样式的按钮 / 按钮样式的链接 —— 两者要长得一样，
    否则同一行里「撤销」和「去处理」会像是两种不同分量的动作。 */
@@ -219,26 +214,26 @@ input, textarea, select {
   border: 0; background: transparent; color: var(--accent);
   padding: 4px 6px; font-weight: 500;
 }
-.btn.link:hover:not(:disabled) { background: var(--accent-soft); }
-.tasks li .grow { flex: 1 1 auto; }
+.btn.link:hover:not(:disabled) { background: var(--accent-soft); border-color: transparent; }
 
 /* ── 推导链：一个数字说不出它是怎么来的，这几行说得出 ─────────────── */
 .derive {
-  background: var(--surface-2); border-radius: 8px; padding: 11px 13px;
-  display: grid; gap: 4px;
+  background: var(--surface-2); border-left: 2px solid var(--accent);
+  border-radius: 0 8px 8px 0; padding: 12px 14px;
+  display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); line-height: 1.65;
 }
 .derive .tot {
   border-top: 1px solid var(--line-2); margin-top: 4px; padding-top: 6px;
-  font-size: 15px;
+  font-size: 15px; color: var(--ink);
 }
 
-/* ── 分项表：I8' 四项要一眼看出方向相反的那两项 ───────────────────
+/* ── 分项表：四项要一眼看出方向相反的那两项 ───────────────────────
    靠颜色**和**符号两条线索，不只靠颜色 —— 色觉差异下颜色那条会消失。 */
 .terms { width: 100%; min-width: 0; border-collapse: collapse; }
 .terms td { padding: 7px 0; border-bottom: 1px solid var(--line); }
 .terms td:last-child { text-align: right; white-space: nowrap; padding-left: 12px; }
 .terms tr.minus td { color: var(--crit); }
-.terms tr.plus td  { color: var(--good); }
+.terms tr.plus td { color: var(--good); }
 .terms tr.sum td {
   border-bottom: 0; border-top: 1px solid var(--line-2);
   font-weight: 600; padding-top: 9px;
@@ -257,28 +252,18 @@ input, textarea, select {
 }
 .outbox-badge:hover { filter: brightness(.97); }
 
-
-/* ── 分段切换（组织与权限那三页共用） ────────────────────────────
-   不做成侧栏的三个链接：它们是同一页的三个视角，不是三个模块。
-   做成路由的话，"改完角色回到人员列表"会变成一次导航而不是一次切换。 */
-.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 8px;
-  background: var(--surface-2); border: 1px solid var(--line); }
-.seg button {
-  border: 0; background: transparent; color: var(--ink-2);
-  padding: 6px 12px; border-radius: 6px; cursor: pointer; font: inherit;
+/* ── 表单 ─────────────────────────────────────────────────────── */
+label.field { display: grid; gap: 5px; margin-bottom: 0; }
+label.field > span { color: var(--ink-3); font-size: 12px; }
+input, textarea, select {
+  font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line-2); border-radius: 7px; padding: 7px 10px;
+  width: 100%; max-width: 100%;
+  transition: border-color var(--t) var(--ease);
 }
-.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; }
-
-/* 概览小卡。四个数字一行，回答"这个租户现在什么样"。 */
-.stats { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
-.stat .stat-l { color: var(--ink-3); font-size: 12px; }
-.stat .stat-v { font-size: 22px; font-variant-numeric: tabular-nums; margin-top: 2px; }
-.stat .stat-n { color: var(--ink-3); font-size: 11.5px; margin-top: 3px; }
-
+input:hover, textarea:hover, select:hover { border-color: var(--ink-3); }
 /* 表单行：几个字段横着排，窄屏自己折。 */
 .grid-form { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-
 /* 权限矩阵里的复选格 */
 .tick { text-align: center; }
 .tick input { width: auto; }

@@ -1,8 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useToast } from "@sitedesk/ui/react";
+import { WITHDRAW_REASONS } from "@sitedesk/contracts";
+import { call, ApiError, type ProblemDetails } from "../../api/client.js";
+import { loadMe } from "../login/me.js";
 import {
   listSubjects, STATE_LABEL, OPEN_STATES, anonymous, type Subject
 } from "./api.js";
+/* 脱落原因的中文名与筛选漏斗那一页共用一份 —— 各写一份的话，
+   同一个 `adverse_event` 会在两页上叫两个名字。 */
+import { WITHDRAW_LABEL } from "../enrollment/api.js";
 
 /* ════════════════════════════════════════════════════════════════════
    受试者访视窗口。
@@ -23,10 +30,46 @@ import {
 export function SubjectsPage() {
   const [subs, setSubs] = useState<Subject[] | null>(null);
   const [openOnly, setOpenOnly] = useState(true);
+  const [canWrite, setCanWrite] = useState(false);
+  /** 正在给谁登记脱落。**行内，不弹层** —— 填的时候要看得见
+   *  他做到第几次访视了，那正是这一步的收入口径。 */
+  const [wdOn, setWdOn] = useState<Subject | null>(null);
+  const [wdReason, setWdReason] = useState("");
+  const [wdOn2, setWdOn2] = useState("");
+  const [wdNote, setWdNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  const say = useToast();
 
-  useEffect(() => {
+  const load = useCallback(() => {
     void listSubjects(openOnly ? { state: OPEN_STATES } : {}).then(r => setSubs(r.items));
   }, [openOnly]);
+  useEffect(load, [load]);
+
+  useEffect(() => {
+    void loadMe()
+      .then(m => setCanWrite(m.permissions.actions.includes("subjWrite")))
+      .catch(() => setCanWrite(false));
+  }, []);
+
+  /** 登记脱落。**两件事同时发生，都要在按下去之前说清楚**：
+   *  收入按已完成访视比例计（不按整例），剩余未完成的访视一并作废 ——
+   *  不作废的话这一例会永远刷红超窗。 */
+  const withdraw = async () => {
+    if (!wdOn) return;
+    setBusy(true); setProblem(null);
+    try {
+      const r = await call<{ sideEffects: { summary: string }[] }>("withdrawSubject", {
+        params: { id: wdOn.id },
+        body: { reason: wdReason, withdrawnOn: wdOn2, note: wdNote.trim() }
+      });
+      load();
+      setWdOn(null); setWdReason(""); setWdOn2(""); setWdNote("");
+      say(r.sideEffects[0]?.summary ?? "已登记脱落");
+    } catch (e) {
+      if (e instanceof ApiError) setProblem(e.problem); else throw e;
+    } finally { setBusy(false); }
+  };
 
   if (!subs) return <p className="muted">加载中…</p>;
 
@@ -100,16 +143,97 @@ export function SubjectsPage() {
                   <td>{windowChip(s)}</td>
                   <td className="muted">{s.crcName ?? "—"}</td>
                   <td>
-                    {s.nextVisit && (
-                      <Link to={`/visits/${s.nextVisit.id}`} className="btn"
-                        style={{ textDecoration: "none", display: "inline-block" }}>打开</Link>
-                    )}
+                    <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                      {s.nextVisit && (
+                        <Link to={`/visits/${s.nextVisit.id}`} className="btn go"
+                          style={{ marginLeft: 0 }}>打开</Link>
+                      )}
+                      {/* 登记脱落。只给还在流程里的那几个 ——
+                          已经筛败或已脱落的人没有"脱落"这一步。 */}
+                      {canWrite && OPEN_STATES.includes(s.state) && (
+                        <button className="btn link" data-testid={`wd-${s.id}`}
+                          onClick={() => {
+                            setWdOn(s); setWdReason(""); setWdNote("");
+                            setWdOn2(""); setProblem(null);
+                          }}>登记脱落</button>
+                      )}
+                    </span>
                   </td>
                 </tr>
               ))}
           </tbody>
         </table>
       </div>
+
+      {/* ── 登记脱落 ─────────────────────────────────────────────────
+          这一步有两个不显形的后果，都要在按下去之前说出来：
+          ① 收入按**已完成访视比例**计，不按整例（I8'）；
+          ② 剩余未完成的访视**一并作废** —— 不作废的话，
+             这一例会永远刷红超窗，而超窗每天都在往方案偏离上走。 */}
+      {wdOn && (
+        <section className="card" data-testid="wd-form" style={{ marginTop: 18 }}>
+          <div className="card-h">
+            <h3>登记脱落</h3>
+            <span className="sub">
+              {wdOn.screeningNo ?? "受试者"} · {wdOn.siteCode} ·
+              已完成 {wdOn.visitsDone}/{wdOn.visitsPlanned} 次访视
+            </span>
+            <span className="sp" />
+            <button className="btn link" onClick={() => setWdOn(null)}>取消</button>
+          </div>
+          <div className="card-b stack">
+            {problem && (
+              <div className="problem" data-testid="wd-problem">
+                <strong>{problem.title}</strong>
+                {problem.detail && <div>{problem.detail}</div>}
+              </div>
+            )}
+            <div className="grid-form">
+              <label className="field">
+                <span>脱落原因</span>
+                <select value={wdReason} data-testid="wd-reason"
+                  onChange={e => setWdReason(e.target.value)}>
+                  <option value="">— 选一个 —</option>
+                  {WITHDRAW_REASONS.map(r => (
+                    <option key={r} value={r}>{WITHDRAW_LABEL[r] ?? r}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>脱落日期</span>
+                <input type="date" value={wdOn2} data-testid="wd-date"
+                  onChange={e => setWdOn2(e.target.value)} />
+              </label>
+            </div>
+            <label className="field">
+              <span>说明 <span className="t-mut">· 至少 4 字</span></span>
+              <textarea rows={2} value={wdNote} data-testid="wd-note"
+                placeholder="例：受试者第 3 周期出现 III 度肝损伤，研究者判断需终止治疗，已完成末次安全性随访。"
+                onChange={e => setWdNote(e.target.value)} />
+            </label>
+            <div className="derive" data-testid="wd-consequence">
+              <b>这一下有两个后果，都不显形：</b>
+              <br />
+              ① 这一例的收入按<b>已完成访视比例</b>计 ——
+              {wdOn.visitsPlanned > 0 && <>
+                {" "}也就是 {wdOn.visitsDone}/{wdOn.visitsPlanned}，
+                不是整例。
+              </>}
+              <br />
+              ② 剩余 <b>{Math.max(0, wdOn.visitsPlanned - wdOn.visitsDone)}</b> 次
+              未完成的访视<b>一并作废</b> —— 不作废的话，
+              这一例会永远刷红超窗，而超窗每天都在往方案偏离上走。
+            </div>
+            <div className="row">
+              <button className="btn btn-p" data-testid="wd-submit"
+                disabled={busy || !wdReason || !wdOn2 || wdNote.trim().length < 4}
+                onClick={() => void withdraw()}>
+                {busy ? "登记中…" : "登记脱落"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="derive" style={{ marginTop: 14 }}>
         这一页一行<b>一个人</b>；「今天」那一页一行<b>一次访视</b>。

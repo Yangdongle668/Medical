@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { yuan, pct } from "../cost/money.js";
+import { NewIntakeForm } from "./NewIntakeForm.js";
+import { SoaEditor } from "./SoaEditor.js";
 
 /* ════════════════════════════════════════════════════════════════════
    立项与建档。
@@ -65,6 +67,9 @@ export function IntakePage() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  /** 展开了哪个项目的访视计划表。**放在项目表里** ——
+   *  SOA 是项目级的配置，而这张表就是项目登记表。 */
+  const [soaFor, setSoaFor] = useState<string | null>(null);
 
   const reload = () => Promise.all([
     call<{ items: Intake[] }>("listIntakeApplications", { query: { limit: 100 } })
@@ -77,6 +82,11 @@ export function IntakePage() {
   if (!me || !rows || !board) return <p className="muted">加载中…</p>;
 
   const canDecide = me.permissions.actions.includes("approve");
+  /* 提交立项要 `bid`，批准要 `approve` —— **两个动作两个人**。
+     同一个人两样都有时他仍然批不了自己的申请（服务端那条规矩）。 */
+  const canSubmit = me.permissions.actions.includes("bid");
+  /* 改 SOA 要 `manage` —— 它对应一次方案修订，不是商务动作。 */
+  const canManage = me.permissions.actions.includes("manage");
   const seesPrice = board.openContractCents !== undefined;
   const open = rows.filter(x => x.state === "submitted");
 
@@ -139,6 +149,12 @@ export function IntakePage() {
         </div>
       )}
       {said && <p className="muted" data-testid="intake-said">{said}</p>}
+
+      {/* 提交入口。此前这一页只能批准与退回 —— 于是「立项」这条流程
+          只处理得了 seed 里已经躺着的那几份申请。 */}
+      {canSubmit && (
+        <NewIntakeForm gmGate={board.gmGate} seesPrice={seesPrice} onCreated={() => void reload()} />
+      )}
 
       {/* ── 申请 ─────────────────────────────────────────────────── */}
       <div className="stack" style={{ marginBottom: 16 }}>
@@ -289,11 +305,13 @@ export function IntakePage() {
                 <th className="num">计划例数</th><th className="num">合同中心</th>
                 <th className="num">已建档</th>
                 {seesPrice && <th className="num">合同额</th>}
+                <th />
               </tr>
             </thead>
             <tbody>
               {board.studies.map(s => (
-                <tr key={s.studyId} data-testid="filing-row"
+                <Fragment key={s.studyId}>
+                <tr data-testid="filing-row"
                   style={s.missingSites > 0
                     ? { background: "rgba(192,57,43,.06)" } : undefined}>
                   <td className="mono">{s.studyCode}</td>
@@ -315,7 +333,26 @@ export function IntakePage() {
                     )}
                   </td>
                   {seesPrice && <td className="num">{yuan(s.contractCents ?? 0)}</td>}
+                  <td>
+                    {/* 访视计划表。**此前它只在库里** —— `getSoa` 前端一次
+                        都没调过，而 CRC 每天看到的任务清单正是从这里落下来的。 */}
+                    <button className="btn link" data-testid={`soa-open-${s.studyId}`}
+                      onClick={() => setSoaFor(soaFor === s.studyId ? null : s.studyId)}>
+                      {soaFor === s.studyId ? "收起访视计划" : "访视计划表"}
+                    </button>
+                  </td>
                 </tr>
+                {/* 展开的访视计划表占满整行 —— 它是一张表，
+                    塞进某一格里会被挤成一条竖线。 */}
+                {soaFor === s.studyId && (
+                  <tr data-testid="soa-expanded">
+                    <td colSpan={seesPrice ? 8 : 7} style={{ padding: 0 }}>
+                      <SoaEditor studyId={s.studyId} studyCode={s.studyCode}
+                        canManage={canManage} onClose={() => setSoaFor(null)} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
