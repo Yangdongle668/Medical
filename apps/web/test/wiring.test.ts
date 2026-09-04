@@ -61,11 +61,6 @@ const writes = allEndpoints()
 /** 服务端有、界面上暂时没有入口的写端点。**每一条都要写清楚为什么。**
  *  接上一个就从这里删一行 —— 这张表只许变短。 */
 const NOT_YET: Record<string, string> = {
-  addAuditFinding: "补一条稽查发现：QaAuditPage 接了开稽查与关发现，没接加发现",
-  reportSae: "SAE 上报：录 SAE 的界面还没建",
-  reportSaeSubmitted: "SAE 已递交监管：同上",
-  withdrawSubject: "受试者退出：SubjectsPage 接了建档/ICF/入组/筛败，没接退出",
-  enterVisitToEdc: "访视录入 EDC：VisitPage 接了完成与确认，没接录入标记",
   replaceSoa: "整体替换项目 SOA：属于项目配置，界面上还没有配置页",
   replaceStartupTemplate: "整体替换启动清单模板：同上"
 };
