@@ -220,3 +220,23 @@ export const ListAuditEntriesQuery = PageQuery.extend({
   sensitiveOnly: QueryBool.optional().describe("只看权限类变更"),
   since: z.iso.datetime({ offset: true }).optional()
 });
+
+/** 登记 / 更换登录链接的收件地址。
+ *
+ *  **地址是写进去的，读不回来。** 台账上只报「登记过没有」
+ *  （Account.hasLoginAddress）—— 管理员要判断的是"这个人自助进得来吗"，
+ *  而把一屋子人的邮箱手机号铺在列表页上，是为了一个判断付了一整页的代价。
+ *  登记错了就再登记一次，那也是这条命令唯一的用法。 */
+/* 这里只管长度，**不重抄形状**：形状的唯一定义处是服务端的
+   `app.set_login_address`（运维脚本走的同一个函数），它的 RAISE 原话
+   会原样透出来。在这里再写一遍正则，两处迟早对不上，
+   而对不上的那天没人知道该信哪一条。
+
+   但长度这一条也得说人话 —— 光写 `.min(5)` 时，填「周敏」收到的是
+   一句「请求参数不符合契约」，和登录名那次犯的是同一个错。 */
+export const SetLoginAddressBody = z.object({
+  address: z.string().trim()
+    .min(5, "太短了 —— 这里填的是收链接的邮箱或手机号，不是姓名")
+    .max(160, "最多 160 个字符")
+    .describe("邮箱或手机号。形状由服务端的 app.set_login_address 校验")
+}).extend(WithReason.shape).meta({ id: "SetLoginAddressRequest" });

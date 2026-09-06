@@ -21,7 +21,7 @@ import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
-import type { MockSoaVisit,
+import type { MockAccount, MockSoaVisit,
   MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
   MockMonitorVisit, MockAudit, MockIntake,
   MockAcceptance, MockIsf } from "./scenario.js";
@@ -369,7 +369,7 @@ export const scenarioHandlers = [
      于是这一页看起来能用、点什么都不生效 —— 建了账号列表不变、
      勾了权限矩阵不动。那比一张空页更难看出问题。 */
   http.get(pathToRegExp("/v1/accounts"), () =>
-    HttpResponse.json({ items: scenario.accounts, nextCursor: null })),
+    HttpResponse.json({ items: scenario.accounts.map(accountDto), nextCursor: null })),
 
   http.post(pathToRegExp("/v1/accounts"), async ({ request }) => {
     const b = await request.json() as {
@@ -389,7 +389,7 @@ export const scenarioHandlers = [
       disabledAt: null, disabledReason: null, lastLoginAt: null
     };
     scenario.accounts.push(acc);
-    return HttpResponse.json(acc, { status: 201 });
+    return HttpResponse.json(accountDto(acc), { status: 201 });
   }),
 
   http.patch(pathToRegExp("/v1/accounts/{id}"), async ({ request }) => {
@@ -413,7 +413,7 @@ export const scenarioHandlers = [
       a.team = team ? { id: team.id, code: team.code, name: team.name } : null;
     }
     if (b.orgRef !== undefined) a.orgRef = b.orgRef;
-    return HttpResponse.json(a);
+    return HttpResponse.json(accountDto(a));
   }),
 
   http.post(pathToRegExp("/v1/accounts/{id}:disable"), async ({ request }) => {
@@ -422,7 +422,7 @@ export const scenarioHandlers = [
     if (!a) return HttpResponse.json(problem("not-found", 404, "账号不存在"), { status: 404 });
     const b = await request.json() as { reason: string };
     a.status = "disabled"; a.disabledAt = new Date().toISOString(); a.disabledReason = b.reason;
-    return HttpResponse.json({ data: a, sideEffects: [
+    return HttpResponse.json({ data: accountDto(a), sideEffects: [
       { type: "AccountDisabled", summary: `${a.displayName} 已停用，历史记录与审计轨迹保留` }
     ] }, { status: 201 });
   }),
@@ -432,10 +432,34 @@ export const scenarioHandlers = [
     const a = scenario.accounts.find(x => x.id === id);
     if (!a) return HttpResponse.json(problem("not-found", 404, "账号不存在"), { status: 404 });
     a.status = "active"; a.disabledAt = null; a.disabledReason = null;
-    return HttpResponse.json({ data: a, sideEffects: [
+    return HttpResponse.json({ data: accountDto(a), sideEffects: [
       { type: "AccountEnabled",
         summary: `${a.displayName} 已恢复登录 —— 停用时交接出去的中心不会自动回来` }
     ] }, { status: 201 });
+  }),
+
+  /* 登记收件地址。mock 里只记一个布尔 —— **地址本身写进去读不回来**，
+     台账上要的就是"登记过没有"这一件事。 */
+  http.post(pathToRegExp("/v1/accounts/{id}:set-login-address"), async ({ request }) => {
+    const id = seg(request.url, /\/accounts\/([^/:]+):set-login-address/);
+    const b = await request.json() as { address: string; reason: string };
+    if (!identity().actions.includes("manage")) return HttpResponse.json(
+      problem("forbidden", 403, "只有管理员能登记收件地址"), { status: 403 });
+    const a = scenario.accounts.find(x => x.id === id);
+    if (!a) return HttpResponse.json(
+      problem("not-found", 404, "账号不存在"), { status: 404 });
+    /* 与服务端 app.set_login_address 同一条形状校验 —— 打错的地址不会报错，
+       只会让那个人永远收不到链接。 */
+    const t = b.address.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(t) && !/^\+?[0-9][0-9 -]{5,19}$/.test(t))
+      return HttpResponse.json(problem("validation-failed", 422,
+        `收件地址既不像邮箱也不像手机号：${t}`), { status: 422 });
+    /* 已经属于别人时报错，**不悄悄改绑** —— 那等于把那个人的入口转走。 */
+    if (scenario.accounts.some(x => x.id !== id && x.loginAddress === t))
+      return HttpResponse.json(problem("invariant-violated", 422,
+        "这个地址已经登记给另一个账号了，请先解除那一边"), { status: 422 });
+    a.loginAddress = t;
+    return new HttpResponse(null, { status: 204 });
   }),
 
   http.post(pathToRegExp("/v1/accounts/{id}:set-password"), () =>
@@ -2954,6 +2978,15 @@ const MS_PLAN = [
 
 /** 状态机顺序取自契约，不在 mock 里另立一份。 */
 const nextState = (cur: string) => SITE_STATES[SITE_STATES.indexOf(cur as never) + 1] ?? null;
+
+/** 账号 DTO。**地址读不回来** —— 与服务端同一条口径：
+ *  台账要的是"这个人自助进得来吗"，不是一屋子人的邮箱手机号。
+ *  raw 直接下发的话，mock 上会多出一个真库没有的字段，
+ *  而那种差别只有在联调那天才发现。 */
+function accountDto(a: MockAccount) {
+  const { loginAddress, ...rest } = a;
+  return { ...rest, hasLoginAddress: !!loginAddress };
+}
 
 function siteDto(id: string) {
   const s = SITES_LIST.find(x => x.id === id);

@@ -8,7 +8,7 @@ import { z } from "zod";
 import { Uuid, WithReason,
   CreateAccountBody, UpdateAccountBody, SetAccountPasswordBody,
   CreateTeamBody, UpdateRolePermissionsBody, ListAccountsQuery,
-  ListAuditEntriesQuery } from "@sitedesk/contracts";
+  ListAuditEntriesQuery, SetLoginAddressBody } from "@sitedesk/contracts";
 import { IdentityService } from "./identity.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
@@ -84,6 +84,12 @@ export class IdentityController {
     @Param("id", new ZodPipe(Uuid)) id: string,
     @Body(new ZodPipe(SetAccountPasswordBody)) b: z.infer<typeof SetAccountPasswordBody>
   ) { await this.svc.setAccountPassword(id, b.password, b.reason); }
+
+  @Post("/accounts/:id\\:set-login-address") @Operation("setLoginAddress") @HttpCode(204)
+  async setLoginAddress(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(SetLoginAddressBody)) b: z.infer<typeof SetLoginAddressBody>
+  ) { await this.svc.setLoginAddress(id, b.address, b.reason); }
 
   @Get("/teams") @Operation("listTeams")
   teams() { return this.svc.listTeams(); }

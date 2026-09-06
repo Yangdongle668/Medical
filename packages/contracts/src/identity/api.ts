@@ -6,7 +6,7 @@ import { commandResult, WithReason } from "../kernel/command.js";
 import { Account, Principal, Role, Team, AuditEntry,
   CreateAccountBody, UpdateAccountBody, SetAccountPasswordBody,
   CreateTeamBody, UpdateRolePermissionsBody, ListAccountsQuery,
-  ListAuditEntriesQuery } from "./model.js";
+  ListAuditEntriesQuery, SetLoginAddressBody } from "./model.js";
 import { FieldKey } from "../kernel/fields.js";
 
 const CTX = "identity";
@@ -140,6 +140,29 @@ define({
   body: SetAccountPasswordBody,
   status: 204,
   errors: ["not-found", "validation-failed"]
+});
+
+define({
+  id: "setLoginAddress", method: "post", path: "/v1/accounts/{id}:set-login-address",
+  layer: "L1", context: CTX, summary: "登记登录链接的收件地址", action: "manage",
+  description:
+    "一次性链接只送到**库里登记的**地址，不送到请求里带的那个 ——\n" +
+    "否则 `magic-link` 这个公开端点就是一键账号接管。所以地址必须有一条路写进去。\n\n" +
+    "在此之前那条路只有一个：上服务器跑 `deploy/login-address.sh`。\n" +
+    "于是新建的账号**没有入口**：申请链接会得到一句「已发送」，" +
+    "而服务端日志里写的是「没有登记收件地址，未签发」——\n" +
+    "那个人一直等，没有人知道为什么。机构老师和 PI 恰恰是最该走链接这条路的人。\n\n" +
+    "**能改地址等于能拿到那个人的登录链接。** 但管理员本来就能用 " +
+    "`setAccountPassword` 接管任何账号，两者一样悄无声息 —— 所以这里不是新增了\n" +
+    "一类能力，而是把一件已经能做的事**摆到会留痕的地方**：\n" +
+    "`manage` 动作、进审计轨迹、标为敏感。与迁移 0026 对「管理员给自己加 subject 字段」\n" +
+    "的处置同一条道理 —— **不是拦住他，是让这件事留下时间和人**。\n\n" +
+    "一个账号只保留一个地址，再调一次就是更换。\n" +
+    "地址已经登记给别的账号时**报错，不悄悄改绑** —— 那等于把那个人的入口转走。",
+  params: ById,
+  body: SetLoginAddressBody,
+  status: 204,
+  errors: ["not-found", "validation-failed", "invariant-violated"]
 });
 
 define({

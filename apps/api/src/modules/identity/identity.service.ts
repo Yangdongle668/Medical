@@ -301,6 +301,49 @@ export class IdentityService {
       targetId: acc.login, after: { passwordIsInitial: true }, reason });
   }
 
+  /** 登记 / 更换登录链接的收件地址。
+   *
+   *  **能改地址等于能拿到那个人的登录链接。** 但管理员本来就能用
+   *  `setAccountPassword` 接管任何账号，两者一样悄无声息 —— 所以这条命令
+   *  不是新增了一类能力，是把一件已经能做的事**摆到会留痕的地方**：
+   *  `manage` 动作、进审计轨迹、标为敏感（isSensitive 由审计层按动作判）。
+   *  与迁移 0026 对「管理员给自己加 subject 字段」的处置同一条道理 ——
+   *  不是拦住他，是让这件事留下时间和人。
+   *
+   *  校验（地址形状、地址已属于别人）全在 `app.set_login_address` 里，
+   *  与运维脚本走**同一个函数** —— 在这里再写一遍，两条路迟早对不上，
+   *  而对不上的那天没人知道该信哪一条。 */
+  async setLoginAddress(id: string, address: string, reason: string) {
+    const c = ctx();
+    const cur = await c.client.query<AccountRow>(
+      `SELECT ${ACCOUNT_COLS} FROM ${ACCOUNT_FROM} WHERE a.id = $1`, [id]);
+    const acc = cur.rows[0];
+    if (!acc) throw notFound("账号");
+
+    let ok = false;
+    try {
+      const { rows } = await c.client.query<{ ok: boolean }>(
+        `SELECT app.set_login_address($1, $2) AS ok`, [acc.login, address]);
+      ok = rows[0]?.ok ?? false;
+    } catch (e) {
+      /* 函数里那两条校验都是 RAISE EXCEPTION，原话比"操作失败"有用得多：
+         「收件地址既不像邮箱也不像手机号」「这个地址已经登记给另一个账号了」。 */
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new ProblemException(
+        /^这个地址已经登记给/.test(msg) ? "invariant-violated" : "validation-failed",
+        { detail: msg });
+    }
+    /* 函数对「账号不存在或已停用」返回 false。上面已经查到账号了，
+       所以走到这里只可能是**已停用** —— 说清楚是哪一种。 */
+    if (!ok) throw new ProblemException("validation-failed", {
+      detail: `${acc.login} 已停用 —— 停用的账号不登记收件地址，先启用它` });
+
+    /* **地址本身不进审计。** 记的是"谁给谁登记过"，不是登记成了什么 ——
+       与设口令那条同一条规矩。改错了就再登记一次。 */
+    await this.audit.write({ action: "登记登录收件地址", targetType: "account",
+      targetId: acc.login, after: { hasLoginAddress: true }, reason });
+  }
+
   async listTeams() {
     const c = ctx();
     const { rows } = await c.client.query<{

@@ -43,6 +43,12 @@ export const enableAccount = (id: string, reason: string) =>
 export const setAccountPassword = (id: string, password: string, reason: string) =>
   call("setAccountPassword", { params: { id }, body: { password, reason } });
 
+/** 登记 / 更换登录链接的收件地址。**写得进去，读不回来** ——
+ *  台账上只报「登记过没有」。要判断的是"这个人自助进得来吗"，
+ *  而把一屋子人的邮箱手机号铺在列表页上，是为了一个判断付一整页的代价。 */
+export const setLoginAddress = (id: string, address: string, reason: string) =>
+  call("setLoginAddress", { params: { id }, body: { address, reason } });
+
 export const createTeam = (b: { code: string; name: string; leadAccountId?: string | null }) =>
   call<Team>("createTeam", { body: b });
 

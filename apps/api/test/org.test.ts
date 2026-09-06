@@ -199,6 +199,115 @@ describe("管理员给别人设初始口令", () => {
   });
 });
 
+/* ════════════════════════════════════════════════════════════════════
+   登记登录收件地址。
+
+   这条端点补的是"建出来的人进不进得来"的另一半：口令那条是内部账号
+   当面给，链接这条是给机构老师与 PI 的（一周登录两次的人不该记密码）。
+   在此之前登记地址**只能进服务器跑脚本**，于是常见结局是账号建好了、
+   没人跑那个脚本，而 `/v1/auth/magic-link` 照样回 202 什么也不发。
+
+   台账上那一列（`hasLoginAddress`）就是为了让这件事看得见 ——
+   所以下面第一条钉的是**它真的会翻过来**，不只是接口回了 204。
+   ════════════════════════════════════════════════════════════════════ */
+describe("管理员给别人登记登录收件地址", () => {
+  const addr = () => `t${Date.now().toString(36)}${++seq}@hengji.com`;
+  const idem = () => ({ "Idempotency-Key": randomUUID() });
+
+  it("登记完，账号台账上「进得来」那一格才翻过来", async () => {
+    const a = await newAccount();
+    const before = (await admin.get(`/v1/accounts?q=${a.login}`)).body.items[0];
+    expect(before.hasLoginAddress, "新账号不该有收件地址").toBe(false);
+
+    const r = await admin.post(`/v1/accounts/${a.id}:set-login-address`,
+      { address: addr(), reason: "入职登记，本人邮箱已核对" });
+    expect(r.status, JSON.stringify(r.body)).toBe(204);
+
+    const after = (await admin.get(`/v1/accounts?q=${a.login}`)).body.items[0];
+    expect(after.hasLoginAddress).toBe(true);
+  });
+
+  it("地址本身读不回来 —— 契约里只有「登记过没有」这一个布尔", async () => {
+    const a = await newAccount();
+    const mine = addr();
+    await admin.post(`/v1/accounts/${a.id}:set-login-address`,
+      { address: mine, reason: "入职登记，本人邮箱已核对" });
+    /* 要判断的是"这个人自助进不进得来"。把一屋子人的邮箱手机号
+       铺在列表页上，是为一个判断付一整页的代价。 */
+    const r = await admin.get(`/v1/accounts?q=${a.login}`);
+    expect(JSON.stringify(r.body)).not.toContain(mine);
+  });
+
+  it("地址也不进审计 —— 记的是「谁给谁登记过」", async () => {
+    const a = await newAccount();
+    const mine = addr();
+    await admin.post(`/v1/accounts/${a.id}:set-login-address`,
+      { address: mine, reason: "入职登记，本人邮箱已核对" });
+    const r = await admin.get(
+      `/v1/audit-entries?targetType=account&targetId=${a.login}&limit=10`);
+    const entry = r.body.items.find(
+      (x: { action: string }) => x.action === "登记登录收件地址");
+    expect(entry, "这一下必须留痕 —— 能改地址等于能拿到那个人的登录链接").toBeTruthy();
+    expect(JSON.stringify(entry)).not.toContain(mine);
+  });
+
+  /* 打错的地址不会报错，只会让那个人永远收不到链接 —— 所以这里必须报，
+     而且**两道门都要说人话**。契约那道只管长度，形状那道在服务端函数里
+     （运维脚本走的同一个）。哪道都不能回一句"请求参数不符合契约"：
+     登录名那次犯的就是这个错。 */
+  it("打错的地址被拒，而且说得出错在哪 —— 长度这道门", async () => {
+    const a = await newAccount();
+    const r = await admin.post(`/v1/accounts/${a.id}:set-login-address`,
+      { address: "周敏", reason: "入职登记，本人邮箱已核对" });
+    expect(r.status).toBe(422);
+    expect(JSON.stringify(r.body)).toMatch(/不是姓名/);
+  });
+
+  it("打错的地址被拒，而且说得出错在哪 —— 形状那道门", async () => {
+    const a = await newAccount();
+    const r = await admin.post(`/v1/accounts/${a.id}:set-login-address`,
+      { address: "周敏周敏周敏", reason: "入职登记，本人邮箱已核对" });
+    expect(r.status).toBe(422);
+    /* 服务端函数的 RAISE 原话原样透出来，不压成"操作失败"。 */
+    expect(r.body.detail).toMatch(/既不像邮箱也不像手机号/);
+  });
+
+  it("地址已属于别人时拒绝，**不悄悄改绑** —— 改绑等于把入口转走", async () => {
+    const one = await newAccount(), two = await newAccount();
+    const shared = addr();
+    expect((await admin.post(`/v1/accounts/${one.id}:set-login-address`,
+      { address: shared, reason: "入职登记，本人邮箱已核对" })).status).toBe(204);
+
+    const r = await admin.post(`/v1/accounts/${two.id}:set-login-address`,
+      { address: shared, reason: "入职登记，本人邮箱已核对" });
+    expect(r.status).toBe(422);
+    expect(r.body.detail).toMatch(/已经登记给另一个账号/);
+
+    /* 第一个人的入口必须原封不动 —— 这才是这条断言的重点。 */
+    const still = (await admin.get(`/v1/accounts?q=${one.login}`)).body.items[0];
+    expect(still.hasLoginAddress).toBe(true);
+    expect((await admin.get(`/v1/accounts?q=${two.login}`))
+      .body.items[0].hasLoginAddress).toBe(false);
+  });
+
+  it("停用的账号不登记 —— 说清是「已停用」，不是含糊的失败", async () => {
+    const a = await newAccount();
+    await admin.post(`/v1/accounts/${a.id}:disable`,
+      { reason: "离职交接完成" }, idem());
+    const r = await admin.post(`/v1/accounts/${a.id}:set-login-address`,
+      { address: addr(), reason: "入职登记，本人邮箱已核对" });
+    expect(r.status).toBe(422);
+    expect(r.body.detail).toMatch(/已停用/);
+  });
+
+  it("CRC 登记不了 —— 这一下要 manage", async () => {
+    const a = await newAccount();
+    const r = await crc.post(`/v1/accounts/${a.id}:set-login-address`,
+      { address: addr(), reason: "想给自己换一个" });
+    expect(r.status).toBe(403);
+  });
+});
+
 describe("分组", () => {
   it("列得出来，并且数得出组员与承接的项目", async () => {
     const r = await admin.get("/v1/teams");

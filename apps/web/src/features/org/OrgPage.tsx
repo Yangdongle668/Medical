@@ -7,7 +7,8 @@ import { MODULES, GROUP_ORDER } from "../../shell/modules.js";
 import { ACTION_KEYS, FIELD_KEYS } from "@sitedesk/contracts";
 import {
   listAccounts, listRoles, listTeams, createAccount, updateAccount,
-  disableAccount, enableAccount, setAccountPassword, createTeam, updateRole,
+  disableAccount, enableAccount, setAccountPassword, setLoginAddress,
+  createTeam, updateRole,
   ROW_RULE, NEEDS_ORG_REF, FIELD_LABEL, ACTION_LABEL,
   type Account, type Role, type Team
 } from "./api.js";
@@ -151,6 +152,7 @@ function UserTab({ me, accounts, roles, teams, run }: {
   const [orgRef, setOrgRef] = useState("");
   const [editing, setEditing] = useState<Account | null>(null);
   const [pwFor, setPwFor] = useState<Account | null>(null);
+  const [addrFor, setAddrFor] = useState<Account | null>(null);
 
   /* 登录名的规则**与契约同一个正则**（CreateAccountBody）。
      在这里当场判，是因为服务端那句提示要等一次往返才看得到 ——
@@ -222,15 +224,13 @@ function UserTab({ me, accounts, roles, teams, run }: {
           </button>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          <b>建出来的账号还没有进得来的路。</b>
-          在这台系统上能做的是下面那一行的「设口令」—— 当面给一个初始口令，
-          他第一次登录时会被要求改掉。
+          <b>建出来的账号还没有进得来的路</b> —— 下面那一行有两个按钮给这条路：
+          「设口令」当面给一个初始口令，他第一次登录时会被要求改掉；
+          「设收件地址」登记邮箱或手机号，之后他可以<b>自己在登录页申请一次性链接</b>。
           <br />
-          想让他<b>自助申请一次性链接</b>，得先给他登记收件地址，
-          而那件事目前只能在服务器上做（<span className="mono">deploy/login-address.sh</span>）——
-          它等同于运维权限：能改收件地址就能把别人的登录链接收到自己手里。
+          机构老师和 PI 走链接那条 —— 一周登录两次的人不该记密码。
           <b>没登记地址就去申请链接，接口会回一句「已发送」，但什么也不会发出去</b>
-          —— 台账上那一列就是为了让这件事看得见。
+          （对外含糊是防账号枚举）—— 台账上「怎么进来」那一列就是为了让这件事看得见。
         </p>
       </div>
 
@@ -297,6 +297,14 @@ function UserTab({ me, accounts, roles, teams, run }: {
                           disabled={self} title={self ? "改自己的口令请用顶部的「改口令」" : undefined}>
                           设口令
                         </button>
+                        {/* 「设收件地址」与「设口令」是同一件事的两条路：
+                            让这个人进得来。链接那条是给机构老师与 PI 的
+                            （一周登录两次的人不该记密码），口令那条是内部账号
+                            当面给。所以两个按钮并排。 */}
+                        <button className="btn" data-testid={`addr-${a.login}`}
+                          onClick={() => setAddrFor(a)}>
+                          {a.hasLoginAddress ? "换收件地址" : "设收件地址"}
+                        </button>
                         {self ? <span className="muted">当前登录</span>
                           : a.status === "active"
                             ? <DangerButton label="停用" testid={`disable-${a.login}`}
@@ -330,7 +338,76 @@ function UserTab({ me, accounts, roles, teams, run }: {
             `${pwFor.displayName} 的口令已重设 —— 他下次登录会被要求改掉，之前的会话全部断开`,
             async () => { await setAccountPassword(pwFor.id, password, reason); setPwFor(null); })} />
       )}
+      {addrFor && (
+        <SetLoginAddress account={addrFor} onClose={() => setAddrFor(null)}
+          onSave={(address, reason) => run(
+            `${addrFor.displayName} 的登录链接以后送到这个地址 —— 他可以自己在登录页申请了`,
+            async () => { await setLoginAddress(addrFor.id, address, reason); setAddrFor(null); })} />
+      )}
     </>
+  );
+}
+
+/* ── 登记登录链接的收件地址 ────────────────────────────────────────
+   这一栏是**写进去、读不回来**的：台账上只报「登记过没有」。
+   要判断的是"这个人自助进得来吗"，而把一屋子人的邮箱手机号铺在
+   列表页上，是为了一个判断付一整页的代价。登记错了就再登记一次。
+
+   **能改地址等于能拿到那个人的登录链接。** 界面上要把这句话说出来 ——
+   管理员本来就能用「设口令」接管任何账号，所以这不是新增的能力，
+   但它同样悄无声息，而悄无声息的事更该在按下去之前被说一遍。 */
+function SetLoginAddress({ account, onClose, onSave }: {
+  account: Account; onClose: () => void;
+  onSave: (address: string, reason: string) => Promise<void>;
+}) {
+  const [address, setAddress] = useState("");
+  const [reason, setReason] = useState("");
+  const t = address.trim();
+  /* 形状的真相在服务端的 app.set_login_address（运维脚本走的是同一个函数）。
+     这里同一条口径先判一遍，是因为一个打错的地址不会报错 ——
+     它只让那个人永远收不到链接，而他会以为是系统坏了。 */
+  const ok = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(t) || /^\+?[0-9][0-9 -]{5,19}$/.test(t);
+
+  return (
+    <div className="card stack" data-testid="set-login-address" style={{ marginTop: 12 }}>
+      <div className="spread">
+        <h3>{account.displayName} 的登录链接送到哪里</h3>
+        <button className="btn link" onClick={onClose}>取消</button>
+      </div>
+      <label className="field">
+        <span>邮箱或手机号</span>
+        <input value={address} data-testid="addr-input" className="mono"
+          placeholder="例：zhanghm@pumch.cn 或 13800138000"
+          aria-invalid={t.length > 0 && !ok ? true : undefined}
+          onChange={e => setAddress(e.target.value)} />
+        {t.length > 0 && !ok && (
+          <span className="t-crit" data-testid="addr-bad" style={{ fontSize: 12 }}>
+            既不像邮箱也不像手机号 —— 打错的地址不会报错，
+            只会让这个人永远收不到链接。
+          </span>
+        )}
+      </label>
+      <label className="field">
+        <span>理由（必填，至少 4 字）</span>
+        <input value={reason} data-testid="addr-reason"
+          placeholder="例：入职登记，本人邮箱已核对"
+          onChange={e => setReason(e.target.value)} />
+      </label>
+      <div className="derive">
+        <b>能改收件地址，等于能拿到这个人的登录链接。</b>
+        所以这一下要 <span className="mono">manage</span> 权限，
+        并且<b>进审计轨迹</b> —— 记的是"谁给谁登记过"，不记地址本身。
+        <br />
+        一个账号只留一个地址，再登记一次就是更换。
+        这个地址<b>已经属于别的账号时会被拦下</b>，不会悄悄改绑 ——
+        那等于把那个人的入口转走。
+      </div>
+      <div className="row">
+        <button className="btn primary" data-testid="addr-go"
+          disabled={!ok || reason.trim().length < 4}
+          onClick={() => void onSave(t, reason.trim())}>登记</button>
+      </div>
+    </div>
   );
 }
 

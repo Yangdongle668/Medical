@@ -170,6 +170,9 @@ export interface MockAccount {
   status: "active" | "disabled";
   joinedOn: string | null; disabledAt: string | null; disabledReason: string | null;
   lastLoginAt: string | null;
+  /** 登录链接的收件地址。**mock 里存着，但 DTO 只下发"有没有"** ——
+   *  与真库同一条口径：写得进去，读不回来。 */
+  loginAddress?: string | null;
 }
 
 export interface Scenario {
