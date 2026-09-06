@@ -12,12 +12,23 @@ interface AccountRow {
   disabled_at: Date | null; disabled_reason: string | null; last_login_at: Date | null;
   role_id: string; role_code: string; role_name: string; role_external: boolean;
   team_id: string | null; team_code: string | null; team_name: string | null;
+  has_login_address: boolean;
 }
 const ACCOUNT_COLS = `
   a.id, a.login, a.display_name, a.is_external, a.org_ref, a.status, a.joined_on,
   a.disabled_at, a.disabled_reason, a.last_login_at,
   r.id AS role_id, r.code AS role_code, r.name AS role_name, r.is_external AS role_external,
-  t.id AS team_id, t.code AS team_code, t.name AS team_name`;
+  t.id AS team_id, t.code AS team_code, t.name AS team_name,
+  /* 登记过收件地址吗 —— 自助那条路（一次性链接）通不通。
+     没有它时 /v1/auth/magic-link 照样回一句「已发送」而什么都没发，
+     所以管理员这一侧必须看得见。
+
+     **不查 auth_password。** 它的行级策略是
+     account_id = app.current_account_id()，严格只看得见自己那一行；
+     拿它做 EXISTS 会对别人一律返回 false，于是台账上每个人都成了
+     "没设过口令"—— 不报错，只是答案是错的。那条策略是对的，撤的是查询。 */
+  EXISTS (SELECT 1 FROM auth_identity ai
+           WHERE ai.account_id = a.id AND ai.provider = 'magic-link') AS has_login_address`;
 const ACCOUNT_FROM = `account a JOIN role r ON r.id = a.role_id LEFT JOIN team t ON t.id = a.team_id`;
 const iso = (v: Date | null) => v ? v.toISOString() : null;
 const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
@@ -34,7 +45,8 @@ const toAccount = (r: AccountRow) => ({
   team: r.team_id ? { id: r.team_id, code: r.team_code!, name: r.team_name! } : null,
   isExternal: r.is_external, orgRef: r.org_ref, status: r.status,
   joinedOn: day(r.joined_on), disabledAt: iso(r.disabled_at),
-  disabledReason: r.disabled_reason, lastLoginAt: iso(r.last_login_at)
+  disabledReason: r.disabled_reason, lastLoginAt: iso(r.last_login_at),
+  hasLoginAddress: r.has_login_address
 });
 
 @Injectable()

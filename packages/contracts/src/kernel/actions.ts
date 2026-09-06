@@ -30,3 +30,36 @@ export const ACTION_KEYS = [
 
 export const ActionKey = z.enum(ACTION_KEYS).meta({ id: "ActionKey" });
 export type ActionKey = (typeof ACTION_KEYS)[number];
+
+/** 十八个动作的中文名。**放在契约里，与 ACTION_KEYS 并排** ——
+ *
+ *  上一版这份表在前端（`apps/web/src/features/org/api.ts`），只有 13 条。
+ *  「组织与权限」的动作矩阵是按它出列的，于是 `accept` / `audit` /
+ *  `capaWrite` / `isfWrite` / `monitor` **在界面上没有那一格**：
+ *  管理员想给 QA 加内部稽查、给 CRC 加监查访视，点不到，也不报错。
+ *
+ *  这正是本文件开头记的那次事故的翻版 —— 那次是契约枚举落后五个，
+ *  这次是前端的副本落后五个。症状一样：**少了几行，而不是报错。**
+ *
+ *  下面的 Record 用 ActionKey 定型：漏一个动作编译不过，
+ *  而不是等到有人发现界面上少了一列。 */
+export const ACTION_LABEL: Record<ActionKey, string> = {
+  accept: "受理立项材料（机构）",
+  advance: "推进中心阶段",
+  approve: "审批工时 / 差旅 / 偏离",
+  audit: "发起内部稽查",
+  bid: "维护报价与投标",
+  capaWrite: "填写质量整改措施",
+  closeQ: "关闭数据质疑",
+  closeQA: "关闭质量事件",
+  ethics: "递交伦理事务",
+  isfWrite: "维护中心文件与物资",
+  manage: "管理人员与权限",
+  monitor: "排期与执行监查访视",
+  piConfirm: "PI 确认访视",
+  raiseQ: "发起数据质疑",
+  rateWrite: "维护费率卡",
+  subjRead: "查看受试者明细",
+  subjWrite: "登记受试者与访视",
+  timeWrite: "填报与作废工时"
+};

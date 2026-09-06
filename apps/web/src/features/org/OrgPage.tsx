@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { MODULES, GROUP_ORDER } from "../../shell/modules.js";
+/* 动作与列的清单来自契约，**表头与格子用同一份** —— 各用各的话，
+   19 列表头配 13 列格子这种事不会报错，只会错位。 */
+import { ACTION_KEYS, FIELD_KEYS } from "@sitedesk/contracts";
 import {
   listAccounts, listRoles, listTeams, createAccount, updateAccount,
   disableAccount, enableAccount, setAccountPassword, createTeam, updateRole,
@@ -149,6 +152,12 @@ function UserTab({ me, accounts, roles, teams, run }: {
   const [editing, setEditing] = useState<Account | null>(null);
   const [pwFor, setPwFor] = useState<Account | null>(null);
 
+  /* 登录名的规则**与契约同一个正则**（CreateAccountBody）。
+     在这里当场判，是因为服务端那句提示要等一次往返才看得到 ——
+     而最自然的填法（「周敏」、「ZhouMin」）全都不合规。 */
+  const loginOk = /^[a-z][a-z0-9_]{2,31}$/.test(login.trim());
+  const loginBad = login.trim().length > 0 && !loginOk;
+
   const role = roles.find(r => r.id === roleId);
   /* hospital 规则的角色没有 orgRef 就是个"登得进来、一行都看不到"的账号。
      库里的触发器会拦（迁移 0002），但让人先看见比让人先撞上强。 */
@@ -165,9 +174,21 @@ function UserTab({ me, accounts, roles, teams, run }: {
           <label className="field"><span>姓名</span>
             <input value={name} data-testid="new-name"
               onChange={e => setName(e.target.value)} placeholder="例：周敏" /></label>
-          <label className="field"><span>登录账号</span>
+          <label className="field">
+            <span>
+              登录账号 <span className="t-mut">· 3–32 位小写字母 / 数字 / 下划线，且以字母开头</span>
+            </span>
             <input value={login} data-testid="new-login" className="mono"
-              onChange={e => setLogin(e.target.value)} placeholder="例：zhoumin" /></label>
+              aria-invalid={loginBad || undefined}
+              onChange={e => setLogin(e.target.value)} placeholder="例：zhoumin" />
+            {/* 姓名那一栏收中文，这一栏不收 —— 说清楚，而不是等服务端拒。 */}
+            {loginBad && (
+              <span className="t-crit" data-testid="new-login-bad" style={{ fontSize: 12 }}>
+                只能用小写字母 / 数字 / 下划线，以字母开头，至少 3 位 ——
+                中文和大写都不行（姓名填在左边那一栏）。
+              </span>
+            )}
+          </label>
           <label className="field"><span>角色</span>
             <select value={roleId} data-testid="new-role" onChange={e => setRoleId(e.target.value)}>
               <option value="">— 选一个 —</option>
@@ -189,7 +210,7 @@ function UserTab({ me, accounts, roles, teams, run }: {
         )}
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="btn primary" data-testid="create-account"
-            disabled={!login.trim() || !name.trim() || !roleId || (needsOrg && !orgRef.trim())}
+            disabled={!loginOk || !name.trim() || !roleId || (needsOrg && !orgRef.trim())}
             onClick={() => void run(`已建号 ${name}（${login}）`, async () => {
               await createAccount({
                 login: login.trim(), displayName: name.trim(), roleId,
@@ -201,8 +222,15 @@ function UserTab({ me, accounts, roles, teams, run }: {
           </button>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          建出来的账号还没有进得来的路。两条选一条：给他登记收件地址（他就能自助申请一次性链接），
-          或者在下面那一行点「设口令」当面给一个初始口令 —— 他第一次登录时会被要求改掉。
+          <b>建出来的账号还没有进得来的路。</b>
+          在这台系统上能做的是下面那一行的「设口令」—— 当面给一个初始口令，
+          他第一次登录时会被要求改掉。
+          <br />
+          想让他<b>自助申请一次性链接</b>，得先给他登记收件地址，
+          而那件事目前只能在服务器上做（<span className="mono">deploy/login-address.sh</span>）——
+          它等同于运维权限：能改收件地址就能把别人的登录链接收到自己手里。
+          <b>没登记地址就去申请链接，接口会回一句「已发送」，但什么也不会发出去</b>
+          —— 台账上那一列就是为了让这件事看得见。
         </p>
       </div>
 
@@ -216,7 +244,7 @@ function UserTab({ me, accounts, roles, teams, run }: {
             <thead>
               <tr>
                 <th>姓名</th><th>登录账号</th><th>角色</th><th>分组</th>
-                <th>行范围</th><th>入职</th><th>最近登录</th><th>状态</th><th />
+                <th>行范围</th><th>怎么进来</th><th>最近登录</th><th>状态</th><th />
               </tr>
             </thead>
             <tbody>
@@ -235,7 +263,25 @@ function UserTab({ me, accounts, roles, teams, run }: {
                     <td><span className="chip flat">{a.role.name}</span></td>
                     <td className="muted">{a.team?.name ?? (a.isExternal ? a.orgRef ?? "外部机构" : "—")}</td>
                     <td className="muted">{r ? ROW_RULE[r.rowRule] ?? r.rowRule : "—"}</td>
-                    <td className="mono muted">{a.joinedOn ?? "—"}</td>
+                    {/* 自助那条路（一次性链接）通不通。**没登记收件地址时，
+                        /v1/auth/magic-link 照样回一句「登录链接已发送」而
+                        什么都没发** —— 对外含糊是防账号枚举，
+                        但管理员这一侧必须看得见。
+
+                        这里**只说链接这条路**：设没设过口令查不到，
+                        auth_password 的行级策略严格只看得见自己那一行，
+                        而那条策略是对的。所以下面那句话说的是
+                        "自助进不来"，不是"进不来"。 */}
+                    <td>
+                      {a.hasLoginAddress
+                        ? <span className="chip good" data-testid="has-address">
+                            可自助申请链接
+                          </span>
+                        : <span className="chip warn" data-testid="no-address"
+                            title="没登记收件地址 —— 申请登录链接会石沉大海，只能由管理员当面给初始口令">
+                            未登记收件地址
+                          </span>}
+                    </td>
                     <td className="mono muted">{a.lastLoginAt?.slice(0, 10) ?? "从未"}</td>
                     <td>
                       <span className={`chip ${a.status === "active" ? "good" : "flat"}`}>
@@ -584,7 +630,7 @@ function PermTab({ roles, run }: { roles: Role[]; run: Run }) {
                         <option key={k} value={k}>{v}</option>)}
                     </select>
                   </td>
-                  {Object.keys(FIELD_LABEL).map(f => (
+                  {FIELD_KEYS.map(f => (
                     <td key={f} className="tick">
                       <input type="checkbox" checked={r.visibleFields.includes(f)}
                         data-testid={`field-${r.code}-${f}`} disabled={locked(r0)}
@@ -624,7 +670,7 @@ function PermTab({ roles, run }: { roles: Role[]; run: Run }) {
                 return (
                 <tr key={r.id}>
                   <td>{r.name}</td>
-                  {Object.keys(ACTION_LABEL).map(a => (
+                  {ACTION_KEYS.map(a => (
                     <td key={a} className="tick">
                       <input type="checkbox" checked={r.allowedActions.includes(a)}
                         data-testid={`action-${r.code}-${a}`} disabled={locked(r0)}

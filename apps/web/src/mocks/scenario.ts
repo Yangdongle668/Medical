@@ -15,6 +15,8 @@
 import {
   DEFAULT_STARTUP_ITEMS, DEFAULT_HANDOVER_ITEMS, STARTUP_CATEGORY_LABEL
 } from "@sitedesk/contracts";
+/* 角色目录由 mock 身份派生 —— 见下面 ROLE_CATALOGUE 上的说明。 */
+import { MOCK_ROLES, IDENTITIES } from "./roles.js";
 
 export interface MockTask { seq: number; task: string; doneAt: string | null }
 
@@ -250,53 +252,31 @@ export interface Scenario {
 }
 
 
-/* 角色目录 —— 与迁移 0026 的开户目录逐条对应。
-   照抄不是重复：两处对不上的话，mock 上调通的界面到了真库会发现
-   角色代号根本没有那一个，而那种错在 e2e 上永远看不出来。 */
-const ROLE_CATALOGUE: Omit<MockRole, "id">[] = [
-  { code: "admin", name: "系统管理员", isExternal: false, rowRule: "all",
-    visibleFields: ["cost", "margin", "price", "staff"],
-    allowedActions: ["advance", "approve", "bid", "closeQ", "closeQA", "ethics", "manage",
-      "piConfirm", "raiseQ", "rateWrite", "subjRead", "subjWrite", "timeWrite"],
-    modules: ["org", "dash", "sites", "intake", "enr", "screen", "client", "cash",
-      "feas", "price", "bid", "change", "staff", "people", "time", "pnl", "bill",
-      "qa", "mon", "audit", "capa", "trail", "pm", "team", "approve", "cra", "mysites",
-      "crc", "mysite", "sched", "subj", "query", "startup", "prescreen", "ethics",
-      "handover", "isf", "material", "pay", "dm", "inst", "instac", "instqc",
-      "instreg", "pi"] },
-  { code: "boss", name: "经营层", isExternal: false, rowRule: "all",
-    visibleFields: ["cost", "margin", "price", "staff"],
-    allowedActions: ["advance", "approve", "bid", "manage", "rateWrite", "subjRead", "timeWrite"],
-    modules: ["dash", "intake", "sites", "enr", "screen", "client", "cash", "bid", "change",
-      "staff", "people", "time", "pnl", "bill", "qa", "mon", "price", "org", "trail"] },
-  { code: "pm", name: "项目总监 PM", isExternal: false, rowRule: "team",
-    visibleFields: ["cost", "margin", "price", "subject"],
-    allowedActions: ["advance", "approve", "bid", "ethics", "raiseQ", "subjRead",
-      "subjWrite", "timeWrite"],
-    modules: ["pm", "team", "approve", "intake", "feas", "sites", "enr", "screen",
-      "mon", "change", "qa", "pnl", "trail"] },
-  { code: "cra", name: "临床监查员 CRA", isExternal: false, rowRule: "assigned",
-    visibleFields: ["subject"], allowedActions: ["raiseQ", "subjRead", "timeWrite"],
-    modules: ["cra", "mysites", "mon", "query", "screen", "feas", "material", "time",
-      "qa", "capa", "trail"] },
-  { code: "crc", name: "临床协调员 CRC", isExternal: false, rowRule: "assigned",
-    visibleFields: ["subject"],
-    allowedActions: ["ethics", "subjRead", "subjWrite", "timeWrite"],
-    modules: ["crc", "mysite", "startup", "sched", "subj", "prescreen", "ethics",
-      "query", "capa", "isf", "material", "pay", "handover", "time"] },
-  { code: "dm", name: "数据管理 DM", isExternal: false, rowRule: "all",
-    visibleFields: ["subject"], allowedActions: ["closeQ", "raiseQ", "subjRead"],
-    modules: ["dm", "query", "screen", "trail"] },
-  { code: "qa", name: "质量保证 QA", isExternal: false, rowRule: "all",
-    visibleFields: ["subject"], allowedActions: ["closeQA", "raiseQ"],
-    modules: ["audit", "qa", "screen", "mon", "trail"] },
-  { code: "inst", name: "机构办（外部）", isExternal: true, rowRule: "hospital",
-    visibleFields: ["subject"], allowedActions: ["closeQA"],
-    modules: ["inst", "instac", "instqc", "instreg"] },
-  { code: "pi", name: "研究者 PI（外部）", isExternal: true, rowRule: "pi",
-    visibleFields: ["subject"], allowedActions: ["piConfirm", "subjRead"],
-    modules: ["pi", "qa"] }
-];
+/* ── 角色目录 ──────────────────────────────────────────────────────
+   **由 IDENTITIES 派生，不再手抄一份。**
+
+   在此之前这里是第三份副本（真相在迁移 0039 的 catalogue，
+   `mocks/roles.ts` 的 IDENTITIES 是第二份，这张表是第三份）。
+   三份里只有前两份被 arch-check 比对着，这一份自己漂了：
+   它说 CRA 有 3 个动作，而库里给的是 6 个
+   （capaWrite / isfWrite / monitor 全不在）。
+
+   症状**不报错**：`GET /v1/roles` 是「组织与权限」那一页的数据源，
+   于是权限矩阵在 mock 上显示的是一份错的授予 ——
+   页面照常渲染，勾选框照常能点，只是勾的内容与真库对不上。
+   第一条以管理员身份跑的 e2e 一上来就撞在这上面。
+
+   派生之后这种漂移不可能再发生：两处是同一个来源。 */
+const ROLE_CATALOGUE: Omit<MockRole, "id">[] = MOCK_ROLES.map(code => {
+  const i = IDENTITIES[code];
+  return {
+    code: i.role.code, name: i.role.name, isExternal: i.isExternal,
+    rowRule: i.rowRule,
+    visibleFields: [...i.fields],
+    allowedActions: [...i.actions],
+    modules: [...i.modules]
+  };
+});
 
 const mkRoles = (): MockRole[] =>
   ROLE_CATALOGUE.map(r => ({ id: `r-${r.code}`, ...r,

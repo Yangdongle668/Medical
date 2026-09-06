@@ -15174,6 +15174,9 @@ components:
           format: date-time
           pattern: >-
             ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        hasLoginAddress:
+          type: boolean
+          description: 登记过登录链接的收件地址（auth_identity, provider=magic-link）
       required:
         - id
         - login
@@ -15187,6 +15190,7 @@ components:
         - disabledAt
         - disabledReason
         - lastLoginAt
+        - hasLoginAddress
       additionalProperties: false
     Principal:
       type: object
@@ -15297,6 +15301,130 @@ components:
         - isSensitive
       additionalProperties: false
       description: 只追加。四个 W：谁 / 何时 / 改了什么 / 为什么。第四个由约束强制。
+    CreateAccountRequest:
+      type: object
+      properties:
+        login:
+          type: string
+          pattern: ^[a-z][a-z0-9_]{2,31}$
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 64
+        roleId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        teamId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        orgRef:
+          nullable: true
+          type: string
+          maxLength: 128
+      required:
+        - login
+        - displayName
+        - roleId
+      additionalProperties: false
+    UpdateAccountRequest:
+      type: object
+      properties:
+        roleId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        teamId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        orgRef:
+          nullable: true
+          type: string
+          maxLength: 128
+        reason:
+          type: string
+          minLength: 4
+          maxLength: 500
+          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
+      required:
+        - reason
+      additionalProperties: false
+    SetAccountPasswordRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          minLength: 8
+          maxLength: 200
+        reason:
+          type: string
+          minLength: 4
+          maxLength: 500
+          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
+      required:
+        - password
+        - reason
+      additionalProperties: false
+    CreateTeamRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          pattern: ^[A-Za-z0-9-]{2,16}$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        leadAccountId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      required:
+        - code
+        - name
+      additionalProperties: false
+    UpdateRolePermissionsRequest:
+      type: object
+      properties:
+        rowRule:
+          allOf:
+            - $ref: '#/components/schemas/RowRule'
+        visibleFields:
+          type: array
+          items:
+            type: string
+            enum:
+              - cost
+              - margin
+              - price
+              - subject
+              - staff
+        allowedActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionKey'
+        modules:
+          type: array
+          items:
+            type: string
+        reason:
+          type: string
+          minLength: 4
+          maxLength: 500
+          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
+      required:
+        - reason
+      additionalProperties: false
     SiteState:
       type: string
       enum:
@@ -19937,62 +20065,6 @@ components:
         - items
         - nextCursor
       additionalProperties: false
-    CreateAccountRequest:
-      type: object
-      properties:
-        login:
-          type: string
-          pattern: ^[a-z][a-z0-9_]{2,31}$
-        displayName:
-          type: string
-          minLength: 1
-          maxLength: 64
-        roleId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        teamId:
-          nullable: true
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        orgRef:
-          nullable: true
-          type: string
-          maxLength: 128
-      required:
-        - login
-        - displayName
-        - roleId
-      additionalProperties: false
-    UpdateAccountRequest:
-      type: object
-      properties:
-        roleId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        teamId:
-          nullable: true
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        orgRef:
-          nullable: true
-          type: string
-          maxLength: 128
-        reason:
-          type: string
-          minLength: 4
-          maxLength: 500
-          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
-      required:
-        - reason
-      additionalProperties: false
     DisableAccountRequest:
       type: object
       properties:
@@ -20031,22 +20103,6 @@ components:
       required:
         - data
         - sideEffects
-      additionalProperties: false
-    SetAccountPasswordRequest:
-      type: object
-      properties:
-        password:
-          type: string
-          minLength: 8
-          maxLength: 200
-        reason:
-          type: string
-          minLength: 4
-          maxLength: 500
-          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
-      required:
-        - password
-        - reason
       additionalProperties: false
     ListAuditEntriesResponse:
       type: object
@@ -21442,38 +21498,6 @@ components:
       required:
         - items
       additionalProperties: false
-    UpdateRolePermissionsRequest:
-      type: object
-      properties:
-        rowRule:
-          allOf:
-            - $ref: '#/components/schemas/RowRule'
-        visibleFields:
-          type: array
-          items:
-            type: string
-            enum:
-              - cost
-              - margin
-              - price
-              - subject
-              - staff
-        allowedActions:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActionKey'
-        modules:
-          type: array
-          items:
-            type: string
-        reason:
-          type: string
-          minLength: 4
-          maxLength: 500
-          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
-      required:
-        - reason
-      additionalProperties: false
     ListSiteAcceptancesResponse:
       type: object
       properties:
@@ -22369,26 +22393,6 @@ components:
             $ref: '#/components/schemas/Team'
       required:
         - items
-      additionalProperties: false
-    CreateTeamRequest:
-      type: object
-      properties:
-        code:
-          type: string
-          pattern: ^[A-Za-z0-9-]{2,16}$
-        name:
-          type: string
-          minLength: 1
-          maxLength: 64
-        leadAccountId:
-          nullable: true
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-      required:
-        - code
-        - name
       additionalProperties: false
     ListTimesheetsResponse:
       type: object

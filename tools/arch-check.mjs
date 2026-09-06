@@ -182,7 +182,7 @@ else {
   for (const m of identities.matchAll(/\n  (\w+): \{[\s\S]*?actions: \[([\s\S]*?)\]/g)) {
     const role = m[1];
     const want = granted.get(role);
-    if (!want) continue;                       // admin 不在 mock 身份里
+    if (!want) continue;
     checked++;
     const got = [...m[2].matchAll(/"([^"]+)"/g)].map(x => x[1]).sort();
     const missing = want.filter(a => !got.includes(a));
@@ -195,9 +195,50 @@ else {
         `    症状不会报错 —— 只是 mock 模式下那一页少了几个按钮`);
   }
   /* 一条比对不到任何身份的规则，会一直绿着。 */
-  if (checked !== 8)
+  if (checked !== 9)
     violations.push(`apps/web/src/mocks/roles.ts\n` +
-      `    只比对到 ${checked} 个身份（应为 8）—— IDENTITIES 的写法变了，这条规则已经失效`);
+      `    只比对到 ${checked} 个身份（应为 9）—— IDENTITIES 的写法变了，这条规则已经失效`);
+}
+
+/* ── 控制器不得自己重声明请求体 ──────────────────────────────────────
+   这是 guards.ts 里那条规矩的另一半。动作权限那一维早就立好了：
+   「两处各写一份的后果不是不一致告警，而是**静默失守**。」
+   请求体这一维一直没有，于是 14 个控制器里长出了 86 处 z.object。
+
+   已经付过一次代价：契约里 createAccount 的登录名写着
+
+       .regex(/^[a-z][a-z0-9_]{2,31}$/, "3–32 位小写字母 / 数字 / 下划线…")
+
+   控制器抄的那份漏了第二个参数。**校验逻辑一模一样**，两边拒同样的输入，
+   差的只是那句话 —— 于是把登录名填成「周敏」的管理员收到的是一串正则，
+   而那几乎必然被读成"这功能坏了"。任何比对"是否拒绝"的测试都照样绿。
+
+   下面这张表只许变短。清空一个控制器，就把它那一行删掉。 */
+const SCHEMA_DEBT = {
+  "bizdev.controller.ts": 10, "intake.controller.ts": 3,
+  "accountability.controller.ts": 6, "clinical.controller.ts": 18,
+  "query.controller.ts": 4, "cost.controller.ts": 5,
+  "finance.controller.ts": 6, "audit.controller.ts": 5,
+  "monitor.controller.ts": 5, "acceptance.controller.ts": 4,
+  "site.controller.ts": 5, "staffing.controller.ts": 5,
+  /* auth 的三个是**登录流程自己的**输入（口令、令牌、投递地址），
+     不对应任何业务契约端点的 body —— 留着，且不计入待还清单。 */
+  "auth.controller.ts": 3
+};
+for (const file of walk(path.join(ROOT, "apps/api/src"))) {
+  if (!file.endsWith(".controller.ts")) continue;
+  const base = path.basename(file);
+  const src = fs.readFileSync(file, "utf8");
+  const n = [...src.matchAll(/^const [A-Za-z]+ = (?:z\.object\(|PageQuery\.extend\()/gm)].length;
+  const owed = SCHEMA_DEBT[base] ?? 0;
+  if (n > owed)
+    violations.push(`${path.relative(ROOT, file)}\n` +
+      `    自己声明了 ${n} 处请求 schema，而待还清单上记的是 ${owed}\n` +
+      `    请求体的定义源是契约：在 contracts 的 model.ts 里命名并导出，两边 import 同一个`);
+  if (n < owed)
+    violations.push(`tools/arch-check.mjs\n` +
+      `    ${base} 只剩 ${n} 处 schema，待还清单上还记着 ${owed} —— 把那一行改小或删掉\n` +
+      `    留着一个还不清的数，下一个人会以为这活还没干`);
 }
 
 if (violations.length) {

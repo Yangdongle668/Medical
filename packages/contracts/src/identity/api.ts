@@ -3,7 +3,10 @@ import { define } from "../kernel/registry.js";
 import { Uuid, QueryBool } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
-import { Account, Principal, Role, Team, AuditEntry, RowRule, ActionKey } from "./model.js";
+import { Account, Principal, Role, Team, AuditEntry,
+  CreateAccountBody, UpdateAccountBody, SetAccountPasswordBody,
+  CreateTeamBody, UpdateRolePermissionsBody, ListAccountsQuery,
+  ListAuditEntriesQuery } from "./model.js";
 import { FieldKey } from "../kernel/fields.js";
 
 const CTX = "identity";
@@ -22,11 +25,7 @@ define({
   id: "listAccounts", method: "get", path: "/v1/accounts", layer: "L1", context: CTX,
   summary: "账号列表",
   description: "外部角色只看得到自己 —— 由行级安全强制，不靠调用方传参过滤。",
-  query: PageQuery.extend({
-    status: z.enum(["active", "disabled"]).optional(),
-    roleCode: z.string().optional(),
-    q: z.string().max(64).optional().describe("按姓名或登录名模糊匹配")
-  }),
+  query: ListAccountsQuery,
   response: page(Account)
 });
 
@@ -36,14 +35,7 @@ define({
   description:
     "不设密码：内部走 OIDC（企业微信 / 飞书），外部走一次性魔法链接。\n" +
     "row_rule=hospital 的角色必须同时给出 orgRef，否则账号能登录却一行数据都看不到。",
-  body: z.object({
-    login: z.string().regex(/^[a-z][a-z0-9_]{2,31}$/,
-      "3–32 位小写字母 / 数字 / 下划线，且以字母开头"),
-    displayName: z.string().min(1).max(64),
-    roleId: Uuid,
-    teamId: Uuid.nullable().optional(),
-    orgRef: z.string().max(128).nullable().optional()
-  }),
+  body: CreateAccountBody,
   response: Account,
   errors: ["invariant-violated"]
 });
@@ -73,12 +65,7 @@ define({
     "行 / 列 / 动作三个维度可分别调整，改完对该角色的所有账号**立即生效**。\n" +
     "每次调整都写审计，且 isSensitive=true —— 「谁给谁开了什么」是核查必查项。",
   params: ById,
-  body: z.object({
-    rowRule: RowRule.optional(),
-    visibleFields: z.array(FieldKey).optional(),
-    allowedActions: z.array(ActionKey).optional(),
-    modules: z.array(z.string()).optional()
-  }).extend(WithReason.shape),
+  body: UpdateRolePermissionsBody,
   response: Role,
   errors: ["conflict-version"]
 });
@@ -105,11 +92,7 @@ define({
 define({
   id: "createTeam", method: "post", path: "/v1/teams", layer: "L1", context: CTX,
   summary: "新建分组", action: "manage", status: 201,
-  body: z.object({
-    code: z.string().regex(/^[A-Za-z0-9-]{2,16}$/, "2–16 位字母 / 数字 / 连字符"),
-    name: z.string().min(1).max(64),
-    leadAccountId: Uuid.nullable().optional()
-  }),
+  body: CreateTeamBody,
   response: Team,
   errors: ["validation-failed"]
 });
@@ -123,11 +106,7 @@ define({
     "那种账号登得进来却一行数据都看不到，而界面上没有任何东西说得出为什么。\n\n" +
     "登录名与姓名不在这里改：登录名是审计轨迹里的那个标识，改掉等于把历史记录指向别人。",
   params: ById,
-  body: z.object({
-    roleId: Uuid.optional(),
-    teamId: Uuid.nullable().optional(),
-    orgRef: z.string().max(128).nullable().optional()
-  }).extend(WithReason.shape),
+  body: UpdateAccountBody,
   response: Account,
   errors: ["invariant-violated", "not-found"]
 });
@@ -158,7 +137,7 @@ define({
     "改自己的口令走 `changePassword`，那条要验旧口令；这条是管理员对别人，\n" +
     "验的是 `manage` 权限。**不能对自己用** —— 那等于绕过验旧口令那道门。",
   params: ById,
-  body: z.object({ password: z.string().min(8).max(200) }).extend(WithReason.shape),
+  body: SetAccountPasswordBody,
   status: 204,
   errors: ["not-found", "validation-failed"]
 });
@@ -167,13 +146,6 @@ define({
   id: "listAuditEntries", method: "get", path: "/v1/audit-entries", layer: "L1", context: CTX,
   summary: "审计轨迹",
   description: "只追加、不可改删。外部方只看得到本院中心相关的条目。",
-  query: PageQuery.extend({
-    studySiteId: Uuid.optional(),
-    actorLogin: z.string().optional(),
-    targetType: z.string().optional(),
-    targetId: z.string().optional(),
-    sensitiveOnly: QueryBool.optional().describe("只看权限类变更"),
-    since: z.iso.datetime({ offset: true }).optional()
-  }),
+  query: ListAuditEntriesQuery,
   response: page(AuditEntry)
 });
