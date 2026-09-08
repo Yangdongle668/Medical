@@ -21,7 +21,7 @@ import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
-import type { MockSoaVisit,
+import type { MockAccount, MockSoaVisit,
   MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
   MockMonitorVisit, MockAudit, MockIntake,
   MockAcceptance, MockIsf } from "./scenario.js";
@@ -369,7 +369,7 @@ export const scenarioHandlers = [
      于是这一页看起来能用、点什么都不生效 —— 建了账号列表不变、
      勾了权限矩阵不动。那比一张空页更难看出问题。 */
   http.get(pathToRegExp("/v1/accounts"), () =>
-    HttpResponse.json({ items: scenario.accounts, nextCursor: null })),
+    HttpResponse.json({ items: scenario.accounts.map(accountDto), nextCursor: null })),
 
   http.post(pathToRegExp("/v1/accounts"), async ({ request }) => {
     const b = await request.json() as {
@@ -389,7 +389,7 @@ export const scenarioHandlers = [
       disabledAt: null, disabledReason: null, lastLoginAt: null
     };
     scenario.accounts.push(acc);
-    return HttpResponse.json(acc, { status: 201 });
+    return HttpResponse.json(accountDto(acc), { status: 201 });
   }),
 
   http.patch(pathToRegExp("/v1/accounts/{id}"), async ({ request }) => {
@@ -413,7 +413,7 @@ export const scenarioHandlers = [
       a.team = team ? { id: team.id, code: team.code, name: team.name } : null;
     }
     if (b.orgRef !== undefined) a.orgRef = b.orgRef;
-    return HttpResponse.json(a);
+    return HttpResponse.json(accountDto(a));
   }),
 
   http.post(pathToRegExp("/v1/accounts/{id}:disable"), async ({ request }) => {
@@ -422,7 +422,7 @@ export const scenarioHandlers = [
     if (!a) return HttpResponse.json(problem("not-found", 404, "账号不存在"), { status: 404 });
     const b = await request.json() as { reason: string };
     a.status = "disabled"; a.disabledAt = new Date().toISOString(); a.disabledReason = b.reason;
-    return HttpResponse.json({ data: a, sideEffects: [
+    return HttpResponse.json({ data: accountDto(a), sideEffects: [
       { type: "AccountDisabled", summary: `${a.displayName} 已停用，历史记录与审计轨迹保留` }
     ] }, { status: 201 });
   }),
@@ -432,10 +432,34 @@ export const scenarioHandlers = [
     const a = scenario.accounts.find(x => x.id === id);
     if (!a) return HttpResponse.json(problem("not-found", 404, "账号不存在"), { status: 404 });
     a.status = "active"; a.disabledAt = null; a.disabledReason = null;
-    return HttpResponse.json({ data: a, sideEffects: [
+    return HttpResponse.json({ data: accountDto(a), sideEffects: [
       { type: "AccountEnabled",
         summary: `${a.displayName} 已恢复登录 —— 停用时交接出去的中心不会自动回来` }
     ] }, { status: 201 });
+  }),
+
+  /* 登记收件地址。mock 里只记一个布尔 —— **地址本身写进去读不回来**，
+     台账上要的就是"登记过没有"这一件事。 */
+  http.post(pathToRegExp("/v1/accounts/{id}:set-login-address"), async ({ request }) => {
+    const id = seg(request.url, /\/accounts\/([^/:]+):set-login-address/);
+    const b = await request.json() as { address: string; reason: string };
+    if (!identity().actions.includes("manage")) return HttpResponse.json(
+      problem("forbidden", 403, "只有管理员能登记收件地址"), { status: 403 });
+    const a = scenario.accounts.find(x => x.id === id);
+    if (!a) return HttpResponse.json(
+      problem("not-found", 404, "账号不存在"), { status: 404 });
+    /* 与服务端 app.set_login_address 同一条形状校验 —— 打错的地址不会报错，
+       只会让那个人永远收不到链接。 */
+    const t = b.address.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(t) && !/^\+?[0-9][0-9 -]{5,19}$/.test(t))
+      return HttpResponse.json(problem("validation-failed", 422,
+        `收件地址既不像邮箱也不像手机号：${t}`), { status: 422 });
+    /* 已经属于别人时报错，**不悄悄改绑** —— 那等于把那个人的入口转走。 */
+    if (scenario.accounts.some(x => x.id !== id && x.loginAddress === t))
+      return HttpResponse.json(problem("invariant-violated", 422,
+        "这个地址已经登记给另一个账号了，请先解除那一边"), { status: 422 });
+    a.loginAddress = t;
+    return new HttpResponse(null, { status: 204 });
   }),
 
   http.post(pathToRegExp("/v1/accounts/{id}:set-password"), () =>
@@ -1862,6 +1886,7 @@ export const scenarioHandlers = [
      而那正是这个表单唯一要证明的事。 */
   http.post(pathToRegExp("/v1/study-sites"), async ({ request }) => {
     const b = await request.json() as {
+      studyId: string;
       code: string; hospital: string; dept: string; city: string; piName: string;
       contracted: number; unitPriceCents?: number; startupFeeCents?: number;
       sivPlannedOn?: string | null;
@@ -1874,9 +1899,12 @@ export const scenarioHandlers = [
       id: `s-new-${SITES_LIST.length + 1}`, code: b.code,
       hospital: b.hospital, dept: b.dept, city: b.city,
       piName: b.piName, piAccountId: null,
-      /* 建档出来的中心停在「合同签署」—— 与后端一致。
-         推进要走 :advance，而那要先过启动清单的闸门。 */
-      state: "contract", contracted: b.contracted,
+      /* **建档出来的中心停在「立项」** —— 与库里的
+         `state text NOT NULL DEFAULT 'intake'`（迁移 0004）一致。
+         这里一度写成 "contract"，那是把状态机的前三格凭空跳过了：
+         新中心的下一步恰恰是伦理递交，而那道闸门要机构先受理。 */
+      state: "intake", contracted: b.contracted,
+      studyId: b.studyId,
       ...(b.unitPriceCents !== undefined ? { unitPriceCents: b.unitPriceCents } : {}),
       ...(b.startupFeeCents !== undefined ? { startupFeeCents: b.startupFeeCents } : {}),
       sivPlannedOn: b.sivPlannedOn ?? null
@@ -2951,12 +2979,27 @@ const MS_PLAN = [
 /** 状态机顺序取自契约，不在 mock 里另立一份。 */
 const nextState = (cur: string) => SITE_STATES[SITE_STATES.indexOf(cur as never) + 1] ?? null;
 
+/** 账号 DTO。**地址读不回来** —— 与服务端同一条口径：
+ *  台账要的是"这个人自助进得来吗"，不是一屋子人的邮箱手机号。
+ *  raw 直接下发的话，mock 上会多出一个真库没有的字段，
+ *  而那种差别只有在联调那天才发现。 */
+function accountDto(a: MockAccount) {
+  const { loginAddress, ...rest } = a;
+  return { ...rest, hasLoginAddress: !!loginAddress };
+}
+
 function siteDto(id: string) {
   const s = SITES_LIST.find(x => x.id === id);
   if (!s) return null;
   return {
     id: s.id, code: s.code,
-    study: { id: "st1", code: "HJ-2024-017", shortName: "艾瑞替尼 III" },
+    /* **项目从中心自己的 studyId 取**，不写死 —— 建档时人挑了哪个项目，
+       中心详情页上就该是哪个，而那也是立项受理闸门比对的键之一。 */
+    study: (() => {
+      const st = scenario.studies.find(x => x.id === (s.studyId ?? "st1"));
+      return { id: st?.id ?? "st1", code: st?.code ?? "HJ-2024-017",
+        shortName: st?.shortName ?? "艾瑞替尼 III" };
+    })(),
     hospital: s.hospital, dept: s.dept, city: s.city,
     piName: s.piName, piAccountId: s.piAccountId,
     state: scenario.siteState[s.id] ?? s.state, contracted: s.contracted ?? 30,
@@ -3013,10 +3056,43 @@ function checklistFor(siteId: string) {
 
 /** 闸门：只有推进到 siv 才有检查项，与后端 REGISTRY 一致。 */
 function gateFor(siteId: string) {
-  const from = scenario.siteState[siteId];
+  /* **回退到中心自己的 state**，与 siteDto 同一条路径。
+     `scenario.siteState` 只记推进过的那些 —— 建档出来的中心不在里面，
+     此前这里直接 return null，于是新中心**一道闸门都没有**：
+     详情页上写着"已是状态机的最后一个节点"，而它才刚建出来。 */
+  const site = SITES_LIST.find(x => x.id === siteId);
+  const from = scenario.siteState[siteId] ?? site?.state;
   if (!from) return null;
   const to = nextState(from);
   if (!to) return null;
+
+  /* ── 伦理递交：要机构先受理 ────────────────────────────────────
+     与 apps/api/src/modules/site/gate.ts 的 `irbNeedsAcceptance` 同源。
+     **此前 mock 里这一格是无条件放行的** —— 于是「新建的中心递不出去」
+     这件事在 mock 上根本复现不了，而那正是这道闸门存在的全部理由。
+
+     受理挂的是 (study_id, hospital)，不是 study_site —— 受理发生在
+     建档之前（迁移 0038），所以按中心的项目与医院去找。 */
+  if (to === "irb_submit") {
+    const dto = site ? siteDto(site.id) : null;
+    const a = site && dto
+      ? scenario.acceptances.find(
+          x => x.studyId === dto.study.id && x.hospital === site.hospital)
+      : undefined;
+    if (!a) return { from, to, satisfied: false, unmet: [{
+      code: "site-acceptance", module: "instac",
+      message: "还没向机构办递交立项材料 —— 受理是医院承接项目的第一道闸门"
+    }] };
+    if (a.state === "accepted") return { from, to, satisfied: true, unmet: [] };
+    const missing = a.docs.filter(d => !d.present).map(d => d.name);
+    return { from, to, satisfied: false, unmet: [{
+      code: "site-acceptance", module: "instac",
+      message: missing.length
+        ? `${a.code} 尚未受理，缺 ${missing.length} 项材料：${missing.join("、")}`
+        : `${a.code} 材料已齐，等机构办出具受理通知`
+    }] };
+  }
+
   if (to !== "siv") return { from, to, satisfied: true, unmet: [] };
 
   const open = scenario.startupItems.filter(

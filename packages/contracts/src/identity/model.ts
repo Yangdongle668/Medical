@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { ACTION_KEYS, ActionKey } from "../kernel/actions.js";
-import { Uuid, Code, DateOnly, Timestamp } from "../kernel/primitives.js";
+import { Uuid, Code, DateOnly, Timestamp, QueryBool } from "../kernel/primitives.js";
 import { FieldKey } from "../kernel/fields.js";
+import { PageQuery } from "../kernel/pagination.js";
+import { WithReason } from "../kernel/command.js";
 
 /* ════════════════════════════════════════════════════════════════════
    Identity & Access —— 权限是三维的：行 × 列 × 动作
@@ -61,7 +63,27 @@ export const Account = z.object({
   joinedOn: DateOnly.nullable(),
   disabledAt: Timestamp.nullable(),
   disabledReason: z.string().nullable(),
-  lastLoginAt: Timestamp.nullable()
+  lastLoginAt: Timestamp.nullable(),
+  /* ── 这个账号进得来吗 ───────────────────────────────────────────
+     建号建出来的是一个**还没有入口的**账号：登录链接只送到已登记的
+     收件地址（auth_identity），而口令要有人当面给一次。两样都没有，
+     这个人就进不来 —— 而在此之前界面上看不出这件事。
+
+     更糟的是那条自助路会**假装成功**：没有收件地址时
+     `POST /v1/auth/magic-link` 照样回 202「登录链接已发送」，
+     服务端日志里写的却是「账号没有登记收件地址，未签发链接」。
+     对外含糊是对的（防账号枚举），但管理员这一侧必须看得见真相。
+
+     **这里只报收件地址，不报"设没设过口令"。** 第一版两个都报了，
+     而 `auth_password` 的行级策略是 `account_id = app.current_account_id()`
+     ——**严格只看得见自己那一行**。于是那个 EXISTS 对别人一律返回 false：
+     台账上每个人都显示"进不来"，包括刚设过口令的那几个。
+     查询不报错，页面不报错，只是答案是错的。
+
+     那条策略是对的（口令行是这个系统里最敏感的东西，管理员也不该读），
+     所以撤掉的是这个字段，不是那条策略。 */
+  hasLoginAddress: z.boolean()
+    .describe("登记过登录链接的收件地址（auth_identity, provider=magic-link）")
 }).meta({ id: "Account" });
 
 /**
@@ -123,3 +145,98 @@ export const AuditEntry = z.object({
   id: "AuditEntry",
   description: "只追加。四个 W：谁 / 何时 / 改了什么 / 为什么。第四个由约束强制。"
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   请求体 —— **有名字，而且导出**。
+
+   ── 为什么不写成 define() 里的匿名 z.object ────────────────────
+   写在 `define({ body: z.object({…}) })` 里的话，schema 只活在注册表里，
+   服务端拿不到它的类型；于是控制器只能照着**再抄一遍**，
+   而抄的那份与这份并排放着，谁也不校验谁。
+
+   这不是假想。`createAccount` 的登录名在这里写着：
+
+       .regex(/^[a-z][a-z0-9_]{2,31}$/, "3–32 位小写字母 / 数字 / 下划线…")
+
+   控制器抄的那份漏了第二个参数。校验逻辑一模一样，两边都拒同样的输入 ——
+   **差的只是那句话**。于是管理员把登录名填成「周敏」时，收到的是
+   `Invalid string: must match pattern /^[a-z][a-z0-9_]{2,31}$/`，
+   而那几乎必然被读成"这功能坏了"。
+
+   任何比对"是否拒绝"的测试都照样绿：错的不是判断，是说给人听的那半句。
+
+   所以请求体在这里定义、在这里导出，控制器 import 它 ——
+   与动作权限那一维同一条规矩（见 apps/api/src/auth/guards.ts 的 ACTION_OF）：
+   **契约是唯一定义源，控制器不另抄一遍。**
+   ════════════════════════════════════════════════════════════════════ */
+
+/* `.meta({ id })` 沿用生成器原来给匿名对象起的名字（…Request）——
+   导出名叫 …Body 是给 TS 用的，而组件名是**公开契约的一部分**：
+   改掉它，照着 OpenAPI 生成客户端的人就得跟着改一遍，
+   而请求体本身一个字节都没变。改名不是不能做，是不该顺手做。 */
+export const CreateAccountBody = z.object({
+  login: z.string().regex(/^[a-z][a-z0-9_]{2,31}$/,
+    "3–32 位小写字母 / 数字 / 下划线，且以字母开头"),
+  displayName: z.string().min(1).max(64),
+  roleId: Uuid,
+  teamId: Uuid.nullable().optional(),
+  orgRef: z.string().max(128).nullable().optional()
+}).meta({ id: "CreateAccountRequest" });
+
+export const UpdateAccountBody = z.object({
+  roleId: Uuid.optional(),
+  teamId: Uuid.nullable().optional(),
+  orgRef: z.string().max(128).nullable().optional()
+}).extend(WithReason.shape).meta({ id: "UpdateAccountRequest" });
+
+export const SetAccountPasswordBody = z.object({
+  password: z.string().min(8).max(200)
+}).extend(WithReason.shape).meta({ id: "SetAccountPasswordRequest" });
+
+export const CreateTeamBody = z.object({
+  code: z.string().regex(/^[A-Za-z0-9-]{2,16}$/, "2–16 位字母 / 数字 / 连字符"),
+  name: z.string().min(1).max(64),
+  leadAccountId: Uuid.nullable().optional()
+}).meta({ id: "CreateTeamRequest" });
+
+export const UpdateRolePermissionsBody = z.object({
+  rowRule: RowRule.optional(),
+  visibleFields: z.array(FieldKey).optional(),
+  allowedActions: z.array(ActionKey).optional(),
+  modules: z.array(z.string()).optional()
+}).extend(WithReason.shape).meta({ id: "UpdateRolePermissionsRequest" });
+
+export const ListAccountsQuery = PageQuery.extend({
+  status: z.enum(["active", "disabled"]).optional(),
+  roleCode: z.string().optional(),
+  q: z.string().max(64).optional().describe("按姓名或登录名模糊匹配")
+});
+
+export const ListAuditEntriesQuery = PageQuery.extend({
+  studySiteId: Uuid.optional(),
+  actorLogin: z.string().optional(),
+  targetType: z.string().optional(),
+  targetId: z.string().optional(),
+  sensitiveOnly: QueryBool.optional().describe("只看权限类变更"),
+  since: z.iso.datetime({ offset: true }).optional()
+});
+
+/** 登记 / 更换登录链接的收件地址。
+ *
+ *  **地址是写进去的，读不回来。** 台账上只报「登记过没有」
+ *  （Account.hasLoginAddress）—— 管理员要判断的是"这个人自助进得来吗"，
+ *  而把一屋子人的邮箱手机号铺在列表页上，是为了一个判断付了一整页的代价。
+ *  登记错了就再登记一次，那也是这条命令唯一的用法。 */
+/* 这里只管长度，**不重抄形状**：形状的唯一定义处是服务端的
+   `app.set_login_address`（运维脚本走的同一个函数），它的 RAISE 原话
+   会原样透出来。在这里再写一遍正则，两处迟早对不上，
+   而对不上的那天没人知道该信哪一条。
+
+   但长度这一条也得说人话 —— 光写 `.min(5)` 时，填「周敏」收到的是
+   一句「请求参数不符合契约」，和登录名那次犯的是同一个错。 */
+export const SetLoginAddressBody = z.object({
+  address: z.string().trim()
+    .min(5, "太短了 —— 这里填的是收链接的邮箱或手机号，不是姓名")
+    .max(160, "最多 160 个字符")
+    .describe("邮箱或手机号。形状由服务端的 app.set_login_address 校验")
+}).extend(WithReason.shape).meta({ id: "SetLoginAddressRequest" });

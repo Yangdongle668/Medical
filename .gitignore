@@ -7,6 +7,10 @@ dist/
 apps/web/dist/
 apps/web/test-results/
 apps/web/playwright-report/
+# 在仓库根跑 playwright 时留下的那份 —— 跑错目录是会发生的，
+# 而它一旦进了版本库，下一个人 clone 出来就带着一份别人的失败记录。
+test-results/
+playwright-report/
 
 # 生产打包产物（npm run bundle -w @sitedesk/api）
 apps/api/build/

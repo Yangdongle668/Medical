@@ -3,6 +3,7 @@
    就再也不能被前端复用、也不能被穷举测试，而这正是它们存在的理由。 */
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const violations = [];
@@ -182,7 +183,7 @@ else {
   for (const m of identities.matchAll(/\n  (\w+): \{[\s\S]*?actions: \[([\s\S]*?)\]/g)) {
     const role = m[1];
     const want = granted.get(role);
-    if (!want) continue;                       // admin 不在 mock 身份里
+    if (!want) continue;
     checked++;
     const got = [...m[2].matchAll(/"([^"]+)"/g)].map(x => x[1]).sort();
     const missing = want.filter(a => !got.includes(a));
@@ -195,9 +196,117 @@ else {
         `    症状不会报错 —— 只是 mock 模式下那一页少了几个按钮`);
   }
   /* 一条比对不到任何身份的规则，会一直绿着。 */
-  if (checked !== 8)
+  if (checked !== 9)
     violations.push(`apps/web/src/mocks/roles.ts\n` +
-      `    只比对到 ${checked} 个身份（应为 8）—— IDENTITIES 的写法变了，这条规则已经失效`);
+      `    只比对到 ${checked} 个身份（应为 9）—— IDENTITIES 的写法变了，这条规则已经失效`);
+}
+
+/* ── 控制器不得自己重声明请求体 ──────────────────────────────────────
+   这是 guards.ts 里那条规矩的另一半。动作权限那一维早就立好了：
+   「两处各写一份的后果不是不一致告警，而是**静默失守**。」
+   请求体这一维一直没有，于是 14 个控制器里长出了 86 处 z.object。
+
+   已经付过一次代价：契约里 createAccount 的登录名写着
+
+       .regex(/^[a-z][a-z0-9_]{2,31}$/, "3–32 位小写字母 / 数字 / 下划线…")
+
+   控制器抄的那份漏了第二个参数。**校验逻辑一模一样**，两边拒同样的输入，
+   差的只是那句话 —— 于是把登录名填成「周敏」的管理员收到的是一串正则，
+   而那几乎必然被读成"这功能坏了"。任何比对"是否拒绝"的测试都照样绿。
+
+   下面这张表只许变短。清空一个控制器，就把它那一行删掉。 */
+const SCHEMA_DEBT = {
+  "bizdev.controller.ts": 10, "intake.controller.ts": 3,
+  "accountability.controller.ts": 6, "clinical.controller.ts": 18,
+  "query.controller.ts": 4, "cost.controller.ts": 5,
+  "finance.controller.ts": 6, "audit.controller.ts": 5,
+  "monitor.controller.ts": 5, "acceptance.controller.ts": 4,
+  "site.controller.ts": 5, "staffing.controller.ts": 5,
+  /* auth 的三个是**登录流程自己的**输入（口令、令牌、投递地址），
+     不对应任何业务契约端点的 body —— 留着，且不计入待还清单。 */
+  "auth.controller.ts": 3
+};
+for (const file of walk(path.join(ROOT, "apps/api/src"))) {
+  if (!file.endsWith(".controller.ts")) continue;
+  const base = path.basename(file);
+  const src = fs.readFileSync(file, "utf8");
+  const n = [...src.matchAll(/^const [A-Za-z]+ = (?:z\.object\(|PageQuery\.extend\()/gm)].length;
+  const owed = SCHEMA_DEBT[base] ?? 0;
+  if (n > owed)
+    violations.push(`${path.relative(ROOT, file)}\n` +
+      `    自己声明了 ${n} 处请求 schema，而待还清单上记的是 ${owed}\n` +
+      `    请求体的定义源是契约：在 contracts 的 model.ts 里命名并导出，两边 import 同一个`);
+  if (n < owed)
+    violations.push(`tools/arch-check.mjs\n` +
+      `    ${base} 只剩 ${n} 处 schema，待还清单上还记着 ${owed} —— 把那一行改小或删掉\n` +
+      `    留着一个还不清的数，下一个人会以为这活还没干`);
+}
+
+/* ── 部署脚本：变量名必须是 ASCII，而且 --help 得真的能跑 ─────────────
+   `deploy/update.sh` 从写出来那天起**一次都没跑通过**：
+
+       ./deploy/update.sh: line 33: 现标签=local: command not found
+
+   bash 允许中文**函数名**（`读取` / `设置` / `死` 一直好好的），
+   但不允许中文**变量名** —— `现标签=local` 不是一条赋值，
+   整个词被当成命令名去找。那是脚本的第 33 行，也就是说
+   `--rollback` 在内的每一条路径都走不过第三步。
+
+   **没有任何东西会发现这件事**：仓库里 580+ 条 api 测试、304 条 e2e、
+   164 条库测试，没有一条会去执行一个 .sh。`bash -n` 也查不出来 ——
+   `现标签=local` 在语法上是合法的（它是一条命令）。
+
+   所以这里做两件事：静态扫非 ASCII 变量名，以及**真的把 --help 跑一遍**
+   （那条路不碰 docker，CI 上跑得起）。 */
+{
+  const deployDir = path.join(ROOT, "deploy");
+  const scripts = fs.existsSync(deployDir)
+    ? fs.readdirSync(deployDir).filter(f => f.endsWith(".sh")).sort() : [];
+  if (scripts.length === 0)
+    violations.push("tools/arch-check.mjs\n    deploy/ 下一个 .sh 都没扫到 —— 这条规则已经形同虚设");
+
+  /* 查的是**取值**（`$名` / `${名}`）和 `for 名 in`，不查赋值。
+     赋值那一侧没法只靠正则分清 —— `死 "口令=错的"` 里也有个等号，
+     而剥 shell 的引号比这条规则本身还容易出错。
+     取值这一侧则是精确的：判据是 `$` 或 `${` **紧跟着**一个非 ASCII 字符。
+     `$code，应为 401` 里 `$` 后面是 `c`，不算；`$现标签` 才算。
+
+     漏不掉：赋了值总要取，不取的话那条赋值本来也没用。
+     update.sh 那四个（现标签 / 上一个 / 镜像 / 新标签）全都被取过，
+     `${现标签:-local}` 就在出事的那一行上。 */
+  const BAD = [
+    [/\$\{?[^\x00-\x7F]\S*/g, "取值"],
+    [/\bfor\s+[^\x00-\x7F]\S*\s+in\b/g, "for 循环变量"]
+  ];
+  for (const f of scripts) {
+    const src = fs.readFileSync(path.join(deployDir, f), "utf8")
+      /* 注释里正是在讲这个坑，别把讲解本身当成犯规。 */
+      .split("\n").filter(l => !/^\s*#/.test(l)).join("\n");
+    for (const [re, what] of BAD)
+      for (const m of src.matchAll(re))
+        violations.push(`deploy/${f}\n` +
+          `    ${what}用了非 ASCII 变量名：\`${m[0]}\`\n` +
+          `    bash 只认 [A-Za-z_][A-Za-z0-9_]* 作变量名：这一行会变成 "command not found"\n` +
+          `    （函数名可以是中文，变量名不行）`);
+  }
+
+  /* --help 要退出 0，而且**不许把代码打出来**。
+     原来每个脚本各写一句 `sed -n '2,20p' "$0"`，行号照着当时的文件头数的；
+     文件头一改就开始连 `source …` 和 `while [ $# -gt 0 ]; do` 一起打。 */
+  for (const f of scripts) {
+    const p = path.join(deployDir, f);
+    /* 只查自己声明了 --help 的那些。login-link / login-address 收的是
+       位置参数，没有这一条路；lib.sh 是被 source 的，根本不单独跑。 */
+    if (!/--help\)/.test(fs.readFileSync(p, "utf8"))) continue;
+    const r = spawnSync("bash", [p, "--help"], { encoding: "utf8", timeout: 20_000 });
+    if (r.status !== 0)
+      violations.push(`deploy/${f}\n` +
+        `    --help 退出码 ${r.status}${r.signal ? `（信号 ${r.signal}）` : ""}\n` +
+        `    ${(r.stderr || r.stdout || "").trim().split("\n").slice(0, 3).join("\n    ")}`);
+    else if (/^\s*(source|while|for|if|PULL=|DEMO=)/m.test(r.stdout))
+      violations.push(`deploy/${f}\n` +
+        `    --help 把脚本正文也打出来了 —— 用法那一段的范围取过头了`);
+  }
 }
 
 if (violations.length) {

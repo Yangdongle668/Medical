@@ -26,30 +26,32 @@
           "joinedOn": "2026-08-16",
           "disabledAt": "2026-08-22T09:15:00+08:00",
           "disabledReason": "示例文本（由契约生成，非真实数据）",
-          "lastLoginAt": null
+          "lastLoginAt": null,
+          "hasLoginAddress": false
         },
         {
-          "id": "61190ae3-2b9e-9466-c4b2-787135a2128e",
-          "login": "linmin",
+          "id": "1190ae32-b9e9-466c-4b27-87135a2128e5",
+          "login": "hanxue",
           "displayName": "韩雪",
           "role": {
-            "id": "c3bfd306-8e6a-befd-490f-9d8194e2a4f7",
+            "id": "3bfd3068-e6ab-efd4-90f9-d8194e2a4f74",
             "code": "crc",
             "name": "临床协调员 CRC",
             "isExternal": false
           },
           "team": {
-            "id": "015de734-2521-0c36-07e4-3a3c07ecaef2",
+            "id": "15de7342-5210-c360-7e43-a3c07ecaef21",
             "code": "G-01",
             "name": "华东华南组"
           },
           "isExternal": false,
-          "orgRef": "天津医科大学肿瘤医院",
+          "orgRef": "复旦大学附属中山医院",
           "status": "active",
-          "joinedOn": "2026-08-13",
+          "joinedOn": null,
           "disabledAt": "2026-08-22T09:15:00+08:00",
           "disabledReason": "示例文本（由契约生成，非真实数据）",
-          "lastLoginAt": "2026-08-22T09:15:00+08:00"
+          "lastLoginAt": "2026-08-22T09:15:00+08:00",
+          "hasLoginAddress": true
         }
       ],
       "nextCursor": "示例"
@@ -80,7 +82,8 @@
       "joinedOn": "2026-08-15",
       "disabledAt": null,
       "disabledReason": "示例文本（由契约生成，非真实数据）",
-      "lastLoginAt": "2026-08-22T09:15:00+08:00"
+      "lastLoginAt": "2026-08-22T09:15:00+08:00",
+      "hasLoginAddress": true
     }
   },
   "updateAccount": {
@@ -108,7 +111,8 @@
       "joinedOn": null,
       "disabledAt": "2026-08-22T09:15:00+08:00",
       "disabledReason": "示例文本（由契约生成，非真实数据）",
-      "lastLoginAt": "2026-08-22T09:15:00+08:00"
+      "lastLoginAt": "2026-08-22T09:15:00+08:00",
+      "hasLoginAddress": true
     }
   },
   "disableAccount": {
@@ -137,22 +141,22 @@
         "joinedOn": "2026-08-21",
         "disabledAt": null,
         "disabledReason": null,
-        "lastLoginAt": null
+        "lastLoginAt": null,
+        "hasLoginAddress": true
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "a750995e-3fc0-e5bc-e7cf-899207114d9e",
-          "amountCents": 6130000,
-          "studySiteId": "259090f9-1ae5-8883-ed16-e8dcd9fd24ef"
+          "ref": "750995e3-fc0e-5bce-7cf8-99207114d9ea",
+          "amountCents": 7880000
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "db3d4842-7e40-04f4-572e-7138ff240e3c",
-          "amountCents": 8140000,
-          "studySiteId": "311475bb-4e5d-fdc2-2060-9cef6a3eed7f"
+          "ref": "9090f91a-e588-83ed-16e8-dcd9fd24ef8d",
+          "amountCents": 3000000,
+          "studySiteId": "48427e40-04f4-572e-7138-ff240e3c8ce3"
         }
       ]
     }
@@ -183,22 +187,23 @@
         "joinedOn": "2026-08-12",
         "disabledAt": "2026-08-22T09:15:00+08:00",
         "disabledReason": "示例文本（由契约生成，非真实数据）",
-        "lastLoginAt": "2026-08-22T09:15:00+08:00"
+        "lastLoginAt": "2026-08-22T09:15:00+08:00",
+        "hasLoginAddress": true
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "8768e3bc-a2ec-cf3f-c491-1b3c817f9fa1",
-          "amountCents": 9890000,
-          "studySiteId": "bb889893-df36-8967-e247-22629d18d903"
+          "ref": "768e3bca-2ecc-f3fc-4911-b3c817f9fa14",
+          "amountCents": 9850000,
+          "studySiteId": "b889893d-f368-967e-2472-2629d18d903d"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "aea93a25-2f4a-e9ff-90c6-0a963bb31915",
-          "amountCents": 3740000,
-          "studySiteId": "a53f1bca-0b29-e829-5694-fbfe6e088572"
+          "ref": "ea93a252-f4ae-9ff9-0c60-a963bb31915e",
+          "amountCents": 5920000,
+          "studySiteId": "53f1bca0-b29e-8295-694f-bfe6e088572c"
         }
       ]
     }
@@ -3268,7 +3273,8 @@
         "joinedOn": "2026-08-15",
         "disabledAt": "2026-08-22T09:15:00+08:00",
         "disabledReason": "示例文本（由契约生成，非真实数据）",
-        "lastLoginAt": "2026-08-22T09:15:00+08:00"
+        "lastLoginAt": "2026-08-22T09:15:00+08:00",
+        "hasLoginAddress": false
       },
       "scopeLabel": "示例标识",
       "permissions": {
@@ -3287,7 +3293,7 @@
         ]
       },
       "credentials": {
-        "hasPassword": false,
+        "hasPassword": true,
         "passwordIsInitial": true
       }
     }

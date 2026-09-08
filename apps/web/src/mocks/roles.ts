@@ -18,7 +18,8 @@
 
 import type { FieldKey, ActionKey } from "@sitedesk/contracts";
 
-export const MOCK_ROLES = ["crc", "cra", "pm", "qa", "boss", "dm", "inst", "pi"] as const;
+export const MOCK_ROLES =
+  ["admin", "crc", "cra", "pm", "qa", "boss", "dm", "inst", "pi"] as const;
 export type MockRole = (typeof MOCK_ROLES)[number];
 
 export interface MockIdentity {
@@ -36,6 +37,30 @@ export interface MockIdentity {
 }
 
 export const IDENTITIES: Record<MockRole, MockIdentity> = {
+  /* 系统管理员。**此前 mock 里根本没有这个身份** —— 八个身份里缺它，
+     于是 297 条 e2e 没有一条是以管理员跑的，而「组织与权限」那一页
+     几乎只有他打得开。第一次有人以 admin 登进真库时，
+     发现的是权限矩阵少了五列 —— 那件事在 mock 上永远撞不上。
+
+     授予与迁移 0039 的 catalogue 逐字同源（arch-check 会逐个比对）：
+     18 个动作全给、45 个模块全给、行范围 all；
+     **唯独 subject 字段不给** —— 系统管理员管的是账号、角色、租户，
+     不是受试者。要给，他自己去「组织与权限」里点两下，而那两下会进审计轨迹。 */
+  admin: {
+    id: "a-admin", login: "admin", name: "系统管理员",
+    role: { id: "r-admin", code: "admin", name: "系统管理员" },
+    isExternal: false, orgRef: null,
+    rowRule: "all", fields: ["cost", "margin", "price", "staff"],
+    actions: ["accept", "advance", "approve", "audit", "bid", "capaWrite",
+      "closeQ", "closeQA", "ethics", "isfWrite", "manage", "monitor",
+      "piConfirm", "raiseQ", "rateWrite", "subjRead", "subjWrite", "timeWrite"],
+    modules: ["org", "dash", "sites", "intake", "enr", "screen", "client", "cash",
+      "feas", "price", "bid", "change", "staff", "people", "time", "pnl", "bill",
+      "qa", "mon", "audit", "capa", "trail",
+      "pm", "team", "approve", "cra", "mysites", "crc", "mysite", "sched", "subj",
+      "query", "startup", "prescreen", "ethics", "handover", "isf", "material",
+      "pay", "dm", "inst", "instac", "instqc", "instreg", "pi"]
+  },
   crc: {
     id: "a-wutong", login: "wutong", name: "吴桐",
     role: { id: "r-crc", code: "crc", name: "临床协调员 CRC" },

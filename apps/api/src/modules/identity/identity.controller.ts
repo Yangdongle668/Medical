@@ -1,6 +1,14 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Headers, HttpCode } from "@nestjs/common";
 import { z } from "zod";
-import { PageQuery, Uuid, WithReason, RowRule, ActionKey, FieldKey, QueryBool } from "@sitedesk/contracts";
+/* 请求体与查询串的校验规则**来自契约，不在这里另抄一遍** ——
+   与动作权限那一维同一条规矩（见 auth/guards.ts 的 ACTION_OF）。
+   抄一遍的代价已经付过一次：`createAccount` 的登录名正则抄对了，
+   跟在后面的那句中文提示没抄，于是把登录名填成「周敏」的管理员
+   收到的是一串正则，而那几乎必然被读成"这功能坏了"。 */
+import { Uuid, WithReason,
+  CreateAccountBody, UpdateAccountBody, SetAccountPasswordBody,
+  CreateTeamBody, UpdateRolePermissionsBody, ListAccountsQuery,
+  ListAuditEntriesQuery, SetLoginAddressBody } from "@sitedesk/contracts";
 import { IdentityService } from "./identity.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
@@ -8,43 +16,6 @@ import { Operation } from "../../auth/guards.js";
 import { ProblemException } from "../../infra/problem.js";
 import { idempotent } from "../../infra/command.js";
 
-const ListQ = PageQuery.extend({
-  status: z.enum(["active", "disabled"]).optional(),
-  roleCode: z.string().optional(),
-  q: z.string().max(64).optional()
-});
-const CreateBody = z.object({
-  login: z.string().regex(/^[a-z][a-z0-9_]{2,31}$/),
-  displayName: z.string().min(1).max(64),
-  roleId: Uuid,
-  teamId: Uuid.nullable().optional(),
-  orgRef: z.string().max(128).nullable().optional()
-});
-const RoleBody = z.object({
-  rowRule: RowRule.optional(),
-  visibleFields: z.array(FieldKey).optional(),
-  allowedActions: z.array(ActionKey).optional(),
-  modules: z.array(z.string()).optional()
-}).extend(WithReason.shape);
-const UpdateBody = z.object({
-  roleId: Uuid.optional(),
-  teamId: Uuid.nullable().optional(),
-  orgRef: z.string().max(128).nullable().optional()
-}).extend(WithReason.shape);
-const TeamBody = z.object({
-  code: z.string().regex(/^[A-Za-z0-9-]{2,16}$/),
-  name: z.string().min(1).max(64),
-  leadAccountId: Uuid.nullable().optional()
-});
-const SetPasswordBody = z.object({
-  password: z.string().min(8).max(200)
-}).extend(WithReason.shape);
-const AuditQ = PageQuery.extend({
-  studySiteId: Uuid.optional(), actorLogin: z.string().optional(),
-  targetType: z.string().optional(), targetId: z.string().optional(),
-  sensitiveOnly: QueryBool.optional(),
-  since: z.iso.datetime({ offset: true }).optional()
-});
 
 @Controller("/v1")
 export class IdentityController {
@@ -57,14 +28,14 @@ export class IdentityController {
   me() { return this.svc.me(); }
 
   @Get("/accounts") @Operation("listAccounts")
-  list(@Query(new ZodPipe(ListQ)) q: z.infer<typeof ListQ>) { return this.svc.listAccounts(q); }
+  list(@Query(new ZodPipe(ListAccountsQuery)) q: z.infer<typeof ListAccountsQuery>) { return this.svc.listAccounts(q); }
 
   /* 幂等键在这里是**可选**的：带了就走幂等那条路（重放返回首次结果），
      没带就照旧。断网时这些创建请求要能排进发件箱，而重放意味着同一个
      请求可能发两次 —— 没有键的话，那就是实实在在的两笔。 */
   @Post("/accounts") @Operation("createAccount") @HttpCode(201)
   create(
-    @Body(new ZodPipe(CreateBody)) b: z.infer<typeof CreateBody>,
+    @Body(new ZodPipe(CreateAccountBody)) b: z.infer<typeof CreateAccountBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return idempotent(this.idem, key, b, () => this.svc.createAccount(b));
@@ -89,7 +60,7 @@ export class IdentityController {
   @Patch("/accounts/:id") @Operation("updateAccount")
   updateAccount(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(UpdateBody)) b: z.infer<typeof UpdateBody>
+    @Body(new ZodPipe(UpdateAccountBody)) b: z.infer<typeof UpdateAccountBody>
   ) { return this.svc.updateAccount(id, b); }
 
   @Post("/accounts/:id\\:enable") @Operation("enableAccount")
@@ -111,14 +82,20 @@ export class IdentityController {
   @Post("/accounts/:id\\:set-password") @Operation("setAccountPassword") @HttpCode(204)
   async setPassword(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(SetPasswordBody)) b: z.infer<typeof SetPasswordBody>
+    @Body(new ZodPipe(SetAccountPasswordBody)) b: z.infer<typeof SetAccountPasswordBody>
   ) { await this.svc.setAccountPassword(id, b.password, b.reason); }
+
+  @Post("/accounts/:id\\:set-login-address") @Operation("setLoginAddress") @HttpCode(204)
+  async setLoginAddress(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(SetLoginAddressBody)) b: z.infer<typeof SetLoginAddressBody>
+  ) { await this.svc.setLoginAddress(id, b.address, b.reason); }
 
   @Get("/teams") @Operation("listTeams")
   teams() { return this.svc.listTeams(); }
 
   @Post("/teams") @Operation("createTeam") @HttpCode(201)
-  createTeam(@Body(new ZodPipe(TeamBody)) b: z.infer<typeof TeamBody>) {
+  createTeam(@Body(new ZodPipe(CreateTeamBody)) b: z.infer<typeof CreateTeamBody>) {
     return this.svc.createTeam(b);
   }
 
@@ -128,9 +105,9 @@ export class IdentityController {
   @Patch("/roles/:id") @Operation("updateRolePermissions")
   updateRole(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(RoleBody)) b: z.infer<typeof RoleBody>
+    @Body(new ZodPipe(UpdateRolePermissionsBody)) b: z.infer<typeof UpdateRolePermissionsBody>
   ) { return this.svc.updateRole(id, b); }
 
   @Get("/audit-entries") @Operation("listAuditEntries")
-  audit(@Query(new ZodPipe(AuditQ)) q: z.infer<typeof AuditQ>) { return this.svc.listAudit(q); }
+  audit(@Query(new ZodPipe(ListAuditEntriesQuery)) q: z.infer<typeof ListAuditEntriesQuery>) { return this.svc.listAudit(q); }
 }

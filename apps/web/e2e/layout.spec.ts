@@ -70,6 +70,42 @@ test("390px 上表格自己横向滚，而不是把整页撑开 —— 那是刻
   expect(scroll).toBeLessThanOrEqual(client);
 });
 
+/* ════════════════════════════════════════════════════════════════════
+   展开的表单，提交按钮要够得着。
+
+   实测（1440×900）：合同变更那张表展开后 732px 高，提交按钮落在 1213px；
+   可行性 648px / 1144px。也就是**填完之后要往下滚三百来像素才知道按哪儿**。
+   七张表里有三张这样；换到更常见的 1366×768 就是五张。
+
+   处置是 `.form-go { position: sticky; bottom: 0 }` —— 对矮表单是个空操作，
+   所以下面两条一起钉：高的要吸住，矮的不许平白多出一条吸底栏。
+   ════════════════════════════════════════════════════════════════════ */
+test("表单比一屏高时，提交按钮吸在视口底部", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.goto("/change?as=admin");
+  await page.getByTestId("new-change").click();
+
+  const go = page.getByTestId("new-change-submit");
+  await expect(go).toBeInViewport();
+
+  /* 展开后表单确实高过一屏 —— 不然这条测试测的是别的东西。 */
+  const formH = await page.getByTestId("new-change-form")
+    .evaluate(el => el.getBoundingClientRect().height);
+  expect(formH, "这张表不高过一屏的话，这条断言就是空的").toBeGreaterThan(500);
+});
+
+test("表单矮的时候按钮待在原地 —— 吸底不是给每张表都加一条横栏", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.goto("/sites?as=admin");
+  await page.getByTestId("new-site").click();
+
+  const go = page.getByTestId("new-site-submit");
+  await expect(go).toBeInViewport();
+  /* 没吸住时它就在表单末尾：底边应当离视口底部还有一段。 */
+  const gap = await go.evaluate(el => innerHeight - el.getBoundingClientRect().bottom);
+  expect(gap, "矮表单的提交按钮不该被推到视口底边").toBeGreaterThan(40);
+});
+
 test("暗色模式下同样不溢出，且背景确实换了", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.setViewportSize({ width: 390, height: 900 });

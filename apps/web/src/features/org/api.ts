@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { Account as AccountSchema } from "@sitedesk/contracts";
 import { call } from "../../api/client.js";
 
 /* 「组织与权限」用到的读写。集中在这里而不是散在组件里 ——
@@ -13,15 +15,10 @@ export interface Team {
   lead: { id: string; displayName: string } | null;
   memberCount: number; studyCount: number;
 }
-export interface Account {
-  id: string; login: string; displayName: string;
-  role: { id: string; code: string; name: string; isExternal: boolean };
-  team: { id: string; code: string; name: string } | null;
-  isExternal: boolean; orgRef: string | null;
-  status: "active" | "disabled";
-  joinedOn: string | null; disabledAt: string | null; disabledReason: string | null;
-  lastLoginAt: string | null;
-}
+/* 账号的形状**来自契约**，不在这里再写一份接口 ——
+   写一份的代价刚刚付过：服务端给 Account 加了「进得来吗」那两个字段，
+   而前端这份副本不会因此报错，只会永远看不见它们。 */
+export type Account = z.infer<typeof AccountSchema>;
 
 export const listAccounts = () =>
   call<{ items: Account[] }>("listAccounts", { query: { limit: 200 } });
@@ -46,6 +43,12 @@ export const enableAccount = (id: string, reason: string) =>
 export const setAccountPassword = (id: string, password: string, reason: string) =>
   call("setAccountPassword", { params: { id }, body: { password, reason } });
 
+/** 登记 / 更换登录链接的收件地址。**写得进去，读不回来** ——
+ *  台账上只报「登记过没有」。要判断的是"这个人自助进得来吗"，
+ *  而把一屋子人的邮箱手机号铺在列表页上，是为了一个判断付一整页的代价。 */
+export const setLoginAddress = (id: string, address: string, reason: string) =>
+  call("setLoginAddress", { params: { id }, body: { address, reason } });
+
 export const createTeam = (b: { code: string; name: string; leadAccountId?: string | null }) =>
   call<Team>("createTeam", { body: b });
 
@@ -62,15 +65,9 @@ export const ROW_RULE: Record<string, string> = {
 /** 需要 orgRef 才切得出行的那条规则 —— 没有它，人登得进来一行都看不到。 */
 export const NEEDS_ORG_REF = "hospital";
 
-export const FIELD_LABEL: Record<string, string> = {
-  cost: "成本与人天", margin: "毛利与利润率", price: "报价与合同金额",
-  subject: "受试者筛选号", staff: "员工薪资口径"
-};
-export const ACTION_LABEL: Record<string, string> = {
-  approve: "审批工时 / 差旅 / 偏离", closeQA: "关闭质量事件",
-  raiseQ: "发起数据质疑", closeQ: "关闭数据质疑",
-  advance: "推进中心阶段", manage: "管理人员与权限",
-  bid: "维护报价与投标", ethics: "递交伦理事务",
-  subjRead: "查看受试者明细", subjWrite: "登记受试者与访视",
-  piConfirm: "PI 确认访视", timeWrite: "填报与作废工时", rateWrite: "维护费率卡"
-};
+/* 动作与列的中文名都来自契约 —— **这里不再抄一份**。
+   抄的那份曾经只有 13 条（契约有 18），于是权限矩阵上
+   `accept` / `audit` / `capaWrite` / `isfWrite` / `monitor` 没有那一格：
+   管理员想给 QA 加内部稽查，点不到，也不报错。
+   契约里的 ACTION_LABEL 用 ActionKey 定型，漏一个编译不过。 */
+export { ACTION_LABEL, FIELD_LABEL } from "@sitedesk/contracts";

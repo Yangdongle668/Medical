@@ -2,9 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { MODULES, GROUP_ORDER } from "../../shell/modules.js";
+/* 动作与列的清单来自契约，**表头与格子用同一份** —— 各用各的话，
+   19 列表头配 13 列格子这种事不会报错，只会错位。 */
+import { ACTION_KEYS, FIELD_KEYS } from "@sitedesk/contracts";
 import {
   listAccounts, listRoles, listTeams, createAccount, updateAccount,
-  disableAccount, enableAccount, setAccountPassword, createTeam, updateRole,
+  disableAccount, enableAccount, setAccountPassword, setLoginAddress,
+  createTeam, updateRole,
   ROW_RULE, NEEDS_ORG_REF, FIELD_LABEL, ACTION_LABEL,
   type Account, type Role, type Team
 } from "./api.js";
@@ -148,6 +152,13 @@ function UserTab({ me, accounts, roles, teams, run }: {
   const [orgRef, setOrgRef] = useState("");
   const [editing, setEditing] = useState<Account | null>(null);
   const [pwFor, setPwFor] = useState<Account | null>(null);
+  const [addrFor, setAddrFor] = useState<Account | null>(null);
+
+  /* 登录名的规则**与契约同一个正则**（CreateAccountBody）。
+     在这里当场判，是因为服务端那句提示要等一次往返才看得到 ——
+     而最自然的填法（「周敏」、「ZhouMin」）全都不合规。 */
+  const loginOk = /^[a-z][a-z0-9_]{2,31}$/.test(login.trim());
+  const loginBad = login.trim().length > 0 && !loginOk;
 
   const role = roles.find(r => r.id === roleId);
   /* hospital 规则的角色没有 orgRef 就是个"登得进来、一行都看不到"的账号。
@@ -165,9 +176,21 @@ function UserTab({ me, accounts, roles, teams, run }: {
           <label className="field"><span>姓名</span>
             <input value={name} data-testid="new-name"
               onChange={e => setName(e.target.value)} placeholder="例：周敏" /></label>
-          <label className="field"><span>登录账号</span>
+          <label className="field">
+            <span>
+              登录账号 <span className="t-mut">· 3–32 位小写字母 / 数字 / 下划线，且以字母开头</span>
+            </span>
             <input value={login} data-testid="new-login" className="mono"
-              onChange={e => setLogin(e.target.value)} placeholder="例：zhoumin" /></label>
+              aria-invalid={loginBad || undefined}
+              onChange={e => setLogin(e.target.value)} placeholder="例：zhoumin" />
+            {/* 姓名那一栏收中文，这一栏不收 —— 说清楚，而不是等服务端拒。 */}
+            {loginBad && (
+              <span className="t-crit" data-testid="new-login-bad" style={{ fontSize: 12 }}>
+                只能用小写字母 / 数字 / 下划线，以字母开头，至少 3 位 ——
+                中文和大写都不行（姓名填在左边那一栏）。
+              </span>
+            )}
+          </label>
           <label className="field"><span>角色</span>
             <select value={roleId} data-testid="new-role" onChange={e => setRoleId(e.target.value)}>
               <option value="">— 选一个 —</option>
@@ -189,7 +212,7 @@ function UserTab({ me, accounts, roles, teams, run }: {
         )}
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="btn primary" data-testid="create-account"
-            disabled={!login.trim() || !name.trim() || !roleId || (needsOrg && !orgRef.trim())}
+            disabled={!loginOk || !name.trim() || !roleId || (needsOrg && !orgRef.trim())}
             onClick={() => void run(`已建号 ${name}（${login}）`, async () => {
               await createAccount({
                 login: login.trim(), displayName: name.trim(), roleId,
@@ -201,8 +224,13 @@ function UserTab({ me, accounts, roles, teams, run }: {
           </button>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          建出来的账号还没有进得来的路。两条选一条：给他登记收件地址（他就能自助申请一次性链接），
-          或者在下面那一行点「设口令」当面给一个初始口令 —— 他第一次登录时会被要求改掉。
+          <b>建出来的账号还没有进得来的路</b> —— 下面那一行有两个按钮给这条路：
+          「设口令」当面给一个初始口令，他第一次登录时会被要求改掉；
+          「设收件地址」登记邮箱或手机号，之后他可以<b>自己在登录页申请一次性链接</b>。
+          <br />
+          机构老师和 PI 走链接那条 —— 一周登录两次的人不该记密码。
+          <b>没登记地址就去申请链接，接口会回一句「已发送」，但什么也不会发出去</b>
+          （对外含糊是防账号枚举）—— 台账上「怎么进来」那一列就是为了让这件事看得见。
         </p>
       </div>
 
@@ -216,7 +244,7 @@ function UserTab({ me, accounts, roles, teams, run }: {
             <thead>
               <tr>
                 <th>姓名</th><th>登录账号</th><th>角色</th><th>分组</th>
-                <th>行范围</th><th>入职</th><th>最近登录</th><th>状态</th><th />
+                <th>行范围</th><th>怎么进来</th><th>最近登录</th><th>状态</th><th />
               </tr>
             </thead>
             <tbody>
@@ -235,7 +263,25 @@ function UserTab({ me, accounts, roles, teams, run }: {
                     <td><span className="chip flat">{a.role.name}</span></td>
                     <td className="muted">{a.team?.name ?? (a.isExternal ? a.orgRef ?? "外部机构" : "—")}</td>
                     <td className="muted">{r ? ROW_RULE[r.rowRule] ?? r.rowRule : "—"}</td>
-                    <td className="mono muted">{a.joinedOn ?? "—"}</td>
+                    {/* 自助那条路（一次性链接）通不通。**没登记收件地址时，
+                        /v1/auth/magic-link 照样回一句「登录链接已发送」而
+                        什么都没发** —— 对外含糊是防账号枚举，
+                        但管理员这一侧必须看得见。
+
+                        这里**只说链接这条路**：设没设过口令查不到，
+                        auth_password 的行级策略严格只看得见自己那一行，
+                        而那条策略是对的。所以下面那句话说的是
+                        "自助进不来"，不是"进不来"。 */}
+                    <td>
+                      {a.hasLoginAddress
+                        ? <span className="chip good" data-testid="has-address">
+                            可自助申请链接
+                          </span>
+                        : <span className="chip warn" data-testid="no-address"
+                            title="没登记收件地址 —— 申请登录链接会石沉大海，只能由管理员当面给初始口令">
+                            未登记收件地址
+                          </span>}
+                    </td>
                     <td className="mono muted">{a.lastLoginAt?.slice(0, 10) ?? "从未"}</td>
                     <td>
                       <span className={`chip ${a.status === "active" ? "good" : "flat"}`}>
@@ -243,13 +289,23 @@ function UserTab({ me, accounts, roles, teams, run }: {
                       </span>
                     </td>
                     <td>
-                      <div className="row" style={{ gap: 4, justifyContent: "flex-end" }}>
+                      {/* 四个按钮一行排完，不换行 —— 换行时每行台账
+                          长高一倍，十二行就多出四百多像素。 */}
+                      <div className="row acts" style={{ gap: 4, justifyContent: "flex-end" }}>
                         <button className="btn" onClick={() => setEditing(a)}>改角色</button>
                         <button className="btn" onClick={() => setPwFor(a)}
                           /* 给自己设口令等于绕过"验旧口令"那道门 —— 服务端会拒，
                              这里先把按钮关掉，免得人点了才知道。 */
                           disabled={self} title={self ? "改自己的口令请用顶部的「改口令」" : undefined}>
                           设口令
+                        </button>
+                        {/* 「设收件地址」与「设口令」是同一件事的两条路：
+                            让这个人进得来。链接那条是给机构老师与 PI 的
+                            （一周登录两次的人不该记密码），口令那条是内部账号
+                            当面给。所以两个按钮并排。 */}
+                        <button className="btn" data-testid={`addr-${a.login}`}
+                          onClick={() => setAddrFor(a)}>
+                          {a.hasLoginAddress ? "换收件地址" : "设收件地址"}
                         </button>
                         {self ? <span className="muted">当前登录</span>
                           : a.status === "active"
@@ -284,7 +340,76 @@ function UserTab({ me, accounts, roles, teams, run }: {
             `${pwFor.displayName} 的口令已重设 —— 他下次登录会被要求改掉，之前的会话全部断开`,
             async () => { await setAccountPassword(pwFor.id, password, reason); setPwFor(null); })} />
       )}
+      {addrFor && (
+        <SetLoginAddress account={addrFor} onClose={() => setAddrFor(null)}
+          onSave={(address, reason) => run(
+            `${addrFor.displayName} 的登录链接以后送到这个地址 —— 他可以自己在登录页申请了`,
+            async () => { await setLoginAddress(addrFor.id, address, reason); setAddrFor(null); })} />
+      )}
     </>
+  );
+}
+
+/* ── 登记登录链接的收件地址 ────────────────────────────────────────
+   这一栏是**写进去、读不回来**的：台账上只报「登记过没有」。
+   要判断的是"这个人自助进得来吗"，而把一屋子人的邮箱手机号铺在
+   列表页上，是为了一个判断付一整页的代价。登记错了就再登记一次。
+
+   **能改地址等于能拿到那个人的登录链接。** 界面上要把这句话说出来 ——
+   管理员本来就能用「设口令」接管任何账号，所以这不是新增的能力，
+   但它同样悄无声息，而悄无声息的事更该在按下去之前被说一遍。 */
+function SetLoginAddress({ account, onClose, onSave }: {
+  account: Account; onClose: () => void;
+  onSave: (address: string, reason: string) => Promise<void>;
+}) {
+  const [address, setAddress] = useState("");
+  const [reason, setReason] = useState("");
+  const t = address.trim();
+  /* 形状的真相在服务端的 app.set_login_address（运维脚本走的是同一个函数）。
+     这里同一条口径先判一遍，是因为一个打错的地址不会报错 ——
+     它只让那个人永远收不到链接，而他会以为是系统坏了。 */
+  const ok = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(t) || /^\+?[0-9][0-9 -]{5,19}$/.test(t);
+
+  return (
+    <div className="card stack" data-testid="set-login-address" style={{ marginTop: 12 }}>
+      <div className="spread">
+        <h3>{account.displayName} 的登录链接送到哪里</h3>
+        <button className="btn link" onClick={onClose}>取消</button>
+      </div>
+      <label className="field">
+        <span>邮箱或手机号</span>
+        <input value={address} data-testid="addr-input" className="mono"
+          placeholder="例：zhanghm@pumch.cn 或 13800138000"
+          aria-invalid={t.length > 0 && !ok ? true : undefined}
+          onChange={e => setAddress(e.target.value)} />
+        {t.length > 0 && !ok && (
+          <span className="t-crit" data-testid="addr-bad" style={{ fontSize: 12 }}>
+            既不像邮箱也不像手机号 —— 打错的地址不会报错，
+            只会让这个人永远收不到链接。
+          </span>
+        )}
+      </label>
+      <label className="field">
+        <span>理由（必填，至少 4 字）</span>
+        <input value={reason} data-testid="addr-reason"
+          placeholder="例：入职登记，本人邮箱已核对"
+          onChange={e => setReason(e.target.value)} />
+      </label>
+      <div className="derive">
+        <b>能改收件地址，等于能拿到这个人的登录链接。</b>
+        所以这一下要 <span className="mono">manage</span> 权限，
+        并且<b>进审计轨迹</b> —— 记的是"谁给谁登记过"，不记地址本身。
+        <br />
+        一个账号只留一个地址，再登记一次就是更换。
+        这个地址<b>已经属于别的账号时会被拦下</b>，不会悄悄改绑 ——
+        那等于把那个人的入口转走。
+      </div>
+      <div className="row">
+        <button className="btn primary" data-testid="addr-go"
+          disabled={!ok || reason.trim().length < 4}
+          onClick={() => void onSave(t, reason.trim())}>登记</button>
+      </div>
+    </div>
   );
 }
 
@@ -521,6 +646,17 @@ function GroupTab({ accounts, teams, run }: {
   );
 }
 
+/** 角色名的短写，给动作矩阵当列头用。
+ *
+ *  库里的名字是「临床协调员 CRC」这种"全称 + 缩写"的写法，而九列表头
+ *  排在一起时全称一列要占三行。取名字里那段拉丁缩写 —— 那本来就是
+ *  这些角色平时被叫的名字（没人说"临床监查员"，都说 CRA）。
+ *  没有缩写的（系统管理员、经营层）就用原名，它们本来也短。
+ *  完整名字留在 `title` 里，也留在上面那张「行范围 · 字段」表的第一列。 */
+export function shortName(name: string): string {
+  return name.match(/[A-Z]{2,}/)?.[0] ?? name;
+}
+
 /* ── 角色权限 ─────────────────────────────────────────────────────── */
 function PermTab({ roles, run }: { roles: Role[]; run: Run }) {
   const [modsFor, setModsFor] = useState<Role | null>(null);
@@ -584,7 +720,7 @@ function PermTab({ roles, run }: { roles: Role[]; run: Run }) {
                         <option key={k} value={k}>{v}</option>)}
                     </select>
                   </td>
-                  {Object.keys(FIELD_LABEL).map(f => (
+                  {FIELD_KEYS.map(f => (
                     <td key={f} className="tick">
                       <input type="checkbox" checked={r.visibleFields.includes(f)}
                         data-testid={`field-${r.code}-${f}`} disabled={locked(r0)}
@@ -610,36 +746,49 @@ function PermTab({ roles, run }: { roles: Role[]; run: Run }) {
         </div>
       </div>
 
+      {/* ── 动作权限：**动作在行，角色在列** ──────────────────────────
+          反过来写（角色在行、18 个动作当表头）时这张表是坏的，而且是
+          两处一起坏：18 个中文表头把「角色」那一列挤到只剩一个字宽，
+          于是"系统管理员"竖着排成五行，每行高 90px；同时那 18 列还是
+          放不下，后八列要横向滚出去才看得到。9 行的表长到 810px，
+          却只露得出十列。
+
+          长标签在左、短标签在头，是表格本来的读法：18 行各一行高，
+          九列角色横着排得下 —— 一屏之内看得完，也不用横向滚。 */}
       <div className="card stack" style={{ marginBottom: 12 }}>
         <div className="spread"><h3>动作权限</h3><span className="muted">能看到不等于能操作</span></div>
         <div className="table-wrap">
-          <table>
+          <table className="matrix">
             <thead>
-              <tr><th>角色</th>{Object.entries(ACTION_LABEL).map(([k, v]) =>
-                <th key={k} className="tick">{v}</th>)}</tr>
+              <tr>
+                <th>动作</th>
+                {roles.map(r0 => (
+                  <th key={r0.id} className="tick" title={r0.name}>{shortName(r0.name)}</th>
+                ))}
+              </tr>
             </thead>
             <tbody>
-              {roles.map(r0 => {
-                const r = view(r0);
-                return (
-                <tr key={r.id}>
-                  <td>{r.name}</td>
-                  {Object.keys(ACTION_LABEL).map(a => (
-                    <td key={a} className="tick">
-                      <input type="checkbox" checked={r.allowedActions.includes(a)}
-                        data-testid={`action-${r.code}-${a}`} disabled={locked(r0)}
-                        aria-label={`${r.name} · ${ACTION_LABEL[a]}`}
-                        onChange={e => propose(r0,
-                          `${r.name} ${e.target.checked ? "获得" : "失去"}「${ACTION_LABEL[a]}」`,
-                          { allowedActions: e.target.checked
-                              ? [...r0.allowedActions, a]
-                              : r0.allowedActions.filter(x => x !== a),
-                            reason: "" })} />
-                    </td>
-                  ))}
+              {ACTION_KEYS.map(a => (
+                <tr key={a} data-testid={`action-row-${a}`}>
+                  <th scope="row">{ACTION_LABEL[a]}</th>
+                  {roles.map(r0 => {
+                    const r = view(r0);
+                    return (
+                      <td key={r0.id} className="tick">
+                        <input type="checkbox" checked={r.allowedActions.includes(a)}
+                          data-testid={`action-${r.code}-${a}`} disabled={locked(r0)}
+                          aria-label={`${r.name} · ${ACTION_LABEL[a]}`}
+                          onChange={e => propose(r0,
+                            `${r.name} ${e.target.checked ? "获得" : "失去"}「${ACTION_LABEL[a]}」`,
+                            { allowedActions: e.target.checked
+                                ? [...r0.allowedActions, a]
+                                : r0.allowedActions.filter(x => x !== a),
+                              reason: "" })} />
+                      </td>
+                    );
+                  })}
                 </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>

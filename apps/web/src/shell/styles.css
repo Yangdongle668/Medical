@@ -26,6 +26,10 @@
 /* ── 基底 ─────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { height: 100%; }
+/* 吸底的提交条（.form-go）会盖住视口最底下那一段。用 Tab 走到表单末尾
+   那几栏时，浏览器把它滚进视野的落点正好在那条横栏底下 ——
+   光标看不见，而人会以为焦点丢了。留出比横栏更高的一段。 */
+html { scroll-padding-bottom: 96px; }
 body {
   margin: 0; background: var(--surface); color: var(--ink);
   font-family: "DM Sans", "PingFang SC", "Source Han Sans SC", "Microsoft YaHei",
@@ -76,6 +80,47 @@ a { color: var(--accent); text-underline-offset: 2px; }
   text-transform: uppercase; color: var(--ink-3); padding: 18px 12px 7px;
 }
 .nav-group:first-child .nav-group-title { padding-top: 4px; }
+
+/* ── 折叠：只在侧栏一屏放不下时出现（见 Rail.tsx 的 DENSE） ─────────
+   标题变成一个按钮，但**看起来还是标题** —— 它不该长得像导航项，
+   否则一列收起的分组会被当成一列页面去点。 */
+.nav-group-h {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  background: none; border: 0; padding: 0; text-align: left;
+  border-radius: 6px; color: inherit;
+}
+.nav-group-h:hover { background: var(--surface-2); }
+.nav-group-h .nav-group-title { flex: 1; padding-right: 0; }
+/* 条数与折叠箭头贴着右边，和标题同一档字号 —— 它们是标注，不是内容。 */
+.nav-group-h .nav-n, .nav-group-h .nav-caret {
+  font-family: "DM Mono", monospace; font-size: 9.5px; color: var(--ink-3);
+  padding-top: 18px; padding-bottom: 7px;
+}
+.nav-group-h .nav-caret { padding-right: 12px; }
+.nav-group:first-child .nav-group-h .nav-n,
+.nav-group:first-child .nav-group-h .nav-caret { padding-top: 4px; }
+/* 收起来的分组标题按**一行**排版，不按"一段的标题"排版。
+   那 18px 的上留白是用来把标题和它上面那一组的内容隔开的；
+   底下没有内容时它只是在把后面十行往下推 —— 十行推出去八十像素，
+   正好是侧栏还要滚的那一段。 */
+.nav-group-h[aria-expanded="false"] > * {
+  padding-top: 8px; padding-bottom: 7px;
+}
+/* 「你在这一组里」—— 那一组被手动收起来时才出现。
+   用强调色的一点，和当前项左边那条竖线是同一个意思的两种写法。 */
+.nav-at {
+  width: 4px; height: 4px; border-radius: 50%; background: var(--accent); flex: none;
+}
+
+/* 过滤框。它是侧栏里唯一一个输入框，所以要比正文控件更收敛：
+   无边框、贴着底色，聚焦时才显出轮廓。 */
+.rail-find { padding: 4px 12px 8px; }
+.rail-find input {
+  background: var(--surface-2); border-color: transparent;
+  padding: 5px 9px; font-size: 12.5px; border-radius: 6px;
+}
+.rail-find input::placeholder { color: var(--ink-3); }
+.nav-none { color: var(--ink-3); font-size: 12px; padding: 8px 12px; margin: 0; }
 /* 「这一页还没建」的记号。用一个点而不是"WIP"之类的字：
    它要能被看见，但不该在侧栏里排成一列噪音。 */
 .nav-todo { color: var(--ink-3); margin-left: auto; }
@@ -124,6 +169,29 @@ a { color: var(--accent); text-underline-offset: 2px; }
    这里只留承重的那一条。 */
 .table-wrap { overflow-x: auto; scrollbar-width: thin; }
 table { min-width: 560px; }
+
+/* ── 勾选矩阵 ─────────────────────────────────────────────────────
+   动作权限那张表：**名目在行，人在列**（见 OrgPage 里那段注释）。
+   第一列是长中文标签，不许被挤到换行 —— 一挤，每行就从一行高涨到
+   五行高，九行的表能长到 810px。其余各列窄而等宽，用不着更多。 */
+/* **表格只占它自己需要的宽度**，不铺满。铺满时九列勾选框被推到最右边，
+   离行首的名目有六百多像素的空白 —— 那段空白正是"串行"的来源，
+   而隔行底纹只是在给它打补丁。挨着放就不用补。 */
+.matrix { width: auto; min-width: 0; }
+.matrix tbody th {
+  text-align: left; font-weight: 400; color: var(--ink);
+  white-space: nowrap; padding: 9px 20px 9px 2px;
+  border-bottom: 1px solid var(--line);
+}
+.matrix thead th.tick, .matrix td.tick {
+  white-space: nowrap; padding-left: 7px; padding-right: 7px;
+}
+/* 隔行浅底：横着看九列勾选框，眼睛还是要一条底纹扶着。 */
+.matrix tbody tr:nth-child(even) { background: var(--surface-2); }
+
+/* 表格里那一格并排的按钮不许换行 —— 换行会让每一行长高一倍，
+   而"这一行能做什么"本来是一眼的事。放不下就让表格自己横向滚。 */
+td .row.acts { flex-wrap: nowrap; white-space: nowrap; }
 
 .muted { color: var(--ink-3); }
 
@@ -264,6 +332,19 @@ input, textarea, select {
 input:hover, textarea:hover, select:hover { border-color: var(--ink-3); }
 /* 表单行：几个字段横着排，窄屏自己折。 */
 .grid-form { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+
+/* ── 提交条吸底 ───────────────────────────────────────────────────
+   展开的表单常常比一屏高（实测最高 732px，提交按钮落在 1213px），
+   于是"填完按哪儿"要滚下去才看得见。`sticky; bottom: 0` 的好处是
+   **它对矮表单是个空操作** —— 够得着的时候它就待在原地。
+
+   底色不能是 `transparent`：吸住的时候后面的字会从它下面穿过去。 */
+.form-go {
+  position: sticky; bottom: 0; z-index: 2;
+  background: var(--surface);
+  padding: 12px 0; margin-top: -10px;
+  border-top: 1px solid var(--line);
+}
 /* 权限矩阵里的复选格 */
 .tick { text-align: center; }
 .tick input { width: auto; }
