@@ -26,6 +26,10 @@
 /* ── 基底 ─────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { height: 100%; }
+/* 吸底的提交条（.form-go）会盖住视口最底下那一段。用 Tab 走到表单末尾
+   那几栏时，浏览器把它滚进视野的落点正好在那条横栏底下 ——
+   光标看不见，而人会以为焦点丢了。留出比横栏更高的一段。 */
+html { scroll-padding-bottom: 96px; }
 body {
   margin: 0; background: var(--surface); color: var(--ink);
   font-family: "DM Sans", "PingFang SC", "Source Han Sans SC", "Microsoft YaHei",
