@@ -7,6 +7,7 @@ import { loadToken, logout, recallWho, type CachedWho } from "../features/login/
 import { loadMe, forgetMe, type Me } from "../features/login/me.js";
 import { ErrorBoundary } from "./ErrorBoundary.js";
 import { FactoryPasswordBanner } from "./FactoryPasswordBanner.js";
+import { Rail } from "./Rail.js";
 import { navFor } from "./modules.js";
 
 /* 侧栏原来是这六项写死的：今天 / 我的中心 / 交接 / 工时 / 质量台账 / 费率卡。
@@ -103,26 +104,9 @@ export function App() {
     <div className="app">
       <aside className="rail">
         <h1>临床中心台</h1>
-        <nav>
-          {groups.map(({ group, items }) => (
-            <div key={group} className="nav-group">
-              {/* 分组标题只在**不止一组**时出现。只有一组的时候它是一句废话：
-                  上面写着"我的工作"，下面就是那个人的全部页面 ——
-                  多出来的那一行只是把导航往下推了一格。 */}
-              {groups.length > 1 && <span className="nav-group-title">{group}</span>}
-              {items.map(m => (
-                <NavLink key={m.key} to={m.path}
-                  aria-current={m.path === here ? "page" : undefined}>
-                  {m.title}
-                  {/* 还没建的页照样出现在导航里 —— 权限已经生效了，
-                      藏起来反而让"我到底有没有这个模块"变成猜。
-                      但要标出来，免得点进去像是坏了。 */}
-                  {m.todo && <span className="nav-todo" title="这一页还没建">·</span>}
-                </NavLink>
-              ))}
-            </div>
-          ))}
-        </nav>
+        {/* 分组标题只在**不止一组**时出现；条目多到一屏放不下时才折叠。
+            两条规则都在 Rail 里，连同为什么。 */}
+        <Rail groups={groups} here={here} />
         {/* 待发数量常驻侧栏 —— 「我到底发出去没有」不该由用户去猜 */}
         {pending > 0 && (
           <NavLink to="/outbox" className="outbox-badge" data-testid="outbox-badge"

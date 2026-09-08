@@ -289,7 +289,9 @@ function UserTab({ me, accounts, roles, teams, run }: {
                       </span>
                     </td>
                     <td>
-                      <div className="row" style={{ gap: 4, justifyContent: "flex-end" }}>
+                      {/* 四个按钮一行排完，不换行 —— 换行时每行台账
+                          长高一倍，十二行就多出四百多像素。 */}
+                      <div className="row acts" style={{ gap: 4, justifyContent: "flex-end" }}>
                         <button className="btn" onClick={() => setEditing(a)}>改角色</button>
                         <button className="btn" onClick={() => setPwFor(a)}
                           /* 给自己设口令等于绕过"验旧口令"那道门 —— 服务端会拒，
@@ -644,6 +646,17 @@ function GroupTab({ accounts, teams, run }: {
   );
 }
 
+/** 角色名的短写，给动作矩阵当列头用。
+ *
+ *  库里的名字是「临床协调员 CRC」这种"全称 + 缩写"的写法，而九列表头
+ *  排在一起时全称一列要占三行。取名字里那段拉丁缩写 —— 那本来就是
+ *  这些角色平时被叫的名字（没人说"临床监查员"，都说 CRA）。
+ *  没有缩写的（系统管理员、经营层）就用原名，它们本来也短。
+ *  完整名字留在 `title` 里，也留在上面那张「行范围 · 字段」表的第一列。 */
+export function shortName(name: string): string {
+  return name.match(/[A-Z]{2,}/)?.[0] ?? name;
+}
+
 /* ── 角色权限 ─────────────────────────────────────────────────────── */
 function PermTab({ roles, run }: { roles: Role[]; run: Run }) {
   const [modsFor, setModsFor] = useState<Role | null>(null);
@@ -733,36 +746,49 @@ function PermTab({ roles, run }: { roles: Role[]; run: Run }) {
         </div>
       </div>
 
+      {/* ── 动作权限：**动作在行，角色在列** ──────────────────────────
+          反过来写（角色在行、18 个动作当表头）时这张表是坏的，而且是
+          两处一起坏：18 个中文表头把「角色」那一列挤到只剩一个字宽，
+          于是"系统管理员"竖着排成五行，每行高 90px；同时那 18 列还是
+          放不下，后八列要横向滚出去才看得到。9 行的表长到 810px，
+          却只露得出十列。
+
+          长标签在左、短标签在头，是表格本来的读法：18 行各一行高，
+          九列角色横着排得下 —— 一屏之内看得完，也不用横向滚。 */}
       <div className="card stack" style={{ marginBottom: 12 }}>
         <div className="spread"><h3>动作权限</h3><span className="muted">能看到不等于能操作</span></div>
         <div className="table-wrap">
-          <table>
+          <table className="matrix">
             <thead>
-              <tr><th>角色</th>{Object.entries(ACTION_LABEL).map(([k, v]) =>
-                <th key={k} className="tick">{v}</th>)}</tr>
+              <tr>
+                <th>动作</th>
+                {roles.map(r0 => (
+                  <th key={r0.id} className="tick" title={r0.name}>{shortName(r0.name)}</th>
+                ))}
+              </tr>
             </thead>
             <tbody>
-              {roles.map(r0 => {
-                const r = view(r0);
-                return (
-                <tr key={r.id}>
-                  <td>{r.name}</td>
-                  {ACTION_KEYS.map(a => (
-                    <td key={a} className="tick">
-                      <input type="checkbox" checked={r.allowedActions.includes(a)}
-                        data-testid={`action-${r.code}-${a}`} disabled={locked(r0)}
-                        aria-label={`${r.name} · ${ACTION_LABEL[a]}`}
-                        onChange={e => propose(r0,
-                          `${r.name} ${e.target.checked ? "获得" : "失去"}「${ACTION_LABEL[a]}」`,
-                          { allowedActions: e.target.checked
-                              ? [...r0.allowedActions, a]
-                              : r0.allowedActions.filter(x => x !== a),
-                            reason: "" })} />
-                    </td>
-                  ))}
+              {ACTION_KEYS.map(a => (
+                <tr key={a} data-testid={`action-row-${a}`}>
+                  <th scope="row">{ACTION_LABEL[a]}</th>
+                  {roles.map(r0 => {
+                    const r = view(r0);
+                    return (
+                      <td key={r0.id} className="tick">
+                        <input type="checkbox" checked={r.allowedActions.includes(a)}
+                          data-testid={`action-${r.code}-${a}`} disabled={locked(r0)}
+                          aria-label={`${r.name} · ${ACTION_LABEL[a]}`}
+                          onChange={e => propose(r0,
+                            `${r.name} ${e.target.checked ? "获得" : "失去"}「${ACTION_LABEL[a]}」`,
+                            { allowedActions: e.target.checked
+                                ? [...r0.allowedActions, a]
+                                : r0.allowedActions.filter(x => x !== a),
+                              reason: "" })} />
+                      </td>
+                    );
+                  })}
                 </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>

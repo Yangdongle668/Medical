@@ -59,8 +59,101 @@ test.describe("管理员 · 组织与权限", () => {
 
   test("侧栏给满 45 个模块 —— 管理员打开系统看得到全部界面", async ({ page }) => {
     await page.goto("/today?as=admin");
-    /* 45 个模块去重后是 41 条（crc/cra 同为「我的一天」等）。 */
+
+    /* 45 个模块去重后是 41 条（crc/cra 同为「我的一天」等）。
+       管理员这一侧超过 DENSE，分组是折叠的 —— 所以这里逐组展开再数。
+       **展开这个动作本身也是断言**：一条打不开的分组等于那几页没有入口，
+       而那正是这条测试原本要盯的事。 */
+    const groups = page.locator(".nav-group-h");
+    await expect(groups).toHaveCount(11);
+    for (const g of await groups.all())
+      if (await g.getAttribute("aria-expanded") === "false") await g.click();
+
     await expect(page.locator(".rail nav a")).toHaveCount(41);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   侧栏在条目多到看不完时会折叠。
+
+   管理员拿到 41 条链接 + 11 个分组标题 —— 实测侧栏内容 2093px，
+   1440×900 上可视 900px：**19 条看得见，22 条要滚才够得着**。
+   一条要滚动才够得着的导航，等于把"这个系统有哪些页"变成了
+   一件要费力气才知道的事。
+
+   折叠只对管理员生效（DENSE=24），所以下面这几条也只有他跑得到。
+   钉三件事：不滚就看得完、当前那一组是打开的、以及**不靠展开也能到**。
+   ════════════════════════════════════════════════════════════════════ */
+test.describe("管理员 · 侧栏", () => {
+  /* 钉的是**整个系统的目录一眼看得完**：十一个分组标题全都落在视口里。
+     展开的那一组里有多少条会变（加一页就多一条），所以不去数总高度 ——
+     那样的断言会因为一次正常的加页而红，而红的原因跟这条测试要防的事无关。 */
+  test("十一个分组一眼看得完 —— 在此之前 41 条里有 22 条够不着", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/today?as=admin");
+
+    const heads = page.locator(".nav-group-h");
+    await expect(heads).toHaveCount(11);
+    const off = await page.evaluate(() =>
+      [...document.querySelectorAll(".nav-group-h")]
+        .filter(e => e.getBoundingClientRect().bottom > innerHeight)
+        .map(e => e.textContent?.trim()));
+    expect(off, "这几组要滚下去才看得见").toEqual([]);
+
+    /* 顺带盯住总量：改之前要滚 1193px。 */
+    const over = await page.evaluate(() => {
+      const el = document.querySelector(".rail")!;
+      return el.scrollHeight - el.clientHeight;
+    });
+    expect(over, `侧栏还要滚 ${over}px 才看得完（原来是 1193px）`).toBeLessThan(120);
+  });
+
+  test("当前所在的那一组是展开的 —— 导航先回答「我在哪」", async ({ page }) => {
+    await page.goto("/today?as=admin");
+    /* 「我的一天」归「我的工作」。 */
+    await expect(page.getByTestId("nav-g-我的工作")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("link", { name: "我的一天" })).toBeVisible();
+    /* 别的组收着，但标题在，且说得出里面有几条 —— 收起来不等于藏起来。 */
+    await expect(page.getByTestId("nav-g-质量")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId("nav-g-质量")).toContainText("4");
+    await expect(page.getByRole("link", { name: "内部稽查" })).toHaveCount(0);
+  });
+
+  test("换一页，展开的那一组跟着换", async ({ page }) => {
+    await page.goto("/org?as=admin");
+    await expect(page.getByTestId("nav-g-系统")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("nav-g-我的工作")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("过滤框：知道名字就不必先想它归哪一组", async ({ page }) => {
+    await page.goto("/today?as=admin");
+    await page.getByTestId("rail-find").fill("稽查");
+    /* 过滤时忽略折叠 —— 找东西的时候不该还要先展开一层。 */
+    await page.getByRole("link", { name: "内部稽查" }).click();
+    await expect(page).toHaveURL(/\/audit/);
+    /* 跳过去之后过滤词要清掉，否则侧栏会一直只剩那一条。 */
+    await expect(page.getByTestId("rail-find")).toHaveValue("");
+  });
+
+  test("分组名也能筛 —— 「质量」一次捞出那一组四页", async ({ page }) => {
+    await page.goto("/today?as=admin");
+    await page.getByTestId("rail-find").fill("质量");
+    await expect(page.locator(".rail nav a")).toHaveCount(4);
+  });
+
+  test("找不到时说出来，而不是给一列空的", async ({ page }) => {
+    await page.goto("/today?as=admin");
+    await page.getByTestId("rail-find").fill("并没有这一页");
+    await expect(page.getByTestId("rail-none")).toBeVisible();
+  });
+
+  test("手动开合记得住 —— 常在哪两组之间来回，不必每次重说", async ({ page }) => {
+    await page.goto("/today?as=admin");
+    await page.getByTestId("nav-g-财务").click();
+    await expect(page.getByTestId("nav-g-财务")).toHaveAttribute("aria-expanded", "true");
+
+    await page.reload();
+    await expect(page.getByTestId("nav-g-财务")).toHaveAttribute("aria-expanded", "true");
   });
 });
 
