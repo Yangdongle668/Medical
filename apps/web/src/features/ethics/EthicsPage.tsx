@@ -105,8 +105,13 @@ export function EthicsPage() {
 
       <div className="stack">
         {sites.map(site => {
-          const subs = bySite[site.id] ?? [];
-          const open = subs.filter(x => x.decision === "pending");
+          /* **undefined 与 [] 不是一回事**：前者是"这个中心的递交记录还没到"，
+             后者是"到了，是空的"。`load()` 分两轮 —— 先拿中心列表把卡片画出来，
+             再每个中心一条请求去拿递交记录，所以中间必然有一段
+             卡片在、记录没到。把两者合并成 `?? []` 的话，那一段里
+             每张卡片都写着「还没有递交记录」—— 把"还没到"说成了"没有"。 */
+          const subs = bySite[site.id];
+          const open = (subs ?? []).filter(x => x.decision === "pending");
           return (
             <div className="card stack" key={site.id} data-testid="ethics-site">
               <div className="spread">
@@ -125,7 +130,9 @@ export function EthicsPage() {
                 </div>
               </div>
 
-              {subs.length === 0
+              {subs === undefined
+                ? <p className="muted" style={{ margin: 0 }} data-testid="ethics-loading">读取中…</p>
+                : subs.length === 0
                 ? <p className="muted" style={{ margin: 0 }}>还没有递交记录。</p>
                 : <div className="table-wrap">
                     <table>
