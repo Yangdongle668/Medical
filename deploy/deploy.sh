@@ -23,7 +23,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --demo) DEMO=1; shift ;;
     --port) PORT="${2:?--port 后面要跟端口号}"; shift 2 ;;
-    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) 用法 "$0"; exit 0 ;;
     *) 死 "不认识的参数：$1（用 --help 看用法）" ;;
   esac
 done
@@ -43,7 +43,7 @@ else
   灰 "  deploy/.env 已存在，沿用它（口令不会被覆盖）。"
 fi
 [ -n "$PORT" ] && 设置 SITEDESK_PORT "$PORT"
-PORT="$(读取 SITEDESK_PORT)"; PORT="${PORT:-8080}"
+PORT="$(读取 SITEDESK_PORT 8080)"
 [ "$(读取 SITEDESK_PUBLIC_ORIGIN)" = "http://localhost:8080" ] && [ "$PORT" != "8080" ] \
   && 设置 SITEDESK_PUBLIC_ORIGIN "http://localhost:${PORT}"
 
@@ -51,15 +51,7 @@ PORT="$(读取 SITEDESK_PORT)"; PORT="${PORT:-8080}"
 dc build
 
 步 "③ 起数据库"
-dc up -d db
-printf '  等数据库'
-n=0
-until dc exec -T db pg_isready -U postgres >/dev/null 2>&1; do
-  n=$((n+1)); printf '.'
-  [ "$n" -lt 60 ] || { echo; 死 "数据库 60 秒内没起来：dc logs db"; }
-  sleep 1
-done
-echo
+起数据库
 
 # 迁移之前先确认口令对得上。不确认的话，卷比 .env 老这件事会以
 # 一条 `password authentication failed` 的堆栈出现在迁移日志里 ——
@@ -84,7 +76,7 @@ dc up -d api web
 验一遍 "$PORT"
 绿 "  首页 ✓  同源反代 ✓  数据库就绪 ✓  未认证 401 ✓"
 
-ORIGIN="$(读取 SITEDESK_PUBLIC_ORIGIN)"; ORIGIN="${ORIGIN:-http://localhost:$PORT}"
+ORIGIN="$(读取 SITEDESK_PUBLIC_ORIGIN "http://localhost:$PORT")"
 步 "完成"
 绿 "  中心台：$ORIGIN"
 echo

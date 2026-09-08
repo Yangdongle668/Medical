@@ -51,7 +51,30 @@ dc() { "${DC[@]}" --project-directory "$HERE" -f "$HERE/docker-compose.yml" "$@"
   fi
 }
 
-读取() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2-; }
+# 读一个键，第二个参数是取不到时的默认值。
+#
+# ── 为什么不能只写那一条管道 ──────────────────────────────────────────
+# 原来是 `grep … | head -1 | cut -d= -f2-`。键不在 .env 里时 grep 返回 1，
+# 而 lib.sh 开头是 `set -euo pipefail` —— pipefail 把 grep 的 1 传给整条管道，
+# set -e 再把它变成**整个脚本当场退出，一个字都不打**。
+#
+# 于是 `./deploy/update.sh --rollback` 在一台还没更新过的机器上
+# （那种机器的 .env 里没有 SITEDESK_PREV_TAG）就是"按下去什么也没发生"，
+# 而下一行那句"没有记录上一个标签 —— 这台机器还没更新过"永远没机会打出来。
+# 一条写好了的错误提示，被它上面那一行给吃掉了。
+读取() {
+  local v
+  v="$(grep -E "^$1=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+  printf '%s' "${v:-${2-}}"
+}
+
+# --help：打脚本开头那一段注释，到第一行非注释为止。
+#
+# 原来每个脚本各写一句 `sed -n '2,20p' "$0"` —— 行号是照着当时的文件头数的，
+# 而文件头是会被改的。update.sh 的头后来短了四行，于是 `--help` 把
+# `source …`、`PULL=1; ROLLBACK=0`、`while [ $# -gt 0 ]; do` 也一起打了出来。
+# 没有任何东西会为此报警：它照样退出 0。
+用法() { sed -n '2,${/^#/!q; s/^# \{0,1\}//p;}' "$1"; }
 
 # 等前端真的能应答。只等容器"起来了"是不够的 ——
 # 进程在、端口通、页面 500，这三件事完全可以同时成立。
@@ -94,8 +117,26 @@ dc() { "${DC[@]}" --project-directory "$HERE" -f "$HERE/docker-compose.yml" "$@"
 # 这两件事的解法完全相反，所以要在迁移之前分清楚。
 验口令() {
   dc exec -T -e PGPASSWORD="$(读取 SITEDESK_DB_OWNER_PASSWORD)" db \
-    psql -U sitedesk -d "$(读取 POSTGRES_DB || echo sitedesk)" -c 'SELECT 1' \
+    psql -U sitedesk -d "$(读取 POSTGRES_DB sitedesk)" -c 'SELECT 1' \
     >/dev/null 2>&1
+}
+
+# 起数据库并等它真的能应答。**验口令之前必须先走这一步。**
+#
+# 不走的话：库没在跑时 `dc exec` 同样失败，而 `验口令 || 口令对不上`
+# 分不出"口令不对"和"库根本没起来"—— 于是屏幕上出现的是
+# "数据卷比 .env 老，两条路选一条"，其中②那条是 `down -v`。
+# 一个因为重启而没起来的库，被诊断成要连卷一起删掉。
+起数据库() {
+  dc up -d db
+  local n=0
+  printf '  等数据库'
+  until dc exec -T db pg_isready -U postgres >/dev/null 2>&1; do
+    n=$((n + 1)); printf '.'
+    [ "$n" -lt 60 ] || { echo; 死 "数据库 60 秒内没起来：docker compose logs db"; }
+    sleep 1
+  done
+  echo
 }
 
 口令对不上() {

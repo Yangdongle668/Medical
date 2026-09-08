@@ -19,20 +19,12 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 OWNER="$(读取 SITEDESK_DB_OWNER_PASSWORD)"
 APP="$(读取 SITEDESK_DB_APP_PASSWORD)"
-DB="$(读取 POSTGRES_DB)"; DB="${DB:-sitedesk}"
+DB="$(读取 POSTGRES_DB sitedesk)"
 [ -n "$OWNER" ] && [ -n "$APP" ] || 死 "deploy/.env 里缺少角色口令"
 
 检查docker
 步 "① 起数据库（如果还没起）"
-dc up -d db
-printf '  等数据库'
-n=0
-until dc exec -T db pg_isready -U postgres >/dev/null 2>&1; do
-  n=$((n+1)); printf '.'
-  [ "$n" -lt 60 ] || { echo; 死 "数据库 60 秒内没起来：dc logs db"; }
-  sleep 1
-done
-echo
+起数据库
 
 步 "② 用超级用户改两个角色的口令"
 # 口令走 psql 变量 :'x'，由 psql 做转义 —— 直接拼进 SQL 字符串的话，
