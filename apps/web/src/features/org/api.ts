@@ -28,6 +28,8 @@ export const listTeams = () => call<{ items: Team[] }>("listTeams");
 export const createAccount = (b: {
   login: string; displayName: string; roleId: string;
   teamId?: string | null; orgRef?: string | null;
+  /** 初始口令。不传就是不设 —— 那个人得靠一次性链接进来。 */
+  password?: string;
 }) => call<Account>("createAccount", { body: b });
 
 export const updateAccount = (id: string, b: {

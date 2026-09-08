@@ -374,10 +374,17 @@ export const scenarioHandlers = [
   http.post(pathToRegExp("/v1/accounts"), async ({ request }) => {
     const b = await request.json() as {
       login: string; displayName: string; roleId: string;
-      teamId?: string | null; orgRef?: string | null };
+      teamId?: string | null; orgRef?: string | null; password?: string };
     if (scenario.accounts.some(a => a.login === b.login))
       return HttpResponse.json(
         problem("validation-failed", 422, `登录名 ${b.login} 已存在`), { status: 422 });
+    /* 与服务端 passwordProblem 同一条口径的前两项。
+       弱口令表那一项不抄 —— 那份表只有服务端一处，抄过来迟早对不上。
+       口令不合规时**账号不建出来**：真库那边是一个事务整体回滚，
+       mock 这边就是这一行 return，两边的观察结果一样。 */
+    if (b.password !== undefined && (b.password.length < 8 || b.password.length > 200))
+      return HttpResponse.json(problem("validation-failed", 422,
+        b.password.length < 8 ? "口令至少 8 位" : "口令最长 200 位"), { status: 422 });
     const role = scenario.roles.find(r => r.id === b.roleId)!;
     const team = scenario.teams.find(t => t.id === b.teamId) ?? null;
     const acc = {

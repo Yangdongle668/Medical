@@ -106,7 +106,15 @@ test.describe("CRC", () => {
 
   test("伦理：登记递交默认待批复；登记批复之后才算数", async ({ page }) => {
     await page.goto("/ethics");
+    /* **两道都要等，而且顺序不能反。** 这一页分两轮取数：先拿中心列表把
+       卡片画出来，再每个中心一条请求去拿递交记录。
+       ① 等 `ethics-site` —— 第一轮回来了，卡片在了；
+       ② 再等 `ethics-loading` 归零 —— 第二轮也回来了，记录在了。
+       只做①，`before` 会在第二轮之前数到 0；只做②更糟：那一刻连卡片
+       都还没有，`ethics-loading` 本来就是 0，断言当场通过，等于没等。
+       这条为此红过两次，都是 expected 1 / received 5。 */
     await expect(page.getByTestId("ethics-site").first()).toBeVisible();
+    await expect(page.getByTestId("ethics-loading")).toHaveCount(0);
     const before = await page.getByTestId("ethics-row").count();
 
     await page.getByTestId("add-SS-01").click();

@@ -106,11 +106,28 @@ export class IdentityService {
     return { items, nextCursor: rows.length > q.limit ? items.at(-1)!.login : null };
   }
 
+  /** 建号。**可以顺带给一个初始口令**。
+   *
+   *  在此之前这是两次调用：先建号，再从台账那一行点「设口令」。
+   *  中间那一格是真的会停在那里的 —— 建完号手头有别的事，
+   *  于是账号在库里，人进不来，而界面上看不出这两件事没配套
+   *  （「怎么进来」那一列只报收件地址，报不了口令，因为
+   *  `auth_password` 的行级策略严格只看得见自己那一行）。
+   *
+   *  合在一起还顺带解决了原子性：口令不合规时**账号不会被建出来**。
+   *  一个请求一个事务（见 infra/request.middleware.ts 与 tx.interceptor.ts），
+   *  抛出去就整体回滚 —— 不存在"建了号但口令没设上"这一格。 */
   async createAccount(b: {
     login: string; displayName: string; roleId: string;
-    teamId?: string | null; orgRef?: string | null;
+    teamId?: string | null; orgRef?: string | null; password?: string;
   }) {
     const c = ctx();
+    /* 口令先验，在 INSERT 之前 —— 事务本来也会回滚，但先验的话
+       报错说的是口令那一栏，而不是"建号失败"。 */
+    if (b.password !== undefined) {
+      const bad = passwordProblem(b.password);
+      if (bad) throw new ProblemException("validation-failed", { detail: bad });
+    }
     const role = await c.client.query<{ is_external: boolean }>(
       `SELECT is_external FROM role WHERE id = $1`, [b.roleId]);
     if (!role.rows[0]) throw notFound("角色");
@@ -122,6 +139,19 @@ export class IdentityService {
          role.rows[0].is_external, b.orgRef ?? null]);
       await this.audit.write({ action: "新增账号", targetType: "account", targetId: b.login,
         after: { login: b.login, displayName: b.displayName } });
+      if (b.password !== undefined) {
+        /* 第三个参数 true = 标成初始口令：本人登录后顶上挂红条，
+           改掉才消失，而且翻不回去。"管理员知道别人的口令"是个短期状态，
+           这个标记是让它保持短期的唯一办法。
+           不必 revoke_sessions —— 这个账号刚建出来，没有会话可撤。 */
+        await c.client.query(`SELECT app.set_password($1, $2, true)`,
+          [rows[0]!.id, await hashPassword(b.password)]);
+        /* **口令本身一个字都不进审计**，与「重设账号口令」同一条规矩。
+           单独记一条而不是并进上面那条：这样"谁给谁设过口令"
+           仍然按动作查得出来，不管口令是建号时给的还是后来补的。 */
+        await this.audit.write({ action: "设置初始口令", targetType: "account",
+          targetId: b.login, after: { passwordIsInitial: true } });
+      }
       const out = await c.client.query<AccountRow>(
         `SELECT ${ACCOUNT_COLS} FROM ${ACCOUNT_FROM} WHERE a.id = $1`, [rows[0]!.id]);
       return toAccount(out.rows[0]!);

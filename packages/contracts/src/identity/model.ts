@@ -180,7 +180,18 @@ export const CreateAccountBody = z.object({
   displayName: z.string().min(1).max(64),
   roleId: Uuid,
   teamId: Uuid.nullable().optional(),
-  orgRef: z.string().max(128).nullable().optional()
+  orgRef: z.string().max(128).nullable().optional(),
+  /* 建号的同时给一个初始口令。**可选** —— 机构老师与 PI 走一次性链接
+     那条路，本来就不该有口令。
+     给了的话它和 `setAccountPassword` 走同一条：标记为初始口令，
+     本人第一次登录被要求改掉，而且这个标记翻不回去。
+
+     长度这一档在契约里挡一道，真正的口令策略（弱口令表、首尾空白）
+     只有服务端一处实现 —— 抄一份到前端，两边迟早对不上，
+     而对不上的那天没人知道该信哪一条。 */
+  password: z.string().min(8, "口令至少 8 位").max(200, "口令最长 200 位")
+    .optional()
+    .describe("初始口令。不填就是不设 —— 那个人得靠一次性链接进来")
 }).meta({ id: "CreateAccountRequest" });
 
 export const UpdateAccountBody = z.object({

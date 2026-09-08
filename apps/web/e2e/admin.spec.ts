@@ -57,6 +57,35 @@ test.describe("管理员 · 组织与权限", () => {
     await expect(page.getByTestId("create-account")).toBeEnabled();
   });
 
+  /* 建号与设口令原来是两次操作，中间那一格是真的会停在那里的：
+     建完号手头有别的事，账号在库里、人进不来，而台账上看不出这两件事
+     没配套（「怎么进来」那一列只报收件地址，报不了口令）。 */
+  test("建号时可以一并给初始口令，留空则不设", async ({ page }) => {
+    await page.goto("/org?as=admin");
+    await page.getByTestId("new-name").fill("周敏");
+    await page.getByTestId("new-login").fill("zhoumin");
+    await page.getByTestId("new-role").selectOption({ label: "临床协调员 CRC" });
+
+    /* 留空是合法的 —— 机构老师和 PI 走一次性链接那条路。 */
+    await expect(page.getByTestId("new-password")).toHaveValue("");
+    await expect(page.getByTestId("create-account")).toBeEnabled();
+
+    /* 填了就得够长，且**在按下去之前**说清楚。 */
+    await page.getByTestId("new-password").fill("1234567");
+    await expect(page.getByTestId("new-password-bad")).toContainText("至少 8 位");
+    await expect(page.getByTestId("create-account")).toBeDisabled();
+
+    await page.getByTestId("new-password").fill("onboarding-2026");
+    await expect(page.getByTestId("new-password-bad")).toHaveCount(0);
+    await expect(page.getByTestId("create-account")).toBeEnabled();
+
+    const before = await page.getByTestId("account-row").count();
+    await page.getByTestId("create-account").click();
+    await expect(page.getByTestId("account-row")).toHaveCount(before + 1);
+    /* 说清这一下做了两件事，而不是只说"已建号"。 */
+    await expect(page.getByTestId("org-said")).toContainText("初始口令已设");
+  });
+
   test("侧栏给满 45 个模块 —— 管理员打开系统看得到全部界面", async ({ page }) => {
     await page.goto("/today?as=admin");
 

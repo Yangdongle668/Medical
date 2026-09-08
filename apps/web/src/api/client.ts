@@ -1,5 +1,6 @@
 import { allEndpoints, type Endpoint } from "@sitedesk/contracts";
 import { enqueue } from "./outbox.js";
+import { uuid } from "./uuid.js";
 
 /* ════════════════════════════════════════════════════════════════════
    API client —— **由契约注册表直接派生**。
@@ -113,8 +114,11 @@ export async function call<T = unknown>(
      人做的事就这么没了。要让它们排队，就必须有幂等键，
      因为重放意味着同一个请求可能发两次 —— 没有键的话那是两笔工时。
      auth 的几个端点除外：排一次登录没有意义（而且它们也不该被重放）。 */
+  /* 用 uuid() 而不是 crypto.randomUUID()：后者只在安全上下文里存在，
+     而 http://<局域网 IP>:8080 不是 —— 那一行会让整台系统的写操作全废。
+     见 api/uuid.ts。 */
   const idem = e.layer === "L2" || (e.method !== "get" && e.context !== "auth")
-    ? (opts.idempotencyKey ?? crypto.randomUUID()) : undefined;
+    ? (opts.idempotencyKey ?? uuid()) : undefined;
   if (e.method !== "get") {
     headers["Content-Type"] = "application/json";
     if (idem) headers["Idempotency-Key"] = idem;
