@@ -150,6 +150,7 @@ function UserTab({ me, accounts, roles, teams, run }: {
   const [roleId, setRoleId] = useState("");
   const [teamId, setTeamId] = useState("");
   const [orgRef, setOrgRef] = useState("");
+  const [pw, setPw] = useState("");
   const [editing, setEditing] = useState<Account | null>(null);
   const [pwFor, setPwFor] = useState<Account | null>(null);
   const [addrFor, setAddrFor] = useState<Account | null>(null);
@@ -164,6 +165,12 @@ function UserTab({ me, accounts, roles, teams, run }: {
   /* hospital 规则的角色没有 orgRef 就是个"登得进来、一行都看不到"的账号。
      库里的触发器会拦（迁移 0002），但让人先看见比让人先撞上强。 */
   const needsOrg = role?.rowRule === NEEDS_ORG_REF;
+
+  /* 初始口令是**可选**的：外部角色（机构办 / PI）走一次性链接那条路，
+     本来就不该有口令。留空就是不设。
+     长度这一档当场判；弱口令表那一档在服务端，抄过来两边迟早对不上。 */
+  const pwOk = pw.length === 0 || (pw.length >= 8 && pw.length <= 200);
+  const pwBad = pw.length > 0 && !pwOk;
 
   return (
     <>
@@ -210,25 +217,49 @@ function UserTab({ me, accounts, roles, teams, run }: {
             <input value={orgRef} data-testid="new-orgref"
               onChange={e => setOrgRef(e.target.value)} placeholder="例：北京协和医院" /></label>
         )}
+        {/* 初始口令与建号在**同一次提交**里。分成两步的话中间那一格
+            是真的会停在那里的：建完号手头有别的事，账号在库里、人进不来，
+            而台账上看不出这两件事没配套（「怎么进来」那一列只报收件地址，
+            报不了口令 —— auth_password 严格只看得见自己那一行）。 */}
+        <label className="field">
+          <span>
+            初始口令 <span className="t-mut">· 可留空 · 至少 8 位 —— 他第一次登录会被要求改掉</span>
+          </span>
+          <input value={pw} data-testid="new-password" type="password" autoComplete="new-password"
+            aria-invalid={pwBad || undefined}
+            onChange={e => setPw(e.target.value)}
+            placeholder="留空 = 不设口令，靠一次性链接进来" />
+          {pwBad && (
+            <span className="t-crit" data-testid="new-password-bad" style={{ fontSize: 12 }}>
+              至少 8 位（现在 {pw.length} 位）。不想设就整个留空 ——
+              机构老师和 PI 本来就该走一次性链接那条路。
+            </span>
+          )}
+        </label>
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="btn primary" data-testid="create-account"
-            disabled={!loginOk || !name.trim() || !roleId || (needsOrg && !orgRef.trim())}
-            onClick={() => void run(`已建号 ${name}（${login}）`, async () => {
-              await createAccount({
-                login: login.trim(), displayName: name.trim(), roleId,
-                teamId: teamId || null, orgRef: needsOrg ? orgRef.trim() : null
-              });
-              setLogin(""); setName(""); setTeamId(""); setOrgRef("");
-            })}>
+            disabled={!loginOk || !pwOk || !name.trim() || !roleId || (needsOrg && !orgRef.trim())}
+            onClick={() => void run(
+              pw ? `已建号 ${name}（${login}），初始口令已设 —— 他第一次登录会被要求改掉`
+                 : `已建号 ${name}（${login}）`,
+              async () => {
+                await createAccount({
+                  login: login.trim(), displayName: name.trim(), roleId,
+                  teamId: teamId || null, orgRef: needsOrg ? orgRef.trim() : null,
+                  ...(pw ? { password: pw } : {})
+                });
+                setLogin(""); setName(""); setTeamId(""); setOrgRef(""); setPw("");
+              })}>
             创建账号
           </button>
         </div>
         <p className="muted" style={{ margin: 0 }}>
-          <b>建出来的账号还没有进得来的路</b> —— 下面那一行有两个按钮给这条路：
-          「设口令」当面给一个初始口令，他第一次登录时会被要求改掉；
-          「设收件地址」登记邮箱或手机号，之后他可以<b>自己在登录页申请一次性链接</b>。
+          <b>进得来有两条路，建号时可以一并办掉。</b>
+          上面那栏填了初始口令，账号建出来就能登 —— 当面把口令给他，
+          他第一次登录时会被要求改掉，而且这个标记翻不回去。
           <br />
-          机构老师和 PI 走链接那条 —— 一周登录两次的人不该记密码。
+          另一条是<b>一次性链接</b>：给他登记收件地址（台账那一行的「设收件地址」），
+          之后他自己在登录页申请。机构老师和 PI 走这条 —— 一周登录两次的人不该记密码。
           <b>没登记地址就去申请链接，接口会回一句「已发送」，但什么也不会发出去</b>
           （对外含糊是防账号枚举）—— 台账上「怎么进来」那一列就是为了让这件事看得见。
         </p>

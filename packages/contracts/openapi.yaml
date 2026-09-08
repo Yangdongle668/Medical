@@ -15440,6 +15440,11 @@ components:
           nullable: true
           type: string
           maxLength: 128
+        password:
+          description: 初始口令。不填就是不设 —— 那个人得靠一次性链接进来
+          type: string
+          minLength: 8
+          maxLength: 200
       required:
         - login
         - displayName

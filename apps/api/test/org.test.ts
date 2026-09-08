@@ -154,6 +154,74 @@ describe("停用与启用", () => {
   });
 });
 
+/* ════════════════════════════════════════════════════════════════════
+   建号时一并给初始口令。
+
+   在此之前这是两次调用：先建号，再从台账那一行点「设口令」。
+   中间那一格是真的会停在那里的 —— 建完号手头有别的事，账号在库里、
+   人进不来，而台账上看不出这两件事没配套（「怎么进来」那一列只报
+   收件地址，报不了口令：auth_password 的行级策略严格只看得见自己那一行）。
+   ════════════════════════════════════════════════════════════════════ */
+describe("建号时一并给初始口令", () => {
+  it("建完就能用那个口令登进来，而且标着「初始口令」", async () => {
+    const login = freshLogin();
+    const r = await admin.post("/v1/accounts", {
+      login, displayName: "新人", roleId: roleOf("cra").id, password: "onboarding-2026" });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+
+    const s = await api(app).post("/v1/auth/password-session")
+      .send({ login, password: "onboarding-2026" });
+    expect(s.status).toBe(201);
+    const me = await api(app).get("/v1/me").set({ Authorization: `Bearer ${s.body.token}` });
+    /* 标成初始口令 —— "管理员知道别人的口令"是个短期状态，
+       这个标记是让它保持短期的唯一办法。 */
+    expect(me.body.credentials).toEqual({ hasPassword: true, passwordIsInitial: true });
+  });
+
+  it("不给口令仍然建得出来 —— 外部角色走一次性链接那条路", async () => {
+    const a = await newAccount();
+    const s = await api(app).post("/v1/auth/password-session")
+      .send({ login: a.login, password: "onboarding-2026" });
+    expect(s.status, "没设过口令的账号不该登得进来").toBe(401);
+  });
+
+  it("口令不合规时**账号不会被建出来** —— 一个事务，整体回滚", async () => {
+    const login = freshLogin();
+    const r = await admin.post("/v1/accounts", {
+      login, displayName: "新人", roleId: roleOf("cra").id, password: "1234567" });
+    expect(r.status).toBe(422);
+    /* 长度这一档是契约挡下的，所以话在 issues 里而不是 detail 里 ——
+       但它得是人话，不能只有一句"请求参数不符合契约"。 */
+    expect(JSON.stringify(r.body)).toMatch(/口令至少 8 位/);
+
+    /* 这一条才是合并成一次调用换来的东西：分两步做的话，
+       这时候库里已经躺着一个没有口令的账号了。 */
+    const list = await admin.get(`/v1/accounts?q=${login}`);
+    expect(list.body.items, "口令被拒了，账号却建出来了").toEqual([]);
+  });
+
+  it("弱口令同样拒 —— 那份表只有服务端一处", async () => {
+    const r = await admin.post("/v1/accounts", {
+      login: freshLogin(), displayName: "新人", roleId: roleOf("cra").id,
+      password: "password123" });
+    expect(r.status).toBe(422);
+    expect(r.body.detail).toMatch(/常见口令表/);
+  });
+
+  it("口令本身不进审计，但「谁给谁设过」查得出来", async () => {
+    const login = freshLogin();
+    await admin.post("/v1/accounts", {
+      login, displayName: "新人", roleId: roleOf("cra").id, password: "onboarding-2026" });
+    const r = await admin.get(`/v1/audit-entries?targetType=account&targetId=${login}&limit=10`);
+    const actions = r.body.items.map((x: { action: string }) => x.action);
+    expect(actions).toContain("新增账号");
+    /* 单独记一条，而不是并进「新增账号」—— 这样"谁给谁设过口令"
+       按动作查得出来，不管口令是建号时给的还是后来补的。 */
+    expect(actions).toContain("设置初始口令");
+    expect(JSON.stringify(r.body)).not.toContain("onboarding-2026");
+  });
+});
+
 describe("管理员给别人设初始口令", () => {
   it("设完他就登得进来，而且顶上会挂红条", async () => {
     const a = await newAccount();
