@@ -242,6 +242,42 @@ for (const file of walk(path.join(ROOT, "apps/api/src"))) {
       `    留着一个还不清的数，下一个人会以为这活还没干`);
 }
 
+/* ── 敏感动作清单里的每个名字都得是真的 operationId ──────────────────
+   `SENSITIVE_ACTIONS` 是一张手抄的 operationId 表，而 `needsReason()`
+   拿 operationId 去里面查 —— **查不到就返回 false，不报错**。
+
+   八条里曾经有三条对不上任何端点：`changeAccountRole`（真名 updateAccount）、
+   `overrideFeasibility`（真名 decideFeasibility，且它是条件敏感）、
+   `updateVisitTargetDate`（这个端点从来没建过）。
+   于是「谁把谁调成了什么角色」写进了轨迹却没标成敏感，
+   而审计页默认只看敏感那一档 —— 核查员打开的第一屏里没有它。
+
+   仓库对每一张同类名单都有守卫（ACTION_KEYS、FIELD_KEYS、模块表、
+   mock 身份、schema 待还清单），唯独这张没有。补上。 */
+{
+  const src = fs.readFileSync(
+    path.join(ROOT, "packages/policy/src/action.ts"), "utf8");
+  const block = src.match(/SENSITIVE_ACTIONS\s*=\s*new Set<string>\(\[([\s\S]*?)\]\)/);
+  if (!block)
+    violations.push("tools/arch-check.mjs\n    没解析出 SENSITIVE_ACTIONS —— 它的写法变了，这条规则已经形同虚设");
+  else {
+    /* 先剥注释再取引号里的词 —— 注释里本来就会出现引号
+       （"标成敏感"、"改了吗"），把它们当成 operationId 会得到一串假阳性，
+       而假阳性多了之后真的那条就没人看了。 */
+    const names = [...block[1]
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "")
+      .matchAll(/"([^"]+)"/g)].map(m => m[1]);
+    if (names.length === 0)
+      violations.push("packages/policy/src/action.ts\n    SENSITIVE_ACTIONS 是空的？");
+    for (const n of names)
+      if (!declared.has(n))
+        violations.push(`packages/policy/src/action.ts\n` +
+          `    SENSITIVE_ACTIONS 里的 "${n}" 不是任何一个 operationId\n` +
+          `    needsReason() 查不到它只会返回 false —— 那条动作会静默地不算敏感`);
+  }
+}
+
 /* ── 部署脚本：变量名必须是 ASCII，而且 --help 得真的能跑 ─────────────
    `deploy/update.sh` 从写出来那天起**一次都没跑通过**：
 
