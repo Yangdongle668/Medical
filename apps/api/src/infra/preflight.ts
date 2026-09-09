@@ -79,6 +79,36 @@ export function preflight(env: NodeJS.ProcessEnv = process.env): Preflight {
   if (isProd(env) && delivery.email === "none" && delivery.sms === "none")
     warn.push(NO_CHANNEL_WARNING);
 
+  /* ── 进程时区必须是 UTC ────────────────────────────────────────
+     全仓 25 处这样把 date 列切成日期串：
+
+         const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
+
+     pg 把无时区的 `date` 列解析成**本地零点**的 JS Date
+     （只有 INT8 覆盖了 type parser，1082 用的是默认那份）。
+     实测：库里存 2026-09-09，TZ 未设时 day() 给 2026-09-09，
+     **TZ=Asia/Shanghai 时给 2026-09-08** —— 入组日、知情签署日、
+     访视窗口、里程碑达成日、发票到期日全线偏移一天。
+
+     更糟的是仓库里同时有两套约定：`atMidnight`（finance / staffing）
+     和编号年份用的是**本地**，上面那 25 处用的是 **UTC**。
+     UTC 下两者碰巧一致；换个时区，一半跟着变对、一半跟着变错。
+
+     容器默认是 UTC，所以今天不触发。但没有任何地方钉死它，
+     而"给中国部署设 TZ=Asia/Shanghai 让日志时间正常"是运维会做的第一件事。
+     **这类改动的失败方式是安静的**：没有报错，只是每个日期少一天。
+
+     所以在这里拦住：要么不设 TZ，要么设成 UTC，否则拒绝启动。
+     真要按本地时区渲染，那是前端的事（见 apps/web/src/shell/dates.ts）——
+     服务端存的是日历日，不该带时区。 */
+  const tz = env["TZ"];
+  if (tz !== undefined && !/^(UTC|Etc\/UTC|GMT|Etc\/GMT)$/i.test(tz.trim()))
+    fatal.push(
+      `TZ=${tz} —— 服务端只能在 UTC 下运行。\n` +
+      "    pg 把无时区的 date 列解析成本地零点，而全仓用 toISOString() 把它切成\n" +
+      "    日期串：非 UTC 时区下每一个日期字段都会少一天，且不会报任何错。\n" +
+      "    请移除 TZ，或设为 UTC。日志要本地时间的话在采集侧转换。");
+
   return { fatal, warn };
 }
 
