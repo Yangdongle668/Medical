@@ -3,6 +3,7 @@ import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { yuan, days } from "./money.js";
 import { usePending } from "../../api/pending.js";
+import { today } from "../../shell/dates.js";
 
 /* ════════════════════════════════════════════════════════════════════
    工时台账。
@@ -52,7 +53,6 @@ const WORK_TYPE_LABEL: Record<string, string> = {
   bd: "投标与商务支持", rework: "返工与整改"
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
 /** 人天 —— 与 calc 的 HOURS_PER_DAY 同一个数。
  *  这里只用于**显示推导过程**，成本本身由服务端算好下发。 */
 const HOURS_PER_DAY = 8;

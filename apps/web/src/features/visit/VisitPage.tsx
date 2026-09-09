@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import type { Visit } from "../today/TodayPage.js";
 import { usePending } from "../../api/pending.js";
+import { today } from "../../shell/dates.js";
 
 /* 完成一次访视 —— 系统里最重要的一个动作。
    界面要做对两件事：
@@ -17,8 +18,6 @@ interface CompleteResult {
   data: Visit; sideEffects: SideEffect[];
   pending?: { name: string; what: string; phase: string }[];
 }
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 export function VisitPage() {
   const { id = "" } = useParams();

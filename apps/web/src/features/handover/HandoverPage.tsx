@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { usePending } from "../../api/pending.js";
+import { today } from "../../shell/dates.js";
 
 /* ════════════════════════════════════════════════════════════════════
    交接。
@@ -243,7 +244,7 @@ function CreateHandover({ onDone }: { onDone: () => void }) {
   const [to, setTo] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [reason, setReason] = useState("");
-  const [plannedOn, setPlannedOn] = useState(new Date().toISOString().slice(0, 10));
+  const [plannedOn, setPlannedOn] = useState(today());
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [busy, setBusy] = useState(false);
 
