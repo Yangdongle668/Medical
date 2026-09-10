@@ -78,7 +78,10 @@ export function NewFeasibilityForm({ onCreated }: { onCreated: () => void }) {
       }}>
       <div className="grid-form">
         <Pick label="项目" v={f.studyId} on={set("studyId")} testid="nf-study"
-          options={studies.map(s => ({ value: s.id, label: `${s.code} · ${s.shortName}` }))} />
+          options={studies.map(s => ({ value: s.id, label: `${s.code} · ${s.shortName}` }))}
+          empty="你的范围里还没有项目 —— 可行性调查是挂在项目下面的，
+                 得先有一份立项申请被批准。批准之后项目立刻出现在这里，
+                 不用等它有中心。" />
         <Field label="医院" v={f.hospital} on={set("hospital")} testid="nf-hospital" />
         <Field label="城市" v={f.city} on={set("city")} testid="nf-city" />
         <Field label="科室" v={f.dept} on={set("dept")} testid="nf-dept" />

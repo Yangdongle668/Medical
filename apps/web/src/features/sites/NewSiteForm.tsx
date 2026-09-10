@@ -74,7 +74,9 @@ export function NewSiteForm({ showPrice, onCreated }:
       <Pick label="所属项目" v={f.studyId} on={set("studyId")} testid="ns-study"
         options={(studies ?? []).map(s => ({
           value: s.id, label: `${s.code} · ${s.shortName}（${s.sponsorName}）`
-        }))} />
+        }))}
+        empty={studies === null ? "加载中…"
+          : "你的范围里还没有项目 —— 中心是挂在项目下面的，得先有一份立项申请被批准。"} />
 
       <div className="grid-form">
         <Field label="中心编号" v={f.code} on={set("code")} testid="ns-code" />

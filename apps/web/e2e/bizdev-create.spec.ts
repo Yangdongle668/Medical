@@ -160,3 +160,32 @@ test.describe("合同变更登记", () => {
       .toContainText("全项目");
   });
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   「选项目」那一栏空着的时候。
+
+   服务端那条 bug 修掉之后，正常情况下它不会空。但它仍然会空 ——
+   新装的系统、还没有任何一份立项申请被批准的时候。
+   而**一个空的下拉框什么都不说**：它看起来和"加载中"、"你没权限"、
+   "还没有这种东西"完全一样，而这三件事该做的下一步互不相同。
+   ════════════════════════════════════════════════════════════════════ */
+test.describe("一个项目都没有", () => {
+  test("可行性登记：直说是「还没有项目」，不是留一个空下拉框", async ({ page }) => {
+    await page.goto("/feas?as=boss&empty=listStudies");
+    await page.getByTestId("new-feas").click();
+
+    await expect(page.getByTestId("nf-study")).toBeDisabled();
+    await expect(page.getByTestId("nf-study-empty")).toContainText("还没有项目");
+    /* 而且要说清下一步在哪 —— 光说"没有"等于让人自己猜。 */
+    await expect(page.getByTestId("nf-study-empty")).toContainText("立项申请");
+    /* 选不了项目就交不出去 */
+    await expect(page.getByTestId("new-feas-submit")).toBeDisabled();
+  });
+
+  test("中心建档：同一句话，同一个理由", async ({ page }) => {
+    await page.goto("/sites?as=boss&empty=listStudies");
+    await page.getByTestId("new-site").click();
+    await expect(page.getByTestId("ns-study")).toBeDisabled();
+    await expect(page.getByTestId("ns-study-empty")).toContainText("立项申请");
+  });
+});

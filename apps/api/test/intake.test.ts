@@ -185,3 +185,130 @@ describe("提交与审批", () => {
     expect(again.body.invariant).toBe("intake-already-decided");
   });
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   批准之后：新项目在「选项目」那一栏里出得来吗？
+
+   这一组补的是一个**死锁**，而不是一条权限规则：
+   `listStudies` 原来的范围写作「只返回本行范围内有中心的项目」，
+   而 EXISTS 在空集上恒为假 —— 刚批下来的项目一个中心都没有，
+   于是它谁也看不见，连 row_rule=all 的管理员也看不见
+   （数据库策略里一直有那个短路，是应用层手写的 WHERE 漏了）。
+   而中心可行性调查、中心建档、立项受理递交、合同变更
+   这四张表单第一栏都是「选项目」：
+   **项目要有中心才看得见，中心要先选中项目才建得出来。**
+
+   第二把锁在 team_study：批准立项从来没往里写过一行（只有 seed 灌过），
+   于是每个真正走完流程的项目都没有归属组，
+   而做可行性调查的正是 pm —— 行范围 team。
+
+   下面这条测试走的是完整的一趟：批准 → 选到项目 → 登记可行性 → 建中心。
+   ════════════════════════════════════════════════════════════════════ */
+describe("批准之后，项目要能被选到", () => {
+  const fresh = () => ({
+    drug: `LK-${Math.floor(Math.random() * 9000 + 1000)} 注射液`,
+    sponsorName: "长空药业", phase: "III期", indication: "转移性结直肠癌",
+    plannedSites: 8, plannedSubjects: 120, enrollMonths: 20,
+    contractCents: 1200_0000_00, estimatedCostCents: 700_0000_00
+  });
+
+  /** 批一个新项目出来，返回它的 code */
+  async function 批一个() {
+    const a = (await pm.post("/v1/intake-applications", fresh(), idem())).body.data;
+    const r = await boss.post(`/v1/intake-applications/${a.id}:decide`,
+      { result: "approved" }, idem());
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    return r.body.data.studyCode as string;
+  }
+
+  const codes = async (c: Caller) =>
+    ((await c.get("/v1/studies?limit=100")).body.items as { code: string }[])
+      .map(s => s.code);
+
+  it("**经营层立刻在项目列表里看得到它** —— 它一个中心都还没有", async () => {
+    const code = await 批一个();
+    expect(await codes(boss), "刚批下来的项目不在项目列表里").toContain(code);
+  });
+
+  it("**承接它的那个组也看得到** —— 可行性调查是在建中心之前做的", async () => {
+    const code = await 批一个();
+    /* 提交人是 hanxue（PM，行范围 team）。归属组由批准那一步写入 team_study。 */
+    expect(await codes(pm), "项目组看不到自己刚接下的项目").toContain(code);
+  });
+
+  it("别的组看不到 —— 修的是死锁，不是把范围放开", async () => {
+    const code = await 批一个();
+    const 别的组 = await as(app, "cendi");   // 另一个 PM，另一个组
+    expect(await codes(别的组)).not.toContain(code);
+  });
+
+  it("外部方（机构办）看不到 —— 它连一个中心都还没有", async () => {
+    const code = await 批一个();
+    expect(await codes(inst)).not.toContain(code);
+  });
+
+  it("**选得到之后，可行性和建档这两步真的走得通**", async () => {
+    const code = await 批一个();
+    const study = ((await pm.get("/v1/studies?limit=100")).body.items as
+      { id: string; code: string }[]).find(s => s.code === code);
+    expect(study, `${code} 不在 PM 的项目列表里，后面两步无从谈起`).toBeTruthy();
+
+    /* 一、登记一次可行性调查 —— 用户卡住的正是这一步 */
+    const feas = await pm.post("/v1/feasibility", {
+      studyId: study!.id, hospital: "长空附属医院", city: "杭州",
+      dept: "肿瘤内科", piName: "秦望", surveyedOn: "2026-09-10",
+      answers: {
+        ptYear: 600, pastN: 3, pastBest: 5, compet: 1,
+        ethicsDays: 30, startDays: 45, teamN: 6, piCommit: 4, eligPct: 0.35
+      }
+    }, idem());
+    expect(feas.status, JSON.stringify(feas.body)).toBe(201);
+
+    /* 二、给它建第一个中心 */
+    const site = await pm.post("/v1/study-sites", {
+      studyId: study!.id, code: `${code}-01`, hospital: "长空附属医院",
+      dept: "肿瘤内科", city: "杭州", piName: "秦望",
+      contracted: 15, unitPriceCents: 3_0000_00, startupFeeCents: 8_0000_00
+    }, idem());
+    expect(site.status, JSON.stringify(site.body)).toBe(201);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   方案编号：行数不是序号。
+
+   原来这么取：`SELECT count(*) + 1 FROM study WHERE code LIKE 'HJ-2026-%'`。
+   序号一旦有缺口，行数就永远追不上最大号，每次都撞在缺口后面那个
+   已经用掉的号上 —— 演示数据里有 HJ-2026-004 而没有 001–003，
+   于是**第三次批准必然 500**，报的是唯一约束冲突。
+   而缺口是常态：删过项目、从别的系统迁过数据、跑过两个租户，都会留下。
+   ════════════════════════════════════════════════════════════════════ */
+describe("方案编号", () => {
+  it("**连批四次都不撞号** —— 种子里已经占着 HJ-2026-004", async () => {
+    const 已有 = ((await boss.get("/v1/studies?limit=100")).body.items as
+      { code: string }[]).map(s => s.code);
+    expect(已有, "这条测试的前提是种子里有一个带缺口的编号").toContain("HJ-2026-004");
+
+    const 新的: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const a = (await pm.post("/v1/intake-applications", {
+        drug: `编号测试 ${i}`, sponsorName: "长空药业", phase: "I期",
+        indication: "编号测试", plannedSites: 2, plannedSubjects: 20,
+        enrollMonths: 6, contractCents: 100_0000_00, estimatedCostCents: 60_0000_00
+      }, idem())).body.data;
+      const r = await boss.post(`/v1/intake-applications/${a.id}:decide`,
+        { result: "approved" }, idem());
+      expect(r.status, `第 ${i + 1} 次批准：${JSON.stringify(r.body)}`).toBe(201);
+      新的.push(r.body.data.studyCode);
+    }
+
+    /* 既不撞已有的，彼此也不撞 */
+    for (const c of 新的) expect(已有).not.toContain(c);
+    expect(new Set(新的).size, `发出去的号有重复：${新的.join(" ")}`).toBe(4);
+    /* 而且是接着**最大号**往下走的，不是随手挑一个没用过的。
+       起点不能写死：同一个文件里前面的用例已经批过几个了。 */
+    const 序号 = (c: string) => Number(c.slice("HJ-2026-".length));
+    const 最大 = Math.max(...已有.filter(c => c.startsWith("HJ-2026-")).map(序号));
+    expect(新的.map(序号)).toEqual([最大 + 1, 最大 + 2, 最大 + 3, 最大 + 4]);
+  });
+});

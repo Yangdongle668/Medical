@@ -74,7 +74,8 @@ export function NewChangeForm({ onCreated }: { onCreated: () => void }) {
       }}>
       <div className="grid-form">
         <Pick label="项目" v={f.studyId} on={set("studyId")} testid="nc-study"
-          options={studies.map(s => ({ value: s.id, label: `${s.code} · ${s.shortName}` }))} />
+          options={studies.map(s => ({ value: s.id, label: `${s.code} · ${s.shortName}` }))}
+          empty="你的范围里还没有项目 —— 合同变更是挂在项目下面的，得先有一份立项申请被批准。" />
         <Pick label="变更类型" v={f.kind} on={set("kind")} testid="nc-kind"
           options={CHANGE_KINDS.map(k => ({ value: k, label: CHANGE_KIND_LABEL[k] }))} />
         <Field label="提出日期" v={f.raisedOn} on={set("raisedOn")}

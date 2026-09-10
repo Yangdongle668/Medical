@@ -1899,6 +1899,10 @@ export const scenarioHandlers = [
      库里不存在的项目上。这类"看起来全对"的错，
      只有让两边用同一份数据才防得住。 */
   http.get(pathToRegExp("/v1/studies"), () => {
+    /* 一个项目都没有：新装的系统就是这个样子。见 setEmptyOps ——
+       「选项目」那一栏空着的时候界面该说什么，只有这样才演得出来。 */
+    if (isEmptied("listStudies"))
+      return HttpResponse.json({ items: [], nextCursor: null });
     /* 外部方（机构办 / PI）看不到项目全表 —— 与立项看板同一条口径。 */
     const items = (identity().isExternal ? [] : scenario.studies).map(st => ({
       id: st.id, code: st.code, shortName: st.shortName,
