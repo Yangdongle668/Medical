@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
+import { Pick } from "../../shell/CreateForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    内部稽查 —— 我方的第二道防线。
@@ -306,15 +307,10 @@ export function QaAuditPage() {
           <div className="stack" data-testid="audit-form"
             style={{ borderTop: "1px solid var(--line, #e5e5e5)", paddingTop: 10 }}>
             <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
-              <label className="field" style={{ minWidth: 260 }}>
-                <span>受稽查中心</span>
-                <select value={siteId} data-testid="audit-site"
-                  onChange={e => setSiteId(e.target.value)}>
-                  {sites.map(s => (
-                    <option key={s.id} value={s.id}>{s.code} {s.hospital}</option>
-                  ))}
-                </select>
-              </label>
+              <Pick label="受稽查中心" v={siteId} on={setSiteId} testid="audit-site"
+                style={{ minWidth: 260 }}
+                options={sites.map(s => ({ value: s.id, label: `${s.code} ${s.hospital}` }))}
+                empty="系统里还没有中心 —— 内部稽查是针对某一个中心开展的。" />
               <label className="field" style={{ minWidth: 200 }}>
                 <span>稽查类型</span>
                 <select value={kind} data-testid="audit-kind"
@@ -378,15 +374,11 @@ export function QaAuditPage() {
                         这一条是复发吗
                         <span className="t-mut"> · 指向此前那条同一个问题的事件</span>
                       </span>
-                      <select value={fRepeatOf} data-testid="af-repeat"
-                        onChange={e => setFRepeatOf(e.target.value)}>
-                        <option value="">— 不是复发 —</option>
-                        {events.map(ev => (
-                          <option key={ev.id} value={ev.id}>
-                            {ev.code} · {ev.siteCode} · {ev.title}
-                          </option>
-                        ))}
-                      </select>
+                      <Pick label="" v={fRepeatOf} on={setFRepeatOf} testid="af-repeat"
+                        placeholder="— 不是复发 —"
+                        options={events.map(ev => ({
+                          value: ev.id, label: `${ev.code} · ${ev.siteCode} · ${ev.title}` }))}
+                        empty="还没有任何在册的质量事件可以指向 —— 那这一条就是首发，留空即可。" />
                     </label>
                   </div>
                   <label className="field">

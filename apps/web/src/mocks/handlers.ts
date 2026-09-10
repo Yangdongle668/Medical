@@ -118,6 +118,23 @@ function nextMockCode(stem: string, width: number, used: readonly string[]): str
   return stem + String(n + 1).padStart(width, "0");
 }
 
+/* ── 项目归属组 ────────────────────────────────────────────────────
+   服务端那一侧是 team_study（迁移 0004/0041）。mock 里用一张同形的
+   映射：项目 id → 组 id。**没有映射 = 没有归属组**，那是真实存在的
+   一格（提交人和审批人都不在任何组里时），而不是"数据没造全"。 */
+const studyTeam = new Map<string, string>();
+function teamOfStudy(studyId: string) {
+  const id = studyTeam.get(studyId);
+  const t = id ? scenario.teams.find(x => x.id === id) : undefined;
+  return t ? { id: t.id, code: t.code, name: t.name } : null;
+}
+/* 演示数据的初始归属：前两个项目归第一个组，其余归第二个 —— 
+   与 seed 里 team_study 那四行同一个形状。 */
+scenario.studies.forEach((st, i) => {
+  const t = scenario.teams[i < 2 ? 0 : 1];
+  if (t) studyTeam.set(st.id, t.id);
+});
+
 export const setEmptyOps = (ops: string[]) => { emptied = new Set(ops); };
 const isEmptied = (op: string) => emptied.has(op);
 const identity = () => IDENTITIES[mockRole];
@@ -1929,10 +1946,53 @@ export const scenarioHandlers = [
       sponsorName: st.clientName, phase: st.phase,
       indication: "非小细胞肺癌", plannedSubjects: st.plannedSubjects,
       startedOn: "2024-11-01", endsOn: null,
+      /* 归属组 —— 它就是 row_rule=team 的行范围。mock 上演不出来的话，
+         「划走之后原来那个组看不见了」这件事在演示里根本发生不了。 */
+      team: teamOfStudy(st.id),
       ...(identity().fields.includes("price")
         ? { contractAmountCents: st.contractCents } : {})
     }));
     return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  /* 把项目划给另一个组。**这是行范围变更** —— 划走那一刻，
+     原来那个组的 PM 看不见它和它下面的一切。 */
+  http.post(pathToRegExp("/v1/studies/{id}:set-team"), async ({ request }) => {
+    const id = seg(request.url, /\/studies\/([^/:]+):set-team/);
+    const b = await request.json() as { teamId: string | null; reason?: string };
+    if (!identity().actions.includes("manage")) return HttpResponse.json(
+      problem("forbidden-action", 403, "你的角色不能改项目归属组"), { status: 403 });
+    const st = scenario.studies.find(x => x.id === id);
+    if (!st) return HttpResponse.json(problem("not-found", 404, "项目不存在"), { status: 404 });
+    if ((b.reason ?? "").trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "改归属必须写原因（至少 4 字）"), { status: 422 });
+
+    const 原 = teamOfStudy(id);
+    if ((原?.id ?? null) === b.teamId) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        原 ? `${st.code} 本来就归 ${原.name}` : `${st.code} 本来就没有归属组`),
+      { status: 422 });
+
+    if (b.teamId) studyTeam.set(id, b.teamId); else studyTeam.delete(id);
+    const 新 = teamOfStudy(id);
+    const n = SITES_LIST.filter(x => x.studyId === id).length;
+    return HttpResponse.json({
+      data: {
+        id: st.id, code: st.code, shortName: st.shortName,
+        sponsorName: st.clientName, phase: st.phase, indication: "非小细胞肺癌",
+        plannedSubjects: st.plannedSubjects, startedOn: "2024-11-01", endsOn: null,
+        team: 新
+      },
+      sideEffects: [{
+        type: "StudyTeamChanged", ref: id,
+        summary: 新
+          ? `${st.code} 已划给 ${新.name}（${新.code}）—— ` +
+            `${原 ? `${原.name} 的项目总监` : "原来能看到它的人"}` +
+            `从这一刻起看不见它，也看不见它下面 ${n} 个中心`
+          : `${st.code} 已收回归属 —— 现在没有任何组承接它，` +
+            "只有行范围为「全部」的人看得到；这通常不是想要的结果"
+      }]
+    }, { status: 201 });
   }),
 
   http.get(pathToRegExp("/v1/study-sites"), ({ request }) => {

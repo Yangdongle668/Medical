@@ -131,26 +131,61 @@ export function Area({ label, v, on, testid, rows, placeholder, hint }: {
   );
 }
 
-/** 下拉。选项是固定集合时用它，而不是让人打字 ——
- *  打字进来的枚举值最后总要在服务端被拒一次。 */
-/* 一个空的下拉框什么都不说。它看起来和"加载中"、"你没权限"、
-   "还没有这种东西"三件事完全一样，而这三件事该做的下一步互不相同 ——
-   于是人只能一遍遍点开它。`empty` 就是用来把那句话说出来的。 */
-export function Pick({ label, v, on, testid, options, hint, empty }: {
+/* ════════════════════════════════════════════════════════════════════
+   数据来源的下拉框。**`empty` 是必填的，这是这个组件存在的理由。**
+
+   一个只列出"已有的"的下拉框，答不出使用者站在那里时真正的问题：
+   **我要的那个不在里面，然后呢？**
+
+   而空着的时候更糟 —— 它和下面三件事长得一模一样，
+   可这三件事该做的下一步完全不同：
+
+     · 还在加载
+     · 你没有权限
+     · 还没有这种东西（你得先去别处建一个）
+
+   这个坑在这套系统里踩过三次：新批的项目选不到、分组建不出来、
+   一个中心都没有时整页空白。所以 `empty` 不给可选 ——
+   TypeScript 会逼着每个调用点回答"空的时候说什么"。
+
+   `action` 是那条去路：不在里面的时候点哪儿。
+   ════════════════════════════════════════════════════════════════════ */
+export function Pick({ label, v, on, testid, options, hint, empty, placeholder,
+  action, style }: {
   label: string; v: string; on: (v: string) => void; testid: string;
-  options: { value: string; label: string }[]; hint?: string; empty?: string;
+  options: { value: string; label: string }[];
+  hint?: string;
+  /** 一个选项都没有时说什么 —— **必填**，见上面那段。 */
+  empty: string;
+  /** 未选中时那一项的文案。缺省「— 选一个 —」；
+   *  有些地方留空是有含义的（「— 全项目 —」「— 不是复发 —」）。 */
+  placeholder?: string;
+  /** 「要的那个不在里面」时的去路。空与不空都显示。 */
+  action?: { label: string; on: () => void };
+  style?: React.CSSProperties;
 }) {
   const none = options.length === 0;
+  const go = action && (
+    <button type="button" className="btn link" data-testid={`${testid}-go`}
+      style={{ marginLeft: 4 }} onClick={action.on}>{action.label}</button>
+  );
   return (
-    <label className="field">
+    <label className="field" style={style}>
       <span>{label}{hint && <span className="t-mut"> · {hint}</span>}</span>
       <select value={v} data-testid={testid} onChange={e => on(e.target.value)}
         disabled={none}>
-        <option value="">{none ? "— 没有可选的 —" : "— 选一个 —"}</option>
+        <option value="">{none ? "— 没有可选的 —" : placeholder ?? "— 选一个 —"}</option>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      {none && empty &&
-        <span className="t-mut" data-testid={`${testid}-empty`}>{empty}</span>}
+      {none
+        ? <span className="t-crit" data-testid={`${testid}-empty`} style={{ fontSize: 12 }}>
+            {empty}{go}
+          </span>
+        : action && (
+            <span className="t-mut" data-testid={`${testid}-hint`} style={{ fontSize: 12 }}>
+              没有要找的那个？{go}
+            </span>
+          )}
     </label>
   );
 }

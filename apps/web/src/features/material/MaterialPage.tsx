@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { today, daysSince } from "../../shell/dates.js";
+import { Pick } from "../../shell/CreateForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    药品与样本。
@@ -89,12 +90,10 @@ export function MaterialPage() {
         <p>两本账都是<b>关闭中心时对不上的那种</b>：药品在手数量、样本闭环。</p>
       </div>
 
-      <label className="field" style={{ maxWidth: 340, marginBottom: 14 }}>
-        <span>中心</span>
-        <select value={siteId} data-testid="mat-site" onChange={e => setSiteId(e.target.value)}>
-          {sites.map(s => <option key={s.id} value={s.id}>{s.code} · {s.hospital}</option>)}
-        </select>
-      </label>
+      <Pick label="中心" v={siteId} on={setSiteId} testid="mat-site"
+        style={{ maxWidth: 340, marginBottom: 14 }}
+        options={sites.map(s => ({ value: s.id, label: `${s.code} · ${s.hospital}` }))}
+        empty="你的范围里还没有中心 —— 药品与样本台账是按中心记的，没有中心就没有台账。" />
 
       {ledger && ledger.balance < 0 && (
         <div className="problem" role="alert" data-testid="ip-negative" style={{ marginBottom: 14 }}>

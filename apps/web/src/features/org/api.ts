@@ -73,3 +73,16 @@ export const NEEDS_ORG_REF = "hospital";
    管理员想给 QA 加内部稽查，点不到，也不报错。
    契约里的 ACTION_LABEL 用 ActionKey 定型，漏一个编译不过。 */
 export { ACTION_LABEL, FIELD_LABEL } from "@sitedesk/contracts";
+
+/** 项目 —— 这一页只用得上编号、名字和归属组。 */
+export interface Study {
+  id: string; code: string; shortName: string;
+  team: { id: string; code: string; name: string } | null;
+}
+export const listStudies = () =>
+  call<{ items: Study[] }>("listStudies", { query: { limit: 200 } });
+
+/** 把项目划给另一个组。**这是行范围变更**，所以必须写原因。 */
+export const setStudyTeam = (id: string, teamId: string | null, reason: string) =>
+  call<{ data: Study; sideEffects: { summary: string }[] }>(
+    "setStudyTeam", { params: { id }, body: { teamId, reason } });

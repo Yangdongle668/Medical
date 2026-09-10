@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   listEnrollment, pct, label, SCREEN_FAIL_LABEL, WITHDRAW_LABEL, type Funnel
 } from "./api.js";
+import { Pick } from "../../shell/CreateForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    筛选漏斗与筛败。
@@ -50,15 +51,12 @@ export function ScreenPage() {
         </p>
       </div>
 
-      <label className="field" style={{ maxWidth: 320, marginBottom: 14 }}>
-        <span>范围</span>
-        <select value={pick} data-testid="site-pick" onChange={e => setPick(e.target.value)}>
-          <option value="">全部中心（{rows.length} 个）</option>
-          {rows.map(r => (
-            <option key={r.studySiteId} value={r.studySiteId}>{r.siteCode} · {r.hospital}</option>
-          ))}
-        </select>
-      </label>
+      <Pick label="范围" v={pick} on={setPick} testid="site-pick"
+        style={{ maxWidth: 320, marginBottom: 14 }}
+        placeholder={`全部中心（${rows.length} 个）`}
+        options={rows.map(r => ({
+          value: r.studySiteId, label: `${r.siteCode} · ${r.hospital}` }))}
+        empty="你的范围里还没有中心 —— 漏斗是按中心算的，没有中心就没有漏斗。" />
 
       <div className="stats" style={{ marginBottom: 14 }}>
         <Step label="预筛" n={pre} note="进到漏斗里的人" />

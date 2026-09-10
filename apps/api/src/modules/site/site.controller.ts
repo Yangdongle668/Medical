@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Headers, HttpCode } from "@nestjs/common";
 import { z } from "zod";
 import { PageQuery, Uuid, CentsNonNeg, DateOnly, SiteState, QueryBool,
-  CreateStudySiteBody } from "@sitedesk/contracts";
+  CreateStudySiteBody, SetStudyTeamBody } from "@sitedesk/contracts";
 import { SiteService } from "./site.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
@@ -45,6 +45,19 @@ export class SiteController {
   @Get("/studies") @Operation("listStudies")
   studies(@Query(new ZodPipe(PageQuery)) q: z.infer<typeof PageQuery>) {
     return this.svc.listStudies(q.limit, q.cursor);
+  }
+
+  /* 把项目划给另一个组。**L2** —— 它改的是行范围本身：
+     划走那一刻，原来那个组的 PM 看不见这个项目和它下面的一切。
+     所以幂等键是必需的（command 而不是 idempotent）：
+     重放一次"划走"和真的划两次，在审计上是两件不同的事。 */
+  @Post("/studies/:id\\:set-team") @Operation("setStudyTeam")
+  setStudyTeam(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(SetStudyTeamBody)) b: z.infer<typeof SetStudyTeamBody>,
+    @Headers("idempotency-key") key: string
+  ) {
+    return command(this.idem, key, { id, ...b }, () => this.svc.setStudyTeam(id, b));
   }
 
   @Get("/study-sites") @Operation("listStudySites")

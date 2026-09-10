@@ -112,8 +112,10 @@ export function PlanVisitForm({ sites, onCreated }:
             label: `${s.siteCode} · ${s.hospital}` +
               (s.neverVisited ? "（从没去过）"
                 : (s.overdueDays ?? 0) > 0 ? `（逾期 ${s.overdueDays} 天）` : "")
-          }))} />
-        <Pick label="类型" v={kind} on={pickKind} testid="pv-kind" options={KIND_OPTIONS} />
+          }))}
+          empty="你的范围里还没有能排监查的中心 —— 监查访视排在已建档的中心上。" />
+        <Pick label="类型" v={kind} on={pickKind} testid="pv-kind" options={KIND_OPTIONS}
+          empty="监查类型是一份固定清单，这里空了说明前端常量没打包进来。" />
         <Field label="计划日期" v={plannedOn} on={setPlannedOn} testid="pv-date" type="date" />
         <Field label="人天" v={days} on={setDays} testid="pv-days" type="number" />
       </div>

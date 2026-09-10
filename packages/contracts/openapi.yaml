@@ -10537,6 +10537,127 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/studies/{id}:set-team:
+    post:
+      operationId: setStudyTeam
+      tags:
+        - site
+      summary: 把项目划给另一个组
+      description: |-
+        **这是权限变更，不是显示偏好。** `row_rule=team` 的行范围就是「本组承接的项目」——
+        项目一划走，原来那个组的 PM 当场看不见它、看不见它下面的全部中心、看不见那些中心上的受试者与工时。所以它写审计、`isSensitive=true`，且必须写原因。
+
+        `teamId` 传 null = 收回归属（谁也不承接）。那之后只有行范围 `all` 的人看得到它，而这通常不是想要的结果 —— 接手、拆组、并组请直接划到新组。
+
+        项目**第一次**的归属不在这里定：批准立项时归给提交人所在的组。
+      x-layer: L2
+      x-required-action: manage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetStudyTeamRequest'
+      responses:
+        '200':
+          description: 把项目划给另一个组
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetStudyTeamResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 版本冲突：资源已被他人修改
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/conflict-version
+                title: 版本冲突：资源已被他人修改
+                status: 409
+                code: conflict-version
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/studies/{id}/visit-template:
     get:
       operationId: getSoa
@@ -15734,6 +15855,27 @@ components:
           format: date
           pattern: >-
             ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        team:
+          nullable: true
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+              pattern: >-
+                ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+            code:
+              type: string
+              minLength: 1
+              maxLength: 64
+              pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+            name:
+              type: string
+          required:
+            - id
+            - code
+            - name
+          additionalProperties: false
       required:
         - id
         - code
@@ -15744,6 +15886,7 @@ components:
         - plannedSubjects
         - startedOn
         - endsOn
+        - team
       additionalProperties: false
     StudySite:
       type: object
@@ -16200,6 +16343,25 @@ components:
       required:
         - items
         - summary
+      additionalProperties: false
+    SetStudyTeamRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 4
+          maxLength: 500
+          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
+        teamId:
+          nullable: true
+          description: null = 收回归属，谁也不承接
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      required:
+        - reason
+        - teamId
       additionalProperties: false
     StartupCategory:
       type: string
@@ -21984,6 +22146,20 @@ components:
       required:
         - items
         - nextCursor
+      additionalProperties: false
+    SetStudyTeamResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Study'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
       additionalProperties: false
     ReplaceSoaRequest:
       type: object

@@ -4,6 +4,7 @@ import { loadMe } from "../login/me.js";
 import { yuan, days } from "./money.js";
 import { usePending } from "../../api/pending.js";
 import { today } from "../../shell/dates.js";
+import { Pick } from "../../shell/CreateForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    工时台账。
@@ -341,16 +342,10 @@ function FileTimesheet({ sites, onDone }: { sites: Site[]; onDone: () => void })
     <section className="card stack" data-testid="file-timesheet">
       <h3>填报工时</h3>
       <div className="row" style={{ gap: 12, alignItems: "flex-end" }}>
-        <label className="field" style={{ flex: "2 1 220px" }}>
-          <span>中心</span>
-          <select value={studySiteId} data-testid="ts-site"
-            onChange={e => setSite(e.target.value)}>
-            <option value="">请选择</option>
-            {sites.map(s => (
-              <option key={s.id} value={s.id}>{s.code} {s.hospital}</option>
-            ))}
-          </select>
-        </label>
+        <Pick label="中心" v={studySiteId} on={setSite} testid="ts-site"
+          style={{ flex: "2 1 220px" }} placeholder="请选择"
+          options={sites.map(s => ({ value: s.id, label: `${s.code} ${s.hospital}` }))}
+          empty="你被派工的中心里一个都没有 —— 工时是记在中心上的。还没被派工的话，找 PM 在「派工与产能」里把你派上去。" />
         <label className="field" style={{ flex: "1 1 150px" }}>
           <span>工作日期</span>
           <input type="date" value={workDate} max={today()} data-testid="ts-date"

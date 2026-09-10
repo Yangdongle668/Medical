@@ -493,6 +493,68 @@ for (const file of walk(path.join(ROOT, "apps/api/src"))) {
   }
 }
 
+/* ── 数据来源的下拉框必须用 <Pick> ─────────────────────────────────
+   一个只列出"已有的"的原生 <select>，答不出使用者站在那里时真正的
+   问题：**我要的那个不在里面，然后呢？** 而它空着的时候，长得和
+   "还在加载"、"你没权限"、"还没有这种东西"一模一样 —— 这三件事
+   该做的下一步完全不同。
+
+   这个坑踩过三次：新批的项目选不到、分组建不出来、一个中心都没有
+   时整页空白。`Pick` 把 `empty` 定成必填，TypeScript 会逼着每个
+   调用点回答"空的时候说什么"—— 但前提是**用了 Pick**。
+   这条规则守的就是这个前提。
+
+   判据：options 由 `.map()` 铺开，且被 map 的那个东西不是常量
+   （常量按本仓库惯例全大写，或 Object.entries(全大写)）。 */
+{
+  const EXEMPT = new Set([
+    /* 多选框：Pick 只管单选。它自己写了空态，见文件里的注释。 */
+    "apps/web/src/features/handover/HandoverPage.tsx",
+    /* Pick 自己的实现 */
+    "apps/web/src/shell/CreateForm.tsx"
+  ]);
+  const tsx = [];
+  (function walk(d) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) walk(f);
+      else if (e.name.endsWith(".tsx")) tsx.push(f);
+    }
+  })(path.join(ROOT, "apps/web/src"));
+
+  let checked = 0;
+  for (const f of tsx) {
+    const rel = path.relative(ROOT, f).replace(/\\/g, "/");
+    if (EXEMPT.has(rel)) continue;
+    const src = fs.readFileSync(f, "utf8");
+    let i = -1;
+    while ((i = src.indexOf("<select", i + 1)) !== -1) {
+      const end = src.indexOf("</select>", i);
+      if (end === -1) continue;
+      const block = src.slice(i, end);
+      const maps = [...block.matchAll(
+        /\{\s*([A-Za-z_$][\w$.?[\]()]*)\s*(?:\?\?\s*\[\])?\s*\.\s*(?:filter\([^)]*\)\s*\.\s*)?map\(/g)]
+        .map(m => m[1]);
+      if (!maps.length) continue;
+      checked++;
+      /* 常量：全大写标识符，或 Object.entries(全大写) */
+      const 常量 = maps.every(x =>
+        /^[A-Z][A-Z0-9_]*$/.test(x) || /^Object\.entries\([A-Z][A-Z0-9_]*\)$/.test(x));
+      if (常量) continue;
+      const line = src.slice(0, i).split("\n").length;
+      const tid = block.match(/data-testid=[{"`]([^"}`]+)/);
+      violations.push(`${rel}:${line}\n` +
+        `    原生 <select> 的选项来自数据（${maps.join(", ")}）${tid ? `，testid=${tid[1]}` : ""}\n` +
+        "    改用 shell/CreateForm.js 的 <Pick> —— 它的 empty 是必填的：\n" +
+        "    一个空下拉框和「还在加载 / 你没权限 / 还没有这种东西」长得一模一样，\n" +
+        "    而这三件事该做的下一步完全不同");
+    }
+  }
+  if (checked < 8)
+    violations.push("tools/arch-check.mjs\n" +
+      `    只扫到 ${checked} 个带 .map() 的 <select> —— 判据的写法过时了，这条规则已经形同虚设`);
+}
+
 if (violations.length) {
   console.error(`✗ 依赖图违规 ${violations.length} 处：\n\n` +
     violations.map(v => "  " + v).join("\n\n"));

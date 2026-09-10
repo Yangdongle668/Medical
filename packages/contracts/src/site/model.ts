@@ -2,6 +2,7 @@ import { z } from "zod";
 import { Uuid, Code, DateOnly, Ratio, CentsNonNeg } from "../kernel/primitives.js";
 import { gated } from "../kernel/fields.js";
 import { GateUnmet } from "../kernel/errors.js";
+import { WithReason } from "../kernel/command.js";
 
 /* ════════════════════════════════════════════════════════════════════
    Site & Staffing —— StudySite（项目 × 中心）是本系统的最小作业单元。
@@ -31,7 +32,11 @@ export const Study = z.object({
   plannedSubjects: z.int().positive(),
   contractAmountCents: gated(CentsNonNeg, "price"),
   startedOn: DateOnly.nullable(),
-  endsOn: DateOnly.nullable()
+  endsOn: DateOnly.nullable(),
+  /** 承接这个项目的组。**这是 row_rule=team 的行范围本身**，不是一个标签：
+   *  项目从 A 组划到 B 组，A 组的 PM 当场看不见它和它下面所有中心。
+   *  null = 还没有归属组（提交人和审批人都不在任何组里时会这样）。 */
+  team: z.object({ id: Uuid, code: Code, name: z.string() }).nullable()
 }).meta({ id: "Study" });
 
 export const StudySite = z.object({
@@ -254,3 +259,8 @@ export const CreateStudySiteBody = z.object({
   startupFeeCents: CentsNonNeg.default(0),
   sivPlannedOn: DateOnly.nullable().optional()
 });
+
+/** **具名导出，路由层直接用这一个** —— 路由层再写一份副本就会分叉。 */
+export const SetStudyTeamBody = WithReason.extend({
+  teamId: Uuid.nullable().describe("null = 收回归属，谁也不承接")
+}).meta({ id: "SetStudyTeamRequest" });

@@ -148,7 +148,7 @@ test.describe("经营层：组织与权限", () => {
 
     /* 分组下拉旁边就写着去哪儿建，而不是让人自己在三个标签里试 */
     await expect(page.getByTestId("new-team-hint")).toContainText("分组");
-    await page.getByTestId("go-group").click();
+    await page.getByTestId("new-team-go").click();
 
     /* 点完人就站在建分组的表单上了 */
     await expect(page.getByTestId("team-name")).toBeVisible();
@@ -182,8 +182,47 @@ test.describe("经营层：组织与权限", () => {
     /* 而且要说清后果，不能只说"没有" */
     await expect(page.getByTestId("new-team-empty")).toContainText("一个项目都看不到");
     /* 去路仍然在同一处 */
-    await page.getByTestId("go-group").click();
+    await page.getByTestId("new-team-go").click();
     await expect(page.getByTestId("create-team")).toBeVisible();
+  });
+
+  /* ══════════════════════════════════════════════════════════════════
+     把项目从 A 组划到 B 组。
+
+     在此之前这件事**只能直接改库**：批准立项会把项目归给提交人所在
+     的组，但归错了、要接手、要拆组并组，都没有入口。而它不是一个
+     标签 —— `row_rule=team` 的定义就是「本组承接的项目」。
+     ══════════════════════════════════════════════════════════════════ */
+  test("**每个组列得出自己承接的项目**，不再只有一个数字", async ({ page }) => {
+    await page.getByRole("link", { name: "组织与权限" }).click();
+    await expect(page.getByTestId("account-row").first()).toBeVisible();
+    await page.getByTestId("tab-group").click();
+    await expect(page.getByTestId("team-study-row").first()).toBeVisible();
+    expect(await page.getByTestId("team-study-row").count()).toBeGreaterThan(0);
+  });
+
+  test("**划走要写原因，而且当场说清后果**", async ({ page }) => {
+    await page.getByRole("link", { name: "组织与权限" }).click();
+    await expect(page.getByTestId("account-row").first()).toBeVisible();
+    await page.getByTestId("tab-group").click();
+
+    const 第一行 = page.getByTestId("team-study-row").first();
+    const 编号 = (await 第一行.locator(".mono").first().textContent())!.trim();
+
+    await page.getByTestId(`move-${编号}`).click();
+    /* 后果写在按钮旁边，不是点完才知道 */
+    await expect(page.getByText(/从确认那一刻起看不见/)).toBeVisible();
+    /* 没写原因就按不下去 —— 这是权限变更 */
+    await expect(page.getByTestId(`move-go-${编号}`)).toBeDisabled();
+
+    await page.getByTestId(`move-to-${编号}`).selectOption({ index: 1 });
+    await page.getByTestId(`move-reason-${编号}`).fill("华东组人手不足，本项目移交承接");
+    await expect(page.getByTestId(`move-go-${编号}`)).toBeEnabled();
+    await page.getByTestId(`move-go-${编号}`).click();
+
+    await expect(page.getByTestId("org-said")).toContainText(编号);
+    /* 划过去之后它出现在另一个组的卡片里 —— 台账上真的动了 */
+    await expect(page.getByTestId("team-study-row").filter({ hasText: 编号 })).toHaveCount(1);
   });
 
   test("**项目怎么归到组里，页面上答得出来**", async ({ page }) => {

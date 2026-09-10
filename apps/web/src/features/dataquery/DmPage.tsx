@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
+import { Pick } from "../../shell/CreateForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    数据管理 DM 工作台。
@@ -198,18 +199,13 @@ export function DmPage() {
             </p>
           : <>
               <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
-                <label className="field" style={{ minWidth: 220 }}>
-                  <span>受试者</span>
-                  <select value={subjectId} data-testid="dm-subject"
-                    onChange={e => setSubjectId(e.target.value)}>
-                    {subjects.map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.screeningNo ?? s.id} · {s.siteCode}
-                        {s.crcName ? ` · ${s.crcName}` : "（无责任 CRC）"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <Pick label="受试者" v={subjectId} on={setSubjectId} testid="dm-subject"
+                  style={{ minWidth: 220 }}
+                  options={subjects.map(s => ({
+                    value: s.id,
+                    label: `${s.screeningNo ?? s.id} · ${s.siteCode}` +
+                      (s.crcName ? ` · ${s.crcName}` : "（无责任 CRC）") }))}
+                  empty="还没有可以提质疑的受试者 —— 质疑是挂在受试者身上的，得先有人被登记进来（预筛登记）。已筛败的不在此列：他们不再录数据，质疑无从核实。" />
                 <label className="field" style={{ minWidth: 200 }}>
                   <span>表单</span>
                   <select value={form} data-testid="dm-form"

@@ -8,10 +8,11 @@ import { ACTION_KEYS, FIELD_KEYS } from "@sitedesk/contracts";
 import {
   listAccounts, listRoles, listTeams, createAccount, updateAccount,
   disableAccount, enableAccount, setAccountPassword, setLoginAddress,
-  createTeam, updateRole,
+  createTeam, updateRole, listStudies, setStudyTeam,
   ROW_RULE, NEEDS_ORG_REF, FIELD_LABEL, ACTION_LABEL,
-  type Account, type Role, type Team
+  type Account, type Role, type Team, type Study
 } from "./api.js";
+import { Pick } from "../../shell/CreateForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    组织与权限 —— 管理员的主界面（原型 26-org.html）。
@@ -37,12 +38,14 @@ export function OrgPage() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [studies, setStudies] = useState<Study[]>([]);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [said, setSaid] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    const [a, r, t] = await Promise.all([listAccounts(), listRoles(), listTeams()]);
-    setAccounts(a.items); setRoles(r.items); setTeams(t.items);
+    const [a, r, t, st] = await Promise.all([
+      listAccounts(), listRoles(), listTeams(), listStudies()]);
+    setAccounts(a.items); setRoles(r.items); setTeams(t.items); setStudies(st.items);
   }, []);
 
   useEffect(() => { void loadMe().then(setMe); void reload(); }, [reload]);
@@ -122,7 +125,7 @@ export function OrgPage() {
 
       {accounts === null ? <p className="muted">加载中…</p>
         : tab === "user" ? <UserTab {...{ me, accounts, roles, teams, run }} goTab={setTab} />
-        : tab === "group" ? <GroupTab {...{ accounts, teams, run }} />
+        : tab === "group" ? <GroupTab {...{ accounts, teams, studies, run }} />
         : <PermTab {...{ roles, run }} />}
     </>
   );
@@ -199,33 +202,17 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
               </span>
             )}
           </label>
-          <label className="field"><span>角色</span>
-            <select value={roleId} data-testid="new-role" onChange={e => setRoleId(e.target.value)}>
-              <option value="">— 选一个 —</option>
-              {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select></label>
+          <Pick label="角色" v={roleId} on={setRoleId} testid="new-role"
+            options={roles.map(r => ({ value: r.id, label: r.name }))}
+            empty="这个租户一个角色都没有 —— 九个标准角色是开户时铺进去的（app.provision_tenant_roles）。出现这句话说明开户没跑完，建号也无从谈起。" />
           {/* 分组是在**另一个标签页**里建的，而人是在这里发现自己需要它的。
-               一个只列现有分组的下拉框答不出"没有我要的那个怎么办"——
-               而这一栏空着的时候，它长得和"这个功能不存在"一模一样。 */}
-          <label className="field">
-            <span>分组 <span className="t-mut">· 决定 PM 看得到哪些项目</span></span>
-            <select value={teamId} data-testid="new-team" onChange={e => setTeamId(e.target.value)}>
-              <option value="">不分组</option>
-              {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-            {teams.length === 0
-              ? <span className="t-crit" data-testid="new-team-empty" style={{ fontSize: 12 }}>
-                  <b>还一个分组都没有。</b>项目总监（PM）的行范围规则是「本组承接的项目」——
-                  没有分组，他登进来一个项目都看不到。
-                  <button className="btn link" data-testid="go-group" style={{ marginLeft: 4 }}
-                    onClick={() => goTab("group")}>去建一个分组</button>
-                </span>
-              : <span className="t-mut" data-testid="new-team-hint" style={{ fontSize: 12 }}>
-                  没有要找的那个组？
-                  <button className="btn link" data-testid="go-group" style={{ marginLeft: 4 }}
-                    onClick={() => goTab("group")}>去「分组」页建一个</button>
-                </span>}
-          </label>
+               `action` 就是那条去路 —— 一个只列现有分组的下拉框
+               答不出"没有我要的那个怎么办"。 */}
+          <Pick label="分组" hint="决定 PM 看得到哪些项目"
+            v={teamId} on={setTeamId} testid="new-team" placeholder="不分组"
+            options={teams.map(t => ({ value: t.id, label: t.name }))}
+            empty="还一个分组都没有。项目总监（PM）的行范围规则是「本组承接的项目」—— 没有分组，他登进来一个项目都看不到。"
+            action={{ label: "去「分组」页建一个", on: () => goTab("group") }} />
         </div>
         {needsOrg && (
           <label className="field"><span>
@@ -512,15 +499,13 @@ function EditAccount({ account, roles, teams, onClose, onSave }: {
         改掉等于把过去的记录指向另一个人。
       </p>
       <div className="grid-form">
-        <label className="field"><span>角色</span>
-          <select value={roleId} data-testid="edit-role" onChange={e => setRoleId(e.target.value)}>
-            {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select></label>
-        <label className="field"><span>分组</span>
-          <select value={teamId} data-testid="edit-team" onChange={e => setTeamId(e.target.value)}>
-            <option value="">不分组</option>
-            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select></label>
+        <Pick label="角色" v={roleId} on={setRoleId} testid="edit-role"
+          options={roles.map(r => ({ value: r.id, label: r.name }))}
+          empty="这个租户一个角色都没有 —— 开户时铺的九个标准角色没进去。" />
+        <Pick label="分组" v={teamId} on={setTeamId} testid="edit-team"
+          placeholder="不分组"
+          options={teams.map(t => ({ value: t.id, label: t.name }))}
+          empty="还一个分组都没有 —— 去「分组」页建一个，再回来把人放进去。" />
       </div>
       {role && (
         <p className="muted" style={{ margin: 0 }}>
@@ -591,14 +576,15 @@ function SetPassword({ account, onClose, onSave }: {
 }
 
 /* ── 分组 ─────────────────────────────────────────────────────────── */
-function GroupTab({ accounts, teams, run }: {
-  accounts: Account[]; teams: Team[]; run: Run;
+function GroupTab({ accounts, teams, studies, run }: {
+  accounts: Account[]; teams: Team[]; studies: Study[]; run: Run;
 }) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [lead, setLead] = useState("");
   const internal = accounts.filter(a => a.status === "active" && !a.isExternal);
   const unassigned = internal.filter(a => !a.team);
+  const 无主 = studies.filter(st => !st.team);
 
   return (
     <>
@@ -614,13 +600,11 @@ function GroupTab({ accounts, teams, run }: {
           <label className="field"><span>组名</span>
             <input value={name} data-testid="team-name"
               onChange={e => setName(e.target.value)} placeholder="例：华中组" /></label>
-          <label className="field"><span>组长</span>
-            <select value={lead} data-testid="team-lead" onChange={e => setLead(e.target.value)}>
-              <option value="">暂不指定</option>
-              {internal.map(a => (
-                <option key={a.id} value={a.id}>{a.displayName}（{a.role.name}）</option>
-              ))}
-            </select></label>
+          <Pick label="组长" v={lead} on={setLead} testid="team-lead"
+            placeholder="暂不指定"
+            options={internal.map(a => ({
+              value: a.id, label: `${a.displayName}（${a.role.name}）` }))}
+            empty="还没有在职的内部人员可以当组长 —— 先在「人员账号」页建号。组长可以之后再指定，不挡着建组。" />
         </div>
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="btn primary" data-testid="create-team"
@@ -659,26 +643,48 @@ function GroupTab({ accounts, teams, run }: {
                   </span>))
                 : <span className="muted">暂无成员</span>}
             </div>
-            <label className="field" style={{ maxWidth: 320 }}>
-              <span>添加成员</span>
-              <select value="" data-testid={`team-add-${t.code}`}
-                onChange={e => {
-                  const id = e.target.value; if (!id) return;
-                  const a = internal.find(x => x.id === id)!;
-                  void run(`${a.displayName} 已加入 ${t.name}`,
-                    () => updateAccount(id, { teamId: t.id, reason: `加入分组 ${t.name}` }));
-                }}>
-                <option value="">— 选一个 —</option>
-                {internal.filter(a => a.team?.id !== t.id).map(a => (
-                  <option key={a.id} value={a.id}>
-                    {a.displayName}（{a.role.name}{a.team ? ` · 现属 ${a.team.name}` : ""}）
-                  </option>
-                ))}
-              </select>
-            </label>
+            {/* 承接的项目 —— **这就是这个组的行范围本身**。
+                在此之前这一栏只有一个数字（上面那句"承接 N 个项目"），
+                哪几个、怎么改都答不出来，改归属只能直接改库。 */}
+            <StudyOwnership team={t} studies={studies} teams={teams} run={run} />
+
+            <Pick label="添加成员" v="" testid={`team-add-${t.code}`}
+              style={{ maxWidth: 320 }}
+              on={id => {
+                if (!id) return;
+                const a = internal.find(x => x.id === id)!;
+                void run(`${a.displayName} 已加入 ${t.name}`,
+                  () => updateAccount(id, { teamId: t.id, reason: `加入分组 ${t.name}` }));
+              }}
+              options={internal.filter(a => a.team?.id !== t.id).map(a => ({
+                value: a.id,
+                label: `${a.displayName}（${a.role.name}${a.team ? ` · 现属 ${a.team.name}` : ""}）`
+              }))}
+              empty={internal.length === 0
+                ? "还没有在职的内部人员 —— 先在「人员账号」页建号。"
+                : "在职的内部人员都已经在本组了。"} />
           </div>
         );
       })}
+
+      {无主.length > 0 && (
+        <div className="card stack" data-testid="unowned-studies" style={{ marginBottom: 12 }}>
+          <div className="spread">
+            <h3>没有归属组的项目（{无主.length}）</h3>
+            <span className="muted">只有行范围「全部」的人看得到它们</span>
+          </div>
+          {/* 这一块平时是空的。它非空的时候，说明有项目是由不在任何组里的人
+              提交、也由不在任何组里的人批准的 —— 那些项目现在谁的台账上都没有。 */}
+          {无主.map(st => (
+            <div className="row" key={st.id} style={{ gap: 8, alignItems: "center" }}>
+              <span className="mono">{st.code}</span>
+              <span>{st.shortName}</span>
+              <span className="sp" />
+              <MoveStudy study={st} teams={teams} run={run} />
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="derive">
         分组不是通讯录，是<b>权限的行维度</b>。PM 的行范围规则是 <code>team</code>：
@@ -699,6 +705,96 @@ function GroupTab({ accounts, teams, run }: {
         接手、拆组、并组都会需要它。
       </div>
     </>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   一个组承接哪些项目 —— 以及把其中一个划走。
+
+   **这不是一张标签列表，它就是这个组的行范围。** 划走那一刻，
+   这个组的 PM 看不见这个项目、它下面的全部中心、那些中心上的
+   受试者与工时。所以每一次都要写原因，而且写进审计。
+   ════════════════════════════════════════════════════════════════════ */
+function StudyOwnership({ team, studies, teams, run }: {
+  team: Team; studies: Study[]; teams: Team[]; run: Run;
+}) {
+  const 本组 = studies.filter(st => st.team?.id === team.id);
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <span style={{ color: "var(--ink-3)", fontSize: 12 }}>
+        承接的项目{本组.length ? `（${本组.length}）` : ""}
+      </span>
+      {本组.length === 0
+        ? <span className="muted" data-testid={`team-studies-${team.code}-empty`}>
+            本组还没有承接任何项目 —— <b>这个组的 PM 现在一个项目都看不到</b>。
+            项目在批准立项时归给提交人所在的组；也可以从别的组划过来。
+          </span>
+        : 本组.map(st => (
+            <div className="row" key={st.id} data-testid="team-study-row"
+              style={{ gap: 8, alignItems: "center" }}>
+              <span className="mono">{st.code}</span>
+              <span>{st.shortName}</span>
+              <span className="sp" />
+              <MoveStudy study={st} teams={teams} run={run} />
+            </div>
+          ))}
+    </div>
+  );
+}
+
+/** 「划到别的组」那一下。展开成一行：选组 + 写原因 + 确认。
+ *
+ *  不做成一个直接生效的下拉 —— 它和「添加成员」不是一回事：
+ *  加个人进组，看错了退出来就是；划走一个项目，原来那个组的人
+ *  在你松手那一刻就看不见它了，而他们不会收到任何通知。 */
+function MoveStudy({ study, teams, run }: {
+  study: Study; teams: Team[]; run: Run;
+}) {
+  const [open, setOpen] = useState(false);
+  const [to, setTo] = useState("");
+  const [reason, setReason] = useState("");
+  const 别的组 = teams.filter(t => t.id !== study.team?.id);
+
+  if (!open) return (
+    <button className="btn link" data-testid={`move-${study.code}`}
+      onClick={() => setOpen(true)}>划到别的组</button>
+  );
+
+  return (
+    <div className="stack" style={{ gap: 6, flex: "1 1 100%" }}>
+      <div className="row" style={{ gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+        <Pick label="划给" v={to} on={setTo} testid={`move-to-${study.code}`}
+          style={{ minWidth: 200 }}
+          placeholder={study.team ? "— 收回归属（谁也不承接）—" : "— 选一个组 —"}
+          options={别的组.map(t => ({ value: t.id, label: `${t.name}（${t.code}）` }))}
+          empty="没有别的组可以划 —— 先去上面建一个。" />
+        <label className="field" style={{ flex: "2 1 260px" }}>
+          <span>原因 <span className="t-mut">· 至少 4 字，进审计轨迹</span></span>
+          <input value={reason} data-testid={`move-reason-${study.code}`}
+            onChange={e => setReason(e.target.value)}
+            placeholder="例：华东组人手不足，本项目移交华中组承接" />
+        </label>
+        <button className="btn primary" data-testid={`move-go-${study.code}`}
+          disabled={reason.trim().length < 4}
+          onClick={() => void run(
+            to ? `${study.code} 已划走` : `${study.code} 已收回归属`,
+            async () => {
+              await setStudyTeam(study.id, to || null, reason.trim());
+              setOpen(false); setTo(""); setReason("");
+            })}>
+          确认
+        </button>
+        <button className="btn link" onClick={() => { setOpen(false); setTo(""); setReason(""); }}>
+          取消
+        </button>
+      </div>
+      <span className="t-crit" style={{ fontSize: 12 }}>
+        <b>这是权限变更。</b>
+        {study.team ? `${study.team.name} ` : "原来能看到它的人"}
+        的项目总监从确认那一刻起看不见 {study.code}、看不见它下面的全部中心、
+        也看不见那些中心上的受试者与工时。他们不会收到通知。
+      </span>
+    </div>
   );
 }
 

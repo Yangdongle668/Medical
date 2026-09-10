@@ -77,23 +77,17 @@ export function NewChangeForm({ onCreated }: { onCreated: () => void }) {
           options={studies.map(s => ({ value: s.id, label: `${s.code} · ${s.shortName}` }))}
           empty="你的范围里还没有项目 —— 合同变更是挂在项目下面的，得先有一份立项申请被批准。" />
         <Pick label="变更类型" v={f.kind} on={set("kind")} testid="nc-kind"
-          options={CHANGE_KINDS.map(k => ({ value: k, label: CHANGE_KIND_LABEL[k] }))} />
+          options={CHANGE_KINDS.map(k => ({ value: k, label: CHANGE_KIND_LABEL[k] }))}
+          empty="变更类型是一份固定清单，这里空了说明前端常量没打包进来 —— 刷新一次，还空就是发布出了问题。" />
         <Field label="提出日期" v={f.raisedOn} on={set("raisedOn")}
           testid="nc-date" type="date" />
       </div>
 
-      <label className="field">
-        <span>
-          中心 <span className="t-mut">· 留空 = 全项目的变更（周期延长、中心增减）</span>
-        </span>
-        <select value={f.studySiteId} data-testid="nc-site"
-          onChange={e => set("studySiteId")(e.target.value)}>
-          <option value="">— 全项目 —</option>
-          {sites.map(s => (
-            <option key={s.id} value={s.id}>{s.code} · {s.hospital}</option>
-          ))}
-        </select>
-      </label>
+      <Pick label="中心" hint="留空 = 全项目的变更（周期延长、中心增减）"
+        v={f.studySiteId} on={set("studySiteId")} testid="nc-site"
+        placeholder="— 全项目 —"
+        options={sites.map(s => ({ value: s.id, label: `${s.code} · ${s.hospital}` }))}
+        empty="你的范围里还没有中心 —— 这不挡事：中心留空本来就是「全项目的变更」，照样登记得了。" />
 
       <Area label="变更内容" hint="至少 4 字" v={f.what} on={set("what")} testid="nc-what"
         placeholder="例：第 3 周期起每例增加一次骨扫描，含预约、陪同与影像归档。" />

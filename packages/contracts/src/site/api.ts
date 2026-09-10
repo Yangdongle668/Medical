@@ -5,7 +5,7 @@ import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
 import { Study, StudySite, SiteState, SiteGate,
   SiteAcceptance, AcceptanceState, SubmitAcceptance,
-  IsfBoard, IsfCategory, CreateStudySiteBody } from "./model.js";
+  IsfBoard, IsfCategory, CreateStudySiteBody, SetStudyTeamBody } from "./model.js";
 
 const CTX = "site";
 const ById = z.object({ id: Uuid });
@@ -22,6 +22,22 @@ define({
     "而建中心的表单第一栏就是选项目 —— 那是个死锁，不是收紧。",
   query: PageQuery.extend({ q: z.string().max(64).optional() }),
   response: page(Study)
+});
+
+define({
+  id: "setStudyTeam", method: "post", path: "/v1/studies/{id}:set-team",
+  layer: "L2", context: CTX, summary: "把项目划给另一个组", action: "manage",
+  description:
+    "**这是权限变更，不是显示偏好。** `row_rule=team` 的行范围就是「本组承接的项目」——\n" +
+    "项目一划走，原来那个组的 PM 当场看不见它、看不见它下面的全部中心、" +
+    "看不见那些中心上的受试者与工时。所以它写审计、`isSensitive=true`，且必须写原因。\n\n" +
+    "`teamId` 传 null = 收回归属（谁也不承接）。那之后只有行范围 `all` 的人看得到它，" +
+    "而这通常不是想要的结果 —— 接手、拆组、并组请直接划到新组。\n\n" +
+    "项目**第一次**的归属不在这里定：批准立项时归给提交人所在的组。",
+  params: ById,
+  body: SetStudyTeamBody,
+  response: commandResult(Study),
+  errors: ["invariant-violated", "conflict-version", "idempotency-key-reused"]
 });
 
 define({

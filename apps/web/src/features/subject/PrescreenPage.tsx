@@ -6,6 +6,7 @@ import {
   STATE_LABEL, anonymous, today, type Subject
 } from "./api.js";
 import { SCREEN_FAIL_LABEL } from "../enrollment/api.js";
+import { Pick } from "../../shell/CreateForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    预筛登记。
@@ -88,11 +89,9 @@ export function PrescreenPage() {
           <span className="muted">此刻只有筛选号 —— 签知情之后才生成筛选期访视</span>
         </div>
         <div className="grid-form">
-          <label className="field"><span>中心</span>
-            <select value={siteId} data-testid="pre-site" onChange={e => setSiteId(e.target.value)}>
-              <option value="">— 选一个 —</option>
-              {sites.map(s => <option key={s.id} value={s.id}>{s.code} · {s.hospital}</option>)}
-            </select></label>
+          <Pick label="中心" v={siteId} on={setSiteId} testid="pre-site"
+            options={sites.map(s => ({ value: s.id, label: `${s.code} · ${s.hospital}` }))}
+            empty="你被派工的中心里还没有能登记受试者的 —— 中心要先推进到 SIV（已启动）才收受试者，在那之前登记等于在启动会之前开展受试者相关工作。" />
           {/* 筛选号默认由系统按中心发（SS-16-P001）。
               留这条口子是因为申办方 / IWRS 指定筛选号确实存在 ——
               但它是例外：让每个人现想一个，得到的是同一个中心上
