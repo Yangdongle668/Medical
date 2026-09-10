@@ -122,7 +122,7 @@ define({
     note: z.string().max(1000).nullable().optional()
   }),
   response: Client,
-  errors: ["invariant-violated"]
+  errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
 /* ── 现金流 ──────────────────────────────────────────────────────── */

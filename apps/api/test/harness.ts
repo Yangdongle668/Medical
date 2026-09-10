@@ -115,7 +115,13 @@ export async function as(app: INestApplication, login: string) {
     get:   (p: string) => api(app).get(p).set(h),
     post:  (p: string, b?: unknown, extra: Record<string, string> = {}) =>
              api(app).post(p).set({ ...h, ...extra }).send(b ?? {}),
-    patch: (p: string, b?: unknown) => api(app).patch(p).set(h).send(b ?? {})
+    /* patch 也要收得下额外请求头。**它原来收不下**，而那不是一个缺口，
+       是一个会骗人的缺口：`patch(url, body, { "idempotency-key": key })`
+       多传的那个参数被静默丢掉，键根本没发出去 —— 于是一条
+       「同一把键重放，服务端应当认得」的测试，测的其实是
+       「不带键调两次」，而它照样是绿的。 */
+    patch: (p: string, b?: unknown, extra: Record<string, string> = {}) =>
+             api(app).patch(p).set({ ...h, ...extra }).send(b ?? {})
   };
 }
 export type Caller = Awaited<ReturnType<typeof as>>;

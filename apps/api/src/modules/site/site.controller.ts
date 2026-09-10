@@ -5,7 +5,6 @@ import { SiteService } from "./site.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
-import { ProblemException } from "../../infra/problem.js";
 import { command, idempotent } from "../../infra/command.js";
 
 const ListQ = PageQuery.extend({
@@ -86,18 +85,11 @@ export class SiteController {
   ) { return this.svc.gate(id, to); }
 
   @Post("/study-sites/:id\\:advance") @Operation("advanceStudySite")
-  async advance(
+  advance(
     @Param("id", new ZodPipe(Uuid)) id: string,
     @Body(new ZodPipe(AdvanceBody)) b: z.infer<typeof AdvanceBody>,
     @Headers("idempotency-key") key?: string
   ) {
-    if (!key) throw new ProblemException("validation-failed", {
-      detail: "L2 命令必须携带 Idempotency-Key 请求头",
-      issues: [{ path: "/headers/idempotency-key", message: "必填" }] });
-    const replay = await this.idem.begin(key, { id, ...b });
-    if (replay) return replay.body;
-    const out = await this.svc.advance(id, b.to, b.reason);
-    await this.idem.complete(key, 200, out);
-    return out;
+    return command(this.idem, key, { id, ...b }, () => this.svc.advance(id, b.to, b.reason));
   }
 }

@@ -13,8 +13,7 @@ import { IdentityService } from "./identity.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
-import { ProblemException } from "../../infra/problem.js";
-import { idempotent } from "../../infra/command.js";
+import { command, idempotent } from "../../infra/command.js";
 
 
 @Controller("/v1")
@@ -42,61 +41,68 @@ export class IdentityController {
   }
 
   @Post("/accounts/:id\\:disable") @Operation("disableAccount")
-  async disable(
+  disable(
     @Param("id", new ZodPipe(Uuid)) id: string,
     @Body(new ZodPipe(WithReason)) b: { reason: string },
     @Headers("idempotency-key") key?: string
   ) {
-    if (!key) throw new ProblemException("validation-failed", {
-      detail: "L2 命令必须携带 Idempotency-Key 请求头",
-      issues: [{ path: "/headers/idempotency-key", message: "必填" }] });
-    const replay = await this.idem.begin(key, { id, ...b });
-    if (replay) return replay.body;
-    const out = await this.svc.disableAccount(id, b.reason);
-    await this.idem.complete(key, 200, out);
-    return out;
+    return command(this.idem, key, { id, ...b }, () => this.svc.disableAccount(id, b.reason));
   }
 
+  /* 改角色重放两次不会改出第三种角色，但会**在轨迹里记两条**——
+     而这一条正是核查员第一屏上的那种。哈希连 id 一起算：
+     同一把键换个账号，那是两次不同的操作，必须被认出来。 */
   @Patch("/accounts/:id") @Operation("updateAccount")
   updateAccount(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(UpdateAccountBody)) b: z.infer<typeof UpdateAccountBody>
-  ) { return this.svc.updateAccount(id, b); }
+    @Body(new ZodPipe(UpdateAccountBody)) b: z.infer<typeof UpdateAccountBody>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    return idempotent(this.idem, key, { id, ...b }, () => this.svc.updateAccount(id, b));
+  }
 
   @Post("/accounts/:id\\:enable") @Operation("enableAccount")
-  async enable(
+  enable(
     @Param("id", new ZodPipe(Uuid)) id: string,
     @Body(new ZodPipe(WithReason)) b: { reason: string },
     @Headers("idempotency-key") key?: string
   ) {
-    if (!key) throw new ProblemException("validation-failed", {
-      detail: "L2 命令必须携带 Idempotency-Key 请求头",
-      issues: [{ path: "/headers/idempotency-key", message: "必填" }] });
-    const replay = await this.idem.begin(key, { id, ...b });
-    if (replay) return replay.body;
-    const out = await this.svc.enableAccount(id, b.reason);
-    await this.idem.complete(key, 200, out);
-    return out;
+    return command(this.idem, key, { id, ...b }, () => this.svc.enableAccount(id, b.reason));
   }
 
+  /* 这两条重放的代价不是"设了两次口令"（设的是同一个），而是
+     **撤会话撤两次、轨迹里记两条**。两条都在核查员第一屏上，
+     而第一屏里出现两条一模一样的「重设账号口令」，读的人只能自己猜
+     是重放还是真的做了两次 —— 那正是审计要消灭的那种含糊。 */
   @Post("/accounts/:id\\:set-password") @Operation("setAccountPassword") @HttpCode(204)
   async setPassword(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(SetAccountPasswordBody)) b: z.infer<typeof SetAccountPasswordBody>
-  ) { await this.svc.setAccountPassword(id, b.password, b.reason); }
+    @Body(new ZodPipe(SetAccountPasswordBody)) b: z.infer<typeof SetAccountPasswordBody>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    await idempotent(this.idem, key, { id, ...b },
+      () => this.svc.setAccountPassword(id, b.password, b.reason));
+  }
 
   @Post("/accounts/:id\\:set-login-address") @Operation("setLoginAddress") @HttpCode(204)
   async setLoginAddress(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(SetLoginAddressBody)) b: z.infer<typeof SetLoginAddressBody>
-  ) { await this.svc.setLoginAddress(id, b.address, b.reason); }
+    @Body(new ZodPipe(SetLoginAddressBody)) b: z.infer<typeof SetLoginAddressBody>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    await idempotent(this.idem, key, { id, ...b },
+      () => this.svc.setLoginAddress(id, b.address, b.reason));
+  }
 
   @Get("/teams") @Operation("listTeams")
   teams() { return this.svc.listTeams(); }
 
   @Post("/teams") @Operation("createTeam") @HttpCode(201)
-  createTeam(@Body(new ZodPipe(CreateTeamBody)) b: z.infer<typeof CreateTeamBody>) {
-    return this.svc.createTeam(b);
+  createTeam(
+    @Body(new ZodPipe(CreateTeamBody)) b: z.infer<typeof CreateTeamBody>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    return idempotent(this.idem, key, b, () => this.svc.createTeam(b));
   }
 
   @Get("/roles") @Operation("listRoles")
@@ -105,8 +111,11 @@ export class IdentityController {
   @Patch("/roles/:id") @Operation("updateRolePermissions")
   updateRole(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(UpdateRolePermissionsBody)) b: z.infer<typeof UpdateRolePermissionsBody>
-  ) { return this.svc.updateRole(id, b); }
+    @Body(new ZodPipe(UpdateRolePermissionsBody)) b: z.infer<typeof UpdateRolePermissionsBody>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    return idempotent(this.idem, key, { id, ...b }, () => this.svc.updateRole(id, b));
+  }
 
   @Get("/audit-entries") @Operation("listAuditEntries")
   audit(@Query(new ZodPipe(ListAuditEntriesQuery)) q: z.infer<typeof ListAuditEntriesQuery>) { return this.svc.listAudit(q); }

@@ -67,7 +67,7 @@ define({
   params: ById,
   body: UpdateRolePermissionsBody,
   response: Role,
-  errors: ["conflict-version"]
+  errors: ["conflict-version", "idempotency-key-reused"]
 });
 
 /* ════════════════════════════════════════════════════════════════════
@@ -94,7 +94,7 @@ define({
   summary: "新建分组", action: "manage", status: 201,
   body: CreateTeamBody,
   response: Team,
-  errors: ["validation-failed"]
+  errors: ["validation-failed", "idempotency-key-reused"]
 });
 
 define({
@@ -108,7 +108,7 @@ define({
   params: ById,
   body: UpdateAccountBody,
   response: Account,
-  errors: ["invariant-violated", "not-found"]
+  errors: ["invariant-violated", "not-found", "idempotency-key-reused"]
 });
 
 define({
@@ -139,7 +139,7 @@ define({
   params: ById,
   body: SetAccountPasswordBody,
   status: 204,
-  errors: ["not-found", "validation-failed"]
+  errors: ["not-found", "validation-failed", "idempotency-key-reused"]
 });
 
 define({
@@ -162,7 +162,7 @@ define({
   params: ById,
   body: SetLoginAddressBody,
   status: 204,
-  errors: ["not-found", "validation-failed", "invariant-violated"]
+  errors: ["not-found", "validation-failed", "invariant-violated", "idempotency-key-reused"]
 });
 
 define({

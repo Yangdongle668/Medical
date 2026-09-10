@@ -314,7 +314,7 @@ define({
   action: "advance",
   body: SubmitAcceptance,
   response: SiteAcceptance,
-  errors: ["invariant-violated"]
+  errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
 define({
