@@ -46,6 +46,12 @@ export const SENSITIVE_ACTIONS = new Set<string>([
   "setAccountPassword",
   "setLoginAddress",
   "advanceStudySite",
+  /* 撤销一个已完成的启动清单项 —— 它可能让一个已经推进的中心
+     回到「其实没准备好」。契约里那句话是直接写着的：
+     「撤销是敏感动作……必须写原因」。原因确实被强制了（body 是 WithReason），
+     缺的还是"标成敏感"这一下 —— 也就是核查员第一屏看不看得见。
+     现在 arch-check 反向也查：契约自称敏感而不在这张表里，立刻红。 */
+  "reopenStartupItem",
   "voidTimesheet"
 ]);
 export const needsReason = (operationId: string): boolean =>

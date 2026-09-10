@@ -128,6 +128,42 @@ describe("接管账号的那几条，得出现在核查员的第一屏", () => {
     expect(e.isSensitive).toBe(true);
   });
 
+  it("撤销启动清单项：契约里就写着它是敏感动作", async () => {
+    /* 「撤销是敏感动作：它可能让一个已经推进的中心回到「其实没准备好」的状态，
+        必须写原因。」—— packages/contracts/src/site/api.ts。
+        原因确实被强制了（body 是 WithReason），缺的一直是"标成敏感"这一下。 */
+    interface SItem { id: string; item: string; doneAt: string | null }
+    const sites = (await boss.get("/v1/study-sites?limit=50")).body.items as
+      { id: string }[];
+
+    /* 跨中心找一条已完成的；一条都没有就自己先完成一条 ——
+       种子里哪个中心勾了哪几项会变，而这条测试关心的是撤销，不是种子。 */
+    let done: SItem | undefined;
+    for (const s of sites) {
+      const items = (await boss.get(
+        `/v1/study-sites/${s.id}/startup-items`)).body.items as SItem[];
+      done = items.find(x => x.doneAt);
+      if (done) break;
+      const open = items[0];
+      if (!open) continue;
+      const c = await boss.post(`/v1/startup-items/${open.id}:complete`, {},
+        { "idempotency-key": crypto.randomUUID() });
+      if (c.status === 201 || c.status === 200) { done = { ...open, doneAt: "x" }; break; }
+    }
+    expect(done, "一个已完成的启动清单项都凑不出来 —— 这条测试测不到东西了")
+      .toBeTruthy();
+
+    const r = await boss.post(`/v1/startup-items/${done!.id}:reopen`,
+      { reason: "现场核对发现该项当时并未真正完成，撤回重做" },
+      { "idempotency-key": crypto.randomUUID() });
+    expect(r.status).toBe(201);
+
+    const 第一屏 = await boss.get("/v1/audit-entries?sensitiveOnly=true&limit=50");
+    const e = (第一屏.body.items as { action: string; targetId: string }[])
+      .find(x => x.action === "撤销启动清单项" && x.targetId === done!.item);
+    expect(e, "撤销启动清单项没出现在 sensitiveOnly 的那一屏上").toBeTruthy();
+  });
+
   it("改收件地址：改了它就能把别人的一次性登录链接收到自己手里", async () => {
     const r = await boss.post(`/v1/accounts/${靶子}:set-login-address`, {
       address: "audittarget@hengji.com",

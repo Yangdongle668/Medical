@@ -276,6 +276,44 @@ for (const file of walk(path.join(ROOT, "apps/api/src"))) {
           `    SENSITIVE_ACTIONS 里的 "${n}" 不是任何一个 operationId\n` +
           `    needsReason() 查不到它只会返回 false —— 那条动作会静默地不算敏感`);
 
+    /* ── 反向也要查 ────────────────────────────────────────────────
+       上面那条只管「表里的名字是不是真端点」。**另一个方向同样会漏，
+       而且漏得一模一样地安静**：契约的 description 里白纸黑字写着
+       「这是敏感动作」，而这张表里没有它 —— needsReason() 返回 false，
+       动作照常进轨迹，却不在核查员默认那一屏上。
+
+       `reopenStartupItem` 就是这么漏的：契约写着「撤销是敏感动作……
+       必须写原因」，原因也确实强制了（body 是 WithReason），
+       唯独"标成敏感"这一下没有。而 updateAccount 与 setLoginAddress
+       的 description 里同样写着 isSensitive=true —— 它们漏了三个版本，
+       没有任何东西红过。
+
+       判据取"契约自己说敏感"，不取"契约要求写原因"：
+       后者还包含关闭质量事件、答复质疑这类**常规流程**
+       （closeQualityEvent / closeDataQuery / returnDataQuery /
+       chaseDataQuery / requestAcceptanceAmend）——
+       它们要写经过，但不是治理意义上的敏感动作。
+       把那五条一并算成敏感，等于把第一屏灌满，而灌满的第一屏
+       和没有第一屏是一回事。 */
+    const 表里有 = new Set(names);
+    for (const f of ["identity", "site", "clinical", "cost", "bizdev",
+                     "finance", "oversight", "platform", "auth"]) {
+      const p = path.join(ROOT, `packages/contracts/src/${f}/api.ts`);
+      if (!fs.existsSync(p)) continue;
+      const api = fs.readFileSync(p, "utf8");
+      for (const m of api.matchAll(/define\(\{([\s\S]*?)\n\}\);/g)) {
+        const blk = m[1];
+        const id = /id:\s*"(\w+)"/.exec(blk)?.[1];
+        if (!id || 表里有.has(id)) continue;
+        /* 只认 description 里的话 —— summary 太短，容易把"敏感"用作形容词。 */
+        const desc = /description:\s*([\s\S]*?)(?=\n  \w+:|\n\}\);)/.exec(blk)?.[1] ?? "";
+        if (!/敏感/.test(desc)) continue;
+        violations.push(`packages/contracts/src/${f}/api.ts\n` +
+          `    ${id} 的契约里写着它是敏感动作，但 SENSITIVE_ACTIONS 里没有它\n` +
+          `    needsReason() 返回 false —— 这条动作进得了轨迹，\n` +
+          `    却不在审计页默认那一屏（sensitiveOnly=true）上`);
+      }
+    }
   }
 }
 
