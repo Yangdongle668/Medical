@@ -217,11 +217,11 @@ else {
    下面这张表只许变短。清空一个控制器，就把它那一行删掉。 */
 const SCHEMA_DEBT = {
   "bizdev.controller.ts": 10, "intake.controller.ts": 3,
-  "accountability.controller.ts": 6, "clinical.controller.ts": 18,
+  "accountability.controller.ts": 6, "clinical.controller.ts": 17,
   "query.controller.ts": 4, "cost.controller.ts": 5,
   "finance.controller.ts": 6, "audit.controller.ts": 5,
   "monitor.controller.ts": 5, "acceptance.controller.ts": 4,
-  "site.controller.ts": 5, "staffing.controller.ts": 5,
+  "site.controller.ts": 4, "staffing.controller.ts": 5,
   /* auth 的三个是**登录流程自己的**输入（口令、令牌、投递地址），
      不对应任何业务契约端点的 body —— 留着，且不计入待还清单。 */
   "auth.controller.ts": 3
@@ -446,6 +446,50 @@ for (const file of walk(path.join(ROOT, "apps/api/src"))) {
     else if (/^\s*(source|while|for|if|PULL=|DEMO=)/m.test(r.stdout))
       violations.push(`deploy/${f}\n` +
         `    --help 把脚本正文也打出来了 —— 用法那一段的范围取过头了`);
+  }
+}
+
+/* ── 编号只许由 app.next_code 发 ───────────────────────────────────
+   编号曾经在十二处各自拼字符串，拼出了三套互不兼容的格式：
+   `Date.now().toString(36)` 六处、`count(*) + 1` 三处、
+   `max(...) + 1` 一处（唯一取对了的那处，而另外三处不知道）。
+   规则收进 `code_rule` 表之后，服务层再出现一个前缀字面量，
+   就是第四套的开始 —— 而它不会报错，只会安静地长出来。
+
+   判据：从迁移里读出登记过的前缀，然后在服务层里找
+   `"XX-` / `` `XX- `` / `'XX-` 这样的字面量。 */
+{
+  const mig = fs.readFileSync(
+    path.join(ROOT, "db/migrations/0043_code_rules.sql"), "utf8");
+  const prefixes = [...mig.matchAll(/^\s*\('[a-zA-Z]+',\s*'([A-Z]+)'/gm)].map(m => m[1]);
+  if (prefixes.length < 10)
+    violations.push("tools/arch-check.mjs\n" +
+      `    只从 0043 里解析出 ${prefixes.length} 个编号前缀 —— ` +
+      "code_rule 的写法变了，这条规则已经形同虚设");
+
+  const svc = [];
+  (function walk(d) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) walk(f);
+      else if (e.name.endsWith(".ts")) svc.push(f);
+    }
+  })(path.join(ROOT, "apps/api/src/modules"));
+
+  const lit = new RegExp("[\"'`](" + prefixes.join("|") + ")-", "g");
+  for (const f of svc) {
+    const src = fs.readFileSync(f, "utf8")
+      /* 注释里讲的正是这件事，别把讲解本身当成犯规。 */
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    for (const m of src.matchAll(lit))
+      violations.push(`${path.relative(ROOT, f)}\n` +
+        `    自己拼了一个编号：\`${m[0]}…\`\n` +
+        "    编号由 app.next_code() 发（infra/code.ts 的 nextCode），规则在 code_rule 表里 —— \n" +
+        "    在这里拼字符串就是第二套格式的开始，而它不会报错");
+    if (/Date\.now\(\)\.toString\(36\)/.test(src))
+      violations.push(`${path.relative(ROOT, f)}\n` +
+        "    用 Date.now().toString(36) 造编号：唯一但不可读、不可排序、不可口述\n" +
+        "    改用 nextCode()");
   }
 }
 

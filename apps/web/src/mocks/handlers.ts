@@ -105,6 +105,19 @@ const failStatus = (op: string) => failing.get(op);
  *  成本与毛利那一页正因如此，在一次干净部署之后（还没有任何中心）
  *  会告诉经营层「你的角色…看不到它们的钱」，而他看得到。 */
 let emptied = new Set<string>();
+/* ── mock 版发号 ───────────────────────────────────────────────────
+   与服务端 app.next_code 同一条规则（迁移 0043）：**按最大号 + 1**，
+   不按条数。按条数在 mock 上也一样会撞 —— 而 mock 撞出来的号
+   看起来像一个真的号，只是它已经属于别人了。 */
+function nextMockCode(stem: string, width: number, used: readonly string[]): string {
+  const n = used.reduce((max, c) => {
+    if (!c.startsWith(stem)) return max;
+    const tail = c.slice(stem.length);
+    return /^[0-9]+$/.test(tail) ? Math.max(max, Number(tail)) : max;
+  }, 0);
+  return stem + String(n + 1).padStart(width, "0");
+}
+
 export const setEmptyOps = (ops: string[]) => { emptied = new Set(ops); };
 const isEmptied = (op: string) => emptied.has(op);
 const identity = () => IDENTITIES[mockRole];
@@ -511,13 +524,14 @@ export const scenarioHandlers = [
 
   http.post(pathToRegExp("/v1/teams"), async ({ request }) => {
     const b = await request.json() as
-      { code: string; name: string; leadAccountId?: string | null };
-    if (scenario.teams.some(t => t.code === b.code))
+      { code?: string; name: string; leadAccountId?: string | null };
+    const code = b.code ?? nextMockCode("G-", 2, scenario.teams.map(t => t.code));
+    if (scenario.teams.some(t => t.code === code))
       return HttpResponse.json(
-        problem("validation-failed", 422, `分组代号 ${b.code} 已存在`), { status: 422 });
+        problem("validation-failed", 422, `分组代号 ${code} 已存在`), { status: 422 });
     const lead = scenario.accounts.find(a => a.id === b.leadAccountId);
     const t = {
-      id: `t-${b.code}`, code: b.code, name: b.name,
+      id: `t-${code}`, code, name: b.name,
       lead: lead ? { id: lead.id, displayName: lead.displayName } : null,
       memberCount: 0, studyCount: 0
     };
@@ -1928,16 +1942,17 @@ export const scenarioHandlers = [
   http.post(pathToRegExp("/v1/study-sites"), async ({ request }) => {
     const b = await request.json() as {
       studyId: string;
-      code: string; hospital: string; dept: string; city: string; piName: string;
+      code?: string; hospital: string; dept: string; city: string; piName: string;
       contracted: number; unitPriceCents?: number; startupFeeCents?: number;
       sivPlannedOn?: string | null;
     };
-    if (SITES_LIST.some(s => s.code === b.code))
+    const code = b.code ?? nextMockCode("SS-", 2, SITES_LIST.map(s => s.code));
+    if (SITES_LIST.some(s => s.code === code))
       return HttpResponse.json(
-        problem("invariant-violated", 422, `中心编号 ${b.code} 已存在`), { status: 422 });
+        problem("invariant-violated", 422, `中心编号 ${code} 已存在`), { status: 422 });
 
     const site = {
-      id: `s-new-${SITES_LIST.length + 1}`, code: b.code,
+      id: `s-new-${SITES_LIST.length + 1}`, code,
       hospital: b.hospital, dept: b.dept, city: b.city,
       piName: b.piName, piAccountId: null,
       /* **建档出来的中心停在「立项」** —— 与库里的
@@ -2727,14 +2742,19 @@ export const scenarioHandlers = [
   }),
 
   http.post(pathToRegExp("/v1/subjects"), async ({ request }) => {
-    const b = await request.json() as { studySiteId: string; screeningNo: string };
-    if (scenario.subjects.some(x => x.screeningNo === b.screeningNo))
-      return HttpResponse.json(problem("invariant-violated", 422,
-        `筛选号 ${b.screeningNo} 在这个中心已经用过了`), { status: 422 });
+    const b = await request.json() as { studySiteId: string; screeningNo?: string };
     const site = SITES_LIST.find(x => x.id === b.studySiteId);
+    /* 筛选号省略即按中心发号，与服务端的 app.next_code('subject', 中心号)
+       同一条规则（迁移 0043）—— mock 上演不出来的分支等于没写过。 */
+    const siteCode = site?.code ?? "SS-??";
+    const screeningNo = b.screeningNo ?? nextMockCode(
+      `${siteCode}-P`, 3, scenario.subjects.map(x => x.screeningNo));
+    if (scenario.subjects.some(x => x.screeningNo === screeningNo))
+      return HttpResponse.json(problem("invariant-violated", 422,
+        `筛选号 ${screeningNo} 在这个中心已经用过了`), { status: 422 });
     const s = {
       id: `u-${scenario.subjects.length + 1}`, studySiteId: b.studySiteId,
-      siteCode: site?.code ?? "SS-??", screeningNo: b.screeningNo,
+      siteCode, screeningNo,
       randomized: false, randomizationNo: null, state: "prescreen",
       icfSignedOn: null, enrolledOn: null, exitedOn: null,
       screenFailReason: null, withdrawReason: null, crcName: me().account.displayName,

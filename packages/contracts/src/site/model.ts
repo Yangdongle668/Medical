@@ -234,3 +234,23 @@ export const IsfBoard = z.object({
   items: z.array(IsfItem),
   summary: IsfSummary
 }).meta({ id: "IsfBoard" });
+
+/** **具名导出，路由层直接用这一个。**
+ *  路由层原来自己写了一份同名同形的副本，而副本是会分叉的：
+ *  `code` 在这里改成可选之后，那份副本仍然要求必填 ——
+ *  于是接口回一句「请求参数不符合契约」，而它自己就是这份契约的实现。 */
+export const CreateStudySiteBody = z.object({
+  studyId: Uuid,
+  /** 省略即由服务端按 code_rule 发号（SS-16）。传了就用传的 ——
+   *  申办方指定中心编号是常事，但那是例外，不该是每次都要现想一个。 */
+  code: z.string().min(1).max(64).optional(),
+  hospital: z.string().min(1).max(128),
+  dept: z.string().min(1).max(64),
+  city: z.string().min(1).max(32),
+  piName: z.string().min(1).max(64),
+  piAccountId: Uuid.nullable().optional(),
+  contracted: z.int().positive(),
+  unitPriceCents: CentsNonNeg,
+  startupFeeCents: CentsNonNeg.default(0),
+  sivPlannedOn: DateOnly.nullable().optional()
+});

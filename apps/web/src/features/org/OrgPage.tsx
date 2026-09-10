@@ -590,9 +590,9 @@ function GroupTab({ accounts, teams, run }: {
           <span className="muted">分组决定 PM 的行范围：只看得到本组承接的项目</span>
         </div>
         <div className="grid-form">
-          <label className="field"><span>代号</span>
+          <label className="field"><span>代号 <span className="t-mut">· 留空即自动</span></span>
             <input value={code} data-testid="team-code" className="mono"
-              onChange={e => setCode(e.target.value)} placeholder="例：G-04" /></label>
+              onChange={e => setCode(e.target.value)} placeholder="自动生成，如 G-04" /></label>
           <label className="field"><span>组名</span>
             <input value={name} data-testid="team-name"
               onChange={e => setName(e.target.value)} placeholder="例：华中组" /></label>
@@ -606,9 +606,11 @@ function GroupTab({ accounts, teams, run }: {
         </div>
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="btn primary" data-testid="create-team"
-            disabled={!code.trim() || !name.trim()}
+            disabled={!name.trim()}
             onClick={() => void run(`已建分组 ${name}`, async () => {
-              await createTeam({ code: code.trim(), name: name.trim(), leadAccountId: lead || null });
+              await createTeam({
+                ...(code.trim() ? { code: code.trim() } : {}),
+                name: name.trim(), leadAccountId: lead || null });
               setCode(""); setName(""); setLead("");
             })}>
             创建

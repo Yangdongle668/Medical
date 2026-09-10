@@ -51,7 +51,7 @@ export const setAccountPassword = (id: string, password: string, reason: string)
 export const setLoginAddress = (id: string, address: string, reason: string) =>
   call("setLoginAddress", { params: { id }, body: { address, reason } });
 
-export const createTeam = (b: { code: string; name: string; leadAccountId?: string | null }) =>
+export const createTeam = (b: { code?: string; name: string; leadAccountId?: string | null }) =>
   call<Team>("createTeam", { body: b });
 
 export const updateRole = (id: string, b: {

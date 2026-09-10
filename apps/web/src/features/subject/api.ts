@@ -39,8 +39,10 @@ export const OPEN_STATES = ["prescreen", "screening", "enrolled"];
 export const listSubjects = (q: Record<string, unknown> = {}) =>
   call<{ items: Subject[] }>("listSubjects", { query: { limit: 200, ...q } });
 
-export const createSubject = (studySiteId: string, screeningNo: string) =>
-  call<Subject>("createSubject", { body: { studySiteId, screeningNo } });
+/** 筛选号省略即由服务端按中心发号（SS-16-P001）。 */
+export const createSubject = (studySiteId: string, screeningNo?: string) =>
+  call<Subject>("createSubject", {
+    body: { studySiteId, ...(screeningNo ? { screeningNo } : {}) } });
 
 export const signIcf = (id: string, signedOn: string) =>
   call<{ data: Subject }>("signIcf", { params: { id }, body: { signedOn } });

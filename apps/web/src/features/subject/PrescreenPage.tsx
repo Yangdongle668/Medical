@@ -87,17 +87,23 @@ export function PrescreenPage() {
               <option value="">— 选一个 —</option>
               {sites.map(s => <option key={s.id} value={s.id}>{s.code} · {s.hospital}</option>)}
             </select></label>
-          <label className="field"><span>筛选号</span>
+          {/* 筛选号默认由系统按中心发（SS-16-P001）。
+              留这条口子是因为申办方 / IWRS 指定筛选号确实存在 ——
+              但它是例外：让每个人现想一个，得到的是同一个中心上
+              并排出现 S-0203 和 SS-01-P001 两套写法。 */}
+          <label className="field"><span>筛选号 <span className="t-mut">· 留空即自动</span></span>
             <input value={no} data-testid="pre-no" className="mono"
-              onChange={e => setNo(e.target.value)} placeholder="例：SS-01-P042" /></label>
+              onChange={e => setNo(e.target.value)}
+              placeholder="自动生成，如 SS-01-P042" /></label>
         </div>
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="btn primary" data-testid="pre-create"
-            disabled={!siteId || !no.trim()}
-            onClick={() => void run(`已登记 ${no.trim()}`, async () => {
-              await createSubject(siteId, no.trim());
-              setNo("");
-            })}>
+            disabled={!siteId}
+            onClick={() => void run(no.trim() ? `已登记 ${no.trim()}` : "已登记，筛选号已自动生成",
+              async () => {
+                await createSubject(siteId, no.trim() || undefined);
+                setNo("");
+              })}>
             登记
           </button>
         </div>

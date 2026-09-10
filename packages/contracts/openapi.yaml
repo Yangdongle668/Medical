@@ -10894,7 +10894,10 @@ paths:
       tags:
         - site
       summary: 中心建档
-      description: 「已建档 / 合同中心数」的差值 = 合同里写了但还没进系统的中心：它们的成本已经在发生，收入却挂不上号。建档滞后是早期成本失控最不显形的一种。
+      description: |-
+        「已建档 / 合同中心数」的差值 = 合同里写了但还没进系统的中心：它们的成本已经在发生，收入却挂不上号。建档滞后是早期成本失控最不显形的一种。
+
+        **中心编号省略时由服务端按 `code_rule` 发号**（`SS-16`）。传了就用传的 —— 留这条口子是给「申办方指定中心编号」这种真实情况。
       x-layer: L1
       parameters:
         - name: Idempotency-Key
@@ -13640,7 +13643,12 @@ paths:
       tags:
         - clinical
       summary: 登记预筛受试者
-      description: 此时只有筛选号。签署知情后才进入筛选期，那时才生成筛选期访视。
+      description: |-
+        此时只有筛选号。签署知情后才进入筛选期，那时才生成筛选期访视。
+
+        **筛选号省略时由服务端按中心发号**（`SS-16-P001`，见 `code_rule`）。传了就用传的 —— 留这条口子是给「申办方 / IWRS 指定筛选号」这种真实情况。
+
+        随机号不在此列：它由中央随机系统发，本系统只抄录 —— 一个能自己编随机号的临床系统，编出来的每一个号都是假的。
       x-layer: L1
       x-required-action: subjWrite
       parameters:
@@ -15616,7 +15624,6 @@ components:
           pattern: >-
             ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
       required:
-        - code
         - name
       additionalProperties: false
     UpdateRolePermissionsRequest:
@@ -22133,7 +22140,6 @@ components:
             ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
       required:
         - studyId
-        - code
         - hospital
         - dept
         - city
@@ -22506,7 +22512,6 @@ components:
           maxLength: 32
       required:
         - studySiteId
-        - screeningNo
       additionalProperties: false
     EnrollSubjectRequest:
       type: object

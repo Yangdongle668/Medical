@@ -6,6 +6,7 @@ import {
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { nextCode } from "../../infra/code.js";
 
 /* ════════════════════════════════════════════════════════════════════
    中心可行性调查。
@@ -166,21 +167,21 @@ export class FeasibilityService {
        不是两条一样的编号。这个取舍是有意的：重号的代价是台账对不上，
        而偶尔一次"请重试"是可以接受的。要彻底消掉竞态得按年开序列，
        而那会在跨年时带来另一类麻烦。 */
-    const year = b.surveyedOn.slice(0, 4);
+    /* 年份取**发号当天**，不取记录上那个日期（原来是 b.surveyedOn）。
+       两处理由：一是台账号是"什么时候登记的"，不是"事情什么时候发生的"；
+       二是按事件日期取年，序号就不再单调 —— 2026 年补录一条 2025 年的，
+       会在 2025 号段里插一个比现有号都大的号，而那个号段早已封账。
+       立项受理和方案编号本来就是按当天取的，这一版把三处对齐。 */
     const a = b.answers;
     const { rows } = await c.client.query<{ id: string }>(
       `INSERT INTO feasibility (
          code, study_id, hospital, city, dept, pi_name, surveyed_on, surveyed_by,
          pt_year, past_n, past_best, compet, ethics_days, start_days,
          team_n, pi_commit, elig_pct)
-       VALUES (
-         'FS-' || $1 || '-' || lpad((
-           SELECT count(*) + 1 FROM feasibility
-            WHERE tenant_id = app.current_tenant_id()
-              AND code LIKE 'FS-' || $1 || '-%')::text, 3, '0'),
-         $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        RETURNING id`,
-      [year, b.studyId, b.hospital, b.city, b.dept, b.piName, b.surveyedOn,
+      [await nextCode("feasibility"),
+       b.studyId, b.hospital, b.city, b.dept, b.piName, b.surveyedOn,
        p.accountId, a.ptYear, a.pastN, a.pastBest, a.compet, a.ethicsDays,
        a.startDays, a.teamN, a.piCommit, a.eligPct]);
 

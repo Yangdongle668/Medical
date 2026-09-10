@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { siteScopeSql, studyScopeSql } from "@sitedesk/policy";
+import { nextCode } from "../../infra/code.js";
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
@@ -126,16 +127,21 @@ export class SiteService {
   }
 
   async create(body: {
-    studyId: string; code: string; hospital: string; dept: string; city: string;
+    studyId: string; code?: string; hospital: string; dept: string; city: string;
     piName: string; piAccountId?: string | null; contracted: number;
     unitPriceCents: number; startupFeeCents?: number; sivPlannedOn?: string | null;
   }) {
     const c = ctx();
+    /* 编号省略时由服务端发号（SS-16，见 code_rule / 迁移 0043）。
+       让人现想一个中心编号，得到的是十五个中心十五种写法 ——
+       而受试者筛选号是直接建在中心编号上的（SS-16-P001），
+       中心编号一乱，底下每一个受试者号跟着乱。 */
+    const code = body.code ?? await nextCode("site");
     const { rows } = await c.client.query<{ id: string }>(
       `INSERT INTO study_site (study_id, code, hospital, dept, city, pi_name, pi_account_id,
          contracted, unit_price_cents, startup_fee_cents, siv_planned_on)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
-      [body.studyId, body.code, body.hospital, body.dept, body.city, body.piName,
+      [body.studyId, code, body.hospital, body.dept, body.city, body.piName,
        body.piAccountId ?? null, body.contracted, body.unitPriceCents,
        body.startupFeeCents ?? 0, body.sivPlannedOn ?? null]);
     const id = rows[0]!.id;
@@ -171,8 +177,8 @@ export class SiteService {
     await c.client.query(
       "UPDATE study_site SET startup_template_version = $2 WHERE id = $1", [id, version]);
 
-    await this.audit.write({ action: "中心建档", targetType: "study_site", targetId: body.code,
-      after: { code: body.code, hospital: body.hospital,
+    await this.audit.write({ action: "中心建档", targetType: "study_site", targetId: code,
+      after: { code, hospital: body.hospital,
                startupItems: Number(n), startupTemplateVersion: version },
       studySiteId: id });
     return this.get(id);

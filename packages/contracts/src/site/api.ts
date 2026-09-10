@@ -5,7 +5,7 @@ import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
 import { Study, StudySite, SiteState, SiteGate,
   SiteAcceptance, AcceptanceState, SubmitAcceptance,
-  IsfBoard, IsfCategory } from "./model.js";
+  IsfBoard, IsfCategory, CreateStudySiteBody } from "./model.js";
 
 const CTX = "site";
 const ById = z.object({ id: Uuid });
@@ -55,20 +55,10 @@ define({
   summary: "中心建档", status: 201,
   description:
     "「已建档 / 合同中心数」的差值 = 合同里写了但还没进系统的中心：" +
-    "它们的成本已经在发生，收入却挂不上号。建档滞后是早期成本失控最不显形的一种。",
-  body: z.object({
-    studyId: Uuid,
-    code: z.string().min(1).max(64),
-    hospital: z.string().min(1).max(128),
-    dept: z.string().min(1).max(64),
-    city: z.string().min(1).max(32),
-    piName: z.string().min(1).max(64),
-    piAccountId: Uuid.nullable().optional(),
-    contracted: z.int().positive(),
-    unitPriceCents: CentsNonNeg,
-    startupFeeCents: CentsNonNeg.default(0),
-    sivPlannedOn: DateOnly.nullable().optional()
-  }),
+    "它们的成本已经在发生，收入却挂不上号。建档滞后是早期成本失控最不显形的一种。\n\n" +
+    "**中心编号省略时由服务端按 `code_rule` 发号**（`SS-16`）。传了就用传的 —— " +
+    "留这条口子是给「申办方指定中心编号」这种真实情况。",
+  body: CreateStudySiteBody,
   response: StudySite,
   errors: ["invariant-violated"]
 });

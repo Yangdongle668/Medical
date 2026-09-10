@@ -5,6 +5,7 @@ import {
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { nextCode } from "../../infra/code.js";
 
 /* ════════════════════════════════════════════════════════════════════
    立项受理与中心文件（ISF）。
@@ -176,22 +177,18 @@ export class AcceptanceService {
     if (!st[0]) throw notFound("项目");
     const study = st[0];
 
-    const year = new Date().getFullYear();
-    /* 编号取**当年已用到的最大号 + 1**，不是条数 + 1。
-       受理号本来就是稀疏的（原型手上那两条是 038 与 041），
-       按条数发号会撞上它们，而撞上之后报的是一句唯一约束。 */
+    /* 编号由 app.next_code 发（迁移 0043）。这里原来自己拼 ——
+       它是全仓库唯一一处**取对了**的（max + 1，因为受理号本来就稀疏：
+       演示数据里那两条是 038 与 041），而另外三处仍在按条数发号。
+       一处知道、别处不知道，正是编号该由一个函数统一发的理由。
+       顺带修掉它剩下的那半个问题：那句 max 是在 RLS 下数的。 */
     const { rows } = await c.client.query<{ id: string }>(
       `INSERT INTO site_acceptance (code, study_id, study_code, drug, sponsor_name,
                                     phase, hospital, submitted_by, origin)
-       VALUES ('AC-' || $1 || '-' || lpad((
-                 SELECT coalesce(max(substring(code from '[0-9]+$')::int), 0) + 1
-                   FROM site_acceptance
-                  WHERE tenant_id = app.current_tenant_id()
-                    AND code LIKE 'AC-' || $1 || '-%')::text, 3, '0'),
-               $2, $3, $4, $5, $6, $7, $8, 'in_system')
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'in_system')
        RETURNING id`,
-      [String(year), b.studyId, study.code, study.short_name, study.sponsor_name,
-       study.phase, b.hospital, p.accountId]);
+      [await nextCode("acceptance"), b.studyId, study.code, study.short_name,
+       study.sponsor_name, study.phase, b.hospital, p.accountId]);
     const id = rows[0]!.id;
 
     /* **递进去一律未勾** —— 勾是机构办形式审查的动作，

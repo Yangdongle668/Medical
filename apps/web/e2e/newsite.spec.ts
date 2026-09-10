@@ -32,6 +32,7 @@ test("建一个中心：填表 → 落到台账上 → 停在立项", async ({ p
   /* 项目是下拉选的 —— 中心必须挂在一个项目下，
      「挂不上号的成本」正是这个端点要消灭的东西。 */
   await page.getByTestId("ns-study").selectOption({ index: 1 });
+  await page.getByTestId("ns-code-override").click();
   await page.getByTestId("ns-code").fill("SS-99");
   await page.getByTestId("ns-hospital").fill("四川大学华西医院");
   await page.getByTestId("ns-dept").fill("胸外科");
@@ -65,6 +66,7 @@ test("必填没齐，建档按钮不亮 —— 而不是按下去再报错", asy
   await expect(page.getByTestId("new-site-submit")).toBeDisabled();
 
   await page.getByTestId("ns-study").selectOption({ index: 1 });
+  await page.getByTestId("ns-code-override").click();
   await page.getByTestId("ns-code").fill("SS-98");
   await page.getByTestId("ns-hospital").fill("浙江大学医学院附属第一医院");
   await page.getByTestId("ns-dept").fill("感染病科");
@@ -89,6 +91,7 @@ test("看不见价钱的人也能建档 —— 建档是运营动作，不是商
   await expect(page.getByTestId("ns-startup-fee")).toHaveCount(0);
 
   await page.getByTestId("ns-study").selectOption({ index: 1 });
+  await page.getByTestId("ns-code-override").click();
   await page.getByTestId("ns-code").fill("SS-97");
   await page.getByTestId("ns-hospital").fill("复旦大学附属中山医院");
   await page.getByTestId("ns-dept").fill("心内科");
@@ -108,6 +111,7 @@ test("中心编号撞车：服务端拦下，理由摆在表单上", async ({ pa
 
   await page.getByTestId("ns-study").selectOption({ index: 1 });
   /* SS-01 是种子里就有的编号 */
+  await page.getByTestId("ns-code-override").click();
   await page.getByTestId("ns-code").fill("SS-01");
   await page.getByTestId("ns-hospital").fill("重复编号医院");
   await page.getByTestId("ns-dept").fill("内科");
@@ -141,6 +145,7 @@ test("新建的中心：伦理递交被闸门拦下，就地递交材料后放�
 
   await page.getByTestId("new-site").click();
   await page.getByTestId("ns-study").selectOption({ index: 1 });
+  await page.getByTestId("ns-code-override").click();
   await page.getByTestId("ns-code").fill("SS-88");
   await page.getByTestId("ns-hospital").fill("山东大学齐鲁医院");
   await page.getByTestId("ns-dept").fill("血液科");
@@ -181,4 +186,51 @@ test("新建的中心：伦理递交被闸门拦下，就地递交材料后放�
   await expect(page.getByTestId("unmet")).toContainText("缺 8 项材料");
   /* 递过了就不再给递交表 —— 这一条已经不是受托方能办的了 */
   await expect(page.getByTestId("gate-submit-acceptance")).toHaveCount(0);
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   编号默认由系统发。
+
+   上面每一条都点开了「申办方指定了编号」那个折叠区 —— 那是**例外**。
+   默认路径是一个字都不填：让每个人现想一个中心编号，得到的是
+   十五个中心十五种写法，而受试者筛选号是直接建在中心编号上的
+   （SS-16-P001），中心编号一乱，底下每一个受试者号跟着乱。
+   ════════════════════════════════════════════════════════════════════ */
+test("**不填编号也建得出来** —— 服务端接着 SS 的最大号往下发", async ({ page }) => {
+  await page.goto("/sites?as=boss");
+  await expect(page.getByTestId("site-row").first()).toBeVisible();
+  const before = await page.getByTestId("site-row").count();
+
+  await page.getByTestId("new-site").click();
+  await page.getByTestId("ns-study").selectOption({ index: 1 });
+  await page.getByTestId("ns-hospital").fill("南京鼓楼医院");
+  await page.getByTestId("ns-dept").fill("血液科");
+  await page.getByTestId("ns-city").fill("南京");
+  await page.getByTestId("ns-pi").fill("顾方");
+  await page.getByTestId("ns-contracted").fill("18");
+  await page.getByTestId("ns-price").fill("52000");
+
+  /* 编号那一栏根本没展开，而按钮是可用的 —— 这正是这条测试要证明的。 */
+  await expect(page.getByTestId("new-site-submit")).toBeEnabled();
+  await page.getByTestId("new-site-submit").click();
+
+  await expect(page.getByTestId("toast")).toContainText("编号已自动生成");
+  await expect(page.getByTestId("site-row")).toHaveCount(before + 1);
+  /* 发出来的号是 SS-NN，不是空、不是一串随机字符 */
+  const row = page.getByTestId("site-row").filter({ hasText: "南京鼓楼医院" });
+  await expect(row.locator("td").first()).toHaveText(/^SS-\d{2,}$/);
+});
+
+test("预筛：筛选号留空即按中心发号", async ({ page }) => {
+  await page.goto("/prescreen?as=crc");
+  await expect(page.getByTestId("pre-site")).toBeVisible();
+  await page.getByTestId("pre-site").selectOption({ index: 1 });
+
+  /* 筛选号一个字都不填 —— 登记按钮照样可用。 */
+  await expect(page.getByTestId("pre-create")).toBeEnabled();
+  await page.getByTestId("pre-create").click();
+  await expect(page.getByTestId("toast")).toContainText("筛选号已自动生成");
+  /* 台账最上面那条是刚发的号，形状是 中心号-PNNN */
+  await expect(page.getByTestId("pre-row").first().locator("td").first())
+    .toHaveText(/^SS-\d+-P\d{3}$/);
 });

@@ -43,7 +43,9 @@ export function NewSiteForm({ showPrice, onCreated }:
   const set = (k: keyof typeof EMPTY) => (v: string) => setF(p => ({ ...p, [k]: v }));
   const yuanToCents = (v: string) => Math.round(Number(v || 0) * 100);
 
-  const ready = !!(f.studyId && f.code.trim() && f.hospital.trim() && f.dept.trim()
+  /* 编号不再是必填 —— 服务端按 code_rule 发号（SS-16）。
+     留一个折叠起来的输入框给"申办方指定了中心编号"这种例外。 */
+  const ready = !!(f.studyId && f.hospital.trim() && f.dept.trim()
     && f.city.trim() && f.piName.trim() && Number(f.contracted) > 0
     && (!showPrice || f.unitPriceYuan !== ""));
 
@@ -56,7 +58,10 @@ export function NewSiteForm({ showPrice, onCreated }:
         await call("createStudySite", {
           body: {
             studyId: f.studyId,
-            code: f.code.trim(), hospital: f.hospital.trim(),
+            /* 空就不传这一栏 —— 传空串会被契约拒掉，
+               而"不传"和"传空"在这里是两件事：前者是"你发一个给我"。 */
+            ...(f.code.trim() ? { code: f.code.trim() } : {}),
+            hospital: f.hospital.trim(),
             dept: f.dept.trim(), city: f.city.trim(), piName: f.piName.trim(),
             contracted: Number(f.contracted),
             /* 看不到价钱的人建的档，价钱是 0 —— 由商务后续在费率那边补。
@@ -66,7 +71,9 @@ export function NewSiteForm({ showPrice, onCreated }:
             ...(f.sivPlannedOn ? { sivPlannedOn: f.sivPlannedOn } : {})
           }
         });
-        const said = `${f.code.trim()} 已建档`;
+        const said = f.code.trim()
+          ? `${f.code.trim()} 已建档`
+          : `${f.hospital.trim()} 已建档，编号已自动生成`;
         setF({ ...EMPTY });
         onCreated();
         return said;
@@ -79,7 +86,6 @@ export function NewSiteForm({ showPrice, onCreated }:
           : "你的范围里还没有项目 —— 中心是挂在项目下面的，得先有一份立项申请被批准。"} />
 
       <div className="grid-form">
-        <Field label="中心编号" v={f.code} on={set("code")} testid="ns-code" />
         <Field label="医院" v={f.hospital} on={set("hospital")} testid="ns-hospital" />
         <Field label="科室" v={f.dept} on={set("dept")} testid="ns-dept" />
         <Field label="城市" v={f.city} on={set("city")} testid="ns-city" />
@@ -100,6 +106,18 @@ export function NewSiteForm({ showPrice, onCreated }:
 
       <Field label="计划 SIV 日" hint="可留空" v={f.sivPlannedOn}
         on={set("sivPlannedOn")} testid="ns-siv" type="date" />
+
+      {/* 编号默认由系统发。开这条口子是因为「申办方指定中心编号」
+          确实常见 —— 但它是例外，不该是每次都要现想一个。 */}
+      <details data-testid="ns-code-override">
+        <summary className="t-mut" style={{ cursor: "pointer", fontSize: 13 }}>
+          中心编号由系统自动生成 · 申办方指定了编号？点这里填
+        </summary>
+        <div style={{ marginTop: 8 }}>
+          <Field label="中心编号" hint="留空即自动" v={f.code}
+            on={set("code")} testid="ns-code" />
+        </div>
+      </details>
     </CreateForm>
   );
 }

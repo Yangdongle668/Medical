@@ -6,6 +6,7 @@ import {
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { nextCode } from "../../infra/code.js";
 
 /* ════════════════════════════════════════════════════════════════════
    数据质疑（EDC Query）。
@@ -265,7 +266,7 @@ export class DataQueryService {
     const raisedBy = p.roleCode === "dm" ? "dm"
       : p.roleCode === "qa" ? "qa" : "cra";
 
-    const code = `Q-${Date.now().toString(36).toUpperCase()}`;
+    const code = await nextCode("query");
     const ins = await c.client.query<{ id: string }>(
       `INSERT INTO quality_event
          (code, study_site_id, subject_id, kind, severity, state, title, detail,

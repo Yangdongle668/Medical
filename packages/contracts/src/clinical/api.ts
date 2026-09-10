@@ -8,11 +8,12 @@ import {
   ScreenFailReason, WithdrawReason,
   QualityEvent, QualityKind, QualityState, QualitySeverity, SubjectPayment, SaeLedger,
   DataQuery, QueryStats,
-  Soa, SoaVisit
+  Soa, SoaVisit, CreateSubjectBody
 } from "./model.js";
 
 const CTX = "clinical";
 const ById = z.object({ id: Uuid });
+
 
 /* ── 读 ──────────────────────────────────────────────────────────── */
 
@@ -185,12 +186,14 @@ define({
   id: "createSubject", method: "post", path: "/v1/subjects",
   layer: "L1", context: CTX, status: 201,
   summary: "登记预筛受试者",
-  description: "此时只有筛选号。签署知情后才进入筛选期，那时才生成筛选期访视。",
+  description:
+    "此时只有筛选号。签署知情后才进入筛选期，那时才生成筛选期访视。\n\n" +
+    "**筛选号省略时由服务端按中心发号**（`SS-16-P001`，见 `code_rule`）。" +
+    "传了就用传的 —— 留这条口子是给「申办方 / IWRS 指定筛选号」这种真实情况。\n\n" +
+    "随机号不在此列：它由中央随机系统发，本系统只抄录 —— " +
+    "一个能自己编随机号的临床系统，编出来的每一个号都是假的。",
   action: "subjWrite",
-  body: z.object({
-    studySiteId: Uuid,
-    screeningNo: z.string().trim().min(1).max(32)
-  }),
+  body: CreateSubjectBody,
   response: Subject,
   errors: ["invariant-violated"]
 });

@@ -205,7 +205,9 @@ export const SetAccountPasswordBody = z.object({
 }).extend(WithReason.shape).meta({ id: "SetAccountPasswordRequest" });
 
 export const CreateTeamBody = z.object({
-  code: z.string().regex(/^[A-Za-z0-9-]{2,16}$/, "2–16 位字母 / 数字 / 连字符"),
+  /** 省略即由服务端按 code_rule 发号（G-03）。传了就用传的 ——
+   *  留这条口子是给"沿用旧系统编号"这种真实情况，不是给人现想一个。 */
+  code: z.string().regex(/^[A-Za-z0-9-]{2,16}$/, "2–16 位字母 / 数字 / 连字符").optional(),
   name: z.string().min(1).max(64),
   leadAccountId: Uuid.nullable().optional()
 }).meta({ id: "CreateTeamRequest" });

@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   PageQuery, Uuid, DateOnly, Timestamp, WithReason,
   SubjectState, VisitStatus, ScreenFailReason, WithdrawReason,
-  QualityKind, QualityState, QueryBool
+  QualityKind, QualityState, QueryBool, CreateSubjectBody
 } from "@sitedesk/contracts";
 import { ClinicalService } from "./clinical.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
@@ -48,9 +48,8 @@ const Capa = z.object({
   dueOn: DateOnly
 });
 
-const CreateSubject = z.object({
-  studySiteId: Uuid, screeningNo: z.string().trim().min(1).max(32)
-});
+/* 预筛登记请求体**直接用契约那一个**（CreateSubjectBody）——
+   这里原来是一份手抄的副本，而副本会和契约分叉，且两边各自自洽。 */
 const SignIcf = z.object({ signedOn: DateOnly });
 const Enroll = z.object({
   randomizationNo: z.string().trim().min(1).max(32), enrolledOn: DateOnly
@@ -156,7 +155,7 @@ export class ClinicalController {
      请求可能发两次 —— 没有键的话，那就是实实在在的两笔。 */
   @Post("/subjects") @Operation("createSubject") @HttpCode(201)
   createSubject(
-    @Body(new ZodPipe(CreateSubject)) b: z.infer<typeof CreateSubject>,
+    @Body(new ZodPipe(CreateSubjectBody)) b: z.infer<typeof CreateSubjectBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return idempotent(this.idem, key, b, () => this.svc.createSubject(b));

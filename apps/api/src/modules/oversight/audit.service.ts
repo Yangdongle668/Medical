@@ -6,6 +6,7 @@ import {
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService as AuditLog } from "../../infra/audit.service.js";
+import { nextCode } from "../../infra/code.js";
 
 /* ════════════════════════════════════════════════════════════════════
    内部稽查 —— 我方的第二道防线。
@@ -259,7 +260,7 @@ export class InternalAuditService {
     if (Date.parse(on) > Date.parse(todayStr()))
       this.invariant("audit-future-date", "稽查日期不能在将来 —— 还没发生的事不能登记");
 
-    const code = `AU-${Date.now().toString(36).toUpperCase()}`;
+    const code = await nextCode("audit");
     const ins = await c.client.query<{ id: string }>(
       `INSERT INTO internal_audit
          (code, study_site_id, kind, audited_on, auditor_account_id, scope, state)

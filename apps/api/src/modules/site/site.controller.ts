@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Headers, HttpCode } from "@nestjs/common";
 import { z } from "zod";
-import { PageQuery, Uuid, CentsNonNeg, DateOnly, SiteState, QueryBool } from "@sitedesk/contracts";
+import { PageQuery, Uuid, CentsNonNeg, DateOnly, SiteState, QueryBool,
+  CreateStudySiteBody } from "@sitedesk/contracts";
 import { SiteService } from "./site.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
@@ -26,14 +27,10 @@ const ReplaceTemplate = z.object({
   items: z.array(TemplateItem).min(1).max(60),
   reason: z.string().trim().min(4).max(500)
 });
-const CreateBody = z.object({
-  studyId: Uuid, code: z.string().min(1).max(64),
-  hospital: z.string().min(1).max(128), dept: z.string().min(1).max(64),
-  city: z.string().min(1).max(32), piName: z.string().min(1).max(64),
-  piAccountId: Uuid.nullable().optional(), contracted: z.int().positive(),
-  unitPriceCents: CentsNonNeg, startupFeeCents: CentsNonNeg.default(0),
-  sivPlannedOn: DateOnly.nullable().optional()
-});
+/* 建档请求体**直接用契约那一个**（CreateStudySiteBody）。
+   这里原来是一份手抄的副本，而副本会分叉：契约把 `code` 改成可选
+   之后，副本仍然要求必填 —— 接口于是回一句「请求参数不符合契约」，
+   而它自己就是那份契约的实现。这种错两边各自都自洽，没有测试拦得住。 */
 const AdvanceBody = z.object({
   to: SiteState, reason: z.string().trim().min(4).max(500)
 });
@@ -72,7 +69,7 @@ export class SiteController {
      请求可能发两次 —— 没有键的话，那就是实实在在的两笔。 */
   @Post("/study-sites") @Operation("createStudySite") @HttpCode(201)
   create(
-    @Body(new ZodPipe(CreateBody)) b: z.infer<typeof CreateBody>,
+    @Body(new ZodPipe(CreateStudySiteBody)) b: z.infer<typeof CreateStudySiteBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return idempotent(this.idem, key, b, () => this.svc.create(b));
