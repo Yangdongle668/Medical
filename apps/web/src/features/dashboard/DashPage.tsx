@@ -117,9 +117,12 @@ export function DashPage() {
     .map(f => ({
       label: `${f.hospital || f.siteCode}`,
       v: Math.round(f.attainment! * 100),
-      color: "var(--ink-2)",
+      /* 条是**品牌蓝**，不是深灰。深灰的条读起来是"一段没有意义的量"，
+         而这一条量正是这一页要讲的事。数值那一侧仍按落后程度变色 ——
+         颜色在这里是判断，不是装饰。 */
+      color: "var(--accent)",
       vColor: f.attainment! < 0.5 ? "var(--crit)"
-        : f.attainment! < 0.9 ? "var(--warn)" : "var(--ink)",
+        : f.attainment! < 0.9 ? "var(--warn)" : "var(--good)",
       tip: <>
         <div className="tip-t">{f.hospital || f.siteCode}</div>
         <div className="tip-r"><span>已入组</span><b>{f.enrolled} / {f.contracted} 例</b></div>
@@ -215,7 +218,7 @@ export function DashPage() {
               ? <>
                   <HBars rows={attain} max={100} unit="%" band={[100]}
                     fmt={v => String(Math.round(v))} />
-                  <Legend items={[{ name: "已入组 / 合同例数", color: "var(--ink-2)" }]}
+                  <Legend items={[{ name: "已入组 / 合同例数", color: "var(--accent)" }]}
                     hint="竖线是合同例数刻度；悬停看明细" />
                 </>
               : <div className="empty">还没有中心定下合同例数</div>}

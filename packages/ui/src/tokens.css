@@ -1,58 +1,97 @@
 /* ══════════════════════════════════════════════════════════════════
    INSTRUMENT —— 设计令牌
 
-   **逐字取自 prototype/parts/01-head.html。** 原型是需求基线，
-   令牌也是：改一个色值，就等于改了当初谈定的那份界面。
-   变更走 test/contrast.test.ts 的实测，不靠肉眼。
+   ── 这一版换掉了什么，以及为什么 ────────────────────────────────
+   上一版是「暖中性 × 冷强调色」：底色 #F7F6F3 是**米色**，正文近黑，
+   主按钮也是墨色，整屏没有一处白。反馈是「压抑、沉重，像个普通后台」，
+   而那不是错觉 —— 四个决定叠在一起造成的：
 
-   一句话概括这套语言：暖中性 × 冷强调色，温差是全部诀窍。
-   强调色只在「活着」的地方出现 —— 满屏强调等于没有强调。
+     ① 米色底 + 米色线：暖灰读起来是「纸、档案」，不是「产品」；
+     ② 全屏一个平面：没有 surface、没有高度，所有内容平铺在同一层，
+        于是没有层级可言 —— 眼睛不知道该先看哪里；
+     ③ 主按钮是墨色（近黑）：黑按钮是编辑设计的语汇，
+        企业软件里它读作「危险/删除」，而不是「这是主操作」；
+     ④ 品牌色几乎不出现：强调色只做指示灯，于是整屏没有品牌。
 
-   语义色刻意低饱和，**绝不做红绿灯**：一个中心同时红着三项，
-   看板就变成了背景噪音，而真正要紧的那一项反而看不见了。
+   这一版的四条对应决定：
+
+     ① **冷中性**。灰里带一点蓝，和 Fluent / Lightning / Stripe 这一档
+        企业产品同源。暖灰换冷灰是"显得贵"最省力的一步。
+     ② **恢复 surface 与高度**。白色卡片浮在浅灰底上，投影极轻
+        （4% 到 8% 的黑，不是发光也不是玻璃）——
+        层级靠"底 / 面 / 浮"三层表达，不靠边框粗细。
+     ③ **主按钮回到品牌蓝**。一屏里只有一个蓝色实心按钮，
+        那就是下一步该按的地方。
+     ④ 品牌蓝同时进数据序列（.s1–.s5）与当前导航项，
+        让它在每一屏都出现一次 —— 但**只出现在有意义的地方**。
+
+   ── 不变的两条 ────────────────────────────────────────────────
+   · 语义色仍然低饱和，**绝不做红绿灯**：一个中心同时红着三项，
+     看板就变成背景噪音，真正要紧的那一项反而看不见。
+   · 变更走 test/contrast.test.ts 的实测，不靠肉眼 ——
+     这一版的每个色值都在明暗两个模式下过了 WCAG AA，
+     且强调色仍是全表最鲜艳的那个（亮 C*=80 / 暗 C*=59）。
    ══════════════════════════════════════════════════════════════════ */
 
 :root{
-  /* 平面 */
-  --ground:#F7F6F3; --surface:#FFFFFF; --surface-2:#F2F1ED; --surface-3:#E9E7E2;
-  /* 墨 */
-  --ink:#111112; --ink-2:#4A4A4D; --ink-3:#74747A;
-  /* 线 */
-  --line:#EAE8E3; --line-2:#DCD9D3;
-  /* 强调（指示灯） */
-  --accent:#1A56DB; --accent-ink:#FFFFFF; --accent-soft:#EFF3FD; --accent-line:#C6D6F7;
+  /* 平面：底 → 面 → 抬起。三层，不是一层。 */
+  --ground:#F5F7FA; --surface:#FFFFFF; --surface-2:#F7F9FC; --surface-3:#EDF1F7;
+  /* 墨：冷调深蓝黑，不是纯黑 —— 纯黑在浅底上过硬，久看累眼 */
+  --ink:#0F172A; --ink-2:#475569; --ink-3:#64748B;
+  /* 线：发丝线仍是主要的分隔手段，只是换成了冷灰 */
+  --line:#E6EBF2; --line-2:#D5DDE8;
+  /* 强调：品牌蓝。它现在同时是主按钮、当前项、数据主序列 */
+  --accent:#2563EB; --accent-ink:#FFFFFF; --accent-soft:#EFF4FF; --accent-line:#C7D9FE;
+  --accent-hover:#1D4ED8; --accent-press:#1E40AF;
   /* 语义 —— 低饱和，绝不做红绿灯 */
-  --good:#16794C; --good-soft:#EDF5F1; --warn:#8A5B00; --warn-soft:#F8F3E9;
-  --crit:#B3261E; --crit-soft:#FBEFEE;
-  /* 数据序列：计划=中性参考，实际=强调色 */
-  --plan:#87878D;
-  --s1:#16357C; --s2:#2451C0; --s3:#4571DC; --s4:#6D90E3; --s5:#93AEEA;
-  /* 高度：只给悬浮物 */
-  --pop:0 1px 2px rgba(17,17,18,.04), 0 12px 32px -8px rgba(17,17,18,.14);
+  --good:#067647; --good-soft:#ECFDF3; --warn:#B54708; --warn-soft:#FFFAEB;
+  --crit:#B42318; --crit-soft:#FEF3F2;
+  /* 数据序列：计划=中性参考，实际=品牌蓝的深浅 */
+  --plan:#78889F;
+  --s1:#1E3A8A; --s2:#2563EB; --s3:#3B82F6; --s4:#60A5FA; --s5:#93C5FD;
+
+  /* 高度：三档。**极轻** —— 靠的是层次，不是投影本身。 */
+  --sh-1:0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
+  --sh-2:0 2px 4px rgba(15,23,42,.04), 0 6px 16px -4px rgba(15,23,42,.10);
+  --pop:0 4px 8px -2px rgba(15,23,42,.08), 0 20px 40px -12px rgba(15,23,42,.20);
+  /* 焦点环：一个令牌，全系统一致 */
+  --ring:0 0 0 3px rgba(37,99,235,.18);
+
+  /* 圆角：三档，不再每处各写一个数 */
+  --r-1:6px; --r-2:10px; --r-3:14px;
+
   --ease:cubic-bezier(.2,0,0,1); --t:140ms;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
-  --ground:#08080A; --surface:#101012; --surface-2:#191A1C; --surface-3:#232426;
-  --ink:#F4F3F1; --ink-2:#A8A8AD; --ink-3:#8B8B93;
-  --line:#212123; --line-2:#2E2F32;
-  --accent:#5A8CF5; --accent-ink:#08080A; --accent-soft:#111C33; --accent-line:#25375C;
-  --good:#4EA97A; --good-soft:#0E1D16; --warn:#CFA24F; --warn-soft:#1F1A0F;
-  --crit:#E4695C; --crit-soft:#23120F;
-  --plan:#8A8A92;
-  --s1:#A9C2FF; --s2:#7FA3F5; --s3:#5A85E8; --s4:#3E66C9; --s5:#33549F;
-  --pop:0 1px 2px rgba(0,0,0,.5), 0 16px 40px -10px rgba(0,0,0,.7);
+  --ground:#0B1120; --surface:#111827; --surface-2:#172033; --surface-3:#1F2A3F;
+  --ink:#F1F5F9; --ink-2:#B3C0D1; --ink-3:#93A3B8;
+  --line:#1E293B; --line-2:#2C3A50;
+  --accent:#5C97FF; --accent-ink:#0B1120; --accent-soft:#152341; --accent-line:#2B4370;
+  --accent-hover:#7BAEFF; --accent-press:#95BEFF;
+  --good:#5FBF8E; --good-soft:#0D2018; --warn:#D2A863; --warn-soft:#241C0E;
+  --crit:#F98B80; --crit-soft:#2A1310;
+  --plan:#8494AB;
+  --s1:#BFD4FF; --s2:#8FB4FF; --s3:#6B93F0; --s4:#4A72CC; --s5:#33549F;
+  --sh-1:0 1px 2px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.30);
+  --sh-2:0 2px 4px rgba(0,0,0,.35), 0 6px 16px -4px rgba(0,0,0,.45);
+  --pop:0 4px 8px -2px rgba(0,0,0,.45), 0 20px 40px -12px rgba(0,0,0,.65);
+  --ring:0 0 0 3px rgba(92,151,255,.26);
   color-scheme:dark;
 }}
 :root[data-theme="dark"]{
-  --ground:#08080A; --surface:#101012; --surface-2:#191A1C; --surface-3:#232426;
-  --ink:#F4F3F1; --ink-2:#A8A8AD; --ink-3:#8B8B93;
-  --line:#212123; --line-2:#2E2F32;
-  --accent:#5A8CF5; --accent-ink:#08080A; --accent-soft:#111C33; --accent-line:#25375C;
-  --good:#4EA97A; --good-soft:#0E1D16; --warn:#CFA24F; --warn-soft:#1F1A0F;
-  --crit:#E4695C; --crit-soft:#23120F;
-  --plan:#8A8A92;
-  --s1:#A9C2FF; --s2:#7FA3F5; --s3:#5A85E8; --s4:#3E66C9; --s5:#33549F;
-  --pop:0 1px 2px rgba(0,0,0,.5), 0 16px 40px -10px rgba(0,0,0,.7);
+  --ground:#0B1120; --surface:#111827; --surface-2:#172033; --surface-3:#1F2A3F;
+  --ink:#F1F5F9; --ink-2:#B3C0D1; --ink-3:#93A3B8;
+  --line:#1E293B; --line-2:#2C3A50;
+  --accent:#5C97FF; --accent-ink:#0B1120; --accent-soft:#152341; --accent-line:#2B4370;
+  --accent-hover:#7BAEFF; --accent-press:#95BEFF;
+  --good:#5FBF8E; --good-soft:#0D2018; --warn:#D2A863; --warn-soft:#241C0E;
+  --crit:#F98B80; --crit-soft:#2A1310;
+  --plan:#8494AB;
+  --s1:#BFD4FF; --s2:#8FB4FF; --s3:#6B93F0; --s4:#4A72CC; --s5:#33549F;
+  --sh-1:0 1px 2px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.30);
+  --sh-2:0 2px 4px rgba(0,0,0,.35), 0 6px 16px -4px rgba(0,0,0,.45);
+  --pop:0 4px 8px -2px rgba(0,0,0,.45), 0 20px 40px -12px rgba(0,0,0,.65);
+  --ring:0 0 0 3px rgba(92,151,255,.26);
   color-scheme:dark;
 }

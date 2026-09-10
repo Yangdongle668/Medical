@@ -103,7 +103,15 @@ export function App() {
   return (
     <div className="app">
       <aside className="rail">
-        <h1>临床中心台</h1>
+        {/* 品牌区与登录页是同一块（.brand-mark + .brand-name/.brand-sub）——
+            两处不一致的话，登进来那一刻会有一瞬间"换了个系统"的感觉。 */}
+        <h1>
+          <span className="brand-mark" aria-hidden="true">台</span>
+          <span>
+            <span className="brand-name">临床中心台</span>
+            <span className="brand-sub">SiteDesk</span>
+          </span>
+        </h1>
         {/* 分组标题只在**不止一组**时出现；条目多到一屏放不下时才折叠。
             两条规则都在 Rail 里，连同为什么。 */}
         <Rail groups={groups} here={here} />

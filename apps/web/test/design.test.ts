@@ -141,13 +141,29 @@ describe("设计语言：原型的组件层必须移植过来", () => {
       expect(CSS.has(c), `.${c} 不见了`).toBe(true);
   });
 
-  it("`.card` 是平面，不是盒子 —— 这是整套语言的第一句话", () => {
-    /* 原型的第一行注释：「界面是一个平面，不是一摞卡片」。
-       web 端曾经把 .card 写成 `border:1px solid; border-radius:10px`，
-       一个字没差，意思全反了。 */
-    const css = read("packages/ui/src/components.css");
-    const rule = css.match(/^\.card\s*\{([^}]*)\}/m)?.[1] ?? "";
-    expect(rule.replace(/\s/g, ""), ".card 又变回盒子了")
-      .toContain("border:0");
+  /* ── 这一条换过一次方向，值得写清楚为什么 ──────────────────────
+     它原来钉的是「`.card` 是平面，不是盒子」（`border:0`），
+     出处是原型的第一行注释「界面是一个平面，不是一摞卡片」。
+
+     2026-09 的 UI 重构**反转了这个决定**：反馈是整屏压抑、没有层级，
+     而"一个平面"正是没有层级的直接原因 —— 一屏二十个区块铺在同一层，
+     眼睛不知道先看哪个。现在是底 / 面 / 浮三层，`.card` 是中间那一层。
+
+     ── 但守卫本身留着，而且钉的是同一件事 ────────────────────────
+     它当初存在的理由不是"平面比盒子好"，而是**同一个类名在两个文件里
+     长出了两个相反的定义**，且没有任何东西会为此报警。那个风险没有变，
+     所以这里改成钉新的决定：`.card` 是一张面（有底色、有边框），
+     而且**只能有一处定义** —— styles.css 里不许再画一遍。 */
+  it("`.card` 是一张面，且只有一处定义", () => {
+    const ui = read("packages/ui/src/components.css");
+    const rule = (ui.match(/^\.card\s*\{([^}]*)\}/m)?.[1] ?? "").replace(/\s/g, "");
+    expect(rule, ".card 不再是一张面了 —— 底 / 面 / 浮三层里的中间那层没了")
+      .toMatch(/background:var\(--surface\)/);
+    expect(rule, ".card 没有边界，它会和底色糊在一起").toMatch(/border:1px/);
+
+    /* 第二处定义才是当初出事的那件事。 */
+    const shell = read("apps/web/src/shell/styles.css");
+    expect(shell, "styles.css 又在重画 .card —— 一个类名两个定义，" +
+      "而共享的只有颜色令牌").not.toMatch(/^\.card\s*\{/m);
   });
 });
