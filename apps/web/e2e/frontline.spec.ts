@@ -24,12 +24,12 @@ test.describe("CRC", () => {
   test("受试者窗口：默认只看还在流程里的，去掉勾才看得到筛败的", async ({ page }) => {
     await page.goto("/subjects");
     await expect(page.getByTestId("subject-row").first()).toBeVisible();
-    await expect(page.getByTestId("subject-row").filter({ hasText: "P0099" })).toHaveCount(0);
+    await expect(page.getByTestId("subject-row").filter({ hasText: "P099" })).toHaveCount(0);
     await page.getByTestId("open-only").uncheck();
-    const failed = page.getByTestId("subject-row").filter({ hasText: "P0099" });
+    const failed = page.getByTestId("subject-row").filter({ hasText: "P099" });
     await expect(failed).toContainText("筛败");
     /* 已经出组的没有下一步，所以排最后 */
-    await expect(page.getByTestId("subject-row").last()).toContainText("P0099");
+    await expect(page.getByTestId("subject-row").last()).toContainText("P099");
   });
 
   test("预筛登记 → 签知情 → 筛选期访视生成", async ({ page }) => {
@@ -55,7 +55,7 @@ test.describe("CRC", () => {
 
   test("预筛登记：筛选中的人两个下一步都在，筛败要选受控原因", async ({ page }) => {
     await page.goto("/prescreen");
-    const row = page.getByTestId("pre-row").filter({ hasText: "P0102" });
+    const row = page.getByTestId("pre-row").filter({ hasText: "P102" });
     await expect(row).toBeVisible();
     await expect(row.getByRole("button", { name: "入组" })).toBeVisible();
     await row.getByRole("button", { name: "筛败" }).click();

@@ -1,8 +1,11 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
+import {
+  Body, Controller, Get, Headers,
+  HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
 import {
-  PageQuery, Uuid, DateOnly, QueryBool, CentsNonNeg,
-  FeasibilityAnswers, FeasibilityStatus, BidStatus, ChangeKind, ChangeStatus
+  Uuid, ListFeasibilityQuery, CreateFeasibilityBody, DecideFeasibilityBody,
+  RecordFeasibilityActualBody, ListBidsQuery, CreateBidBody, DecideBidBody,
+  ListContractChangesQuery, CreateContractChangeBody, SettleContractChangeBody
 } from "@sitedesk/contracts";
 import { FeasibilityService } from "./feasibility.service.js";
 import { BidService } from "./bid.service.js";
@@ -10,73 +13,6 @@ import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { command, idempotent } from "../../infra/command.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
-
-const arr = <T extends z.ZodType>(t: T) =>
-  z.union([t, z.array(t)]).transform(v => Array.isArray(v) ? v : [v]).optional();
-
-const FeasQ = PageQuery.extend({
-  studyId: Uuid.optional(),
-  status: arr(FeasibilityStatus),
-  overrideOnly: QueryBool.optional(),
-  q: z.string().max(64).optional()
-});
-const CreateFeas = z.object({
-  studyId: Uuid,
-  hospital: z.string().trim().min(2).max(80),
-  city: z.string().trim().min(2).max(40),
-  dept: z.string().trim().min(2).max(40),
-  piName: z.string().trim().min(2).max(40),
-  surveyedOn: DateOnly,
-  answers: FeasibilityAnswers
-});
-const Decide = z.object({
-  decision: z.enum(["selected", "rejected"]),
-  reason: z.string().trim().max(500).optional()
-});
-const Actual = z.object({ actualRate: z.number().min(0).max(1000) });
-
-const BidQ = PageQuery.extend({
-  status: arr(BidStatus),
-  sponsor: z.string().max(64).optional()
-});
-const CreateBid = z.object({
-  sponsor: z.string().trim().min(2).max(80),
-  name: z.string().trim().min(2).max(120),
-  submittedOn: DateOnly,
-  sites: z.int().min(1).max(999),
-  subjects: z.int().min(1).max(99999),
-  ourQuoteCents: CentsNonNeg.min(1),
-  ourPersonDays: z.number().min(0.1).max(999999),
-  note: z.string().max(500).optional()
-});
-const DecideBid = z.object({
-  result: z.enum(["won", "lost"]),
-  winningPriceCents: CentsNonNeg.min(1).nullable().optional(),
-  note: z.string().max(500).optional()
-});
-
-const ChangeQ = PageQuery.extend({
-  studyId: Uuid.optional(),
-  studySiteId: Uuid.optional(),
-  status: arr(ChangeStatus),
-  uncoveredOnly: QueryBool.optional()
-});
-const CreateChange = z.object({
-  studyId: Uuid,
-  studySiteId: Uuid.nullable().optional(),
-  kind: ChangeKind,
-  raisedOn: DateOnly,
-  what: z.string().trim().min(4).max(500),
-  personDaysImpact: z.number().min(-99999).max(99999),
-  perSubject: z.boolean(),
-  note: z.string().max(500).optional()
-});
-const Settle = z.object({
-  status: z.enum(["submitted", "signed", "rejected"]),
-  settledCents: z.number().int().min(-99999999999).max(99999999999)
-    .nullable().optional(),
-  note: z.string().max(500).optional()
-});
 
 @Controller("/v1")
 export class BizdevController {
@@ -95,7 +31,7 @@ export class BizdevController {
   calibration() { return this.feas.calibration(); }
 
   @Get("/feasibility") @Operation("listFeasibility")
-  list(@Query(new ZodPipe(FeasQ)) q: z.infer<typeof FeasQ>) {
+  list(@Query(new ZodPipe(ListFeasibilityQuery)) q: z.infer<typeof ListFeasibilityQuery>) {
     return this.feas.list(q);
   }
 
@@ -106,7 +42,7 @@ export class BizdevController {
      两种都不是"返回首次的结果"。 */
   @Post("/feasibility") @Operation("createFeasibility") @HttpCode(201)
   create(
-    @Body(new ZodPipe(CreateFeas)) b: z.infer<typeof CreateFeas>,
+    @Body(new ZodPipe(CreateFeasibilityBody)) b: z.infer<typeof CreateFeasibilityBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return idempotent(this.idem, key, b, () => this.feas.create(b));
@@ -115,7 +51,7 @@ export class BizdevController {
   @Post("/feasibility/:id\\:decide") @Operation("decideFeasibility")
   decide(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(Decide)) b: z.infer<typeof Decide>,
+    @Body(new ZodPipe(DecideFeasibilityBody)) b: z.infer<typeof DecideFeasibilityBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return command(this.idem, key, { id, ...b }, () => this.feas.decide(id, b));
@@ -124,7 +60,7 @@ export class BizdevController {
   @Post("/feasibility/:id\\:actual") @Operation("recordFeasibilityActual")
   actual(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(Actual)) b: z.infer<typeof Actual>,
+    @Body(new ZodPipe(RecordFeasibilityActualBody)) b: z.infer<typeof RecordFeasibilityActualBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return command(this.idem, key, { id, ...b },
@@ -138,13 +74,13 @@ export class BizdevController {
   bidReview() { return this.bids.bidReview(); }
 
   @Get("/bids") @Operation("listBids")
-  listBids(@Query(new ZodPipe(BidQ)) q: z.infer<typeof BidQ>) {
+  listBids(@Query(new ZodPipe(ListBidsQuery)) q: z.infer<typeof ListBidsQuery>) {
     return this.bids.listBids(q);
   }
 
   @Post("/bids") @Operation("createBid") @HttpCode(201)
   createBid(
-    @Body(new ZodPipe(CreateBid)) b: z.infer<typeof CreateBid>,
+    @Body(new ZodPipe(CreateBidBody)) b: z.infer<typeof CreateBidBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return idempotent(this.idem, key, b, () => this.bids.createBid(b));
@@ -153,7 +89,7 @@ export class BizdevController {
   @Post("/bids/:id\\:decide") @Operation("decideBid")
   decideBid(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(DecideBid)) b: z.infer<typeof DecideBid>,
+    @Body(new ZodPipe(DecideBidBody)) b: z.infer<typeof DecideBidBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return command(this.idem, key, { id, ...b }, () => this.bids.decideBid(id, b));
@@ -164,13 +100,13 @@ export class BizdevController {
   scopeCreep() { return this.bids.scopeCreep(); }
 
   @Get("/contract-changes") @Operation("listContractChanges")
-  listChanges(@Query(new ZodPipe(ChangeQ)) q: z.infer<typeof ChangeQ>) {
+  listChanges(@Query(new ZodPipe(ListContractChangesQuery)) q: z.infer<typeof ListContractChangesQuery>) {
     return this.bids.listChanges(q);
   }
 
   @Post("/contract-changes") @Operation("createContractChange") @HttpCode(201)
   createChange(
-    @Body(new ZodPipe(CreateChange)) b: z.infer<typeof CreateChange>,
+    @Body(new ZodPipe(CreateContractChangeBody)) b: z.infer<typeof CreateContractChangeBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return idempotent(this.idem, key, b, () => this.bids.createChange(b));
@@ -179,7 +115,7 @@ export class BizdevController {
   @Post("/contract-changes/:id\\:settle") @Operation("settleContractChange")
   settleChange(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(Settle)) b: z.infer<typeof Settle>,
+    @Body(new ZodPipe(SettleContractChangeBody)) b: z.infer<typeof SettleContractChangeBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return command(this.idem, key, { id, ...b }, () => this.bids.settleChange(id, b));

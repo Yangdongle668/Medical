@@ -7,6 +7,7 @@ import { CHANGE_KIND_LABEL } from "@sitedesk/contracts";
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { nextCode } from "../../infra/code.js";
 
 /* ════════════════════════════════════════════════════════════════════
    投标闭环 · 合同变更。
@@ -166,7 +167,11 @@ export class BidService {
   }) {
     const c = ctx();
     const p = principal();
-    const year = b.submittedOn.slice(0, 4);
+    /* 年份取**发号当天**，不取记录上那个日期（原来是 b.submittedOn）。
+       两处理由：一是台账号是"什么时候登记的"，不是"事情什么时候发生的"；
+       二是按事件日期取年，序号就不再单调 —— 2026 年补录一条 2025 年的，
+       会在 2025 号段里插一个比现有号都大的号，而那个号段早已封账。
+       立项受理和方案编号本来就是按当天取的，这一版把三处对齐。 */
     /* 编号在**库里**数，不在应用里数：应用里"读一次 count 再加一"要两个
        往返，中间隔着整个网络延迟。放进一条 INSERT 之后窗口收窄到一条语句。
 
@@ -178,13 +183,9 @@ export class BidService {
     const { rows } = await c.client.query<{ id: string }>(
       `INSERT INTO bid (code, sponsor, name, submitted_on, sites, subjects,
                         our_quote_cents, our_person_days, owner_account_id, note)
-       VALUES ('B-' || $1 || '-' || lpad((
-                 SELECT count(*) + 1 FROM bid
-                  WHERE tenant_id = app.current_tenant_id()
-                    AND code LIKE 'B-' || $1 || '-%')::text, 2, '0'),
-               $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING id`,
-      [year, b.sponsor, b.name, b.submittedOn, b.sites, b.subjects,
+      [await nextCode("bid"), b.sponsor, b.name, b.submittedOn, b.sites, b.subjects,
        b.ourQuoteCents, b.ourPersonDays, p.accountId, b.note ?? null]);
 
     const dto = bidDto(await this.oneBid(rows[0]!.id));
@@ -339,18 +340,14 @@ export class BidService {
       if (!ok.rowCount) throw new ProblemException("invariant-violated", {
         detail: "这个中心不属于该项目 —— 变更单挂错项目会算进别人的未覆盖工作量" });
     }
-    const year = b.raisedOn.slice(0, 4);
     const { rows } = await c.client.query<{ id: string }>(
       `INSERT INTO contract_change (
          code, study_id, study_site_id, kind, raised_on, raised_by, what,
          person_days_impact, per_subject, note)
-       VALUES ('CR-' || $1 || '-' || lpad((
-                 SELECT count(*) + 1 FROM contract_change
-                  WHERE tenant_id = app.current_tenant_id()
-                    AND code LIKE 'CR-' || $1 || '-%')::text, 3, '0'),
-               $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        RETURNING id`,
-      [year, b.studyId, b.studySiteId ?? null, b.kind, b.raisedOn, p.accountId,
+      [await nextCode("change"), b.studyId, b.studySiteId ?? null, b.kind,
+       b.raisedOn, p.accountId,
        b.what, b.personDaysImpact, b.perSubject, b.note ?? null]);
 
     const crcDay = await this.crcDayCost();

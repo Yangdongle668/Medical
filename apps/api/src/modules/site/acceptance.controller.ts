@@ -1,33 +1,16 @@
-import { Body, Controller, Get, Headers, Param, Post, Query } from "@nestjs/common";
+import {
+  Body, Controller, Get, Headers,
+  Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
-import { PageQuery, Uuid, DateOnly, WithReason, AcceptanceState, SubmitAcceptance,
-  IsfCategory, QueryBool } from "@sitedesk/contracts";
+import {
+  Uuid, WithReason, SubmitAcceptance, ListSiteAcceptancesQuery,
+  SetAcceptanceDocBody, GetIsfBoardQuery, UpdateIsfItemBody
+} from "@sitedesk/contracts";
 import { AcceptanceService } from "./acceptance.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { command, idempotent } from "../../infra/command.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
-
-const arr = <T extends z.ZodType>(t: T) =>
-  z.union([t, z.array(t)]).transform(v => Array.isArray(v) ? v : [v]).optional();
-
-const AcQ = PageQuery.extend({
-  studyId: Uuid.optional(),
-  state: arr(AcceptanceState),
-  openOnly: QueryBool.optional()
-});
-const IsfQ = z.object({
-  studySiteId: Uuid.optional(),
-  category: arr(IsfCategory),
-  openOnly: QueryBool.optional()
-});
-const SetDoc = z.object({ present: z.boolean() });
-const UpdateIsf = z.object({
-  present: z.boolean().optional(),
-  expiresOn: DateOnly.nullable().optional(),
-  quantity: z.int().min(0).nullable().optional(),
-  note: z.string().trim().max(500).optional()
-});
 
 @Controller("/v1")
 export class AcceptanceController {
@@ -37,7 +20,7 @@ export class AcceptanceController {
   ) {}
 
   @Get("/site-acceptances") @Operation("listSiteAcceptances")
-  list(@Query(new ZodPipe(AcQ)) q: z.infer<typeof AcQ>) {
+  list(@Query(new ZodPipe(ListSiteAcceptancesQuery)) q: z.infer<typeof ListSiteAcceptancesQuery>) {
     return this.svc.listAcceptances(q);
   }
 
@@ -56,7 +39,7 @@ export class AcceptanceController {
   setDoc(
     @Param("id", new ZodPipe(Uuid)) id: string,
     @Param("seq", new ZodPipe(z.coerce.number().int().min(0))) seq: number,
-    @Body(new ZodPipe(SetDoc)) b: z.infer<typeof SetDoc>,
+    @Body(new ZodPipe(SetAcceptanceDocBody)) b: z.infer<typeof SetAcceptanceDocBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.setDoc(id, seq, b)); }
 
@@ -75,14 +58,14 @@ export class AcceptanceController {
   ) { return command(this.idem, key, b, () => this.svc.requestAmend(id, b)); }
 
   @Get("/isf-items") @Operation("getIsfBoard")
-  isf(@Query(new ZodPipe(IsfQ)) q: z.infer<typeof IsfQ>) {
+  isf(@Query(new ZodPipe(GetIsfBoardQuery)) q: z.infer<typeof GetIsfBoardQuery>) {
     return this.svc.isfBoard(q);
   }
 
   @Post("/isf-items/:id\\:update") @Operation("updateIsfItem")
   updateIsf(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(UpdateIsf)) b: z.infer<typeof UpdateIsf>,
+    @Body(new ZodPipe(UpdateIsfItemBody)) b: z.infer<typeof UpdateIsfItemBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.updateIsf(id, b)); }
 }

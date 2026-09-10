@@ -6,6 +6,7 @@ import {
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { nextCode } from "../../infra/code.js";
 
 /* ════════════════════════════════════════════════════════════════════
    监查访视。
@@ -266,7 +267,7 @@ export class MonitorService {
         `${s.code} 已关闭 —— 关闭之后还要去，说明关闭那一步没做完`);
 
     const monitor = b.monitorAccountId ?? p.accountId;
-    const code = `MV-${Date.now().toString(36).toUpperCase()}`;
+    const code = await nextCode("monitor");
     const ins = await c.client.query<{ id: string }>(
       `INSERT INTO monitor_visit
          (code, study_site_id, kind, planned_on, monitor_account_id, days,

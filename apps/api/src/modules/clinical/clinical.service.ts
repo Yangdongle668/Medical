@@ -8,6 +8,7 @@ import { pendingSubscribers } from "./visit-completed.js";
 import { VISIT_TIMESHEET_PORT, type VisitTimesheetPort } from "./ports.js";
 import { saeReportHours, saeTimeliness, saeStatus, SAE_REPORT_DEADLINE_HOURS, CALC_VERSION }
   from "@sitedesk/calc";
+import { nextCode } from "../../infra/code.js";
 
 /* ════════════════════════════════════════════════════════════════════
    ClinicalOps —— 受试者与访视。
@@ -390,7 +391,7 @@ export class ClinicalService {
     throw new ProblemException("invariant-violated", { detail, invariant: name });
   }
 
-  async createSubject(b: { studySiteId: string; screeningNo: string }) {
+  async createSubject(b: { studySiteId: string; screeningNo?: string }) {
     const c = ctx();
     const site = await c.client.query<{ id: string; state: string; code: string }>(
       `SELECT id, state, code FROM study_site WHERE id = $1`, [b.studySiteId]);
@@ -400,13 +401,18 @@ export class ClinicalService {
       this.invariant("subject-needs-active-site",
         `中心当前是「${site.rows[0].state}」，尚未启动，不能登记受试者`);
 
+    /* 筛选号跟着中心走：SS-16-P001。省略时由服务端发号 ——
+       让人现想一个筛选号，得到的是同一个中心上并排出现 S-0203 和
+       SS-01-P001 两套写法（演示数据里就是这样，24 条对 574 条）。
+       传了就用传的：申办方 / IWRS 指定筛选号是真实存在的情况。 */
+    const screeningNo = b.screeningNo ?? await nextCode("subject", site.rows[0].code);
     const { rows } = await c.client.query<{ id: string }>(
       `INSERT INTO subject (study_site_id, screening_no, crc_account_id)
        VALUES ($1, $2, $3) RETURNING id`,
-      [b.studySiteId, b.screeningNo, principal().accountId]);
+      [b.studySiteId, screeningNo, principal().accountId]);
     await this.audit.write({
-      action: "登记预筛受试者", targetType: "subject", targetId: b.screeningNo,
-      after: { screeningNo: b.screeningNo }, studySiteId: b.studySiteId });
+      action: "登记预筛受试者", targetType: "subject", targetId: screeningNo,
+      after: { screeningNo }, studySiteId: b.studySiteId });
     return this.getSubject(rows[0]!.id);
   }
 
@@ -653,7 +659,7 @@ export class ClinicalService {
     /* ① I4：超窗 → 方案偏离。**同一个事务里生成** ——
           事后补录的偏离，核查时看的是补录时间，不是发生时间。 */
     if (outOfWindow) {
-      const code = `DEV-${Date.now().toString(36).toUpperCase()}-${v.seq}`;
+      const code = await nextCode("deviation");
       const late = b.actualDate > v.windowTo;
       const dev = await c.client.query<{ id: string }>(
         `INSERT INTO quality_event (code, study_site_id, subject_id, visit_id, kind,
@@ -1071,7 +1077,7 @@ export class ClinicalService {
     if (b.reportedAt && b.reportedAt < b.occurredAt)
       this.invariant("sae-reported-before-occurred", "上报时刻早于发生时刻");
 
-    const code = `SAE-${Date.now().toString(36).toUpperCase()}`;
+    const code = await nextCode("sae");
     const { rows } = await c.client.query<{ id: string }>(
       `INSERT INTO quality_event (code, study_site_id, subject_id, kind, severity,
          title, detail, auto_generated, raised_by, raised_on, occurred_at, reported_at)
@@ -1139,7 +1145,7 @@ export class ClinicalService {
     const hours = saeReportHours({ occurredAt, reportedAt })!;
     if (saeStatus({ occurredAt, reportedAt }, new Date()) !== "late") return [];
 
-    const code = `SAELATE-${Date.now().toString(36).toUpperCase()}`;
+    const code = await nextCode("saeLate");
     /* source_event_id 指向那条 SAE —— 自动生成的记录必须答得出「凭什么存在」，
        而它的来源不是一次访视（迁移 0018 为此补了这一列）。 */
     const late = await ctx().client.query<{ id: string }>(

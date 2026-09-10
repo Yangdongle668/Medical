@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { canSeeSite, siteScopeSql } from "@sitedesk/policy";
 import { ctx, principal } from "../../infra/ctx.js";
+import { nextCode } from "../../infra/code.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { hashPassword, passwordProblem } from "../../auth/password.js";
@@ -393,14 +394,15 @@ export class IdentityService {
       memberCount: Number(r.members), studyCount: Number(r.studies) })) };
   }
 
-  async createTeam(b: { code: string; name: string; leadAccountId?: string | null }) {
+  async createTeam(b: { code?: string; name: string; leadAccountId?: string | null }) {
     const c = ctx();
     try {
+      const code = b.code ?? await nextCode("team");
       const { rows } = await c.client.query<{ id: string }>(
         `INSERT INTO team (code, name, lead_account_id) VALUES ($1,$2,$3) RETURNING id`,
-        [b.code, b.name, b.leadAccountId ?? null]);
-      await this.audit.write({ action: "新建分组", targetType: "team", targetId: b.code,
-        after: { code: b.code, name: b.name } });
+        [code, b.name, b.leadAccountId ?? null]);
+      await this.audit.write({ action: "新建分组", targetType: "team", targetId: code,
+        after: { code, name: b.name } });
       const one = (await this.listTeams()).items.find(t => t.id === rows[0]!.id)!;
       return one;
     } catch (e) {

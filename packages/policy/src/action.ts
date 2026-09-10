@@ -52,6 +52,10 @@ export const SENSITIVE_ACTIONS = new Set<string>([
      缺的还是"标成敏感"这一下 —— 也就是核查员第一屏看不看得见。
      现在 arch-check 反向也查：契约自称敏感而不在这张表里，立刻红。 */
   "reopenStartupItem",
+  /* 把项目划到另一个组 —— **它就是行范围本身**。划走那一刻，
+     原来那个组的 PM 看不见这个项目、它下面的全部中心、
+     那些中心上的受试者与工时。和改角色同一档。 */
+  "setStudyTeam",
   "voidTimesheet"
 ]);
 export const needsReason = (operationId: string): boolean =>

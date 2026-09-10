@@ -42,7 +42,7 @@ type Schema = Record<string, unknown> & {
   properties?: Record<string, Schema>; required?: string[];
   enum?: unknown[]; type?: string; $ref?: string; "x-extensible"?: boolean;
 };
-type Param = { name: string; in: string; required?: boolean };
+type Param = { name: string; in: string; required?: boolean; schema?: unknown };
 type Op = { operationId?: string; responses?: Record<string, unknown>;
             parameters?: Param[]; requestBody?: unknown };
 type Doc = { paths: Record<string, Record<string, Op>>;
@@ -150,6 +150,19 @@ for (const [id, cur] of co) {
     new Set((o.parameters ?? []).filter(x => x.required).map(x => `${x.in}:${x.name}`));
   for (const k of req(cur.op))
     if (!req(old.op).has(k)) breaking.push(`端点 ${id} 新增必填参数 ${k}`);
+  /* 参数的 **schema** 变了也要报。
+     这里原来只比"在不在"和"必不必填" —— 于是把一个查询参数从
+     `array` 收窄成 `string`（旧客户端立刻全挂）和从 `array` 放宽成
+     `string | array`（无害）**同样一声不吭**。
+     宽窄很难在这一层判准，所以一律记成"需要留意"：
+     它至少让人去看一眼，而不是让门禁替他做一个它做不了的判断。 */
+  const 参数表 = (o: Op) =>
+    new Map((o.parameters ?? []).map(x => [`${x.in}:${x.name}`, JSON.stringify(x.schema ?? null)]));
+  const 旧参 = 参数表(old.op), 新参 = 参数表(cur.op);
+  for (const [k, v] of 新参) {
+    const o = 旧参.get(k);
+    if (o !== undefined && o !== v) warn.push(`端点 ${id} 参数 ${k} 的 schema 变了`);
+  }
   if (!old.op.requestBody && cur.op.requestBody) breaking.push(`端点 ${id} 新增了必填请求体`);
 }
 
@@ -254,6 +267,12 @@ function cmp(name: string, o0: Schema, c0: Schema, at = "") {
   /* 响应端字段由必填变可选 = 客户端原本可以假定它存在，现在不能了 */
   for (const k of oreq) if (!creq.has(k) && k in cp && isRes)
     breaking.push(`${where} 字段 ${k} 由必填变为可选（响应端：客户端原本可假定它存在）`);
+  /* 请求端由必填变可选是**兼容**的（旧客户端照发不误），但它不是"没变化"。
+     这一条原来一处都不记 —— 于是把 createStudySite 的 code 改成可选之后，
+     门禁输出的是「契约无变化」。一个说"没变"的门禁比没有门禁更糟：
+     它不是漏报了一次，是让人以为它看过了。 */
+  for (const k of oreq) if (!creq.has(k) && k in cp && isReq)
+    added.push(`${where} 字段 ${k} 由必填变为可选（请求端：兼容，调用方可以不再传）`);
 }
 for (const n of Object.keys(cs)) { const b = bs[n], c = cs[n]; if (b && c) cmp(n, b, c); }
 

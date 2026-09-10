@@ -1037,7 +1037,7 @@ function makeDataQueries(): MockQuery[] {
         answeredOn: shift(TODAY, -4),
         returnedReason: "回复未提供源数据依据，请附医嘱单页码或扫描件。"
       }),
-    mk("q3", "Q-1190", s1, "u-102", "SS-01-P0102", "合并用药 CM", "结束日期",
+    mk("q3", "Q-1190", s1, "u-102", "SS-01-P102", "合并用药 CM", "结束日期",
       "CM 结束日期为空但用药状态标为「已停用」，请补齐或更正状态。",
       3, "open", WU),
     /* 一条已回复待关闭 —— DM 的「待我关闭」和「回复合格才能关」都靠它。 */
@@ -1544,12 +1544,12 @@ const mkNext = (id: string, label: string, daysLeft: number) => ({
 });
 
 export const mkSubjects = (): MockSubject[] => [
-  { id: "u-101", studySiteId: "s1", siteCode: "SS-01", screeningNo: "SS-01-P0101",
+  { id: "u-101", studySiteId: "s1", siteCode: "SS-01", screeningNo: "SS-01-P101",
     randomized: false, randomizationNo: null, state: "prescreen",
     icfSignedOn: null, enrolledOn: null, exitedOn: null,
     screenFailReason: null, withdrawReason: null, crcName: "吴桐",
     visitsDone: 0, visitsPlanned: 0, nextVisit: null },
-  { id: "u-102", studySiteId: "s1", siteCode: "SS-01", screeningNo: "SS-01-P0102",
+  { id: "u-102", studySiteId: "s1", siteCode: "SS-01", screeningNo: "SS-01-P102",
     randomized: false, randomizationNo: null, state: "screening",
     icfSignedOn: day(-9), enrolledOn: null, exitedOn: null,
     screenFailReason: null, withdrawReason: null, crcName: "吴桐",
@@ -1564,7 +1564,7 @@ export const mkSubjects = (): MockSubject[] => [
     icfSignedOn: day(-80), enrolledOn: day(-72), exitedOn: null,
     screenFailReason: null, withdrawReason: null, crcName: "廖萌",
     visitsDone: 3, visitsPlanned: 8, nextVisit: mkNext("v3", "C3D1 给药 + 肿瘤评估", 12) },
-  { id: "u-099", studySiteId: "s1", siteCode: "SS-01", screeningNo: "SS-01-P0099",
+  { id: "u-099", studySiteId: "s1", siteCode: "SS-01", screeningNo: "SS-01-P099",
     randomized: false, randomizationNo: null, state: "screen_failed",
     icfSignedOn: day(-40), enrolledOn: null, exitedOn: day(-33),
     screenFailReason: "imaging", withdrawReason: null, crcName: "吴桐",
@@ -1577,7 +1577,7 @@ export const mkPayments = (): MockPayment[] => [
     screeningNo: "S-0203", visitId: "v1", visitLabel: "C3D1 给药",
     amountCents: 60000, dueOn: day(-48), paidOn: null, receiptRef: null, ageDays: 48 },
   { id: "pay-2", studySiteId: "s1", siteCode: "SS-01", subjectId: "u-102",
-    screeningNo: "SS-01-P0102", visitId: "v-102", visitLabel: "筛选期评估",
+    screeningNo: "SS-01-P102", visitId: "v-102", visitLabel: "筛选期评估",
     amountCents: 30000, dueOn: day(-6), paidOn: null, receiptRef: null, ageDays: 6 },
   /* **发了但没凭证** —— 比"还没发"更麻烦，关闭中心那天对不上 */
   { id: "pay-3", studySiteId: "s2", siteCode: "SS-07", subjectId: "u2",

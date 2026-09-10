@@ -3,6 +3,7 @@ import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { SaePanel } from "./SaePanel.js";
 import { IpPanel } from "./IpPanel.js";
+import { Pick } from "../../shell/CreateForm.js";
 
 interface QualityEvent {
   id: string; code: string; siteCode: string; kind: string; severity: string;
@@ -81,15 +82,11 @@ export function QualityPage() {
       </div>
 
       {sites.length > 0 && (
-        <label className="field" style={{ maxWidth: 380, marginBottom: 14 }}>
-          <span>中心（SAE 及时率与药品台账按中心算）</span>
-          <select value={siteId} data-testid="quality-site"
-            onChange={e => setSiteId(e.target.value)}>
-            {sites.map(s => (
-              <option key={s.id} value={s.id}>{s.code} {s.hospital}</option>
-            ))}
-          </select>
-        </label>
+        <Pick label="中心" hint="SAE 及时率与药品台账按中心算"
+          v={siteId} on={setSiteId} testid="quality-site" placeholder={null}
+          style={{ maxWidth: 380, marginBottom: 14 }}
+          options={sites.map(s => ({ value: s.id, label: `${s.code} ${s.hospital}` }))}
+          empty="你的范围里还没有中心 —— 这一页的每个数都是按中心算的。" />
       )}
 
       {siteId && (

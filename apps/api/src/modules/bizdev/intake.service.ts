@@ -5,6 +5,7 @@ import {
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { nextCode } from "../../infra/code.js";
 
 /* ════════════════════════════════════════════════════════════════════
    立项与建档。
@@ -190,7 +191,7 @@ export class IntakeService {
   }) {
     const c = ctx();
     const p = principal();
-    const code = `NP-${Date.now().toString(36).toUpperCase()}`;
+    const code = await nextCode("intake");
     const ins = await c.client.query<{ id: string }>(
       `INSERT INTO intake_application
          (code, drug, sponsor_name, phase, indication, planned_sites, planned_subjects,
@@ -285,9 +286,7 @@ export class IntakeService {
        行范围为 team 的人（pm 也持有 approve）数出来的是"本组的项目数"，
        撞得更早。取号问的是"这个号有没有被人用过"，不是"你看得见谁"。
        见迁移 0042。 */
-    const seq = await c.client.query<{ code: string }>(
-      `SELECT app.next_study_code() AS code`);
-    const studyCode = seq.rows[0]!.code;
+    const studyCode = await nextCode("study");
 
     const st = await c.client.query<{ id: string }>(
       `INSERT INTO study (code, short_name, client_id, phase, indication,

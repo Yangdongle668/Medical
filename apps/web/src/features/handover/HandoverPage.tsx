@@ -4,6 +4,7 @@ import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { usePending } from "../../api/pending.js";
 import { today } from "../../shell/dates.js";
+import { Pick } from "../../shell/CreateForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    交接。
@@ -283,29 +284,31 @@ function CreateHandover({ onDone }: { onDone: () => void }) {
   return (
     <section className="card stack" data-testid="create-handover">
       <h3>发起交接</h3>
-      <label className="field">
-        <span>接手人{myKind && `（同为 ${myKind}）`}</span>
-        <select value={to} data-testid="handover-to" onChange={e => setTo(e.target.value)}>
-          <option value="">请选择</option>
-          {candidates.map(s => (
-            <option key={s.accountId} value={s.accountId}>
-              {s.displayName} · {s.roleKind} · {s.city}
-            </option>
-          ))}
-        </select>
-      </label>
+      <Pick label={`接手人${myKind ? `（同为 ${myKind}）` : ""}`}
+        v={to} on={setTo} testid="handover-to" placeholder="请选择"
+        options={candidates.map(s => ({
+          value: s.accountId, label: `${s.displayName} · ${s.roleKind} · ${s.city}` }))}
+        empty="没有同岗位的在职同事可以接 —— 交接只能交给同一岗位的人（CRC 交给 CRC）。先在「组织与权限」里建号，或者把已停用的那位启用回来。" />
 
+      {/* 全站唯一一处保留原生 select 的数据下拉：它是**多选**的，
+          而 Pick 只管单选。空态因此在这里自己写一遍 ——
+          一个空的多选框看起来就是一个灰色的方块，什么都不说。 */}
       <label className="field">
         <span>交接的中心（只能交接自己当前负责的）</span>
-        <select multiple size={Math.min(6, Math.max(3, sites.length))}
-          data-testid="handover-sites"
-          value={picked}
-          onChange={e => setPicked(
-            Array.from(e.target.selectedOptions, o => o.value))}>
-          {sites.map(s => (
-            <option key={s.id} value={s.id}>{s.code} {s.hospital}</option>
-          ))}
-        </select>
+        {sites.length === 0
+          ? <span className="t-crit" data-testid="handover-sites-empty" style={{ fontSize: 12 }}>
+              你名下没有正在负责的中心 —— 没有可交接的。
+              交接交的是**当前派工**，不是历史上带过的那些。
+            </span>
+          : <select multiple size={Math.min(6, Math.max(3, sites.length))}
+              data-testid="handover-sites"
+              value={picked}
+              onChange={e => setPicked(
+                Array.from(e.target.selectedOptions, o => o.value))}>
+              {sites.map(s => (
+                <option key={s.id} value={s.id}>{s.code} {s.hospital}</option>
+              ))}
+            </select>}
       </label>
 
       <div className="row" style={{ gap: 14, alignItems: "flex-end" }}>

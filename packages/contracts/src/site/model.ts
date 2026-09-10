@@ -2,6 +2,7 @@ import { z } from "zod";
 import { Uuid, Code, DateOnly, Ratio, CentsNonNeg } from "../kernel/primitives.js";
 import { gated } from "../kernel/fields.js";
 import { GateUnmet } from "../kernel/errors.js";
+import { WithReason } from "../kernel/command.js";
 
 /* ════════════════════════════════════════════════════════════════════
    Site & Staffing —— StudySite（项目 × 中心）是本系统的最小作业单元。
@@ -31,7 +32,11 @@ export const Study = z.object({
   plannedSubjects: z.int().positive(),
   contractAmountCents: gated(CentsNonNeg, "price"),
   startedOn: DateOnly.nullable(),
-  endsOn: DateOnly.nullable()
+  endsOn: DateOnly.nullable(),
+  /** 承接这个项目的组。**这是 row_rule=team 的行范围本身**，不是一个标签：
+   *  项目从 A 组划到 B 组，A 组的 PM 当场看不见它和它下面所有中心。
+   *  null = 还没有归属组（提交人和审批人都不在任何组里时会这样）。 */
+  team: z.object({ id: Uuid, code: Code, name: z.string() }).nullable()
 }).meta({ id: "Study" });
 
 export const StudySite = z.object({
@@ -234,3 +239,28 @@ export const IsfBoard = z.object({
   items: z.array(IsfItem),
   summary: IsfSummary
 }).meta({ id: "IsfBoard" });
+
+/** **具名导出，路由层直接用这一个。**
+ *  路由层原来自己写了一份同名同形的副本，而副本是会分叉的：
+ *  `code` 在这里改成可选之后，那份副本仍然要求必填 ——
+ *  于是接口回一句「请求参数不符合契约」，而它自己就是这份契约的实现。 */
+export const CreateStudySiteBody = z.object({
+  studyId: Uuid,
+  /** 省略即由服务端按 code_rule 发号（SS-16）。传了就用传的 ——
+   *  申办方指定中心编号是常事，但那是例外，不该是每次都要现想一个。 */
+  code: z.string().min(1).max(64).optional(),
+  hospital: z.string().min(1).max(128),
+  dept: z.string().min(1).max(64),
+  city: z.string().min(1).max(32),
+  piName: z.string().min(1).max(64),
+  piAccountId: Uuid.nullable().optional(),
+  contracted: z.int().positive(),
+  unitPriceCents: CentsNonNeg,
+  startupFeeCents: CentsNonNeg.default(0),
+  sivPlannedOn: DateOnly.nullable().optional()
+});
+
+/** **具名导出，路由层直接用这一个** —— 路由层再写一份副本就会分叉。 */
+export const SetStudyTeamBody = WithReason.extend({
+  teamId: Uuid.nullable().describe("null = 收回归属，谁也不承接")
+}).meta({ id: "SetStudyTeamRequest" });

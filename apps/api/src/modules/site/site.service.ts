@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { siteScopeSql, studyScopeSql } from "@sitedesk/policy";
+import { nextCode } from "../../infra/code.js";
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
@@ -79,16 +80,94 @@ export class SiteService {
       /* sponsorName 从 client join 出来 —— 0031 把 study.sponsor_name
          换成了 client_id（0004 的注释预告过这一步）。
          契约里那一栏没变：它是**显示名**，只是现在只有一个来源了。 */
-    }>(`SELECT st.*, cl.name AS sponsor_name
-          FROM study st JOIN client cl ON cl.id = st.client_id
+      team_id: string | null; team_code: string | null; team_name: string | null;
+      /* 归属组用 LEFT JOIN —— **不能用内连接**：没有归属组的项目
+         （提交人和审批人都不在任何组里时会有）会整条消失，
+         而那正是最需要被看见、去指派一个组的那些。 */
+    }>(`SELECT st.*, cl.name AS sponsor_name,
+               tm.id AS team_id, tm.code AS team_code, tm.name AS team_name
+          FROM study st
+          JOIN client cl ON cl.id = st.client_id
+          LEFT JOIN team_study ts ON ts.study_id = st.id
+          LEFT JOIN team tm ON tm.id = ts.team_id
          WHERE ${where} ORDER BY st.code LIMIT $${params.length}`, params);
     const items = rows.slice(0, limit).map(r => ({
       id: r.id, code: r.code, shortName: r.short_name, sponsorName: r.sponsor_name,
       phase: r.phase, indication: r.indication, plannedSubjects: r.planned_subjects,
       contractAmountCents: r.contract_amount_cents,
-      startedOn: d(r.started_on), endsOn: d(r.ends_on)
+      startedOn: d(r.started_on), endsOn: d(r.ends_on),
+      team: r.team_id
+        ? { id: r.team_id, code: r.team_code!, name: r.team_name! }
+        : null
     }));
     return { items, nextCursor: rows.length > limit ? items.at(-1)!.code : null };
+  }
+
+  /** 一个项目 —— 与 listStudies 同一份口径（含归属组），只是收窄到一行。 */
+  private async oneStudy(id: string) {
+    const all = await this.listStudies(500);
+    const one = all.items.find(x => x.id === id);
+    /* 范围外与不存在返回同一个 404 —— 区分开就是在确认「它存在」 */
+    if (!one) throw notFound("项目");
+    return one;
+  }
+
+  /* ── 把项目划给另一个组 ──────────────────────────────────────────
+     **这是行范围本身，不是一个标签。** 划走那一刻，原来那个组的 PM
+     看不见这个项目、它下面的全部中心、那些中心上的受试者与工时。
+     所以它是敏感动作：写审计、必须写原因。
+
+     `team_study` 上有 UNIQUE (study_id)（迁移 0004：一个项目同一时间
+     只归一个组，否则"本组的中心"就有歧义）—— 所以这里是先删后插，
+     而不是 upsert：upsert 在"收回归属"那一支上无从表达。 */
+  async setStudyTeam(id: string, b: { teamId: string | null; reason: string }) {
+    const c = ctx();
+    const before = await this.oneStudy(id);
+
+    let after: { id: string; code: string; name: string } | null = null;
+    if (b.teamId) {
+      const t = await c.client.query<{ id: string; code: string; name: string }>(
+        "SELECT id, code, name FROM team WHERE id = $1", [b.teamId]);
+      if (!t.rows[0]) throw notFound("分组");
+      after = t.rows[0];
+    }
+
+    if (before.team?.id === b.teamId)
+      throw new ProblemException("invariant-violated", {
+        invariant: "study-team-unchanged",
+        detail: after
+          ? `${before.code} 本来就归 ${after.name} —— 没有变化就不该留一条审计`
+          : `${before.code} 本来就没有归属组`
+      });
+
+    await c.client.query("DELETE FROM team_study WHERE study_id = $1", [id]);
+    if (b.teamId)
+      await c.client.query(
+        "INSERT INTO team_study (team_id, study_id) VALUES ($1, $2)", [b.teamId, id]);
+
+    await this.audit.write({
+      action: b.teamId ? "改项目归属组" : "收回项目归属组",
+      targetType: "study", targetId: before.code,
+      before: { team: before.team?.name ?? null },
+      after: { team: after?.name ?? null },
+      reason: b.reason });
+
+    /* 划走的后果要当场说出来 —— 点这一下的人未必想到它连着中心和工时。 */
+    const 影响 = await c.client.query<{ n: string }>(
+      "SELECT count(*)::text AS n FROM study_site WHERE study_id = $1", [id]);
+    return {
+      data: await this.oneStudy(id),
+      sideEffects: [{
+        type: "StudyTeamChanged",
+        summary: after
+          ? `${before.code} 已划给 ${after.name}（${after.code}）—— ` +
+            `${before.team ? `${before.team.name} 的项目总监` : "原来能看到它的人"}` +
+            `从这一刻起看不见它，也看不见它下面 ${影响.rows[0]!.n} 个中心`
+          : `${before.code} 已收回归属 —— 现在没有任何组承接它，` +
+            "只有行范围为「全部」的人看得到；这通常不是想要的结果",
+        ref: id
+      }]
+    };
   }
 
   async list(q: { limit: number; cursor?: string; studyId?: string; state?: string[];
@@ -126,16 +205,21 @@ export class SiteService {
   }
 
   async create(body: {
-    studyId: string; code: string; hospital: string; dept: string; city: string;
+    studyId: string; code?: string; hospital: string; dept: string; city: string;
     piName: string; piAccountId?: string | null; contracted: number;
     unitPriceCents: number; startupFeeCents?: number; sivPlannedOn?: string | null;
   }) {
     const c = ctx();
+    /* 编号省略时由服务端发号（SS-16，见 code_rule / 迁移 0043）。
+       让人现想一个中心编号，得到的是十五个中心十五种写法 ——
+       而受试者筛选号是直接建在中心编号上的（SS-16-P001），
+       中心编号一乱，底下每一个受试者号跟着乱。 */
+    const code = body.code ?? await nextCode("site");
     const { rows } = await c.client.query<{ id: string }>(
       `INSERT INTO study_site (study_id, code, hospital, dept, city, pi_name, pi_account_id,
          contracted, unit_price_cents, startup_fee_cents, siv_planned_on)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
-      [body.studyId, body.code, body.hospital, body.dept, body.city, body.piName,
+      [body.studyId, code, body.hospital, body.dept, body.city, body.piName,
        body.piAccountId ?? null, body.contracted, body.unitPriceCents,
        body.startupFeeCents ?? 0, body.sivPlannedOn ?? null]);
     const id = rows[0]!.id;
@@ -171,8 +255,8 @@ export class SiteService {
     await c.client.query(
       "UPDATE study_site SET startup_template_version = $2 WHERE id = $1", [id, version]);
 
-    await this.audit.write({ action: "中心建档", targetType: "study_site", targetId: body.code,
-      after: { code: body.code, hospital: body.hospital,
+    await this.audit.write({ action: "中心建档", targetType: "study_site", targetId: code,
+      after: { code, hospital: body.hospital,
                startupItems: Number(n), startupTemplateVersion: version },
       studySiteId: id });
     return this.get(id);

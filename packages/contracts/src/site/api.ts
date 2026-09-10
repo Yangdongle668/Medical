@@ -1,14 +1,17 @@
 import { z } from "zod";
 import { define } from "../kernel/registry.js";
-import { Uuid, DateOnly, CentsNonNeg, QueryBool } from "../kernel/primitives.js";
+import { Uuid, DateOnly, CentsNonNeg, QueryBool , QueryArray } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
 import { Study, StudySite, SiteState, SiteGate,
   SiteAcceptance, AcceptanceState, SubmitAcceptance,
-  IsfBoard, IsfCategory } from "./model.js";
+  IsfBoard, IsfCategory, CreateStudySiteBody, SetStudyTeamBody } from "./model.js";
 
 const CTX = "site";
 const ById = z.object({ id: Uuid });
+
+/** `listStudies` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListStudiesQuery = PageQuery.extend({ q: z.string().max(64).optional() });
 
 define({
   id: "listStudies", method: "get", path: "/v1/studies", layer: "L1", context: CTX,
@@ -20,9 +23,36 @@ define({
     "`assigned` / `hospital` / `pi` 由中心决定 —— 看得到中心才看得到它的项目。\n\n" +
     "前两支不能写成「有没有一个可见的中心」：一个刚批下来的项目一个中心都没有，" +
     "而建中心的表单第一栏就是选项目 —— 那是个死锁，不是收紧。",
-  query: PageQuery.extend({ q: z.string().max(64).optional() }),
+  query: ListStudiesQuery,
   response: page(Study)
 });
+
+define({
+  id: "setStudyTeam", method: "post", path: "/v1/studies/{id}:set-team",
+  layer: "L2", context: CTX, summary: "把项目划给另一个组", action: "manage",
+  description:
+    "**这是权限变更，不是显示偏好。** `row_rule=team` 的行范围就是「本组承接的项目」——\n" +
+    "项目一划走，原来那个组的 PM 当场看不见它、看不见它下面的全部中心、" +
+    "看不见那些中心上的受试者与工时。所以它写审计、`isSensitive=true`，且必须写原因。\n\n" +
+    "`teamId` 传 null = 收回归属（谁也不承接）。那之后只有行范围 `all` 的人看得到它，" +
+    "而这通常不是想要的结果 —— 接手、拆组、并组请直接划到新组。\n\n" +
+    "项目**第一次**的归属不在这里定：批准立项时归给提交人所在的组。",
+  params: ById,
+  body: SetStudyTeamBody,
+  response: commandResult(Study),
+  errors: ["invariant-violated", "conflict-version", "idempotency-key-reused"]
+});
+
+/** `listStudySites` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListStudySitesQuery = PageQuery.extend({
+    studyId: Uuid.optional(),
+    state: QueryArray(SiteState),
+    hospital: z.string().optional(),
+    q: z.string().max(64).optional(),
+    /** 只看「事后失效」的中心。见 StudySite.startupInvalidated —— 
+     *  这是撤销启动清单项之后，那件事在台账上留下的唯一可查痕迹。 */
+    startupInvalidated: QueryBool.optional()
+  });
 
 define({
   id: "listStudySites", method: "get", path: "/v1/study-sites", layer: "L1", context: CTX,
@@ -31,15 +61,7 @@ define({
     "行范围由登录身份推导：CRA 只看被指派的、PM 看本组承接项目下的、" +
     "机构办只看本院、PI 只看自己担任研究者的。\n" +
     "**调用方不能通过传参扩大范围**，只能在范围内再收窄。",
-  query: PageQuery.extend({
-    studyId: Uuid.optional(),
-    state: z.array(SiteState).optional(),
-    hospital: z.string().optional(),
-    q: z.string().max(64).optional(),
-    /** 只看「事后失效」的中心。见 StudySite.startupInvalidated —— 
-     *  这是撤销启动清单项之后，那件事在台账上留下的唯一可查痕迹。 */
-    startupInvalidated: QueryBool.optional()
-  }),
+  query: ListStudySitesQuery,
   response: page(StudySite)
 });
 
@@ -55,23 +77,16 @@ define({
   summary: "中心建档", status: 201,
   description:
     "「已建档 / 合同中心数」的差值 = 合同里写了但还没进系统的中心：" +
-    "它们的成本已经在发生，收入却挂不上号。建档滞后是早期成本失控最不显形的一种。",
-  body: z.object({
-    studyId: Uuid,
-    code: z.string().min(1).max(64),
-    hospital: z.string().min(1).max(128),
-    dept: z.string().min(1).max(64),
-    city: z.string().min(1).max(32),
-    piName: z.string().min(1).max(64),
-    piAccountId: Uuid.nullable().optional(),
-    contracted: z.int().positive(),
-    unitPriceCents: CentsNonNeg,
-    startupFeeCents: CentsNonNeg.default(0),
-    sivPlannedOn: DateOnly.nullable().optional()
-  }),
+    "它们的成本已经在发生，收入却挂不上号。建档滞后是早期成本失控最不显形的一种。\n\n" +
+    "**中心编号省略时由服务端按 `code_rule` 发号**（`SS-16`）。传了就用传的 —— " +
+    "留这条口子是给「申办方指定中心编号」这种真实情况。",
+  body: CreateStudySiteBody,
   response: StudySite,
   errors: ["invariant-violated"]
 });
+
+/** `getSiteGate` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const GetSiteGateQuery = z.object({ to: SiteState.optional().describe("缺省为状态机的下一节点") });
 
 define({
   id: "getSiteGate", method: "get", path: "/v1/study-sites/{id}/gate", layer: "L1", context: CTX,
@@ -80,9 +95,22 @@ define({
     "在按钮点下去之前就告诉用户还差什么。前端用它决定按钮是否可用，" +
     "以及在旁边列出未满足项与「去处理」入口。",
   params: ById,
-  query: z.object({ to: SiteState.optional().describe("缺省为状态机的下一节点") }),
+  query: GetSiteGateQuery,
   response: SiteGate
 });
+
+/** `advanceStudySite` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const AdvanceStudySiteBody = z.object({
+    to: SiteState,
+    /** **每一次推进都必填**，不只是 siv / closed。
+     *
+     *  这里曾写成"不可逆节点时必填"，而 `SENSITIVE_ACTIONS` 里
+     *  `advanceStudySite` 是无条件敏感的 —— 契约与策略各说一套，
+     *  症状是缺原因时返回 500 而不是 422：调用方被告知"服务坏了"，
+     *  于是去重试、去看监控，唯独不会去补那一栏。
+     *  以策略为准收口：中心状态机的每一次推进都是核查会问到的事实。 */
+    reason: WithReason.shape.reason
+  });
 
 define({
   id: "advanceStudySite", method: "post", path: "/v1/study-sites/{id}:advance",
@@ -96,17 +124,7 @@ define({
     "未满足时返回 422 `gate-not-satisfied`，`unmet` 里逐条说明还差什么、去哪里处理 —— " +
     "而不是一个被禁用的按钮。",
   params: ById,
-  body: z.object({
-    to: SiteState,
-    /** **每一次推进都必填**，不只是 siv / closed。
-     *
-     *  这里曾写成"不可逆节点时必填"，而 `SENSITIVE_ACTIONS` 里
-     *  `advanceStudySite` 是无条件敏感的 —— 契约与策略各说一套，
-     *  症状是缺原因时返回 500 而不是 422：调用方被告知"服务坏了"，
-     *  于是去重试、去看监控，唯独不会去补那一栏。
-     *  以策略为准收口：中心状态机的每一次推进都是核查会问到的事实。 */
-    reason: WithReason.shape.reason
-  }),
+  body: AdvanceStudySiteBody,
   response: commandResult(StudySite),
   errors: ["gate-not-satisfied", "validation-failed",
     "conflict-version", "idempotency-key-reused"]
@@ -130,6 +148,13 @@ define({
   response: StartupChecklist
 });
 
+/** `listStartupChecklists` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListStartupChecklistsQuery = PageQuery.extend({
+    /** 只看还有阻塞项没清的。**默认不筛** —— 清完的也要看得见，
+     *  否则"还有几个中心没启动"这个数在页面上凑不齐。 */
+    blockedOnly: QueryBool.optional()
+  });
+
 define({
   id: "listStartupChecklists", method: "get", path: "/v1/startup-checklists",
   layer: "L1", context: CTX,
@@ -140,13 +165,12 @@ define({
     "带上 items 的话，15 个中心就是 15 × 16 项，而这一页一项都不画。\n\n" +
     "排序：先未完成的阻塞项数（降序），再距计划 SIV 的天数 ——\n" +
     "**启动慢一个月，这个中心的整条收入曲线右移一个月。**",
-  query: PageQuery.extend({
-    /** 只看还有阻塞项没清的。**默认不筛** —— 清完的也要看得见，
-     *  否则"还有几个中心没启动"这个数在页面上凑不齐。 */
-    blockedOnly: QueryBool.optional()
-  }),
+  query: ListStartupChecklistsQuery,
   response: page(StartupSummary)
 });
+
+/** `completeStartupItem` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const CompleteStartupItemBody = z.object({ note: z.string().max(500).optional() });
 
 define({
   id: "completeStartupItem", method: "post", path: "/v1/startup-items/{id}:complete",
@@ -155,7 +179,7 @@ define({
     "完成必须同时记下时间与人 —— 只记「做完了」而不记「谁做的」，核查时说不清。\n" +
     "若本次完成清空了最后一个阻塞项，`sideEffects` 会明确告知「可推进 SIV」。",
   params: ById,
-  body: z.object({ note: z.string().max(500).optional() }),
+  body: CompleteStartupItemBody,
   response: commandResult(StartupItem),
   errors: ["conflict-version", "idempotency-key-reused"]
 });
@@ -170,20 +194,31 @@ define({
   errors: ["conflict-version", "idempotency-key-reused"]
 });
 
-define({
-  id: "listStaff", method: "get", path: "/v1/staff", layer: "L1", context: CTX,
-  summary: "人员与派工",
-  description: "外部方看不到员工名册 —— 那与机构履行监管职责无关。",
-  query: PageQuery.extend({
+/** `listStaff` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListStaffQuery = PageQuery.extend({
     roleKind: RoleKind.optional(),
     successionGap: QueryBool.optional().describe("只看「带多个中心却无继任者」的人"),
     /** 只看在职的。发起交接的候选人列表用它 ——
      *  停用的人出现在下拉里，选中之后是一次白跑：后端会拒，
      *  而界面上什么也说不出来。 */
     activeOnly: QueryBool.optional()
-  }),
+  });
+
+define({
+  id: "listStaff", method: "get", path: "/v1/staff", layer: "L1", context: CTX,
+  summary: "人员与派工",
+  description: "外部方看不到员工名册 —— 那与机构履行监管职责无关。",
+  query: ListStaffQuery,
   response: page(Staff)
 });
+
+/** `listSiteStaff` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListSiteStaffQuery = PageQuery.extend({
+    roleKind: RoleKind.optional(),
+    /** 只看证书已过期或即将到期的 —— 备案表上真正要动手的就这几个人。 */
+    gcpProblem: QueryBool.optional().describe("只看 GCP 已过期或 60 天内到期的"),
+    studySiteId: Uuid.optional()
+  });
 
 define({
   id: "listSiteStaff", method: "get", path: "/v1/site-staff", layer: "L1", context: CTX,
@@ -198,21 +233,27 @@ define({
     "所以走一个只开这几列的口子（`app.site_staff_registry()`），" +
     "行范围照旧由登录身份推导 —— **SECURITY DEFINER 绕开的是表策略，不是行范围**。\n" +
     "`sites` 只列本范围内的中心：那个 CRC 在别家医院还带着几个，与本院无关。",
-  query: PageQuery.extend({
-    roleKind: RoleKind.optional(),
-    /** 只看证书已过期或即将到期的 —— 备案表上真正要动手的就这几个人。 */
-    gcpProblem: QueryBool.optional().describe("只看 GCP 已过期或 60 天内到期的"),
-    studySiteId: Uuid.optional()
-  }),
+  query: ListSiteStaffQuery,
   response: page(SiteStaff)
 });
+
+/** `listHandovers` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListHandoversQuery = PageQuery.extend({ status: HandoverStatus.optional() });
 
 define({
   id: "listHandovers", method: "get", path: "/v1/handovers", layer: "L1", context: CTX,
   summary: "交接列表",
-  query: PageQuery.extend({ status: HandoverStatus.optional() }),
+  query: ListHandoversQuery,
   response: page(Handover)
 });
+
+/** `createHandover` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const CreateHandoverBody = z.object({
+    toAccountId: Uuid,
+    studySiteIds: z.array(Uuid).min(1),
+    reason: z.string().trim().min(5).max(500),
+    plannedOn: DateOnly
+  });
 
 define({
   id: "createHandover", method: "post", path: "/v1/handovers",
@@ -221,15 +262,13 @@ define({
   description:
     "休假、离职、调岗 —— 中心不会因此停下。\n" +
     "只能交接自己当前负责的中心；接手人必须是同工种的在职人员。",
-  body: z.object({
-    toAccountId: Uuid,
-    studySiteIds: z.array(Uuid).min(1),
-    reason: z.string().trim().min(5).max(500),
-    plannedOn: DateOnly
-  }),
+  body: CreateHandoverBody,
   response: Handover,
   errors: ["invariant-violated"]
 });
+
+/** `completeHandoverItem` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const CompleteHandoverItemBody = z.object({});
 
 define({
   id: "completeHandoverItem", method: "post",
@@ -237,10 +276,13 @@ define({
   summary: "确认交接清单的某一项",
   description: "逐项确认，不是一次打勾了事 —— 交接单签了字但受试者没交底，等于没交接。",
   params: z.object({ id: Uuid, seq: z.coerce.number().int().min(0) }),
-  body: z.object({}),
+  body: CompleteHandoverItemBody,
   response: commandResult(Handover),
   errors: ["idempotency-key-reused"]
 });
+
+/** `completeHandover` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const CompleteHandoverBody = z.object({});
 
 define({
   id: "completeHandover", method: "post", path: "/v1/handovers/{id}:complete",
@@ -254,7 +296,7 @@ define({
     "两个人都以为交完了，接手人一个中心也没拿到，" +
     "而原负责人的账号此刻已经可以停用了。",
   params: ById,
-  body: z.object({}),
+  body: CompleteHandoverBody,
   response: commandResult(Handover),
   errors: ["gate-not-satisfied", "invariant-violated", "idempotency-key-reused"]
 });
@@ -267,6 +309,12 @@ define({
   response: StartupTemplate
 });
 
+/** `replaceStartupTemplate` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ReplaceStartupTemplateBody = z.object({
+    items: z.array(StartupTemplateItem).min(1).max(60),
+    reason: z.string().trim().min(4).max(500)
+  });
+
 define({
   id: "replaceStartupTemplate", method: "post", path: "/v1/startup-template:replace",
   layer: "L2", context: "site",
@@ -276,15 +324,19 @@ define({
     "要指得回去，否则「这个中心当初是照着什么铺的」就没有答案。\n" +
     "只对**此后建档**的中心生效。",
   action: "manage",
-  body: z.object({
-    items: z.array(StartupTemplateItem).min(1).max(60),
-    reason: z.string().trim().min(4).max(500)
-  }),
+  body: ReplaceStartupTemplateBody,
   response: commandResult(StartupTemplate),
   errors: ["validation-failed", "idempotency-key-reused"]
 });
 
 /* ── 立项受理 ────────────────────────────────────────────────────── */
+
+/** `listSiteAcceptances` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListSiteAcceptancesQuery = PageQuery.extend({
+    studyId: Uuid.optional(),
+    state: QueryArray(AcceptanceState),
+    openOnly: QueryBool.optional()
+  });
 
 define({
   id: "listSiteAcceptances", method: "get", path: "/v1/site-acceptances",
@@ -297,11 +349,7 @@ define({
     "所以未受理的中心推不到「伦理递交」（中心状态机的闸门）。\n\n" +
     "**这张表不对外部方关闭** —— 它是双方共同的记录：" +
     "递交方要看到缺什么，受理方要出具受理通知。",
-  query: PageQuery.extend({
-    studyId: Uuid.optional(),
-    state: z.array(AcceptanceState).optional(),
-    openOnly: QueryBool.optional()
-  }),
+  query: ListSiteAcceptancesQuery,
   response: page(SiteAcceptance)
 });
 
@@ -323,6 +371,9 @@ define({
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
+/** `setAcceptanceDoc` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const SetAcceptanceDocBody = z.object({ present: z.boolean() });
+
 define({
   id: "setAcceptanceDoc", method: "post",
   path: "/v1/site-acceptances/{id}/docs/{seq}:set",
@@ -335,7 +386,7 @@ define({
     "那张通知就不再对应任何一份材料。",
   action: "accept",
   params: z.object({ id: Uuid, seq: z.coerce.number().int().min(0) }),
-  body: z.object({ present: z.boolean() }),
+  body: SetAcceptanceDocBody,
   response: commandResult(SiteAcceptance),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
@@ -371,6 +422,14 @@ define({
 
 /* ── 中心文件与物资 ──────────────────────────────────────────────── */
 
+/** `getIsfBoard` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const GetIsfBoardQuery = z.object({
+    studySiteId: Uuid.optional(),
+    category: QueryArray(IsfCategory),
+    /** 只看不齐备的。 */
+    openOnly: QueryBool.optional()
+  });
+
 define({
   id: "getIsfBoard", method: "get", path: "/v1/isf-items",
   layer: "L1", context: CTX,
@@ -384,14 +443,17 @@ define({
     "要么在最要紧的那一项上来不及。\n\n" +
     "**缺失与过期排最前**，其次临期（越近越前），再次库存不足，齐备在最后 ——" +
     "核查现场翻的就是这几摞东西，翻到的顺序应当是最该先处理的那几项。",
-  query: z.object({
-    studySiteId: Uuid.optional(),
-    category: z.array(IsfCategory).optional(),
-    /** 只看不齐备的。 */
-    openOnly: QueryBool.optional()
-  }),
+  query: GetIsfBoardQuery,
   response: IsfBoard
 });
+
+/** `updateIsfItem` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const UpdateIsfItemBody = z.object({
+    present: z.boolean().optional(),
+    expiresOn: DateOnly.nullable().optional(),
+    quantity: z.int().min(0).nullable().optional(),
+    note: z.string().trim().max(500).optional()
+  });
 
 define({
   id: "updateIsfItem", method: "post", path: "/v1/isf-items/{id}:update",
@@ -404,12 +466,7 @@ define({
     "而 CRA 没有 `subjWrite` —— 借那个动作，CRA 现场发现缺件却改不动台账。",
   action: "isfWrite",
   params: ById,
-  body: z.object({
-    present: z.boolean().optional(),
-    expiresOn: DateOnly.nullable().optional(),
-    quantity: z.int().min(0).nullable().optional(),
-    note: z.string().trim().max(500).optional()
-  }),
+  body: UpdateIsfItemBody,
   response: commandResult(IsfBoard),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });

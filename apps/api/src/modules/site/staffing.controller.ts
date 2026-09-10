@@ -1,3 +1,4 @@
+import { ListStartupChecklistsQuery, ListStaffQuery, ListSiteStaffQuery, ListHandoversQuery, CreateHandoverBody } from "@sitedesk/contracts";
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
 import { PageQuery, Uuid, DateOnly, WithReason, RoleKind, HandoverStatus, QueryBool }
@@ -8,26 +9,6 @@ import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
 import { command, idempotent } from "../../infra/command.js";
 
-const StaffQ = PageQuery.extend({
-  roleKind: RoleKind.optional(),
-  successionGap: QueryBool.optional(),
-  activeOnly: QueryBool.optional()
-});
-const SiteStaffQ = PageQuery.extend({
-  roleKind: RoleKind.optional(),
-  gcpProblem: QueryBool.optional(),
-  studySiteId: Uuid.optional()
-});
-const HandoverQ = PageQuery.extend({ status: HandoverStatus.optional() });
-const CreateHandover = z.object({
-  toAccountId: Uuid,
-  studySiteIds: z.array(Uuid).min(1),
-  reason: z.string().trim().min(5).max(500),
-  plannedOn: DateOnly
-});
-
-const ChecklistQ = PageQuery.extend({ blockedOnly: QueryBool.optional() });
-
 @Controller("/v1")
 export class StaffingController {
   constructor(
@@ -36,7 +17,7 @@ export class StaffingController {
   ) {}
 
   @Get("/startup-checklists") @Operation("listStartupChecklists")
-  listChecklists(@Query(new ZodPipe(ChecklistQ)) q: z.infer<typeof ChecklistQ>) {
+  listChecklists(@Query(new ZodPipe(ListStartupChecklistsQuery)) q: z.infer<typeof ListStartupChecklistsQuery>) {
     return this.svc.listChecklists(q);
   }
 
@@ -63,15 +44,15 @@ export class StaffingController {
   }
 
   @Get("/staff") @Operation("listStaff")
-  staff(@Query(new ZodPipe(StaffQ)) q: z.infer<typeof StaffQ>) { return this.svc.listStaff(q); }
+  staff(@Query(new ZodPipe(ListStaffQuery)) q: z.infer<typeof ListStaffQuery>) { return this.svc.listStaff(q); }
 
   @Get("/site-staff") @Operation("listSiteStaff")
-  siteStaff(@Query(new ZodPipe(SiteStaffQ)) q: z.infer<typeof SiteStaffQ>) {
+  siteStaff(@Query(new ZodPipe(ListSiteStaffQuery)) q: z.infer<typeof ListSiteStaffQuery>) {
     return this.svc.listSiteStaff(q);
   }
 
   @Get("/handovers") @Operation("listHandovers")
-  handovers(@Query(new ZodPipe(HandoverQ)) q: z.infer<typeof HandoverQ>) {
+  handovers(@Query(new ZodPipe(ListHandoversQuery)) q: z.infer<typeof ListHandoversQuery>) {
     return this.svc.listHandovers(q);
   }
 
@@ -80,7 +61,7 @@ export class StaffingController {
      请求可能发两次 —— 没有键的话，那就是实实在在的两笔。 */
   @Post("/handovers") @Operation("createHandover") @HttpCode(201)
   createHandover(
-    @Body(new ZodPipe(CreateHandover)) b: z.infer<typeof CreateHandover>,
+    @Body(new ZodPipe(CreateHandoverBody)) b: z.infer<typeof CreateHandoverBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return idempotent(this.idem, key, b, () => this.svc.createHandover(b));

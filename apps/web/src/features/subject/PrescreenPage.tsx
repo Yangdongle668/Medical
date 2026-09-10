@@ -6,6 +6,7 @@ import {
   STATE_LABEL, anonymous, today, type Subject
 } from "./api.js";
 import { SCREEN_FAIL_LABEL } from "../enrollment/api.js";
+import { Pick } from "../../shell/CreateForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    预筛登记。
@@ -49,10 +50,16 @@ export function PrescreenPage() {
     })();
   }, []);
 
+  /* fn 返回字符串时，用它当回执 —— 有些动作要等服务端回来才知道
+     该说什么（比如筛选号是服务端发的，登记之前这里并不知道号是多少）。 */
   const run = async (what: string, fn: () => Promise<unknown>) => {
     setProblem(null); setSaid(null);
-    try { await fn(); await reload(); setSaid(what); setActing(null); }
-    catch (e) { if (e instanceof ApiError) setProblem(e.problem); else throw e; }
+    try {
+      const r = await fn();
+      await reload();
+      setSaid(typeof r === "string" ? r : what);
+      setActing(null);
+    } catch (e) { if (e instanceof ApiError) setProblem(e.problem); else throw e; }
   };
 
   if (!subs) return <p className="muted">加载中…</p>;
@@ -82,21 +89,30 @@ export function PrescreenPage() {
           <span className="muted">此刻只有筛选号 —— 签知情之后才生成筛选期访视</span>
         </div>
         <div className="grid-form">
-          <label className="field"><span>中心</span>
-            <select value={siteId} data-testid="pre-site" onChange={e => setSiteId(e.target.value)}>
-              <option value="">— 选一个 —</option>
-              {sites.map(s => <option key={s.id} value={s.id}>{s.code} · {s.hospital}</option>)}
-            </select></label>
-          <label className="field"><span>筛选号</span>
+          <Pick label="中心" v={siteId} on={setSiteId} testid="pre-site"
+            options={sites.map(s => ({ value: s.id, label: `${s.code} · ${s.hospital}` }))}
+            empty="你被派工的中心里还没有能登记受试者的 —— 中心要先推进到 SIV（已启动）才收受试者，在那之前登记等于在启动会之前开展受试者相关工作。" />
+          {/* 筛选号默认由系统按中心发（SS-16-P001）。
+              留这条口子是因为申办方 / IWRS 指定筛选号确实存在 ——
+              但它是例外：让每个人现想一个，得到的是同一个中心上
+              并排出现 S-0203 和 SS-01-P001 两套写法。 */}
+          <label className="field"><span>筛选号 <span className="t-mut">· 留空即自动</span></span>
             <input value={no} data-testid="pre-no" className="mono"
-              onChange={e => setNo(e.target.value)} placeholder="例：SS-01-P042" /></label>
+              onChange={e => setNo(e.target.value)}
+              placeholder="自动生成，如 SS-01-P042" /></label>
         </div>
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="btn primary" data-testid="pre-create"
-            disabled={!siteId || !no.trim()}
-            onClick={() => void run(`已登记 ${no.trim()}`, async () => {
-              await createSubject(siteId, no.trim());
+            disabled={!siteId}
+            onClick={() => void run("已登记", async () => {
+              const s = await createSubject(siteId, no.trim() || undefined);
               setNo("");
+              /* 号是服务端发的，**发完要说出来** —— 不说的话，
+                 人得自己去台账里找哪一条是刚才那个。
+                 看不到筛选号的角色（列权限）就退回一句通用的。 */
+              return s.screeningNo
+                ? `已登记 ${s.screeningNo}${no.trim() ? "" : "（筛选号已自动生成）"}`
+                : "已登记";
             })}>
             登记
           </button>

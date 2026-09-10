@@ -21,13 +21,13 @@ export * from "./finance/model.js";
 export * from "./oversight/model.js";
 
 /* 端点定义有副作用（注册到 registry），必须被导入 */
-import "./platform/api.js";
-import "./auth/api.js";
-import "./identity/api.js";
-import "./site/api.js";
-import "./clinical/api.js";
+export * from "./platform/api.js";
+export * from "./auth/api.js";
+export * from "./identity/api.js";
+export * from "./site/api.js";
+export * from "./clinical/api.js";
 import "./clinical/accountability.js";
-import "./cost/api.js";
-import "./bizdev/api.js";
-import "./finance/api.js";
-import "./oversight/api.js";
+export * from "./cost/api.js";
+export * from "./bizdev/api.js";
+export * from "./finance/api.js";
+export * from "./oversight/api.js";

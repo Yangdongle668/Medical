@@ -63,20 +63,23 @@ define({
   response: IpLedger
 });
 
-define({
-  id: "recordIpMovement", method: "post", path: "/v1/study-sites/{id}/ip-movements",
-  layer: "L1", context: CTX, status: 201, action: "subjWrite",
-  summary: "记一笔药品出入库",
-  description: "只追加：记错了要用反向流水冲销，不能改历史 —— 核查看的就是这本台账。",
-  params: ById,
-  body: z.object({
+/** `recordIpMovement` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const RecordIpMovementBody = z.object({
     movedOn: DateOnly.optional(),
     kind: IpKind,
     quantity: z.int().positive().max(100_000),
     subjectRef: z.string().max(32).optional(),
     refNo: z.string().max(64).optional(),
     note: z.string().max(500).optional()
-  }),
+  });
+
+define({
+  id: "recordIpMovement", method: "post", path: "/v1/study-sites/{id}/ip-movements",
+  layer: "L1", context: CTX, status: 201, action: "subjWrite",
+  summary: "记一笔药品出入库",
+  description: "只追加：记错了要用反向流水冲销，不能改历史 —— 核查看的就是这本台账。",
+  params: ById,
+  body: RecordIpMovementBody,
   response: IpMovement
 });
 
@@ -95,28 +98,40 @@ export const Specimen = z.object({
   closed: z.boolean()
 }).meta({ id: "Specimen" });
 
+/** `listSpecimens` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListSpecimensQuery = PageQuery.extend({ openOnly: QueryBool.optional() });
+
 define({
   id: "listSpecimens", method: "get", path: "/v1/study-sites/{id}/specimens",
   layer: "L1", context: CTX,
   summary: "中心生物样本",
   params: ById,
-  query: PageQuery.extend({ openOnly: QueryBool.optional() }),
+  query: ListSpecimensQuery,
   response: page(Specimen)
 });
+
+/** `recordSpecimen` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const RecordSpecimenBody = z.object({
+    subjectRef: z.string().min(1).max(32),
+    kind: z.string().min(1).max(32),
+    collectedOn: DateOnly,
+    trackingNo: z.string().max(64).optional()
+  });
 
 define({
   id: "recordSpecimen", method: "post", path: "/v1/study-sites/{id}/specimens",
   layer: "L1", context: CTX, status: 201, action: "subjWrite",
   summary: "登记一管样本",
   params: ById,
-  body: z.object({
-    subjectRef: z.string().min(1).max(32),
-    kind: z.string().min(1).max(32),
-    collectedOn: DateOnly,
-    trackingNo: z.string().max(64).optional()
-  }),
+  body: RecordSpecimenBody,
   response: Specimen
 });
+
+/** `advanceSpecimen` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const AdvanceSpecimenBody = z.object({
+    stage: z.enum(["shipped", "received", "discarded"]),
+    on: DateOnly
+  });
 
 define({
   id: "advanceSpecimen", method: "post", path: "/v1/specimens/{id}:advance",
@@ -126,10 +141,7 @@ define({
     "收到与销毁是两个互斥的结局 —— 都不填就是「在路上不知去向」，" +
     "而中心一关就再也查不清了。",
   params: ById,
-  body: z.object({
-    stage: z.enum(["shipped", "received", "discarded"]),
-    on: DateOnly
-  }),
+  body: AdvanceSpecimenBody,
   response: commandResult(Specimen)
 });
 
@@ -157,20 +169,30 @@ define({
   response: page(RegulatorySubmission)
 });
 
+/** `recordRegulatorySubmission` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const RecordRegulatorySubmissionBody = z.object({
+    kind: SubmissionKind,
+    submittedOn: DateOnly,
+    refNo: z.string().max(64).optional(),
+    note: z.string().max(500).optional()
+  });
+
 define({
   id: "recordRegulatorySubmission", method: "post",
   path: "/v1/study-sites/{id}/regulatory-submissions",
   layer: "L1", context: CTX, status: 201, action: "ethics",
   summary: "登记一次伦理递交",
   params: ById,
-  body: z.object({
-    kind: SubmissionKind,
-    submittedOn: DateOnly,
-    refNo: z.string().max(64).optional(),
-    note: z.string().max(500).optional()
-  }),
+  body: RecordRegulatorySubmissionBody,
   response: RegulatorySubmission
 });
+
+/** `decideRegulatorySubmission` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const DecideRegulatorySubmissionBody = z.object({
+    decision: z.enum(["approved", "rejected"]),
+    decidedOn: DateOnly,
+    note: z.string().max(500).optional()
+  });
 
 define({
   id: "decideRegulatorySubmission", method: "post",
@@ -179,10 +201,6 @@ define({
   summary: "登记伦理批复",
   description: "**递交了不等于批下来了。** 关闭闸门看的是批复，不是递交。",
   params: ById,
-  body: z.object({
-    decision: z.enum(["approved", "rejected"]),
-    decidedOn: DateOnly,
-    note: z.string().max(500).optional()
-  }),
+  body: DecideRegulatorySubmissionBody,
   response: commandResult(RegulatorySubmission)
 });

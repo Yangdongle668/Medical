@@ -131,6 +131,110 @@ test.describe("经营层：组织与权限", () => {
     /* 分组不是通讯录 —— 这句话要在页面上，因为它是这一页存在的理由 */
     await expect(page.locator(".derive")).toContainText("权限的行维度");
   });
+
+  /* ══════════════════════════════════════════════════════════════════
+     建分组的入口一直都在（分组标签页），但**站在需要它的地方看不见**。
+
+     人是在「新增人员」那张表上发现自己缺一个分组的：那里有一个分组
+     下拉框，它只列现有的，答不出"没有我要的那个怎么办"。而顶上那三个
+     分段按钮（人员账号 20 / 分组 2 / 角色权限 9）读起来像筛选器，
+     不像"在这儿建东西"。
+
+     一个存在但找不到的入口，和没有这个入口，对用的人是同一件事。
+     ══════════════════════════════════════════════════════════════════ */
+  test("**从「新增人员」那里找得到建分组的路**", async ({ page }) => {
+    await page.getByRole("link", { name: "组织与权限" }).click();
+    await expect(page.getByTestId("new-team")).toBeVisible();
+
+    /* 分组下拉旁边就写着去哪儿建，而不是让人自己在三个标签里试 */
+    await expect(page.getByTestId("new-team-hint")).toContainText("分组");
+    await page.getByTestId("new-team-go").click();
+
+    /* 点完人就站在建分组的表单上了 */
+    await expect(page.getByTestId("team-name")).toBeVisible();
+    await expect(page.getByTestId("create-team")).toBeVisible();
+  });
+
+  test("建一个分组：代号留空，落到列表上", async ({ page }) => {
+    await page.getByRole("link", { name: "组织与权限" }).click();
+    await expect(page.getByTestId("account-row").first()).toBeVisible();
+    await page.getByTestId("tab-group").click();
+    const before = await page.getByTestId("team-card").count();
+
+    await page.getByTestId("team-name").fill("华南组");
+    /* 代号一个字都不填 —— 服务端按 code_rule 发号 */
+    await expect(page.getByTestId("create-team")).toBeEnabled();
+    await page.getByTestId("create-team").click();
+
+    await expect(page.getByTestId("org-said")).toContainText("华南组");
+    await expect(page.getByTestId("team-card")).toHaveCount(before + 1);
+    const 新组 = page.getByTestId("team-card").filter({ hasText: "华南组" });
+    await expect(新组.locator(".mono").first()).toHaveText(/^G-\d{2,}$/);
+  });
+
+  test("**一个分组都没有时，那一栏不能只显示「不分组」**", async ({ page }) => {
+    /* 新装的系统就是这个样子。而空着的下拉框长得和"这个功能不存在"
+       一模一样 —— 何况这一格空着的后果是实打实的：PM 的行范围规则是
+       「本组承接的项目」，没有分组他登进来一个项目都看不到。 */
+    await page.goto("/org?as=boss&empty=listTeams");
+    await expect(page.getByTestId("new-team")).toBeVisible();
+    await expect(page.getByTestId("new-team-empty")).toContainText("还一个分组都没有");
+    /* 而且要说清后果，不能只说"没有" */
+    await expect(page.getByTestId("new-team-empty")).toContainText("一个项目都看不到");
+    /* 去路仍然在同一处 */
+    await page.getByTestId("new-team-go").click();
+    await expect(page.getByTestId("create-team")).toBeVisible();
+  });
+
+  /* ══════════════════════════════════════════════════════════════════
+     把项目从 A 组划到 B 组。
+
+     在此之前这件事**只能直接改库**：批准立项会把项目归给提交人所在
+     的组，但归错了、要接手、要拆组并组，都没有入口。而它不是一个
+     标签 —— `row_rule=team` 的定义就是「本组承接的项目」。
+     ══════════════════════════════════════════════════════════════════ */
+  test("**每个组列得出自己承接的项目**，不再只有一个数字", async ({ page }) => {
+    await page.getByRole("link", { name: "组织与权限" }).click();
+    await expect(page.getByTestId("account-row").first()).toBeVisible();
+    await page.getByTestId("tab-group").click();
+    await expect(page.getByTestId("team-study-row").first()).toBeVisible();
+    expect(await page.getByTestId("team-study-row").count()).toBeGreaterThan(0);
+  });
+
+  test("**划走要写原因，而且当场说清后果**", async ({ page }) => {
+    await page.getByRole("link", { name: "组织与权限" }).click();
+    await expect(page.getByTestId("account-row").first()).toBeVisible();
+    await page.getByTestId("tab-group").click();
+
+    const 第一行 = page.getByTestId("team-study-row").first();
+    const 编号 = (await 第一行.locator(".mono").first().textContent())!.trim();
+
+    await page.getByTestId(`move-${编号}`).click();
+    /* 后果写在按钮旁边，不是点完才知道 */
+    await expect(page.getByText(/从确认那一刻起看不见/)).toBeVisible();
+    /* 没写原因就按不下去 —— 这是权限变更 */
+    await expect(page.getByTestId(`move-go-${编号}`)).toBeDisabled();
+
+    await page.getByTestId(`move-to-${编号}`).selectOption({ index: 1 });
+    await page.getByTestId(`move-reason-${编号}`).fill("华东组人手不足，本项目移交承接");
+    await expect(page.getByTestId(`move-go-${编号}`)).toBeEnabled();
+    await page.getByTestId(`move-go-${编号}`).click();
+
+    await expect(page.getByTestId("org-said")).toContainText(编号);
+    /* 划过去之后它出现在另一个组的卡片里 —— 台账上真的动了 */
+    await expect(page.getByTestId("team-study-row").filter({ hasText: 编号 })).toHaveCount(1);
+  });
+
+  test("**项目怎么归到组里，页面上答得出来**", async ({ page }) => {
+    await page.getByRole("link", { name: "组织与权限" }).click();
+    await expect(page.getByTestId("account-row").first()).toBeVisible();
+    await page.getByTestId("tab-group").click();
+    /* 这句话从前写的是"只有直接改库"，而批准立项现在会自动归组。
+       页面上留一句已经不对的说明，比不写更糟。 */
+    await expect(page.locator(".derive")).toContainText("批准立项那一刻");
+    /* 而仍然缺的那个入口也要说出来，不能假装它有 */
+    await expect(page.locator(".derive")).toContainText("从 A 组划到 B 组");
+  });
 });
 
 test("CRC 手敲进来：一句话，不是一串 403", async ({ page }) => {

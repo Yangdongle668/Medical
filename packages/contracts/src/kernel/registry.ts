@@ -51,6 +51,26 @@ export function define(e: Endpoint): Endpoint {
 
 export const allEndpoints = (): readonly Endpoint[] => endpoints;
 
+/** 按 id 取一个端点。写错 id 立刻抛，而不是拿到 undefined 再往下走。 */
+export function endpointOf(id: string): Endpoint {
+  const e = endpoints.find(x => x.id === id);
+  if (!e) throw new Error(`没有登记这个操作：${id}`);
+  return e;
+}
+
+/** 取某个端点的请求体 schema —— **路由层不许再写一份**。
+ *
+ *  写第二份的代价不是"多几行"，是它会安静地和契约分叉：
+ *  createStudySite 的 `code` 在契约里改成了可选，而路由层那份副本
+ *  仍然要求必填 —— 于是接口返回 422「请求参数不符合契约」，
+ *  而它自己就是那份契约的实现。这种错没有任何测试拦得住，
+ *  因为两边各自都是自洽的。 */
+export function bodyOf(id: string): z.ZodType {
+  const e = endpointOf(id);
+  if (!e.body) throw new Error(`${id} 没有请求体，取不到 body schema`);
+  return e.body;
+}
+
 /** 每个端点都可能返回的错误，不必逐个声明 */
 export const COMMON_ERRORS: ErrorCode[] = [
   "unauthenticated", "forbidden-action", "not-found", "validation-failed",

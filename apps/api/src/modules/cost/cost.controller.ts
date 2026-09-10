@@ -1,48 +1,16 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
+import {
+  Body, Controller, Get, Headers,
+  HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
 import {
-  PageQuery, Uuid, DateOnly, CentsNonNeg, WithReason, WorkType, RoleKindForRate, QueryBool
+  Uuid, DateOnly, WithReason, ListTimesheetsQuery,
+  CreateTimesheetBody, ListRateCardsQuery, CreateRateCardBody, ListPnlQuery
 } from "@sitedesk/contracts";
 import { CostService } from "./cost.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { command, idempotent } from "../../infra/command.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
-
-const arr = <T extends z.ZodType>(t: T) =>
-  z.union([t, z.array(t)]).transform(v => Array.isArray(v) ? v : [v]).optional();
-
-const TimesheetQ = PageQuery.extend({
-  studySiteId: Uuid.optional(),
-  accountId: Uuid.optional(),
-  workType: arr(WorkType),
-  from: DateOnly.optional(), to: DateOnly.optional(),
-  includeVoided: QueryBool.optional(),
-  unapprovedOnly: QueryBool.optional()
-});
-const CreateTimesheet = z.object({
-  studySiteId: Uuid,
-  workDate: DateOnly,
-  workType: WorkType,
-  hours: z.number().min(0.25).max(24),
-  travelCents: CentsNonNeg.optional(),
-  subjectId: Uuid.optional(),
-  note: z.string().max(500).optional()
-});
-const RateQ = PageQuery.extend({ roleKind: RoleKindForRate.optional() });
-const CreateRate = z.object({
-  roleKind: RoleKindForRate,
-  level: z.string().max(16).nullable().optional(),
-  dayCostCents: CentsNonNeg.min(1),
-  validFrom: DateOnly,
-  validTo: DateOnly.nullable().optional(),
-  note: z.string().max(200).optional()
-});
-
-const PnlQ = PageQuery.extend({
-  studyId: Uuid.optional(),
-  lossOnly: QueryBool.optional()
-});
 
 @Controller("/v1")
 export class CostController {
@@ -52,7 +20,7 @@ export class CostController {
   ) {}
 
   @Get("/timesheets") @Operation("listTimesheets")
-  list(@Query(new ZodPipe(TimesheetQ)) q: z.infer<typeof TimesheetQ>) {
+  list(@Query(new ZodPipe(ListTimesheetsQuery)) q: z.infer<typeof ListTimesheetsQuery>) {
     return this.svc.listTimesheets(q);
   }
 
@@ -61,7 +29,7 @@ export class CostController {
      请求可能发两次 —— 没有键的话，那就是实实在在的两笔。 */
   @Post("/timesheets") @Operation("createTimesheet") @HttpCode(201)
   create(
-    @Body(new ZodPipe(CreateTimesheet)) b: z.infer<typeof CreateTimesheet>,
+    @Body(new ZodPipe(CreateTimesheetBody)) b: z.infer<typeof CreateTimesheetBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return idempotent(this.idem, key, b, () => this.svc.createTimesheet(b));
@@ -83,13 +51,13 @@ export class CostController {
   ) { return command(this.idem, key, b, () => this.svc.voidTimesheet(id, b)); }
 
   @Get("/rate-cards") @Operation("listRateCards")
-  rates(@Query(new ZodPipe(RateQ)) q: z.infer<typeof RateQ>) {
+  rates(@Query(new ZodPipe(ListRateCardsQuery)) q: z.infer<typeof ListRateCardsQuery>) {
     return this.svc.listRateCards(q);
   }
 
   @Post("/rate-cards") @Operation("createRateCard") @HttpCode(201)
   createRate(
-    @Body(new ZodPipe(CreateRate)) b: z.infer<typeof CreateRate>,
+    @Body(new ZodPipe(CreateRateCardBody)) b: z.infer<typeof CreateRateCardBody>,
     @Headers("idempotency-key") key?: string
   ) {
     return idempotent(this.idem, key, b, () => this.svc.createRateCard(b));
@@ -111,7 +79,7 @@ export class CostController {
   ) { return this.svc.sitePnlTrend(id, q.months); }
 
   @Get("/pnl") @Operation("listPnl")
-  listPnl(@Query(new ZodPipe(PnlQ)) q: z.infer<typeof PnlQ>) { return this.svc.listPnl(q); }
+  listPnl(@Query(new ZodPipe(ListPnlQuery)) q: z.infer<typeof ListPnlQuery>) { return this.svc.listPnl(q); }
 
   @Get("/study-sites/:id/pnl") @Operation("getSitePnl")
   pnl(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.sitePnl(id); }

@@ -50,6 +50,24 @@ export const QueryBool = z.union([
   z.enum(["false", "0", "no", "off"]).transform(() => false)
 ]).describe("布尔查询参数：true/1/yes 或 false/0/no");
 
+/** 查询串里的数组。
+ *
+ *  `?state=a&state=b` 到了服务端是一个数组，`?state=a` 是**一个字符串** ——
+ *  这是查询串本身的形状，不是调用方写错了。
+ *
+ *  契约里原来写的是 `z.array(X).optional()`，而每个控制器
+ *  各自抄了一份带强制转换的版本（`arr()`）去接住那个标量。
+ *  两边都能跑，但**生成的 OpenAPI 说的是假话**：它声明只收数组，
+ *  而服务端一直收得下单值。照着文档写的客户端会为此绕一圈
+ *  （把单选也拼成数组），而照着实际行为写的客户端在文档上是"违规"的。
+ *
+ *  和 `QueryBool` 同一个道理：**查询串的形状归契约管**，
+ *  不归每个路由各自处置。 */
+export const QueryArray = <T extends z.ZodType>(t: T) =>
+  z.union([t, z.array(t)])
+    .transform(v => (Array.isArray(v) ? v : [v]))
+    .optional();
+
 /** 幂等键。所有 L2 命令必填，见 kernel/command.ts。 */
 export const IdempotencyKey = z.uuid()
   .describe("幂等键。24 小时内重放同一键返回首次结果。CRC 离线重放的生命线。");

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { call } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
+import { Pick } from "../../shell/CreateForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    人员备案与准入。
@@ -113,13 +114,10 @@ export function InstRegistryPage() {
       </div>
 
       <div className="row" style={{ marginBottom: 12, gap: 12, alignItems: "end" }}>
-        <label className="field" style={{ maxWidth: 220 }}>
-          <span>工种</span>
-          <select value={kind} data-testid="reg-kind" onChange={e => setKind(e.target.value)}>
-            <option value="">全部</option>
-            {kinds.map(k => <option key={k} value={k}>{KIND[k] ?? k}</option>)}
-          </select>
-        </label>
+        <Pick label="工种" v={kind} on={setKind} testid="reg-kind"
+          style={{ maxWidth: 220 }} placeholder="全部"
+          options={kinds.map(k => ({ value: k, label: KIND[k] ?? k }))}
+          empty="本院这几个中心上还没有备案人员 —— 没有可筛的工种。" />
         <label className="field" style={{ maxWidth: 260 }}>
           <span>
             <input type="checkbox" checked={problemOnly} data-testid="reg-problem-only"

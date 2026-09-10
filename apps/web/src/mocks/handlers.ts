@@ -105,6 +105,36 @@ const failStatus = (op: string) => failing.get(op);
  *  成本与毛利那一页正因如此，在一次干净部署之后（还没有任何中心）
  *  会告诉经营层「你的角色…看不到它们的钱」，而他看得到。 */
 let emptied = new Set<string>();
+/* ── mock 版发号 ───────────────────────────────────────────────────
+   与服务端 app.next_code 同一条规则（迁移 0043）：**按最大号 + 1**，
+   不按条数。按条数在 mock 上也一样会撞 —— 而 mock 撞出来的号
+   看起来像一个真的号，只是它已经属于别人了。 */
+function nextMockCode(stem: string, width: number, used: readonly string[]): string {
+  const n = used.reduce((max, c) => {
+    if (!c.startsWith(stem)) return max;
+    const tail = c.slice(stem.length);
+    return /^[0-9]+$/.test(tail) ? Math.max(max, Number(tail)) : max;
+  }, 0);
+  return stem + String(n + 1).padStart(width, "0");
+}
+
+/* ── 项目归属组 ────────────────────────────────────────────────────
+   服务端那一侧是 team_study（迁移 0004/0041）。mock 里用一张同形的
+   映射：项目 id → 组 id。**没有映射 = 没有归属组**，那是真实存在的
+   一格（提交人和审批人都不在任何组里时），而不是"数据没造全"。 */
+const studyTeam = new Map<string, string>();
+function teamOfStudy(studyId: string) {
+  const id = studyTeam.get(studyId);
+  const t = id ? scenario.teams.find(x => x.id === id) : undefined;
+  return t ? { id: t.id, code: t.code, name: t.name } : null;
+}
+/* 演示数据的初始归属：前两个项目归第一个组，其余归第二个 —— 
+   与 seed 里 team_study 那四行同一个形状。 */
+scenario.studies.forEach((st, i) => {
+  const t = scenario.teams[i < 2 ? 0 : 1];
+  if (t) studyTeam.set(st.id, t.id);
+});
+
 export const setEmptyOps = (ops: string[]) => { emptied = new Set(ops); };
 const isEmptied = (op: string) => emptied.has(op);
 const identity = () => IDENTITIES[mockRole];
@@ -502,22 +532,29 @@ export const scenarioHandlers = [
   http.post(pathToRegExp("/v1/accounts/{id}:set-password"), () =>
     new HttpResponse(null, { status: 204 })),
 
-  http.get(pathToRegExp("/v1/teams"), () =>
-    HttpResponse.json({ items: scenario.teams.map(t => ({
+  http.get(pathToRegExp("/v1/teams"), () => {
+    /* 一个分组都没有：新装的系统就是这个样子。见 setEmptyOps ——
+       「新增人员」那张表上的分组下拉框空着的时候界面该说什么，
+       只有这样才演得出来，而那正是最容易被读成"没有这个功能"的一格。 */
+    if (isEmptied("listTeams"))
+      return HttpResponse.json({ items: [] });
+    return HttpResponse.json({ items: scenario.teams.map(t => ({
       ...t,
       memberCount: scenario.accounts.filter(
         a => a.team?.id === t.id && a.status === "active").length
-    })) })),
+    })) });
+  }),
 
   http.post(pathToRegExp("/v1/teams"), async ({ request }) => {
     const b = await request.json() as
-      { code: string; name: string; leadAccountId?: string | null };
-    if (scenario.teams.some(t => t.code === b.code))
+      { code?: string; name: string; leadAccountId?: string | null };
+    const code = b.code ?? nextMockCode("G-", 2, scenario.teams.map(t => t.code));
+    if (scenario.teams.some(t => t.code === code))
       return HttpResponse.json(
-        problem("validation-failed", 422, `分组代号 ${b.code} 已存在`), { status: 422 });
+        problem("validation-failed", 422, `分组代号 ${code} 已存在`), { status: 422 });
     const lead = scenario.accounts.find(a => a.id === b.leadAccountId);
     const t = {
-      id: `t-${b.code}`, code: b.code, name: b.name,
+      id: `t-${code}`, code, name: b.name,
       lead: lead ? { id: lead.id, displayName: lead.displayName } : null,
       memberCount: 0, studyCount: 0
     };
@@ -1909,10 +1946,53 @@ export const scenarioHandlers = [
       sponsorName: st.clientName, phase: st.phase,
       indication: "非小细胞肺癌", plannedSubjects: st.plannedSubjects,
       startedOn: "2024-11-01", endsOn: null,
+      /* 归属组 —— 它就是 row_rule=team 的行范围。mock 上演不出来的话，
+         「划走之后原来那个组看不见了」这件事在演示里根本发生不了。 */
+      team: teamOfStudy(st.id),
       ...(identity().fields.includes("price")
         ? { contractAmountCents: st.contractCents } : {})
     }));
     return HttpResponse.json({ items, nextCursor: null });
+  }),
+
+  /* 把项目划给另一个组。**这是行范围变更** —— 划走那一刻，
+     原来那个组的 PM 看不见它和它下面的一切。 */
+  http.post(pathToRegExp("/v1/studies/{id}:set-team"), async ({ request }) => {
+    const id = seg(request.url, /\/studies\/([^/:]+):set-team/);
+    const b = await request.json() as { teamId: string | null; reason?: string };
+    if (!identity().actions.includes("manage")) return HttpResponse.json(
+      problem("forbidden-action", 403, "你的角色不能改项目归属组"), { status: 403 });
+    const st = scenario.studies.find(x => x.id === id);
+    if (!st) return HttpResponse.json(problem("not-found", 404, "项目不存在"), { status: 404 });
+    if ((b.reason ?? "").trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "改归属必须写原因（至少 4 字）"), { status: 422 });
+
+    const 原 = teamOfStudy(id);
+    if ((原?.id ?? null) === b.teamId) return HttpResponse.json(
+      problem("invariant-violated", 422,
+        原 ? `${st.code} 本来就归 ${原.name}` : `${st.code} 本来就没有归属组`),
+      { status: 422 });
+
+    if (b.teamId) studyTeam.set(id, b.teamId); else studyTeam.delete(id);
+    const 新 = teamOfStudy(id);
+    const n = SITES_LIST.filter(x => x.studyId === id).length;
+    return HttpResponse.json({
+      data: {
+        id: st.id, code: st.code, shortName: st.shortName,
+        sponsorName: st.clientName, phase: st.phase, indication: "非小细胞肺癌",
+        plannedSubjects: st.plannedSubjects, startedOn: "2024-11-01", endsOn: null,
+        team: 新
+      },
+      sideEffects: [{
+        type: "StudyTeamChanged", ref: id,
+        summary: 新
+          ? `${st.code} 已划给 ${新.name}（${新.code}）—— ` +
+            `${原 ? `${原.name} 的项目总监` : "原来能看到它的人"}` +
+            `从这一刻起看不见它，也看不见它下面 ${n} 个中心`
+          : `${st.code} 已收回归属 —— 现在没有任何组承接它，` +
+            "只有行范围为「全部」的人看得到；这通常不是想要的结果"
+      }]
+    }, { status: 201 });
   }),
 
   http.get(pathToRegExp("/v1/study-sites"), ({ request }) => {
@@ -1928,16 +2008,17 @@ export const scenarioHandlers = [
   http.post(pathToRegExp("/v1/study-sites"), async ({ request }) => {
     const b = await request.json() as {
       studyId: string;
-      code: string; hospital: string; dept: string; city: string; piName: string;
+      code?: string; hospital: string; dept: string; city: string; piName: string;
       contracted: number; unitPriceCents?: number; startupFeeCents?: number;
       sivPlannedOn?: string | null;
     };
-    if (SITES_LIST.some(s => s.code === b.code))
+    const code = b.code ?? nextMockCode("SS-", 2, SITES_LIST.map(s => s.code));
+    if (SITES_LIST.some(s => s.code === code))
       return HttpResponse.json(
-        problem("invariant-violated", 422, `中心编号 ${b.code} 已存在`), { status: 422 });
+        problem("invariant-violated", 422, `中心编号 ${code} 已存在`), { status: 422 });
 
     const site = {
-      id: `s-new-${SITES_LIST.length + 1}`, code: b.code,
+      id: `s-new-${SITES_LIST.length + 1}`, code,
       hospital: b.hospital, dept: b.dept, city: b.city,
       piName: b.piName, piAccountId: null,
       /* **建档出来的中心停在「立项」** —— 与库里的
@@ -2727,14 +2808,19 @@ export const scenarioHandlers = [
   }),
 
   http.post(pathToRegExp("/v1/subjects"), async ({ request }) => {
-    const b = await request.json() as { studySiteId: string; screeningNo: string };
-    if (scenario.subjects.some(x => x.screeningNo === b.screeningNo))
-      return HttpResponse.json(problem("invariant-violated", 422,
-        `筛选号 ${b.screeningNo} 在这个中心已经用过了`), { status: 422 });
+    const b = await request.json() as { studySiteId: string; screeningNo?: string };
     const site = SITES_LIST.find(x => x.id === b.studySiteId);
+    /* 筛选号省略即按中心发号，与服务端的 app.next_code('subject', 中心号)
+       同一条规则（迁移 0043）—— mock 上演不出来的分支等于没写过。 */
+    const siteCode = site?.code ?? "SS-??";
+    const screeningNo = b.screeningNo ?? nextMockCode(
+      `${siteCode}-P`, 3, scenario.subjects.map(x => x.screeningNo));
+    if (scenario.subjects.some(x => x.screeningNo === screeningNo))
+      return HttpResponse.json(problem("invariant-violated", 422,
+        `筛选号 ${screeningNo} 在这个中心已经用过了`), { status: 422 });
     const s = {
       id: `u-${scenario.subjects.length + 1}`, studySiteId: b.studySiteId,
-      siteCode: site?.code ?? "SS-??", screeningNo: b.screeningNo,
+      siteCode, screeningNo,
       randomized: false, randomizationNo: null, state: "prescreen",
       icfSignedOn: null, enrolledOn: null, exitedOn: null,
       screenFailReason: null, withdrawReason: null, crcName: me().account.displayName,

@@ -432,3 +432,10 @@ export const Soa = z.object({
     "一个受试者的 C4D1 已经排在下周三，模板一改就跳到下周五，" +
     "那个人的行程、床位、伴随用药全部作废，而系统不会知道自己做了这件事。"
 });
+
+/** **具名导出，路由层直接用这一个** —— 路由层再写一份副本就会分叉。 */
+export const CreateSubjectBody = z.object({
+  studySiteId: Uuid,
+  /** 省略即由服务端按中心发号（SS-16-P001，见 code_rule）。 */
+  screeningNo: z.string().trim().min(1).max(32).optional()
+});
