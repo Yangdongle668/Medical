@@ -106,7 +106,11 @@ services:
       # ── 登录链接的投递通道 ────────────────────────────────────────
       # 链接里的地址就是拿这个拼的。填错了，链接点开会落到别处。
       SITEDESK_PUBLIC_ORIGIN: ${SITEDESK_PUBLIC_ORIGIN:-http://localhost:8080}
-      # 一个都没配 = 不发：链接照样签发，但只能由运维用
+      # 存 SMTP 口令用的钥匙。系统里那一页（组织与权限 → 投递通道）
+      # 靠它把口令加密后落库；没配就拒绝保存口令，不会悄悄存明文。
+      SITEDESK_SECRET_KEY: ${SITEDESK_SECRET_KEY:-}
+      # 下面几行是开机那条路。日常运营在系统里配，库里配了以库里为准；
+      # 两处都没配 = 不发：链接照样签发，但只能由运维用
       # ./deploy/login-link.sh 代发（启动自检会为此打一条告警）。
       SITEDESK_SMTP_URL: ${SITEDESK_SMTP_URL:-}
       SITEDESK_MAIL_FROM: ${SITEDESK_MAIL_FROM:-}

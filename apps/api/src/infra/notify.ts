@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { ctx } from "./ctx.js";
 import { emit } from "./log.js";
 import { LoginDelivery, type Channel } from "./login-delivery.js";
+import { MailTransportService } from "./mail-transport.service.js";
 
 /* ════════════════════════════════════════════════════════════════════
    业务通知（欠账 D5：交接不发通知）。
@@ -33,7 +34,10 @@ export interface Notice {
 
 @Injectable()
 export class NotifyService {
-  constructor(private readonly delivery: LoginDelivery) {}
+  constructor(
+    private readonly delivery: LoginDelivery,
+    private readonly mail: MailTransportService
+  ) {}
 
   /** 排一条通知，**在本次事务提交之后**送出去。
    *
@@ -48,6 +52,9 @@ export class NotifyService {
   queue(n: Notice): void {
     const c = ctx();
     const pending = this.destination(n.accountId);
+    /* 通道也要在事务里解 —— 和收件地址同一个理由。 */
+    const viaPending = this.mail.resolve()
+      .then(cfg => cfg ? MailTransportService.transportOf(cfg) : null);
     c.afterCommit.push(async () => {
       try {
         const dest = await pending;
@@ -60,7 +67,7 @@ export class NotifyService {
         }
         const how = await this.delivery.notify({
           channel: dest.channel, to: dest.address, subject: n.subject, text: n.text
-        });
+        }, await viaPending);
         if (how === "no-transport")
           emit("warn", "notify", "没有配置对应的投递通道，通知未发出",
             { channel: dest.channel, subject: n.subject });

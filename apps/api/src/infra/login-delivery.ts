@@ -194,10 +194,11 @@ export function deliveryPlan(env: NodeJS.ProcessEnv = process.env): DeliveryPlan
 /** 生产环境两条通道都没配 —— 不拒绝启动（运维代发仍然是可用的路径），
  *  但必须说一次：这是上线清单上的一项。 */
 export const NO_CHANNEL_WARNING =
-  "登录链接没有配置任何投递通道（SITEDESK_SMTP_URL / SITEDESK_SMS_WEBHOOK_URL）。\n" +
-  "    系统仍然会签发令牌，但没有人收得到 —— 只能由能进服务器的人跑\n" +
-  "    deploy/login-link.sh 代发，也就是说签发权限等同于运维权限。\n" +
-  "    这是上线前该补掉的一项。";
+  "环境变量里没有配置任何投递通道（SITEDESK_SMTP_URL / SITEDESK_SMS_WEBHOOK_URL）。\n" +
+  "    **这不一定是问题**：邮件通道现在也可以在系统里配\n" +
+  "    （组织与权限 → 投递通道），而那份配置在库里，开机时看不见。\n" +
+  "    两处都没有的话，系统仍然会签发令牌但没有人收得到 —— 只能由能进\n" +
+  "    服务器的人跑 deploy/login-link.sh 代发，也就是说签发权限等同于运维权限。";
 
 /* ── 投递 ─────────────────────────────────────────────────────────── */
 
@@ -218,8 +219,13 @@ export class LoginDelivery {
       : this.plan.sms === "console" ? console_ : null;
   }
 
-  /** 这条通道有没有人在听。没有的话调用方只记日志，**响应仍然是同一个 202**。 */
-  transportFor(channel: Channel): Transport | null {
+  /** 这条通道有没有人在听。没有的话调用方只记日志，**响应仍然是同一个 202**。
+   *
+   *  `override` 是库里那一份配置解出来的通道（MailTransportService.resolve）——
+   *  **它优先于 env**。传进来而不是在这里查，是因为投递发生在 afterCommit，
+   *  那时数据库连接已经归还了（notify.ts 里写着同一条）。 */
+  transportFor(channel: Channel, override?: Transport | null): Transport | null {
+    if (channel === "email" && override) return override;
     return channel === "email" ? this.email : this.sms;
   }
 
@@ -228,12 +234,12 @@ export class LoginDelivery {
    *  暂时性失败会重试（欠账 G6），窗口不超过链接自己有效期的三分之一：
    *  在第 20 分钟送到一条第 15 分钟就过期的链接，比彻底失败更糟 ——
    *  用户点开它看到"链接无效"，然后不知道该怪谁。 */
-  async deliver(m: LoginLink): Promise<"sent" | "no-transport"> {
+  async deliver(m: LoginLink, override?: Transport | null): Promise<"sent" | "no-transport"> {
     return this.send({
       channel: m.channel, to: m.to,
       subject: subjectOf(m.ttlMin),
       text: m.channel === "sms" ? smsOf(m) : bodyOf(m)
-    }, "登录链接已投递", {}, loginLinkPlan(m.ttlMin));
+    }, "登录链接已投递", {}, loginLinkPlan(m.ttlMin), override);
   }
 
   /** 送一条**普通通知**（交接、到期提醒……）。
@@ -244,14 +250,15 @@ export class LoginDelivery {
    *
    *  但两者有一处必须分开：**登录链接的正文绝不进日志**（它就是凭证），
    *  而普通通知的标题进日志是有用的 —— 排查"他说没收到"时要靠它。 */
-  async notify(m: Message): Promise<"sent" | "no-transport"> {
-    return this.send(m, "通知已投递", { subject: m.subject }, noticePlan());
+  async notify(m: Message, override?: Transport | null): Promise<"sent" | "no-transport"> {
+    return this.send(m, "通知已投递", { subject: m.subject }, noticePlan(), override);
   }
 
   private async send(
-    m: Message, what: string, extra: Record<string, unknown> = {}, plan?: RetryPlan
+    m: Message, what: string, extra: Record<string, unknown> = {}, plan?: RetryPlan,
+    override?: Transport | null
   ): Promise<"sent" | "no-transport"> {
-    const t = this.transportFor(m.channel);
+    const t = this.transportFor(m.channel, override);
     if (!t) return "no-transport";
 
     if (plan) {

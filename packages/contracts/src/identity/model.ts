@@ -253,3 +253,61 @@ export const SetLoginAddressBody = z.object({
     .max(160, "最多 160 个字符")
     .describe("邮箱或手机号。形状由服务端的 app.set_login_address 校验")
 }).extend(WithReason.shape).meta({ id: "SetLoginAddressRequest" });
+
+/* ════════════════════════════════════════════════════════════════════
+   登录链接的投递通道。
+
+   通道本身早就写好了（SMTP 客户端、重试、掩码日志），缺的是**填它的
+   地方** —— 在此之前只能改环境变量、重启进程，也就是说
+   **签发登录链接的权限等同于运维权限**（login-delivery.ts 自己写着
+   这一条，把它列为"上线前该补掉的一项"）。
+   ════════════════════════════════════════════════════════════════════ */
+
+export const MailTransportKind = z.enum(["smtp", "none"]);
+
+export const MailTransport = z.object({
+  kind: MailTransportKind,
+  /** `smtp://host:port` 或 `smtps://host:port` —— **不含口令**。 */
+  url: z.string().nullable(),
+  fromAddr: z.string().nullable(),
+  username: z.string().nullable(),
+  /** 口令**存了没有**，不是口令本身。
+   *
+   *  一个能把口令读回来的设置页，等于给每个管理员发了一份邮箱凭证 ——
+   *  而他们要做的事（改服务器、换发件人、试发一封）一件也不需要读它。 */
+  secretSet: z.boolean(),
+  /** 这份配置从哪儿来：`db` = 在这一页配的；`env` = 还在用环境变量；
+   *  `none` = 两处都没有，链接签得出来但没有人收得到。 */
+  source: z.enum(["db", "env", "none"]),
+  /** 服务器上配了 `SITEDESK_SECRET_KEY` 没有。
+   *  没有就存不了口令 —— 页面要据此说清为什么，而不是让人存完发现没生效。 */
+  keyReady: z.boolean(),
+  lastTestAt: Timestamp.nullable(),
+  lastTestOk: z.boolean().nullable(),
+  lastTestError: z.string().nullable(),
+  updatedAt: Timestamp.nullable(),
+  updatedByName: z.string().nullable()
+}).meta({ id: "MailTransport" });
+
+/** **具名导出，路由层直接用这一个。** */
+export const SetMailTransportBody = WithReason.extend({
+  kind: MailTransportKind,
+  url: z.string().trim().max(300).nullable().optional()
+    .describe("smtp://host:port 或 smtps://host:port，不要带口令"),
+  fromAddr: z.string().trim().max(200).nullable().optional(),
+  username: z.string().trim().max(200).nullable().optional(),
+  /** 口令。**省略 = 不动已存的那一个**（改端口不该被迫重输口令）；
+   *  传空串 = 清掉。这三种意思必须分得开。 */
+  secret: z.string().max(400).nullable().optional()
+}).meta({ id: "SetMailTransportRequest" });
+
+/** 试发。收件人**不接受传入** —— 一律发给当前登录者自己登记的地址。
+ *  可以指定收件人的"试发"是一个开放的转发器。 */
+export const TestMailTransportBody = z.object({}).meta({ id: "TestMailTransportRequest" });
+
+export const MailTestResult = z.object({
+  ok: z.boolean(),
+  /** 发到哪儿了 —— **掩码后的**。 */
+  sentTo: z.string().nullable(),
+  error: z.string().nullable()
+}).meta({ id: "MailTestResult" });

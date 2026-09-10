@@ -173,7 +173,19 @@ git clone <仓库地址> && cd Medical
 #  ✓ 「lingyuan」的登录链接将投递到：lingyuan@hengji.com（走邮件通道）
 ```
 
-通道在 `deploy/.env` 里配（`SITEDESK_SMTP_URL` / `SITEDESK_SMS_WEBHOOK_URL`）。
+通道有两条配法，**日常用第一条**：
+
+1. **在系统里配** —— 组织与权限 → 投递通道（需 `manage`）。填服务器地址、
+   发件人、用户名、口令，配完当场「试发一封」验一次。口令加密后落库
+   （钥匙是 `SITEDESK_SECRET_KEY`，见下表）；**页面上读不回来**，
+   只说「存了没有」—— 一个能把口令读回来的设置页，等于给每个管理员
+   发了一份邮箱凭证。
+2. **在 `deploy/.env` 里配**（`SITEDESK_SMTP_URL` / `SITEDESK_SMS_WEBHOOK_URL`）
+   —— 这是**开机那条路**：第一个租户开出来之前没有人能登进来配它。
+   库里配了以库里为准。
+
+两处都不配的话链接照样签发，但没有人收得到 —— 那时候登录链接的签发
+权限等同于运维权限，而没收到的人只会以为系统坏了。
 一个都不配也能跑，只是链接没人收得到 —— 启动自检会为此打一条告警。
 
 > **收件地址只认库里登记的那个。** `POST /v1/auth/magic-link` 的请求体里有一个
@@ -301,7 +313,8 @@ docker compose --project-directory deploy -f deploy/docker-compose.yml down -v
 | `SITEDESK_DRAIN_MS` | 未设 → 5000 + 一条告警 | SIGTERM 后等多久再关。**必须比 LB 摘掉本实例所需的时间长** |
 | `SITEDESK_LB_PROBE_MS` | 未设 | 不知道上面填几秒？填 LB 的探测间隔，进程自己乘 |
 | `SITEDESK_LB_PROBE_FAILURES` | `2` | 连续几次探测失败才摘掉 |
-| `SITEDESK_SMTP_URL` | 未设 | `smtp://用户:口令@主机:587`。配了就走邮件通道 |
+| `SITEDESK_SECRET_KEY` | 未设 | 存 SMTP 口令用的钥匙（`openssl rand -base64 32`）。没配时设置页**拒绝保存口令**，不会悄悄存明文。换掉它 = 已存的口令全部解不开 |
+| `SITEDESK_SMTP_URL` | 未设 | `smtp://用户:口令@主机:587`。开机那条路；系统里配了以系统里为准 |
 | `SITEDESK_MAIL_FROM` | 未设 | 发件人。配了 SMTP 却没配它 → **拒绝启动** |
 | `SITEDESK_SMS_WEBHOOK_URL` | 未设 | 短信网关，POST `{to, text}` + Bearer |
 | `SITEDESK_HSTS_MAX_AGE` | `63072000`（两年） | 秒。只在 `X-Forwarded-Proto: https` 时发；`0` = 关 |

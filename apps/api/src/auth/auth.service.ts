@@ -6,6 +6,7 @@ import { ctx } from "../infra/ctx.js";
 import { ProblemException } from "../infra/problem.js";
 import { emit } from "../infra/log.js";
 import { LoginDelivery, type Channel } from "../infra/login-delivery.js";
+import { MailTransportService } from "../infra/mail-transport.service.js";
 import { hashPassword, verifyPassword, passwordProblem } from "./password.js";
 
 /** 三种失败一个说法。区分开来，这个端点就是账号枚举器。 */
@@ -50,6 +51,7 @@ const SESSION_TTL_H = () => intEnv("SITEDESK_SESSION_TTL_H", 8, 1, 24 * 30);
 export class AuthService {
   constructor(
     private readonly delivery: LoginDelivery,
+    private readonly mail: MailTransportService,
     /** 口令失败计数要活过业务回滚，所以得有一条不属于本次事务的连接。 */
     @Inject(POOL) private readonly pool: Pool
   ) {}
@@ -96,10 +98,15 @@ export class AuthService {
     /* **提交之后再发。** 在事务里发的话，用户可能在令牌落库之前就点开链接，
        拿到一句"链接无效"，而库里明明有 —— 那是最难复现的一类报障。 */
     const link = `${publicOrigin()}/login?token=${encodeURIComponent(token)}`;
+    /* 通道**在请求里解出来**，装进闭包带过去 —— afterCommit 跑的时候
+       数据库连接已经归还了（notify.ts 里写着同一条）。
+       库里配了就用库里那份，没配回退到环境变量。 */
+    const cfg = await this.mail.resolve();
+    const via = cfg ? MailTransportService.transportOf(cfg) : null;
     c.afterCommit.push(() => this.delivery.deliver({
       channel: r.channel ?? "email", to: r.destination!,
       displayName: r.display_name, link, ttlMin: LINK_TTL_MIN()
-    }).then((how) => {
+    }, via).then((how) => {
       if (how === "no-transport")
         emit("warn", "login-delivery",
           "链接已签发，但没有配置对应的投递通道 —— 只能由运维用 deploy/login-link.sh 代发",
