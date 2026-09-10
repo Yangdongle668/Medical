@@ -15,7 +15,6 @@ import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
 import { command, idempotent } from "../../infra/command.js";
 
-
 @Controller("/v1")
 export class IdentityController {
   constructor(

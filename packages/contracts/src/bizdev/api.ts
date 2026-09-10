@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { define } from "../kernel/registry.js";
-import { Uuid, Code, DateOnly, QueryBool } from "../kernel/primitives.js";
+import { Uuid, Code, DateOnly, QueryBool , QueryArray } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult } from "../kernel/command.js";
 import { CentsNonNeg } from "../kernel/primitives.js";
@@ -15,6 +15,15 @@ const ById = z.object({ id: Uuid });
 
 /* ── 中心可行性调查 ──────────────────────────────────────────────── */
 
+/** `listFeasibility` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListFeasibilityQuery = PageQuery.extend({
+    studyId: Uuid.optional(),
+    status: QueryArray(FeasibilityStatus),
+    /** 只看「评分不够却入选了」的那些 —— 复盘时第一个要看的就是它们。 */
+    overrideOnly: QueryBool.optional(),
+    q: z.string().max(64).optional().describe("按医院名筛")
+  });
+
 define({
   id: "listFeasibility", method: "get", path: "/v1/feasibility",
   layer: "L1", context: CTX,
@@ -26,13 +35,7 @@ define({
     "内部按项目切：这个项目下有一个中心是我看得见的，它的可行性调查我就看得见。\n\n" +
     "评分**由服务端算并逐项下发**：同一套口径出现在两个地方迟早分叉，" +
     "而分叉那天，一家医院会因为看哪个页面而得到不同的结论。",
-  query: PageQuery.extend({
-    studyId: Uuid.optional(),
-    status: z.array(FeasibilityStatus).optional(),
-    /** 只看「评分不够却入选了」的那些 —— 复盘时第一个要看的就是它们。 */
-    overrideOnly: QueryBool.optional(),
-    q: z.string().max(64).optional().describe("按医院名筛")
-  }),
+  query: ListFeasibilityQuery,
   response: page(Feasibility)
 });
 
@@ -48,14 +51,8 @@ define({
   response: FeasibilityCalibration
 });
 
-define({
-  id: "createFeasibility", method: "post", path: "/v1/feasibility",
-  layer: "L1", context: CTX, status: 201, action: "bid",
-  summary: "登记一次可行性调查",
-  description:
-    "同一个项目对同一家医院的同一个科室只能有一份 —— " +
-    "重复了就没人知道该看哪一份（数据库直接拒绝）。",
-  body: z.object({
+/** `createFeasibility` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const CreateFeasibilityBody = z.object({
     studyId: Uuid,
     hospital: z.string().trim().min(2).max(80),
     city: z.string().trim().min(2).max(40),
@@ -63,10 +60,26 @@ define({
     piName: z.string().trim().min(2).max(40),
     surveyedOn: DateOnly,
     answers: FeasibilityAnswers
-  }),
+  });
+
+define({
+  id: "createFeasibility", method: "post", path: "/v1/feasibility",
+  layer: "L1", context: CTX, status: 201, action: "bid",
+  summary: "登记一次可行性调查",
+  description:
+    "同一个项目对同一家医院的同一个科室只能有一份 —— " +
+    "重复了就没人知道该看哪一份（数据库直接拒绝）。",
+  body: CreateFeasibilityBody,
   response: Feasibility,
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `decideFeasibility` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const DecideFeasibilityBody = z.object({
+    decision: z.enum(["selected", "rejected"]),
+    reason: z.string().trim().max(500).optional()
+      .describe("低分入选与拒绝时必填，至少 4 个字")
+  });
 
 define({
   id: "decideFeasibility", method: "post", path: "/v1/feasibility/{id}:decide",
@@ -80,14 +93,13 @@ define({
     "拒绝同样要写：申办方问「为什么没选这家」，「评分不够」不是答案，" +
     "「年就诊 45 例、既往没做过、启动要 147 天」才是。",
   params: ById,
-  body: z.object({
-    decision: z.enum(["selected", "rejected"]),
-    reason: z.string().trim().max(500).optional()
-      .describe("低分入选与拒绝时必填，至少 4 个字")
-  }),
+  body: DecideFeasibilityBody,
   response: commandResult(Feasibility),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `recordFeasibilityActual` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const RecordFeasibilityActualBody = z.object({ actualRate: z.number().min(0).max(1000) });
 
 define({
   id: "recordFeasibilityActual", method: "post",
@@ -99,12 +111,18 @@ define({
     "而自洽的说法在第一次争议里会被「我觉得这家不错」覆盖掉。\n" +
     "只有已入选的中心谈得上实际入组速度。",
   params: ById,
-  body: z.object({ actualRate: z.number().min(0).max(1000) }),
+  body: RecordFeasibilityActualBody,
   response: commandResult(Feasibility),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
 /* ── 投标与报价闭环 ─────────────────────────────────────────────── */
+
+/** `listBids` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListBidsQuery = PageQuery.extend({
+    status: QueryArray(BidStatus),
+    sponsor: z.string().max(64).optional()
+  });
 
 define({
   id: "listBids", method: "get", path: "/v1/bids", layer: "L1", context: CTX,
@@ -113,10 +131,7 @@ define({
     "报出去的价、赢没赢、对手报了多少。**对外部方整表关闭** ——\n" +
     "投标价格落到医院或申办方手里是直接的商业损失。\n" +
     "价格受 `price` 列权限管辖：拿不到那一列的人看得到投了几个标，看不到价。",
-  query: PageQuery.extend({
-    status: z.array(BidStatus).optional(),
-    sponsor: z.string().max(64).optional()
-  }),
+  query: ListBidsQuery,
   response: page(Bid)
 });
 
@@ -134,14 +149,8 @@ define({
   response: BidReview
 });
 
-define({
-  id: "createBid", method: "post", path: "/v1/bids",
-  layer: "L1", context: CTX, status: 201, action: "bid",
-  summary: "登记一次投标",
-  description:
-    "报价与当时测算的人天**两个都要记**：只记价格的话，事后没法回答" +
-    "「是人天估多了还是费率高了」，而这两条要采取的行动完全不同。",
-  body: z.object({
+/** `createBid` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const CreateBidBody = z.object({
     sponsor: z.string().trim().min(2).max(80),
     name: z.string().trim().min(2).max(120),
     submittedOn: DateOnly,
@@ -150,10 +159,27 @@ define({
     ourQuoteCents: CentsNonNeg.min(1),
     ourPersonDays: z.number().min(0.1).max(999999),
     note: z.string().max(500).optional()
-  }),
+  });
+
+define({
+  id: "createBid", method: "post", path: "/v1/bids",
+  layer: "L1", context: CTX, status: 201, action: "bid",
+  summary: "登记一次投标",
+  description:
+    "报价与当时测算的人天**两个都要记**：只记价格的话，事后没法回答" +
+    "「是人天估多了还是费率高了」，而这两条要采取的行动完全不同。",
+  body: CreateBidBody,
   response: Bid,
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `decideBid` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const DecideBidBody = z.object({
+    result: z.enum(["won", "lost"]),
+    winningPriceCents: CentsNonNeg.min(1).nullable().optional()
+      .describe("中标必填；失标可空 —— 空表示问不到，不表示与我方同价"),
+    note: z.string().max(500).optional()
+  });
 
 define({
   id: "decideBid", method: "post", path: "/v1/bids/{id}:decide",
@@ -166,17 +192,21 @@ define({
     "**「不知道」不能记成「和我们一样」** —— 后者会把偏差算成 0，" +
     "于是一次输得很惨的标在统计上毫无痕迹。",
   params: ById,
-  body: z.object({
-    result: z.enum(["won", "lost"]),
-    winningPriceCents: CentsNonNeg.min(1).nullable().optional()
-      .describe("中标必填；失标可空 —— 空表示问不到，不表示与我方同价"),
-    note: z.string().max(500).optional()
-  }),
+  body: DecideBidBody,
   response: commandResult(Bid),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
 /* ── 合同变更 ───────────────────────────────────────────────────── */
+
+/** `listContractChanges` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListContractChangesQuery = PageQuery.extend({
+    studyId: Uuid.optional(),
+    studySiteId: Uuid.optional(),
+    status: QueryArray(ChangeStatus),
+    /** 只看没有对应金额的 —— 这一页真正要盯的就是它们。 */
+    uncoveredOnly: QueryBool.optional()
+  });
 
 define({
   id: "listContractChanges", method: "get", path: "/v1/contract-changes",
@@ -188,13 +218,7 @@ define({
     "`affectedSubjects` 与 `totalPersonDays` 都是**算出来的，不存**：" +
     "一条「每例多 1.5 人天」的变更真正可怕的地方是入组越多白做的越多，" +
     "存一个数会把它冻在提出那天。",
-  query: PageQuery.extend({
-    studyId: Uuid.optional(),
-    studySiteId: Uuid.optional(),
-    status: z.array(ChangeStatus).optional(),
-    /** 只看没有对应金额的 —— 这一页真正要盯的就是它们。 */
-    uncoveredOnly: QueryBool.optional()
-  }),
+  query: ListContractChangesQuery,
   response: page(ContractChange)
 });
 
@@ -209,14 +233,8 @@ define({
   response: ScopeCreep
 });
 
-define({
-  id: "createContractChange", method: "post", path: "/v1/contract-changes",
-  layer: "L1", context: CTX, status: 201, action: "bid",
-  summary: "登记一张变更单",
-  description:
-    "**先记下来，再去谈。** 顺序反过来的话，谈不成的那些就永远不进系统，" +
-    "而它们恰恰是最该被记住的 —— 下次报价时要加进去的正是它们。",
-  body: z.object({
+/** `createContractChange` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const CreateContractChangeBody = z.object({
     studyId: Uuid,
     studySiteId: Uuid.nullable().optional()
       .describe("为空 = 全项目的变更（周期延长、中心增减）"),
@@ -226,10 +244,28 @@ define({
     personDaysImpact: z.number().min(-99999).max(99999),
     perSubject: z.boolean(),
     note: z.string().max(500).optional()
-  }),
+  });
+
+define({
+  id: "createContractChange", method: "post", path: "/v1/contract-changes",
+  layer: "L1", context: CTX, status: 201, action: "bid",
+  summary: "登记一张变更单",
+  description:
+    "**先记下来，再去谈。** 顺序反过来的话，谈不成的那些就永远不进系统，" +
+    "而它们恰恰是最该被记住的 —— 下次报价时要加进去的正是它们。",
+  body: CreateContractChangeBody,
   response: ContractChange,
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `settleContractChange` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const SettleContractChangeBody = z.object({
+    status: z.enum(["submitted", "signed", "rejected"]),
+    settledCents: z.number().int().min(-99999999999).max(99999999999)
+      .nullable().optional()
+      .describe("签署必填（可为 0 或负数）；其余状态忽略"),
+    note: z.string().max(500).optional()
+  });
 
 define({
   id: "settleContractChange", method: "post",
@@ -242,13 +278,7 @@ define({
     "0 是「谈过了，对方不给钱，我们认了」，不填是「还没谈」——" +
     "前者是决策，后者是欠账，而只有后者该出现在未覆盖工作量里。",
   params: ById,
-  body: z.object({
-    status: z.enum(["submitted", "signed", "rejected"]),
-    settledCents: z.number().int().min(-99999999999).max(99999999999)
-      .nullable().optional()
-      .describe("签署必填（可为 0 或负数）；其余状态忽略"),
-    note: z.string().max(500).optional()
-  }),
+  body: SettleContractChangeBody,
   response: commandResult(ContractChange),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
@@ -265,6 +295,15 @@ export const _bizdevContext = CTX;
 
 /* ── 立项与建档 ──────────────────────────────────────────────────── */
 
+/** `listIntakeApplications` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListIntakeApplicationsQuery = PageQuery.extend({
+    state: QueryArray(IntakeState),
+    /** 只看我提交的。 */
+    mine: QueryBool.optional(),
+    /** 只看低于毛利门槛的。 */
+    belowGateOnly: QueryBool.optional()
+  });
+
 define({
   id: "listIntakeApplications", method: "get", path: "/v1/intake-applications",
   layer: "L1", context: CTX,
@@ -276,15 +315,12 @@ define({
     "而按提交日排的话，最该看的那几条会沉在底下。\n" +
     "对外部方整表关闭 —— 一家医院看得到我们按什么毛利率接项目，" +
     "下一轮谈判就不用谈了。",
-  query: PageQuery.extend({
-    state: z.array(IntakeState).optional(),
-    /** 只看我提交的。 */
-    mine: QueryBool.optional(),
-    /** 只看低于毛利门槛的。 */
-    belowGateOnly: QueryBool.optional()
-  }),
+  query: ListIntakeApplicationsQuery,
   response: page(IntakeApplication)
 });
+
+/** `getIntakeBoard` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const GetIntakeBoardQuery = z.object({});
 
 define({
   id: "getIntakeBoard", method: "get", path: "/v1/intake-applications/board",
@@ -295,9 +331,23 @@ define({
     "那几个中心的成本已经在发生（伦理递交、合同谈判、可行性访视），" +
     "收入却还挂不上号 —— 这是早期成本失控最常见的一种，" +
     "而在此之前系统里连「合同写了几个中心」这个数都没有。",
-  query: z.object({}),
+  query: GetIntakeBoardQuery,
   response: IntakeBoard
 });
+
+/** `submitIntakeApplication` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const SubmitIntakeApplicationBody = z.object({
+    drug: z.string().trim().min(2).max(200),
+    sponsorName: z.string().trim().min(2).max(120),
+    phase: z.string().trim().min(1).max(20),
+    indication: z.string().trim().min(2).max(120),
+    plannedSites: z.int().min(1).max(200),
+    plannedSubjects: z.int().min(1).max(20000),
+    enrollMonths: z.int().min(1).max(120),
+    contractCents: z.int().min(0),
+    estimatedCostCents: z.int().min(0),
+    note: z.string().trim().max(1000).optional()
+  });
 
 define({
   id: "submitIntakeApplication", method: "post", path: "/v1/intake-applications",
@@ -309,21 +359,16 @@ define({
     "毛利率与保本合同额由服务端算，不接受调用方传入：" +
     "一个可以自己报毛利率的申请，门槛就形同虚设。",
   action: "bid",
-  body: z.object({
-    drug: z.string().trim().min(2).max(200),
-    sponsorName: z.string().trim().min(2).max(120),
-    phase: z.string().trim().min(1).max(20),
-    indication: z.string().trim().min(2).max(120),
-    plannedSites: z.int().min(1).max(200),
-    plannedSubjects: z.int().min(1).max(20000),
-    enrollMonths: z.int().min(1).max(120),
-    contractCents: z.int().min(0),
-    estimatedCostCents: z.int().min(0),
-    note: z.string().trim().max(1000).optional()
-  }),
+  body: SubmitIntakeApplicationBody,
   response: commandResult(IntakeApplication),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `decideIntakeApplication` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const DecideIntakeApplicationBody = z.object({
+    result: z.enum(["approved", "returned"]),
+    reason: z.string().trim().max(1000).optional()
+  });
 
 define({
   id: "decideIntakeApplication", method: "post",
@@ -339,10 +384,7 @@ define({
     "而猜错的代价是拿着同一份价格再谈一轮。",
   action: "approve",
   params: ById,
-  body: z.object({
-    result: z.enum(["approved", "returned"]),
-    reason: z.string().trim().max(1000).optional()
-  }),
+  body: DecideIntakeApplicationBody,
   response: commandResult(IntakeApplication),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });

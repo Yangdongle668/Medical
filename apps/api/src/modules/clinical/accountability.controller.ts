@@ -1,6 +1,11 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
+import {
+  Body, Controller, Get, Headers,
+  HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
-import { PageQuery, Uuid, DateOnly, QueryBool } from "@sitedesk/contracts";
+import {
+  PageQuery, Uuid, RecordIpMovementBody, ListSpecimensQuery,
+  RecordSpecimenBody, AdvanceSpecimenBody, RecordRegulatorySubmissionBody, DecideRegulatorySubmissionBody
+} from "@sitedesk/contracts";
 import { AccountabilityService } from "./accountability.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { command, idempotent } from "../../infra/command.js";
@@ -13,38 +18,8 @@ import { Operation } from "../../auth/guards.js";
    让人在关闭时勾四个框，等于把闸门变成一句口头承诺。 */
 
 const IpQ = PageQuery;
-const SpecimenQ = PageQuery.extend({ openOnly: QueryBool.optional() });
 
 const IpKind = z.enum(["receipt", "dispense", "return", "ship_back", "destroy"]);
-const RecordIp = z.object({
-  movedOn: DateOnly.optional(),
-  kind: IpKind,
-  quantity: z.coerce.number().int().positive().max(100_000),
-  subjectRef: z.string().max(32).optional(),
-  refNo: z.string().max(64).optional(),
-  note: z.string().max(500).optional()
-});
-const RecordSpecimen = z.object({
-  subjectRef: z.string().min(1).max(32),
-  kind: z.string().min(1).max(32),
-  collectedOn: DateOnly,
-  trackingNo: z.string().max(64).optional()
-});
-const Advance = z.object({
-  stage: z.enum(["shipped", "received", "discarded"]),
-  on: DateOnly
-});
-const RecordSubmission = z.object({
-  kind: z.enum(["initial", "amendment", "annual", "closeout"]),
-  submittedOn: DateOnly,
-  refNo: z.string().max(64).optional(),
-  note: z.string().max(500).optional()
-});
-const Decide = z.object({
-  decision: z.enum(["approved", "rejected"]),
-  decidedOn: DateOnly,
-  note: z.string().max(500).optional()
-});
 
 @Controller("/v1")
 export class AccountabilityController {
@@ -64,7 +39,7 @@ export class AccountabilityController {
   @Post("/study-sites/:id/ip-movements") @Operation("recordIpMovement") @HttpCode(201)
   recordIp(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(RecordIp)) b: z.infer<typeof RecordIp>,
+    @Body(new ZodPipe(RecordIpMovementBody)) b: z.infer<typeof RecordIpMovementBody>,
     @Headers("idempotency-key") key?: string
   ) { return idempotent(this.idem, key, b, () => this.svc.recordIp(id, b)); }
 
@@ -73,20 +48,20 @@ export class AccountabilityController {
   @Get("/study-sites/:id/specimens") @Operation("listSpecimens")
   listSpecimens(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Query(new ZodPipe(SpecimenQ)) q: z.infer<typeof SpecimenQ>
+    @Query(new ZodPipe(ListSpecimensQuery)) q: z.infer<typeof ListSpecimensQuery>
   ) { return this.svc.listSpecimens(id, q); }
 
   @Post("/study-sites/:id/specimens") @Operation("recordSpecimen") @HttpCode(201)
   recordSpecimen(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(RecordSpecimen)) b: z.infer<typeof RecordSpecimen>,
+    @Body(new ZodPipe(RecordSpecimenBody)) b: z.infer<typeof RecordSpecimenBody>,
     @Headers("idempotency-key") key?: string
   ) { return idempotent(this.idem, key, b, () => this.svc.recordSpecimen(id, b)); }
 
   @Post("/specimens/:id\\:advance") @Operation("advanceSpecimen")
   advance(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(Advance)) b: z.infer<typeof Advance>,
+    @Body(new ZodPipe(AdvanceSpecimenBody)) b: z.infer<typeof AdvanceSpecimenBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.advanceSpecimen(id, b)); }
 
@@ -102,14 +77,14 @@ export class AccountabilityController {
   @Operation("recordRegulatorySubmission") @HttpCode(201)
   recordSubmission(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(RecordSubmission)) b: z.infer<typeof RecordSubmission>,
+    @Body(new ZodPipe(RecordRegulatorySubmissionBody)) b: z.infer<typeof RecordRegulatorySubmissionBody>,
     @Headers("idempotency-key") key?: string
   ) { return idempotent(this.idem, key, b, () => this.svc.recordSubmission(id, b)); }
 
   @Post("/regulatory-submissions/:id\\:decide") @Operation("decideRegulatorySubmission")
   decide(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(Decide)) b: z.infer<typeof Decide>,
+    @Body(new ZodPipe(DecideRegulatorySubmissionBody)) b: z.infer<typeof DecideRegulatorySubmissionBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.decide(id, b)); }
 }

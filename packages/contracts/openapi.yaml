@@ -1538,9 +1538,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/BidStatus'
+            anyOf:
+              - $ref: '#/components/schemas/BidStatus'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/BidStatus'
         - name: sponsor
           in: query
           required: false
@@ -2302,9 +2304,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/ChangeStatus'
+            anyOf:
+              - $ref: '#/components/schemas/ChangeStatus'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/ChangeStatus'
         - name: uncoveredOnly
           in: query
           required: false
@@ -2752,9 +2756,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/QualityState'
+            anyOf:
+              - $ref: '#/components/schemas/QualityState'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/QualityState'
         - name: mine
           in: query
           required: false
@@ -3749,9 +3755,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/FeasibilityStatus'
+            anyOf:
+              - $ref: '#/components/schemas/FeasibilityStatus'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/FeasibilityStatus'
         - name: overrideOnly
           in: query
           required: false
@@ -4929,9 +4937,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/IntakeState'
+            anyOf:
+              - $ref: '#/components/schemas/IntakeState'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/IntakeState'
         - name: mine
           in: query
           required: false
@@ -5396,9 +5406,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/AuditKind'
+            anyOf:
+              - $ref: '#/components/schemas/AuditKind'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/AuditKind'
         - name: openOnly
           in: query
           required: false
@@ -5964,9 +5976,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/IsfCategory'
+            anyOf:
+              - $ref: '#/components/schemas/IsfCategory'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/IsfCategory'
         - name: openOnly
           in: query
           required: false
@@ -6317,9 +6331,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/MilestoneState'
+            anyOf:
+              - $ref: '#/components/schemas/MilestoneState'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/MilestoneState'
         - name: receivableOnly
           in: query
           required: false
@@ -6876,16 +6892,20 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/MonitorKind'
+            anyOf:
+              - $ref: '#/components/schemas/MonitorKind'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/MonitorKind'
         - name: state
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/MonitorState'
+            anyOf:
+              - $ref: '#/components/schemas/MonitorState'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/MonitorState'
         - name: mine
           in: query
           required: false
@@ -7839,16 +7859,20 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/QualityKind'
+            anyOf:
+              - $ref: '#/components/schemas/QualityKind'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/QualityKind'
         - name: state
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/QualityState'
+            anyOf:
+              - $ref: '#/components/schemas/QualityState'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/QualityState'
       responses:
         '200':
           description: 质量事件
@@ -8935,9 +8959,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/AcceptanceState'
+            anyOf:
+              - $ref: '#/components/schemas/AcceptanceState'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/AcceptanceState'
         - name: openOnly
           in: query
           required: false
@@ -10904,9 +10930,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/SiteState'
+            anyOf:
+              - $ref: '#/components/schemas/SiteState'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/SiteState'
         - name: hospital
           in: query
           required: false
@@ -12929,9 +12957,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/VisitStatus'
+            anyOf:
+              - $ref: '#/components/schemas/VisitStatus'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/VisitStatus'
         - name: outOfWindow
           in: query
           required: false
@@ -13658,9 +13688,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/SubjectState'
+            anyOf:
+              - $ref: '#/components/schemas/SubjectState'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/SubjectState'
         - name: outOfWindow
           in: query
           required: false
@@ -14650,9 +14682,11 @@ paths:
           in: query
           required: false
           schema:
-            type: array
-            items:
-              $ref: '#/components/schemas/WorkType'
+            anyOf:
+              - $ref: '#/components/schemas/WorkType'
+              - type: array
+                items:
+                  $ref: '#/components/schemas/WorkType'
         - name: from
           in: query
           required: false

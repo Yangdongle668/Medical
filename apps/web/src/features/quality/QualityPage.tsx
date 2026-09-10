@@ -83,7 +83,7 @@ export function QualityPage() {
 
       {sites.length > 0 && (
         <Pick label="中心" hint="SAE 及时率与药品台账按中心算"
-          v={siteId} on={setSiteId} testid="quality-site"
+          v={siteId} on={setSiteId} testid="quality-site" placeholder={null}
           style={{ maxWidth: 380, marginBottom: 14 }}
           options={sites.map(s => ({ value: s.id, label: `${s.code} ${s.hospital}` }))}
           empty="你的范围里还没有中心 —— 这一页的每个数都是按中心算的。" />

@@ -158,8 +158,13 @@ export function Pick({ label, v, on, testid, options, hint, empty, placeholder,
   /** 一个选项都没有时说什么 —— **必填**，见上面那段。 */
   empty: string;
   /** 未选中时那一项的文案。缺省「— 选一个 —」；
-   *  有些地方留空是有含义的（「— 全项目 —」「— 不是复发 —」）。 */
-  placeholder?: string;
+   *  有些地方留空是有含义的（「— 全项目 —」「— 不是复发 —」）。
+   *
+   *  传 `null` = **不要这一项**。有一类下拉框问的是"我现在在看哪一个"
+   *  （质量事件看哪个中心、药品台账看哪个中心），它默认就选中第一个，
+   *  从来不存在"没选"这个状态 —— 给它加一个空选项，等于凭空多出一格
+   *  "什么都不看"，而页面在那一格上是空白的。 */
+  placeholder?: string | null;
   /** 「要的那个不在里面」时的去路。空与不空都显示。 */
   action?: { label: string; on: () => void };
   style?: React.CSSProperties;
@@ -174,7 +179,8 @@ export function Pick({ label, v, on, testid, options, hint, empty, placeholder,
       <span>{label}{hint && <span className="t-mut"> · {hint}</span>}</span>
       <select value={v} data-testid={testid} onChange={e => on(e.target.value)}
         disabled={none}>
-        <option value="">{none ? "— 没有可选的 —" : placeholder ?? "— 选一个 —"}</option>
+        {(placeholder !== null || none) &&
+          <option value="">{none ? "— 没有可选的 —" : placeholder ?? "— 选一个 —"}</option>}
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
       {none

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { define } from "../kernel/registry.js";
-import { Uuid, DateOnly, Timestamp, QueryBool } from "../kernel/primitives.js";
+import { Uuid, DateOnly, Timestamp, QueryBool , QueryArray } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
 import {
@@ -17,6 +17,14 @@ const ById = z.object({ id: Uuid });
 
 /* ── 读 ──────────────────────────────────────────────────────────── */
 
+/** `listSubjects` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListSubjectsQuery = PageQuery.extend({
+    studySiteId: Uuid.optional(),
+    state: QueryArray(SubjectState),
+    outOfWindow: QueryBool.optional().describe("只看已超窗或今日到期的"),
+    q: z.string().max(64).optional()
+  });
+
 define({
   id: "listSubjects", method: "get", path: "/v1/subjects", layer: "L1", context: CTX,
   summary: "受试者列表",
@@ -25,12 +33,7 @@ define({
     "筛选号受列权限管辖：无权限时该字段从响应里消失 —— " +
     "外部方能看到「这个中心有 12 例在组」，看不到是哪 12 例。",
   action: "subjRead",
-  query: PageQuery.extend({
-    studySiteId: Uuid.optional(),
-    state: z.array(SubjectState).optional(),
-    outOfWindow: QueryBool.optional().describe("只看已超窗或今日到期的"),
-    q: z.string().max(64).optional()
-  }),
+  query: ListSubjectsQuery,
   response: page(Subject)
 });
 
@@ -52,6 +55,14 @@ define({
   params: ById, response: SiteFunnel
 });
 
+/** `listEnrollment` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListEnrollmentQuery = PageQuery.extend({
+    studyId: Uuid.optional(),
+    /** 只看没达成合同例数的。**默认不筛** —— 达成了的也要看得见，
+     *  否则「我们一共接了多少」这个数在页面上就凑不齐。 */
+    behindOnly: QueryBool.optional()
+  });
+
 define({
   id: "listEnrollment", method: "get", path: "/v1/enrollment",
   layer: "L1", context: CTX,
@@ -64,14 +75,18 @@ define({
     "和 `getSiteFunnel` 一样**只返回计数，不返回受试者明细**，\n" +
     "所以不需要 `subjRead`（I10）。行范围照常生效。\n\n" +
     "排序：达成率升序 —— 落后的排在最前面。这是这两页唯一要回答的问题。",
-  query: PageQuery.extend({
-    studyId: Uuid.optional(),
-    /** 只看没达成合同例数的。**默认不筛** —— 达成了的也要看得见，
-     *  否则「我们一共接了多少」这个数在页面上就凑不齐。 */
-    behindOnly: QueryBool.optional()
-  }),
+  query: ListEnrollmentQuery,
   response: page(SiteFunnel)
 });
+
+/** `listSubjectVisits` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListSubjectVisitsQuery = PageQuery.extend({
+    studySiteId: Uuid.optional(),
+    subjectId: Uuid.optional(),
+    status: QueryArray(VisitStatus),
+    outOfWindow: QueryBool.optional(),
+    pendingPi: QueryBool.optional().describe("只看待 PI 确认的")
+  });
 
 define({
   id: "listSubjectVisits", method: "get", path: "/v1/subject-visits",
@@ -81,13 +96,7 @@ define({
     "默认按窗口关闭日升序 —— CRC 每天第一件事是看「今天谁到期」。\n" +
     "`outOfWindow=true` 走 GiST 索引，不在应用层遍历。",
   action: "subjRead",
-  query: PageQuery.extend({
-    studySiteId: Uuid.optional(),
-    subjectId: Uuid.optional(),
-    status: z.array(VisitStatus).optional(),
-    outOfWindow: QueryBool.optional(),
-    pendingPi: QueryBool.optional().describe("只看待 PI 确认的")
-  }),
+  query: ListSubjectVisitsQuery,
   response: page(SubjectVisit)
 });
 
@@ -107,15 +116,18 @@ define({
   errors: ["not-found"]
 });
 
+/** `listQualityEvents` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListQualityEventsQuery = PageQuery.extend({
+    studySiteId: Uuid.optional(),
+    kind: QueryArray(QualityKind),
+    state: QueryArray(QualityState)
+  });
+
 define({
   id: "listQualityEvents", method: "get", path: "/v1/quality-events",
   layer: "L1", context: CTX,
   summary: "质量事件",
-  query: PageQuery.extend({
-    studySiteId: Uuid.optional(),
-    kind: z.array(QualityKind).optional(),
-    state: z.array(QualityState).optional()
-  }),
+  query: ListQualityEventsQuery,
   response: page(QualityEvent)
 });
 
@@ -133,6 +145,15 @@ define({
   response: SaeLedger
 });
 
+/** `reportSae` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ReportSaeBody = z.object({
+    subjectId: Uuid.optional(),
+    title: z.string().trim().min(1).max(200),
+    detail: z.string().trim().min(4).max(2000),
+    occurredAt: Timestamp,
+    reportedAt: Timestamp.optional()
+  });
+
 define({
   id: "reportSae", method: "post", path: "/v1/study-sites/{id}/sae",
   layer: "L1", context: CTX, status: 201,
@@ -143,16 +164,13 @@ define({
     "登记时可以一并填上报时刻；也可以先记事件、上报之后再补（见 reportSaeSubmitted）。",
   action: "subjWrite",
   params: z.object({ id: Uuid }),
-  body: z.object({
-    subjectId: Uuid.optional(),
-    title: z.string().trim().min(1).max(200),
-    detail: z.string().trim().min(4).max(2000),
-    occurredAt: Timestamp,
-    reportedAt: Timestamp.optional()
-  }),
+  body: ReportSaeBody,
   response: QualityEvent,
   errors: ["invariant-violated"]
 });
+
+/** `reportSaeSubmitted` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ReportSaeSubmittedBody = z.object({ reportedAt: Timestamp });
 
 define({
   id: "reportSaeSubmitted", method: "post", path: "/v1/quality-events/{id}:sae-reported",
@@ -163,20 +181,23 @@ define({
     "在同一个事务里写，不是事后补录。它不可跳过，也不能人工删除，只能整改关闭。",
   action: "subjWrite",
   params: ById,
-  body: z.object({ reportedAt: Timestamp }),
+  body: ReportSaeSubmittedBody,
   response: commandResult(QualityEvent),
   errors: ["invariant-violated", "conflict-version", "idempotency-key-reused"]
 });
+
+/** `listSubjectPayments` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListSubjectPaymentsQuery = PageQuery.extend({
+    studySiteId: Uuid.optional(),
+    unpaid: QueryBool.optional()
+  });
 
 define({
   id: "listSubjectPayments", method: "get", path: "/v1/subject-payments",
   layer: "L1", context: CTX,
   summary: "受试者补偿台账",
   action: "subjRead",
-  query: PageQuery.extend({
-    studySiteId: Uuid.optional(),
-    unpaid: QueryBool.optional()
-  }),
+  query: ListSubjectPaymentsQuery,
   response: page(SubjectPayment)
 });
 
@@ -198,6 +219,9 @@ define({
   errors: ["invariant-violated"]
 });
 
+/** `signIcf` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const SignIcfBody = z.object({ signedOn: DateOnly });
+
 define({
   id: "signIcf", method: "post", path: "/v1/subjects/{id}:sign-icf",
   layer: "L2", context: CTX,
@@ -208,10 +232,16 @@ define({
     "在批件之前签的知情，是严重违背。",
   action: "subjWrite",
   params: ById,
-  body: z.object({ signedOn: DateOnly }),
+  body: SignIcfBody,
   response: commandResult(Subject),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `enrollSubject` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const EnrollSubjectBody = z.object({
+    randomizationNo: z.string().trim().min(1).max(32),
+    enrolledOn: DateOnly
+  });
 
 define({
   id: "enrollSubject", method: "post", path: "/v1/subjects/{id}:enroll",
@@ -222,13 +252,13 @@ define({
     "入排标准还没人签字就随机化，是核查必查的一条。",
   action: "subjWrite",
   params: ById,
-  body: z.object({
-    randomizationNo: z.string().trim().min(1).max(32),
-    enrolledOn: DateOnly
-  }),
+  body: EnrollSubjectBody,
   response: commandResult(Subject),
   errors: ["invariant-violated", "gate-not-satisfied", "idempotency-key-reused"]
 });
+
+/** `screenFailSubject` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ScreenFailSubjectBody = z.object({ reason: ScreenFailReason, failedOn: DateOnly, note: z.string().max(500).optional() });
 
 define({
   id: "screenFailSubject", method: "post", path: "/v1/subjects/{id}:screen-fail",
@@ -240,10 +270,16 @@ define({
     "原因是受控取值：自由文本统计不出「入排标准与病源不匹配」。",
   action: "subjWrite",
   params: ById,
-  body: z.object({ reason: ScreenFailReason, failedOn: DateOnly, note: z.string().max(500).optional() }),
+  body: ScreenFailSubjectBody,
   response: commandResult(Subject),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `withdrawSubject` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const WithdrawSubjectBody = z.object({
+    reason: WithdrawReason, withdrawnOn: DateOnly,
+    note: z.string().trim().min(4).max(500)
+  });
 
 define({
   id: "withdrawSubject", method: "post", path: "/v1/subjects/{id}:withdraw",
@@ -254,15 +290,21 @@ define({
     "剩余未完成的访视一并作废 —— 否则这一例会永远刷红超窗。",
   action: "subjWrite",
   params: ById,
-  body: z.object({
-    reason: WithdrawReason, withdrawnOn: DateOnly,
-    note: z.string().trim().min(4).max(500)
-  }),
+  body: WithdrawSubjectBody,
   response: commandResult(Subject),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
 /* ── 写：访视 ────────────────────────────────────────────────────── */
+
+/** `completeSubjectVisit` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const CompleteSubjectVisitBody = z.object({
+    actualDate: DateOnly,
+    /** 超窗时必须说明原因，它会原样进入方案偏离的记录 */
+    outOfWindowReason: z.string().trim().min(4).max(500).optional(),
+    hours: z.number().min(0.25).max(24).describe("本次访视 CRC 实际投入工时"),
+    note: z.string().max(500).optional()
+  });
 
 define({
   id: "completeSubjectVisit", method: "post", path: "/v1/subject-visits/{id}:complete",
@@ -283,16 +325,13 @@ define({
     "**任务未逐项完成不得提交** —— 打勾了事等于没做。",
   action: "subjWrite",
   params: ById,
-  body: z.object({
-    actualDate: DateOnly,
-    /** 超窗时必须说明原因，它会原样进入方案偏离的记录 */
-    outOfWindowReason: z.string().trim().min(4).max(500).optional(),
-    hours: z.number().min(0.25).max(24).describe("本次访视 CRC 实际投入工时"),
-    note: z.string().max(500).optional()
-  }),
+  body: CompleteSubjectVisitBody,
   response: commandResult(SubjectVisit),
   errors: ["invariant-violated", "gate-not-satisfied", "idempotency-key-reused"]
 });
+
+/** `completeVisitTask` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const CompleteVisitTaskBody = z.object({});
 
 define({
   id: "completeVisitTask", method: "post",
@@ -300,10 +339,13 @@ define({
   summary: "勾掉访视的一项任务",
   action: "subjWrite",
   params: z.object({ id: Uuid, seq: z.coerce.number().int().min(0) }),
-  body: z.object({}),
+  body: CompleteVisitTaskBody,
   response: commandResult(SubjectVisit),
   errors: ["idempotency-key-reused", "conflict-version"]
 });
+
+/** `confirmSubjectVisit` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ConfirmSubjectVisitBody = z.object({});
 
 define({
   id: "confirmSubjectVisit", method: "post", path: "/v1/subject-visits/{id}:confirm",
@@ -314,10 +356,13 @@ define({
     "CRC 说做完了和 PI 确认做完了，在核查时是两回事。",
   action: "piConfirm",
   params: ById,
-  body: z.object({}),
+  body: ConfirmSubjectVisitBody,
   response: commandResult(SubjectVisit),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `enterVisitToEdc` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const EnterVisitToEdcBody = z.object({});
 
 define({
   id: "enterVisitToEdc", method: "post", path: "/v1/subject-visits/{id}:edc-entered",
@@ -325,7 +370,8 @@ define({
   summary: "标记已录入 EDC",
   description: "访视完成后 5 个工作日内录入才算及时。超时不阻断，但进及时率统计。",
   action: "subjWrite",
-  params: ById, body: z.object({}),
+  params: ById,
+  body: EnterVisitToEdcBody,
   response: commandResult(SubjectVisit),
   errors: ["idempotency-key-reused"]
 });
@@ -352,6 +398,19 @@ define({
    但系统里没有数据管理这个角色 —— 质疑凭空产生、凭空关闭。
    这一组补的就是「谁提的、谁负责答、谁判定能关」。 */
 
+/** `listDataQueries` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListDataQueriesQuery = PageQuery.extend({
+    studySiteId: Uuid.optional(),
+    subjectId: Uuid.optional(),
+    state: QueryArray(QualityState),
+    /** 只看指派给我的 —— CRC 的默认视角。 */
+    mine: QueryBool.optional(),
+    /** 只看我提的 —— DM / CRA 的「我发起的」。 */
+    raisedByMe: QueryBool.optional(),
+    /** 只看挂起超过 7 天且仍待回复的 —— 该打电话的那些。 */
+    staleOnly: QueryBool.optional()
+  });
+
 define({
   id: "listDataQueries", method: "get", path: "/v1/data-queries",
   layer: "L1", context: CTX,
@@ -361,19 +420,12 @@ define({
     "再建一张，「本中心还有几条未关闭的质量事件」就有两个答案。\n\n" +
     "默认按**挂得最久的排最前**：挂了 21 天的那条比今天刚提的紧急得多。\n" +
     "CRC 用 `mine=true` 看「待我回复」；DM 用 `state=pending_review` 看「待我关闭」。",
-  query: PageQuery.extend({
-    studySiteId: Uuid.optional(),
-    subjectId: Uuid.optional(),
-    state: z.array(QualityState).optional(),
-    /** 只看指派给我的 —— CRC 的默认视角。 */
-    mine: QueryBool.optional(),
-    /** 只看我提的 —— DM / CRA 的「我发起的」。 */
-    raisedByMe: QueryBool.optional(),
-    /** 只看挂起超过 7 天且仍待回复的 —— 该打电话的那些。 */
-    staleOnly: QueryBool.optional()
-  }),
+  query: ListDataQueriesQuery,
   response: page(DataQuery)
 });
+
+/** `getQueryStats` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const GetQueryStatsQuery = z.object({ studySiteId: Uuid.optional(), mine: QueryBool.optional() });
 
 define({
   id: "getQueryStats", method: "get", path: "/v1/data-queries/stats",
@@ -386,9 +438,20 @@ define({
     "每中心给的是密度**和集中度**：扎堆在一个表单上是方案难填（改 eCRF 或培训材料），" +
     "散在七八个表单上才是这家中心的录入质量（改人）。只给密度，" +
     "「高不一定是中心差」就只是一句免责声明。",
-  query: z.object({ studySiteId: Uuid.optional(), mine: QueryBool.optional() }),
+  query: GetQueryStatsQuery,
   response: QueryStats
 });
+
+/** `raiseDataQuery` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const RaiseDataQueryBody = z.object({
+    subjectId: Uuid,
+    form: z.string().trim().min(1).max(80),
+    fieldName: z.string().trim().min(2).max(80),
+    /** 疑点与要求核实的方向。太短的质疑，中心答不了。 */
+    detail: z.string().trim().min(10).max(2000),
+    ownerAccountId: Uuid.optional(),
+    severity: QualitySeverity.optional()
+  });
 
 define({
   id: "raiseDataQuery", method: "post", path: "/v1/data-queries",
@@ -401,18 +464,13 @@ define({
     "此后交接不改写它 —— 否则「这条挂了 21 天是谁的 21 天」没有答案。" +
     "受试者没有责任 CRC 且未显式指派时拒绝创建：无人认领的质疑等于没提。",
   action: "raiseQ",
-  body: z.object({
-    subjectId: Uuid,
-    form: z.string().trim().min(1).max(80),
-    fieldName: z.string().trim().min(2).max(80),
-    /** 疑点与要求核实的方向。太短的质疑，中心答不了。 */
-    detail: z.string().trim().min(10).max(2000),
-    ownerAccountId: Uuid.optional(),
-    severity: QualitySeverity.optional()
-  }),
+  body: RaiseDataQueryBody,
   response: commandResult(DataQuery),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `answerDataQuery` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const AnswerDataQueryBody = z.object({ answer: z.string().trim().min(10).max(2000) });
 
 define({
   id: "answerDataQuery", method: "post", path: "/v1/data-queries/{id}:answer",
@@ -425,7 +483,7 @@ define({
     "回复了不等于问题解决了，判定权在 DM。",
   action: "subjWrite",
   params: ById,
-  body: z.object({ answer: z.string().trim().min(10).max(2000) }),
+  body: AnswerDataQueryBody,
   response: commandResult(DataQuery),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
@@ -476,6 +534,14 @@ define({
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
+/** `setCapaPlan` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const SetCapaPlanBody = z.object({
+    plan: z.string().trim().min(10).max(2000),
+    /** 不填就是指给自己 —— 谁提出整改谁负责是常态。 */
+    ownerAccountId: Uuid.optional(),
+    dueOn: DateOnly
+  });
+
 define({
   id: "setCapaPlan", method: "post", path: "/v1/quality-events/{id}:capa",
   layer: "L2", context: CTX,
@@ -490,15 +556,13 @@ define({
     "质疑不走这条路：它有自己的闭环（回复 → 判定）。",
   action: "capaWrite",
   params: ById,
-  body: z.object({
-    plan: z.string().trim().min(10).max(2000),
-    /** 不填就是指给自己 —— 谁提出整改谁负责是常态。 */
-    ownerAccountId: Uuid.optional(),
-    dueOn: DateOnly
-  }),
+  body: SetCapaPlanBody,
   response: commandResult(QualityEvent),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `paySubjectPayment` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const PaySubjectPaymentBody = z.object({ paidOn: DateOnly, receiptRef: z.string().trim().min(1).max(64) });
 
 define({
   id: "paySubjectPayment", method: "post", path: "/v1/subject-payments/{id}:pay",
@@ -507,7 +571,7 @@ define({
   description: "必须同时登记签收凭证编号 —— 只记「发了」而没有凭证，关闭中心时对不上。",
   action: "subjWrite",
   params: ById,
-  body: z.object({ paidOn: DateOnly, receiptRef: z.string().trim().min(1).max(64) }),
+  body: PaySubjectPaymentBody,
   response: commandResult(SubjectPayment),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
@@ -523,6 +587,12 @@ define({
   response: Soa
 });
 
+/** `replaceSoa` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ReplaceSoaBody = z.object({
+    visits: z.array(SoaVisit.omit({ scheduledCount: true })).min(1).max(80),
+    reason: z.string().trim().min(4).max(500)
+  });
+
 define({
   id: "replaceSoa", method: "post", path: "/v1/studies/{id}/visit-template:replace",
   layer: "L2", context: CTX,
@@ -534,10 +604,7 @@ define({
     "改 SOA 对应的是一次方案修订，必须写原因，前后快照进变更史。",
   action: "manage",
   params: z.object({ id: Uuid }),
-  body: z.object({
-    visits: z.array(SoaVisit.omit({ scheduledCount: true })).min(1).max(80),
-    reason: z.string().trim().min(4).max(500)
-  }),
+  body: ReplaceSoaBody,
   response: commandResult(Soa),
   errors: ["validation-failed", "invariant-violated", "idempotency-key-reused"]
 });

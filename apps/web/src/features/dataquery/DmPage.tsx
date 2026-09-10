@@ -199,7 +199,7 @@ export function DmPage() {
             </p>
           : <>
               <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
-                <Pick label="受试者" v={subjectId} on={setSubjectId} testid="dm-subject"
+                <Pick label="受试者" v={subjectId} on={setSubjectId} testid="dm-subject" placeholder={null}
                   style={{ minWidth: 220 }}
                   options={subjects.map(s => ({
                     value: s.id,

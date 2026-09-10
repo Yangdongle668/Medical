@@ -25,6 +25,16 @@ export const LinkAccepted = z.object({
     .describe("仅当 SITEDESK_DEV_LOGIN=1 时出现，供本地与 CI 使用。生产环境永远不返回。")
 }).meta({ id: "LinkAccepted" });
 
+/** `requestMagicLink` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const RequestMagicLinkBody = z.object({
+    login: z.string().min(1).max(64),
+    sentTo: z.string().max(128).optional()
+      .describe(
+        "调用方声称的收件地址，**仅用于审计留痕，不决定投递到哪里**。" +
+        "实际收件地址由服务端从已登记的身份解析（auth_identity, provider=magic-link）——" +
+        "拿这个字段当收件地址的话，这个公开端点就是一键账号接管。")
+  });
+
 define({
   id: "requestMagicLink", method: "post", path: "/v1/auth/magic-link",
   layer: "L1", context: CTX, status: 202,
@@ -33,16 +43,12 @@ define({
     "**无论账号是否存在都返回同样的 202。** 区别对待会让这个接口变成账号枚举器。\n" +
     "「存在但没登记收件地址」也返回同样的 202 —— 那是第三种状态，同样不能被区分出来。\n" +
     "链接由邮件 / 短信通道直接发给本人，绝不回显给调用方。",
-  body: z.object({
-    login: z.string().min(1).max(64),
-    sentTo: z.string().max(128).optional()
-      .describe(
-        "调用方声称的收件地址，**仅用于审计留痕，不决定投递到哪里**。" +
-        "实际收件地址由服务端从已登记的身份解析（auth_identity, provider=magic-link）——" +
-        "拿这个字段当收件地址的话，这个公开端点就是一键账号接管。")
-  }),
+  body: RequestMagicLinkBody,
   response: LinkAccepted
 });
+
+/** `redeemMagicLink` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const RedeemMagicLinkBody = z.object({ token: z.string().min(16).max(256) });
 
 define({
   id: "redeemMagicLink", method: "post", path: "/v1/auth/session",
@@ -51,7 +57,7 @@ define({
   description:
     "兑换在数据库里原子完成：并发的两次兑换只有一次能成功。\n" +
     "放在应用层做「先查再改」，两个请求同时到达就会双双成功。",
-  body: z.object({ token: z.string().min(16).max(256) }),
+  body: RedeemMagicLinkBody,
   response: SessionGranted,
   errors: ["unauthenticated"]
 });
@@ -81,6 +87,12 @@ define({
    不是"所有人都改用密码"。`hasPassword` 为 false 是正常状态。
    ════════════════════════════════════════════════════════════════════ */
 
+/** `passwordLogin` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const PasswordLoginBody = z.object({
+    login: z.string().min(1).max(64),
+    password: z.string().min(1).max(200)
+  });
+
 define({
   id: "passwordLogin", method: "post", path: "/v1/auth/password-session",
   layer: "L1", context: CTX,
@@ -91,13 +103,16 @@ define({
     "耗时不同也一样能读出来 —— 所以验证失败时服务端照样烧掉一次 scrypt。\n\n" +
     "连续失败会锁定，锁定时长随失败次数指数增长（封顶 15 分钟）。\n" +
     "固定阈值对撞库没用而对本人很痛：打错三次的人被关半小时，脚本换个账号继续跑。",
-  body: z.object({
-    login: z.string().min(1).max(64),
-    password: z.string().min(1).max(200)
-  }),
+  body: PasswordLoginBody,
   response: SessionGranted,
   errors: ["unauthenticated", "rate-limited"]
 });
+
+/** `changePassword` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ChangePasswordBody = z.object({
+    currentPassword: z.string().max(200),
+    newPassword: z.string().min(8).max(200)
+  });
 
 define({
   id: "changePassword", method: "post", path: "/v1/auth/password",
@@ -109,9 +124,6 @@ define({
     "他是靠一个真实会话进来的，那本身就是身份证明。\n\n" +
     "改完**撤销本人其余会话**，只留当前这一个：改密的常见理由就是「号可能被人拿了」，\n" +
     "而改完不踢掉别的会话，等于把这件事做了一半。",
-  body: z.object({
-    currentPassword: z.string().max(200),
-    newPassword: z.string().min(8).max(200)
-  }),
+  body: ChangePasswordBody,
   errors: ["unauthenticated", "validation-failed"]
 });

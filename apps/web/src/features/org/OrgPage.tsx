@@ -499,7 +499,7 @@ function EditAccount({ account, roles, teams, onClose, onSave }: {
         改掉等于把过去的记录指向另一个人。
       </p>
       <div className="grid-form">
-        <Pick label="角色" v={roleId} on={setRoleId} testid="edit-role"
+        <Pick label="角色" v={roleId} on={setRoleId} testid="edit-role" placeholder={null}
           options={roles.map(r => ({ value: r.id, label: r.name }))}
           empty="这个租户一个角色都没有 —— 开户时铺的九个标准角色没进去。" />
         <Pick label="分组" v={teamId} on={setTeamId} testid="edit-team"

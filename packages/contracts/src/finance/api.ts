@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { define } from "../kernel/registry.js";
-import { Uuid, DateOnly, QueryBool } from "../kernel/primitives.js";
+import { Uuid, DateOnly, QueryBool , QueryArray } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult } from "../kernel/command.js";
 import {
@@ -12,6 +12,18 @@ const ById = z.object({ id: Uuid });
 
 /* ── 里程碑 · 结算 ───────────────────────────────────────────────── */
 
+/** `listMilestones` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListMilestonesQuery = PageQuery.extend({
+    studySiteId: Uuid.optional(),
+    studyId: Uuid.optional(),
+    clientId: Uuid.optional(),
+    state: QueryArray(MilestoneState),
+    /** 只看已开票未回款的（应收）。 */
+    receivableOnly: QueryBool.optional(),
+    /** 只看已过到期日的 —— 真正要打电话的那部分。 */
+    overdueOnly: QueryBool.optional()
+  });
+
 define({
   id: "listMilestones", method: "get", path: "/v1/milestones",
   layer: "L1", context: CTX,
@@ -22,16 +34,7 @@ define({
     "默认按**逾期最久**排：一笔挂了 94 天的应收，比今天刚达成的那笔紧急得多。\n" +
     "金额受 `price` 列权限管辖；对外部方整表关闭 —— " +
     "一个中心收了多少钱，医院不该从我们这里看到。",
-  query: PageQuery.extend({
-    studySiteId: Uuid.optional(),
-    studyId: Uuid.optional(),
-    clientId: Uuid.optional(),
-    state: z.array(MilestoneState).optional(),
-    /** 只看已开票未回款的（应收）。 */
-    receivableOnly: QueryBool.optional(),
-    /** 只看已过到期日的 —— 真正要打电话的那部分。 */
-    overdueOnly: QueryBool.optional()
-  }),
+  query: ListMilestonesQuery,
   response: page(Milestone)
 });
 
@@ -45,6 +48,9 @@ define({
   response: z.object({ items: z.array(MilestonePlanItem) })
 });
 
+/** `getArAging` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const GetArAgingQuery = z.object({ clientId: Uuid.optional() });
+
 define({
   id: "getArAging", method: "get", path: "/v1/milestones/ar-aging",
   layer: "L1", context: CTX,
@@ -53,9 +59,15 @@ define({
     "**逾期占比比绝对额有用**：500 万里逾期 50 万，和 80 万里逾期 50 万，" +
     "是两种完全不同的处境。两者都给。\n" +
     "逾期超过 60 天的单独算 —— 那不再是催收问题。",
-  query: z.object({ clientId: Uuid.optional() }),
+  query: GetArAgingQuery,
   response: ArAging
 });
+
+/** `invoiceMilestone` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const InvoiceMilestoneBody = z.object({
+    invoicedOn: DateOnly.optional().describe("默认今天"),
+    note: z.string().max(500).optional()
+  });
 
 define({
   id: "invoiceMilestone", method: "post", path: "/v1/milestones/{id}:invoice",
@@ -66,13 +78,16 @@ define({
     "历史发票的到期日不该跟着变。\n" +
     "开票日不得早于达成日：开不出那样的票（库里的 CHECK 也不让）。",
   params: ById,
-  body: z.object({
-    invoicedOn: DateOnly.optional().describe("默认今天"),
-    note: z.string().max(500).optional()
-  }),
+  body: InvoiceMilestoneBody,
   response: commandResult(Milestone),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `payMilestone` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const PayMilestoneBody = z.object({
+    paidOn: DateOnly.optional().describe("默认今天"),
+    note: z.string().max(500).optional()
+  });
 
 define({
   id: "payMilestone", method: "post", path: "/v1/milestones/{id}:pay",
@@ -82,15 +97,15 @@ define({
     "回款日不得早于开票日。**已回款的不能改回去** —— " +
     "钱到账是一件不可撤销的事实，写错了要走冲销，不是改状态。",
   params: ById,
-  body: z.object({
-    paidOn: DateOnly.optional().describe("默认今天"),
-    note: z.string().max(500).optional()
-  }),
+  body: PayMilestoneBody,
   response: commandResult(Milestone),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
 /* ── 客户档案 ────────────────────────────────────────────────────── */
+
+/** `listClients` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListClientsQuery = PageQuery.extend({ q: z.string().max(64).optional() });
 
 define({
   id: "listClients", method: "get", path: "/v1/clients",
@@ -103,9 +118,18 @@ define({
     "这也是把 `study.sponsor_name` 从字符串升成一张表的理由（见迁移 0031）：" +
     "按字符串分组算这些数，一次拼写不一致就够毁掉那个数。\n" +
     "对外部方整表关闭 —— 账期、联系人、关系评分都是商业信息。",
-  query: PageQuery.extend({ q: z.string().max(64).optional() }),
+  query: ListClientsQuery,
   response: page(Client)
 });
+
+/** `updateClient` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const UpdateClientBody = z.object({
+    sinceYear: z.int().min(1980).max(2200).nullable().optional(),
+    contact: z.string().max(120).nullable().optional(),
+    paymentTermsDays: z.int().min(0).max(365).optional(),
+    nps: z.int().min(0).max(10).nullable().optional(),
+    note: z.string().max(1000).nullable().optional()
+  });
 
 define({
   id: "updateClient", method: "patch", path: "/v1/clients/{id}",
@@ -114,18 +138,17 @@ define({
   description:
     "**账期改了不回溯历史发票** —— 已开出去的票，到期日在开票那一刻就固化了。",
   params: ById,
-  body: z.object({
-    sinceYear: z.int().min(1980).max(2200).nullable().optional(),
-    contact: z.string().max(120).nullable().optional(),
-    paymentTermsDays: z.int().min(0).max(365).optional(),
-    nps: z.int().min(0).max(10).nullable().optional(),
-    note: z.string().max(1000).nullable().optional()
-  }),
+  body: UpdateClientBody,
   response: Client,
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
 /* ── 现金流 ──────────────────────────────────────────────────────── */
+
+/** `getCashForecast` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const GetCashForecastQuery = z.object({
+    months: z.coerce.number().int().min(1).max(12).optional().describe("默认 6")
+  });
 
 define({
   id: "getCashForecast", method: "get", path: "/v1/cash-forecast",
@@ -143,8 +166,6 @@ define({
     "它不是未来收入，钱本来就该收到了。\n\n" +
     "另给一份压力情景：逾期的再拖 3 个月、预计的延后 1 个月。" +
     "不是悲观 —— 逾期之所以逾期，恰恰是因为对方还没打算付。",
-  query: z.object({
-    months: z.coerce.number().int().min(1).max(12).optional().describe("默认 6")
-  }),
+  query: GetCashForecastQuery,
   response: CashForecast
 });

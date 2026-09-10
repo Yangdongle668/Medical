@@ -1,9 +1,14 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
+import {
+  Body, Controller, Get, Headers,
+  HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
 import {
-  PageQuery, Uuid, DateOnly, Timestamp, WithReason,
-  SubjectState, VisitStatus, ScreenFailReason, WithdrawReason,
-  QualityKind, QualityState, QueryBool, CreateSubjectBody
+  PageQuery, Uuid, WithReason, CreateSubjectBody,
+  ListSubjectsQuery, ListEnrollmentQuery, ListSubjectVisitsQuery, ListQualityEventsQuery,
+  ListSubjectPaymentsQuery, SignIcfBody, EnrollSubjectBody, ScreenFailSubjectBody,
+  WithdrawSubjectBody, CompleteSubjectVisitBody, ReportSaeBody, ReplaceSoaBody,
+  ReportSaeSubmittedBody, SetCapaPlanBody, PaySubjectPaymentBody, CompleteVisitTaskBody,
+  ConfirmSubjectVisitBody, EnterVisitToEdcBody
 } from "@sitedesk/contracts";
 import { ClinicalService } from "./clinical.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
@@ -12,89 +17,9 @@ import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
 
 /* 查询参数的形状与契约同源：契约改了这里必然编译不过 */
-const arr = <T extends z.ZodType>(t: T) =>
-  z.union([t, z.array(t)]).transform(v => Array.isArray(v) ? v : [v]).optional();
-
-const SubjectQ = PageQuery.extend({
-  studySiteId: Uuid.optional(),
-  state: arr(SubjectState),
-  outOfWindow: QueryBool.optional(),
-  q: z.string().max(64).optional()
-});
-const EnrollmentQ = PageQuery.extend({
-  studyId: Uuid.optional(),
-  behindOnly: QueryBool.optional()
-});
-const VisitQ = PageQuery.extend({
-  studySiteId: Uuid.optional(),
-  subjectId: Uuid.optional(),
-  status: arr(VisitStatus),
-  outOfWindow: QueryBool.optional(),
-  pendingPi: QueryBool.optional()
-});
-const QualityQ = PageQuery.extend({
-  studySiteId: Uuid.optional(),
-  kind: arr(QualityKind),
-  state: arr(QualityState)
-});
-const PaymentQ = PageQuery.extend({
-  studySiteId: Uuid.optional(),
-  unpaid: QueryBool.optional()
-});
-
-const Capa = z.object({
-  plan: z.string().trim().min(10).max(2000),
-  ownerAccountId: Uuid.optional(),
-  dueOn: DateOnly
-});
 
 /* 预筛登记请求体**直接用契约那一个**（CreateSubjectBody）——
    这里原来是一份手抄的副本，而副本会和契约分叉，且两边各自自洽。 */
-const SignIcf = z.object({ signedOn: DateOnly });
-const Enroll = z.object({
-  randomizationNo: z.string().trim().min(1).max(32), enrolledOn: DateOnly
-});
-const ScreenFail = z.object({
-  reason: ScreenFailReason, failedOn: DateOnly, note: z.string().max(500).optional()
-});
-const Withdraw = z.object({
-  reason: WithdrawReason, withdrawnOn: DateOnly, note: z.string().trim().min(4).max(500)
-});
-const CompleteVisit = z.object({
-  actualDate: DateOnly,
-  outOfWindowReason: z.string().trim().min(4).max(500).optional(),
-  hours: z.number().min(0.25).max(24),
-  note: z.string().max(500).optional()
-});
-const Pay = z.object({
-  paidOn: DateOnly, receiptRef: z.string().trim().min(1).max(64)
-});
-const Empty = z.object({});
-const ReportSae = z.object({
-  subjectId: Uuid.optional(),
-  title: z.string().trim().min(1).max(200),
-  detail: z.string().trim().min(4).max(2000),
-  occurredAt: Timestamp,
-  reportedAt: Timestamp.optional()
-});
-const SaeReported = z.object({ reportedAt: Timestamp });
-const SoaVisitIn = z.object({
-  seq: z.coerce.number().int().min(0),
-  /* 与契约的 Code 同一条规则。`~` 不在允许字符里 ——
-     服务端腾编号位置时用的正是那个后缀。 */
-  visitCode: z.string().trim().min(1).max(64)
-    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
-  visitLabel: z.string().trim().min(1).max(120),
-  anchor: z.enum(["icf", "enroll"]),
-  offsetDays: z.coerce.number().int().min(-365).max(3650),
-  windowDays: z.coerce.number().int().min(0).max(120),
-  compensationCents: z.coerce.number().int().min(0),
-  tasks: z.array(z.string().trim().min(1).max(120)).max(30)
-});
-const ReplaceSoa = z.object({
-  visits: z.array(SoaVisitIn).min(1).max(80),
-  reason: z.string().trim().min(4).max(500)
-});
 
 @Controller("/v1")
 export class ClinicalController {
@@ -106,7 +31,7 @@ export class ClinicalController {
   /* ── 读 ─────────────────────────────────────────────────────────── */
 
   @Get("/subjects") @Operation("listSubjects")
-  listSubjects(@Query(new ZodPipe(SubjectQ)) q: z.infer<typeof SubjectQ>) {
+  listSubjects(@Query(new ZodPipe(ListSubjectsQuery)) q: z.infer<typeof ListSubjectsQuery>) {
     return this.svc.listSubjects(q);
   }
 
@@ -117,12 +42,12 @@ export class ClinicalController {
   funnel(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.funnel(id); }
 
   @Get("/enrollment") @Operation("listEnrollment")
-  listEnrollment(@Query(new ZodPipe(EnrollmentQ)) q: z.infer<typeof EnrollmentQ>) {
+  listEnrollment(@Query(new ZodPipe(ListEnrollmentQuery)) q: z.infer<typeof ListEnrollmentQuery>) {
     return this.svc.listEnrollment(q);
   }
 
   @Get("/subject-visits") @Operation("listSubjectVisits")
-  listVisits(@Query(new ZodPipe(VisitQ)) q: z.infer<typeof VisitQ>) {
+  listVisits(@Query(new ZodPipe(ListSubjectVisitsQuery)) q: z.infer<typeof ListSubjectVisitsQuery>) {
     return this.svc.listVisits(q);
   }
 
@@ -130,7 +55,7 @@ export class ClinicalController {
   getVisit(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.visit(id); }
 
   @Get("/quality-events") @Operation("listQualityEvents")
-  listQuality(@Query(new ZodPipe(QualityQ)) q: z.infer<typeof QualityQ>) {
+  listQuality(@Query(new ZodPipe(ListQualityEventsQuery)) q: z.infer<typeof ListQualityEventsQuery>) {
     return this.svc.listQualityEvents(q);
   }
 
@@ -144,7 +69,7 @@ export class ClinicalController {
   soa(@Param("id", new ZodPipe(Uuid)) id: string) { return this.svc.soa(id); }
 
   @Get("/subject-payments") @Operation("listSubjectPayments")
-  listPayments(@Query(new ZodPipe(PaymentQ)) q: z.infer<typeof PaymentQ>) {
+  listPayments(@Query(new ZodPipe(ListSubjectPaymentsQuery)) q: z.infer<typeof ListSubjectPaymentsQuery>) {
     return this.svc.listPayments(q);
   }
 
@@ -164,28 +89,28 @@ export class ClinicalController {
   @Post("/subjects/:id\\:sign-icf") @Operation("signIcf")
   signIcf(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(SignIcf)) b: z.infer<typeof SignIcf>,
+    @Body(new ZodPipe(SignIcfBody)) b: z.infer<typeof SignIcfBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.signIcf(id, b)); }
 
   @Post("/subjects/:id\\:enroll") @Operation("enrollSubject")
   enroll(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(Enroll)) b: z.infer<typeof Enroll>,
+    @Body(new ZodPipe(EnrollSubjectBody)) b: z.infer<typeof EnrollSubjectBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.enroll(id, b)); }
 
   @Post("/subjects/:id\\:screen-fail") @Operation("screenFailSubject")
   screenFail(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(ScreenFail)) b: z.infer<typeof ScreenFail>,
+    @Body(new ZodPipe(ScreenFailSubjectBody)) b: z.infer<typeof ScreenFailSubjectBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.screenFail(id, b)); }
 
   @Post("/subjects/:id\\:withdraw") @Operation("withdrawSubject")
   withdraw(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(Withdraw)) b: z.infer<typeof Withdraw>,
+    @Body(new ZodPipe(WithdrawSubjectBody)) b: z.infer<typeof WithdrawSubjectBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.withdraw(id, b)); }
 
@@ -195,28 +120,28 @@ export class ClinicalController {
   completeTask(
     @Param("id", new ZodPipe(Uuid)) id: string,
     @Param("seq", new ZodPipe(z.coerce.number().int().min(0))) seq: number,
-    @Body(new ZodPipe(Empty)) b: unknown,
+    @Body(new ZodPipe(CompleteVisitTaskBody)) b: unknown,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, { id, seq }, () => this.svc.completeTask(id, seq)); }
 
   @Post("/subject-visits/:id\\:complete") @Operation("completeSubjectVisit")
   completeVisit(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(CompleteVisit)) b: z.infer<typeof CompleteVisit>,
+    @Body(new ZodPipe(CompleteSubjectVisitBody)) b: z.infer<typeof CompleteSubjectVisitBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.completeVisit(id, b)); }
 
   @Post("/subject-visits/:id\\:confirm") @Operation("confirmSubjectVisit")
   confirmVisit(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(Empty)) b: unknown,
+    @Body(new ZodPipe(ConfirmSubjectVisitBody)) b: unknown,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, { id }, () => this.svc.confirmVisit(id)); }
 
   @Post("/subject-visits/:id\\:edc-entered") @Operation("enterVisitToEdc")
   edcEntered(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(Empty)) b: unknown,
+    @Body(new ZodPipe(EnterVisitToEdcBody)) b: unknown,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, { id }, () => this.svc.markEdcEntered(id)); }
 
@@ -225,28 +150,28 @@ export class ClinicalController {
   @Post("/study-sites/:id/sae") @Operation("reportSae") @HttpCode(201)
   reportSae(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(ReportSae)) b: z.infer<typeof ReportSae>,
+    @Body(new ZodPipe(ReportSaeBody)) b: z.infer<typeof ReportSaeBody>,
     @Headers("idempotency-key") key?: string
   ) { return idempotent(this.idem, key, b, () => this.svc.reportSae(id, b)); }
 
   @Post("/studies/:id/visit-template\\:replace") @Operation("replaceSoa")
   replaceSoa(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(ReplaceSoa)) b: z.infer<typeof ReplaceSoa>,
+    @Body(new ZodPipe(ReplaceSoaBody)) b: z.infer<typeof ReplaceSoaBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.replaceSoa(id, b)); }
 
   @Post("/quality-events/:id\\:sae-reported") @Operation("reportSaeSubmitted")
   saeReported(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(SaeReported)) b: z.infer<typeof SaeReported>,
+    @Body(new ZodPipe(ReportSaeSubmittedBody)) b: z.infer<typeof ReportSaeSubmittedBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.markSaeReported(id, b)); }
 
   @Post("/quality-events/:id\\:capa") @Operation("setCapaPlan")
   capa(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(Capa)) b: z.infer<typeof Capa>,
+    @Body(new ZodPipe(SetCapaPlanBody)) b: z.infer<typeof SetCapaPlanBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.setCapaPlan(id, b)); }
 
@@ -260,7 +185,7 @@ export class ClinicalController {
   @Post("/subject-payments/:id\\:pay") @Operation("paySubjectPayment")
   pay(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(Pay)) b: z.infer<typeof Pay>,
+    @Body(new ZodPipe(PaySubjectPaymentBody)) b: z.infer<typeof PaySubjectPaymentBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.payPayment(id, b)); }
 }

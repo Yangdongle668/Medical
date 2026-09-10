@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { define } from "../kernel/registry.js";
-import { Uuid, DateOnly, QueryBool } from "../kernel/primitives.js";
+import { Uuid, DateOnly, QueryBool , QueryArray } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult } from "../kernel/command.js";
 import { MonitorVisit, MonitorKind, MonitorState, MonitorBoard,
@@ -8,6 +8,17 @@ import { MonitorVisit, MonitorKind, MonitorState, MonitorBoard,
 
 const CTX = "oversight";
 const ById = z.object({ id: Uuid });
+
+/** `listMonitorVisits` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListMonitorVisitsQuery = PageQuery.extend({
+    studySiteId: Uuid.optional(),
+    kind: QueryArray(MonitorKind),
+    state: QueryArray(MonitorState),
+    /** 只看指派给我的 —— CRA 的默认视角。 */
+    mine: QueryBool.optional(),
+    /** 只看还没提交报告的。 */
+    openOnly: QueryBool.optional()
+  });
 
 define({
   id: "listMonitorVisits", method: "get", path: "/v1/monitor-visits",
@@ -18,17 +29,12 @@ define({
     "这一页是「接下来去哪」，不是「最近做了什么」。\n\n" +
     "对外部方整表关闭：一个机构办看得到我们打算什么时候去、抽多少比例，" +
     "等于把监查策略交给了被监查的一方。",
-  query: PageQuery.extend({
-    studySiteId: Uuid.optional(),
-    kind: z.array(MonitorKind).optional(),
-    state: z.array(MonitorState).optional(),
-    /** 只看指派给我的 —— CRA 的默认视角。 */
-    mine: QueryBool.optional(),
-    /** 只看还没提交报告的。 */
-    openOnly: QueryBool.optional()
-  }),
+  query: ListMonitorVisitsQuery,
   response: page(MonitorVisit)
 });
+
+/** `getMonitorBoard` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const GetMonitorBoardQuery = z.object({ studyId: Uuid.optional() });
 
 define({
   id: "getMonitorBoard", method: "get", path: "/v1/monitor-visits/board",
@@ -41,9 +47,22 @@ define({
     "没有理由的建议值没人照着做，也没人能在核查时解释" +
     "「为什么这个中心只抽了 25%」。\n\n" +
     "另一半是欠账：逾期未监查的中心，和已经到过现场却压着没交的报告。",
-  query: z.object({ studyId: Uuid.optional() }),
+  query: GetMonitorBoardQuery,
   response: MonitorBoard
 });
+
+/** `planMonitorVisit` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const PlanMonitorVisitBody = z.object({
+    studySiteId: Uuid,
+    kind: MonitorKind,
+    plannedOn: DateOnly,
+    /** 不填就是排给自己 —— CRA 排自己的班是常态。 */
+    monitorAccountId: Uuid.optional(),
+    days: z.number().positive().max(30),
+    sdvSamplePct: z.int().min(1).max(100).optional(),
+    note: z.string().trim().max(500).optional(),
+    items: z.array(z.string().trim().min(4).max(300)).min(1).max(30)
+  });
 
 define({
   id: "planMonitorVisit", method: "post", path: "/v1/monitor-visits",
@@ -54,17 +73,7 @@ define({
     "「这次去要看什么」是出发前的决定，事后补的清单只会写成已经做过的事。\n\n" +
     "抽样比例可以不填：空表示「这次没有单独定过」，而不是默认 100%。",
   action: "monitor",
-  body: z.object({
-    studySiteId: Uuid,
-    kind: MonitorKind,
-    plannedOn: DateOnly,
-    /** 不填就是排给自己 —— CRA 排自己的班是常态。 */
-    monitorAccountId: Uuid.optional(),
-    days: z.number().positive().max(30),
-    sdvSamplePct: z.int().min(1).max(100).optional(),
-    note: z.string().trim().max(500).optional(),
-    items: z.array(z.string().trim().min(4).max(300)).min(1).max(30)
-  }),
+  body: PlanMonitorVisitBody,
   response: commandResult(MonitorVisit),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
@@ -83,6 +92,9 @@ define({
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
+/** `performMonitorVisit` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const PerformMonitorVisitBody = z.object({ performedOn: DateOnly.optional() });
+
 define({
   id: "performMonitorVisit", method: "post", path: "/v1/monitor-visits/{id}:perform",
   layer: "L2", context: CTX,
@@ -92,10 +104,13 @@ define({
     "在此之前它是「还没去」，在此之后它是「欠一份报告」，两种欠账要做的事不一样。",
   action: "monitor",
   params: ById,
-  body: z.object({ performedOn: DateOnly.optional() }),
+  body: PerformMonitorVisitBody,
   response: commandResult(MonitorVisit),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `setMonitorItemDone` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const SetMonitorItemDoneBody = z.object({ done: z.boolean() });
 
 define({
   id: "setMonitorItemDone", method: "post",
@@ -107,7 +122,7 @@ define({
     "比台账上少一项严重得多：核查时两份材料互相打脸。",
   action: "monitor",
   params: z.object({ id: Uuid, seq: z.coerce.number().int().min(0) }),
-  body: z.object({ done: z.boolean() }),
+  body: SetMonitorItemDoneBody,
   response: commandResult(MonitorVisit),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
@@ -127,6 +142,13 @@ define({
 
 /* ── 内部稽查 ────────────────────────────────────────────────────── */
 
+/** `listInternalAudits` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListInternalAuditsQuery = PageQuery.extend({
+    studySiteId: Uuid.optional(),
+    kind: QueryArray(AuditKind),
+    openOnly: QueryBool.optional()
+  });
+
 define({
   id: "listInternalAudits", method: "get", path: "/v1/internal-audits",
   layer: "L1", context: CTX,
@@ -135,13 +157,12 @@ define({
     "机构质控是医院查我们，稽查是我们自己查自己。**对外部方整表关闭** —— " +
     "把自查报告给被查方看，下一次自查就查不出东西了。\n\n" +
     "默认最近的排最前：稽查看的是当前状态，不是历史顺序。",
-  query: PageQuery.extend({
-    studySiteId: Uuid.optional(),
-    kind: z.array(AuditKind).optional(),
-    openOnly: QueryBool.optional()
-  }),
+  query: ListInternalAuditsQuery,
   response: page(InternalAudit)
 });
+
+/** `getAuditBoard` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const GetAuditBoardQuery = z.object({ studySiteId: Uuid.optional() });
 
 define({
   id: "getAuditBoard", method: "get", path: "/v1/internal-audits/board",
@@ -154,9 +175,17 @@ define({
     "后者更急。\n\n" +
     "判定里还把「没人管」从「待观察」拆了出来：" +
     "已指派责任人却还没提交措施，那不是在观察，是有人欠着一份措施。",
-  query: z.object({ studySiteId: Uuid.optional() }),
+  query: GetAuditBoardQuery,
   response: AuditBoard
 });
+
+/** `openInternalAudit` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const OpenInternalAuditBody = z.object({
+    studySiteId: Uuid,
+    kind: AuditKind,
+    auditedOn: DateOnly.optional(),
+    scope: z.string().trim().min(4).max(1000)
+  });
 
 define({
   id: "openInternalAudit", method: "post", path: "/v1/internal-audits",
@@ -167,15 +196,17 @@ define({
     "借它等于让被稽查的一方能对我方发起内部稽查。\n\n" +
     "稽查范围必填：空范围的稽查等于没查，事后说不清当时看了什么。",
   action: "audit",
-  body: z.object({
-    studySiteId: Uuid,
-    kind: AuditKind,
-    auditedOn: DateOnly.optional(),
-    scope: z.string().trim().min(4).max(1000)
-  }),
+  body: OpenInternalAuditBody,
   response: commandResult(InternalAudit),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `addAuditFinding` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const AddAuditFindingBody = z.object({
+    severity: z.enum(["minor", "major", "critical"]),
+    finding: z.string().trim().min(10).max(1000),
+    repeatOf: Uuid.optional()
+  });
 
 define({
   id: "addAuditFinding", method: "post", path: "/v1/internal-audits/{id}:finding",
@@ -187,14 +218,13 @@ define({
     "源事件必须早于本次稽查 —— 指向一条今天才提出的事件，那不是复发。",
   action: "audit",
   params: ById,
-  body: z.object({
-    severity: z.enum(["minor", "major", "critical"]),
-    finding: z.string().trim().min(10).max(1000),
-    repeatOf: Uuid.optional()
-  }),
+  body: AddAuditFindingBody,
   response: commandResult(InternalAudit),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });
+
+/** `closeAuditFinding` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const CloseAuditFindingBody = z.object({ verification: z.string().trim().min(10).max(1000) });
 
 define({
   id: "closeAuditFinding", method: "post",
@@ -208,7 +238,7 @@ define({
     "就会出现「发现项全关了但稽查还开着」这种只有系统自己知道的状态。",
   action: "audit",
   params: z.object({ id: Uuid, seq: z.coerce.number().int().min(0) }),
-  body: z.object({ verification: z.string().trim().min(10).max(1000) }),
+  body: CloseAuditFindingBody,
   response: commandResult(InternalAudit),
   errors: ["invariant-violated", "idempotency-key-reused"]
 });

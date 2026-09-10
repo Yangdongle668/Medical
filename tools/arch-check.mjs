@@ -201,45 +201,61 @@ else {
       `    只比对到 ${checked} 个身份（应为 9）—— IDENTITIES 的写法变了，这条规则已经失效`);
 }
 
-/* ── 控制器不得自己重声明请求体 ──────────────────────────────────────
+/* ── 路由层不许自己声明请求 schema ──────────────────────────────────
    这是 guards.ts 里那条规矩的另一半。动作权限那一维早就立好了：
    「两处各写一份的后果不是不一致告警，而是**静默失守**。」
-   请求体这一维一直没有，于是 14 个控制器里长出了 86 处 z.object。
+   请求体这一维一直没有，于是 14 个控制器里长出了 77 处 z.object。
 
-   已经付过一次代价：契约里 createAccount 的登录名写着
+   已经付过两次代价：
 
-       .regex(/^[a-z][a-z0-9_]{2,31}$/, "3–32 位小写字母 / 数字 / 下划线…")
+   ① 契约里 createAccount 的登录名写着
+        .regex(/^[a-z][a-z0-9_]{2,31}$/, "3–32 位小写字母 / 数字 / 下划线…")
+      控制器抄的那份漏了第二个参数。**校验逻辑一模一样**，两边拒同样的
+      输入，差的只是那句话 —— 于是把登录名填成「周敏」的管理员收到的是
+      一串正则。任何比对"是否拒绝"的测试都照样绿。
 
-   控制器抄的那份漏了第二个参数。**校验逻辑一模一样**，两边拒同样的输入，
-   差的只是那句话 —— 于是把登录名填成「周敏」的管理员收到的是一串正则，
-   而那几乎必然被读成"这功能坏了"。任何比对"是否拒绝"的测试都照样绿。
+   ② createStudySite 的 `code` 在契约里改成可选（服务端发号）之后，
+      控制器那份副本仍然要求必填 —— 接口回一句「请求参数不符合契约」，
+      **而它自己就是那份契约的实现**。两边各自都自洽，没有测试拦得住。
 
-   下面这张表只许变短。清空一个控制器，就把它那一行删掉。 */
-const SCHEMA_DEBT = {
-  "bizdev.controller.ts": 10, "intake.controller.ts": 3,
-  "accountability.controller.ts": 6, "clinical.controller.ts": 17,
-  "query.controller.ts": 4, "cost.controller.ts": 5,
-  "finance.controller.ts": 6, "audit.controller.ts": 5,
-  "monitor.controller.ts": 5, "acceptance.controller.ts": 4,
-  "site.controller.ts": 4, "staffing.controller.ts": 5,
-  /* auth 的三个是**登录流程自己的**输入（口令、令牌、投递地址），
-     不对应任何业务契约端点的 body —— 留着，且不计入待还清单。 */
-  "auth.controller.ts": 3
-};
-for (const file of walk(path.join(ROOT, "apps/api/src"))) {
-  if (!file.endsWith(".controller.ts")) continue;
-  const base = path.basename(file);
-  const src = fs.readFileSync(file, "utf8");
-  const n = [...src.matchAll(/^const [A-Za-z]+ = (?:z\.object\(|PageQuery\.extend\()/gm)].length;
-  const owed = SCHEMA_DEBT[base] ?? 0;
-  if (n > owed)
-    violations.push(`${path.relative(ROOT, file)}\n` +
-      `    自己声明了 ${n} 处请求 schema，而待还清单上记的是 ${owed}\n` +
-      `    请求体的定义源是契约：在 contracts 的 model.ts 里命名并导出，两边 import 同一个`);
-  if (n < owed)
-    violations.push(`tools/arch-check.mjs\n` +
-      `    ${base} 只剩 ${n} 处 schema，待还清单上还记着 ${owed} —— 把那一行改小或删掉\n` +
-      `    留着一个还不清的数，下一个人会以为这活还没干`);
+   这条规则以前是一张"只许变短"的欠账表。现在债还完了（77 → 3），
+   于是它从"别再变多"升级成"一个都不许有"：
+
+     凡是 @Operation("x") 的处理器，其 @Body / @Query 用的 schema
+     必须是从 @sitedesk/contracts 导入的 —— 而不是本文件里 const 出来的。
+
+   auth 那三个是**登录流程自己的**输入（口令、令牌、投递地址），
+   不对应任何业务契约端点的 body —— 整个文件豁免。 */
+{
+  const 豁免 = new Set(["auth.controller.ts"]);
+  let 查过 = 0;
+  for (const file of walk(path.join(ROOT, "apps/api/src"))) {
+    if (!file.endsWith(".controller.ts")) continue;
+    const base = path.basename(file);
+    if (豁免.has(base)) continue;
+    const src = fs.readFileSync(file, "utf8");
+    const 本地 = [...src.matchAll(
+      /^const ([A-Za-z]+) = (?:z\.object\(|PageQuery\.extend\()/gm)].map(m => m[1]);
+    const ops = [...src.matchAll(/@Operation\("([^"]+)"\)/g)];
+    for (let k = 0; k < ops.length; k++) {
+      const seg = src.slice(ops[k].index,
+        k + 1 < ops.length ? ops[k + 1].index : src.length);
+      for (const re of [/@Body\(new ZodPipe\(([A-Za-z]+)\)/,
+                        /@Query\(new ZodPipe\(([A-Za-z]+)\)/]) {
+        const name = seg.match(re)?.[1];
+        if (!name) continue;
+        查过++;
+        if (!本地.includes(name)) continue;
+        violations.push(`${path.relative(ROOT, file)}\n` +
+          `    ${ops[k][1]} 用的 ${name} 是本文件 const 出来的，不是契约那一份\n` +
+          "    请求体的定义源是契约：在 contracts 里命名并导出，两边 import 同一个\n" +
+          "    （副本会分叉，而两边各自都自洽 —— 没有测试拦得住）");
+      }
+    }
+  }
+  if (查过 < 60)
+    violations.push("tools/arch-check.mjs\n" +
+      `    只查到 ${查过} 处 @Body/@Query —— 判据的写法过时了，这条规则已经形同虚设`);
 }
 
 /* ── 敏感动作清单里的每个名字都得是真的 operationId ──────────────────

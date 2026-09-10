@@ -42,7 +42,7 @@ type Schema = Record<string, unknown> & {
   properties?: Record<string, Schema>; required?: string[];
   enum?: unknown[]; type?: string; $ref?: string; "x-extensible"?: boolean;
 };
-type Param = { name: string; in: string; required?: boolean };
+type Param = { name: string; in: string; required?: boolean; schema?: unknown };
 type Op = { operationId?: string; responses?: Record<string, unknown>;
             parameters?: Param[]; requestBody?: unknown };
 type Doc = { paths: Record<string, Record<string, Op>>;
@@ -150,6 +150,19 @@ for (const [id, cur] of co) {
     new Set((o.parameters ?? []).filter(x => x.required).map(x => `${x.in}:${x.name}`));
   for (const k of req(cur.op))
     if (!req(old.op).has(k)) breaking.push(`端点 ${id} 新增必填参数 ${k}`);
+  /* 参数的 **schema** 变了也要报。
+     这里原来只比"在不在"和"必不必填" —— 于是把一个查询参数从
+     `array` 收窄成 `string`（旧客户端立刻全挂）和从 `array` 放宽成
+     `string | array`（无害）**同样一声不吭**。
+     宽窄很难在这一层判准，所以一律记成"需要留意"：
+     它至少让人去看一眼，而不是让门禁替他做一个它做不了的判断。 */
+  const 参数表 = (o: Op) =>
+    new Map((o.parameters ?? []).map(x => [`${x.in}:${x.name}`, JSON.stringify(x.schema ?? null)]));
+  const 旧参 = 参数表(old.op), 新参 = 参数表(cur.op);
+  for (const [k, v] of 新参) {
+    const o = 旧参.get(k);
+    if (o !== undefined && o !== v) warn.push(`端点 ${id} 参数 ${k} 的 schema 变了`);
+  }
   if (!old.op.requestBody && cur.op.requestBody) breaking.push(`端点 ${id} 新增了必填请求体`);
 }
 

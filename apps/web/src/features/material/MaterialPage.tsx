@@ -90,7 +90,7 @@ export function MaterialPage() {
         <p>两本账都是<b>关闭中心时对不上的那种</b>：药品在手数量、样本闭环。</p>
       </div>
 
-      <Pick label="中心" v={siteId} on={setSiteId} testid="mat-site"
+      <Pick label="中心" v={siteId} on={setSiteId} testid="mat-site" placeholder={null}
         style={{ maxWidth: 340, marginBottom: 14 }}
         options={sites.map(s => ({ value: s.id, label: `${s.code} · ${s.hospital}` }))}
         empty="你的范围里还没有中心 —— 药品与样本台账是按中心记的，没有中心就没有台账。" />

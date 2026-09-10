@@ -307,7 +307,7 @@ export function QaAuditPage() {
           <div className="stack" data-testid="audit-form"
             style={{ borderTop: "1px solid var(--line, #e5e5e5)", paddingTop: 10 }}>
             <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
-              <Pick label="受稽查中心" v={siteId} on={setSiteId} testid="audit-site"
+              <Pick label="受稽查中心" v={siteId} on={setSiteId} testid="audit-site" placeholder={null}
                 style={{ minWidth: 260 }}
                 options={sites.map(s => ({ value: s.id, label: `${s.code} ${s.hospital}` }))}
                 empty="系统里还没有中心 —— 内部稽查是针对某一个中心开展的。" />
