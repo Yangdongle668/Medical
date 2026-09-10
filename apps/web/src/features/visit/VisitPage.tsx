@@ -65,8 +65,20 @@ export function VisitPage() {
   const outOfWindow = actualDate < visit.windowFrom || actualDate > visit.windowTo;
   const done = visit.status !== "planned";
 
+  /* 勾一项。**这里原来一个 catch 都没有** —— 因为那时服务端对
+     "这一项已经被别人勾了" 也回 200（那条 UPDATE 匹配 0 行却不报错）。
+     现在它会回 409，而一个没人接的 rejected promise 只会进控制台：
+     勾选框弹回去，页面上一个字都不说。两个 CRC 同时勾同一张任务单
+     不是罕见情形，那正是这条清单要处理的现场。 */
   async function tick(seq: number) {
-    await call("completeVisitTask", { params: { id, seq }, body: {} });
+    setProblem(null);
+    try {
+      await call("completeVisitTask", { params: { id, seq }, body: {} });
+    } catch (e) {
+      if (e instanceof ApiError) setProblem(e.problem); else throw e;
+    }
+    /* 无论成没成都重读：失败那次多半是别人已经勾了，
+       而"最新的清单"正是这时候最该给的东西。 */
     await load();
   }
 

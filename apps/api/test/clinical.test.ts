@@ -665,3 +665,66 @@ describe("行范围：受试者跟着中心走", () => {
     expect((await cra.get(`/v1/subjects/${outside.id}`)).status).toBe(404);
   });
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   勾任务：**匹配 0 行不是成功。**
+
+   `completeTask` 原来这么写：
+
+       await c.client.query(
+         `UPDATE subject_visit_task SET done_at = now(), done_by = $3
+           WHERE visit_id = $1 AND seq = $2 AND done_at IS NULL`, …);
+       return { data: await this.visit(visitId), … };
+
+   WHERE 里的 `seq = $2` 和 `done_at IS NULL` 都是上面那次读**没有验证过**
+   的条件。seq 不存在、或这一项已经被别人勾掉了，UPDATE 都匹配 0 行 ——
+   而接口照样回 200，调用方分不出"勾上了"和"根本没这一项"。
+
+   这正是迁移 0027 点名过的那种失守：那次是管理员改口令的 UPDATE 被 RLS
+   挡在门外匹配到 0 行，接口回 204，口令没换、旧会话还开着。
+   同一个形状：**SQL 成功了，事情没发生。**
+   ════════════════════════════════════════════════════════════════════ */
+describe("勾任务：SQL 成功了不等于事情发生了", () => {
+  /** SS-01 —— crc（吴桐）带的那个中心。 */
+  const 中心 = async () => (await siteByCode(crc, "SS-01")).id;
+
+  it("不存在的 seq → 404，而不是一声不响的 200", async () => {
+    const s = await freshSubject(crc, await 中心());
+    const v = await currentVisit(crc, s.id);
+    const r = await crc.post(`/v1/subject-visits/${v.id}/tasks/999:done`, {}, K());
+    expect(r.status, "勾了一项根本不存在的任务，接口却说成功").toBe(404);
+  });
+
+  it("已经被勾过的那一项 → 409，说得出是谁的活重了", async () => {
+    /* 两个 CRC 同时勾同一张任务单不是罕见情形，那正是这条清单要处理的现场。
+       后到的那个该看到「已经有人勾了」，而不是以为是自己勾的。 */
+    const s = await freshSubject(crc, await 中心());
+    const v = await currentVisit(crc, s.id);
+    const t = v.tasks[0];
+    expect(t, "这次访视一项任务都没有 —— 这条测试测不到东西了").toBeTruthy();
+
+    const first = await crc.post(
+      `/v1/subject-visits/${v.id}/tasks/${t.seq}:done`, {}, K());
+    expect(first.status).toBe(201);
+
+    /* **换一把幂等键**：同一把键会走重放那条路（那是对的，也是另一回事），
+       这里要验的是"第二个人来勾同一项"。 */
+    const again = await crc.post(
+      `/v1/subject-visits/${v.id}/tasks/${t.seq}:done`, {}, K());
+    expect(again.status, "重复勾同一项，接口却说成功").toBe(409);
+    expect(again.body.detail).toContain("已经完成过了");
+  });
+
+  it("同一把幂等键重放，仍然照常返回首次的结果（不是 409）", async () => {
+    /* 上面那条不能把离线重放一起打死：发件箱重发的是**同一把键**，
+       它必须还是成功那一次的结果。 */
+    const s = await freshSubject(crc, await 中心());
+    const v = await currentVisit(crc, s.id);
+    const t = v.tasks[0];
+    const k = K();
+    const a = await crc.post(`/v1/subject-visits/${v.id}/tasks/${t.seq}:done`, {}, k);
+    const b = await crc.post(`/v1/subject-visits/${v.id}/tasks/${t.seq}:done`, {}, k);
+    expect(a.status).toBe(201);
+    expect(b.status, "离线重放被当成了重复勾选").toBe(201);
+  });
+});

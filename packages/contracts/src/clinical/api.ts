@@ -299,7 +299,7 @@ define({
   params: z.object({ id: Uuid, seq: z.coerce.number().int().min(0) }),
   body: z.object({}),
   response: commandResult(SubjectVisit),
-  errors: ["idempotency-key-reused"]
+  errors: ["idempotency-key-reused", "conflict-version"]
 });
 
 define({
