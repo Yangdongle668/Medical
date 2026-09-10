@@ -86,3 +86,35 @@ export const listStudies = () =>
 export const setStudyTeam = (id: string, teamId: string | null, reason: string) =>
   call<{ data: Study; sideEffects: { summary: string }[] }>(
     "setStudyTeam", { params: { id }, body: { teamId, reason } });
+
+/* ── 投递通道 ─────────────────────────────────────────────────────
+   登录链接靠它送出去。**响应里没有口令**，只有 secretSet：
+   一个能把口令读回来的设置页，等于给每个管理员发了一份邮箱凭证。 */
+export interface MailTransport {
+  kind: "smtp" | "none";
+  url: string | null;
+  fromAddr: string | null;
+  username: string | null;
+  secretSet: boolean;
+  source: "db" | "env" | "none";
+  keyReady: boolean;
+  lastTestAt: string | null;
+  lastTestOk: boolean | null;
+  lastTestError: string | null;
+  updatedAt: string | null;
+  updatedByName: string | null;
+}
+export const getMailTransport = () => call<MailTransport>("getMailTransport");
+
+export const setMailTransport = (b: {
+  kind: "smtp" | "none";
+  url?: string | null; fromAddr?: string | null; username?: string | null;
+  /** 省略 = 不动已存的那一个；空串 = 清掉。两者不是一回事。 */
+  secret?: string | null;
+  reason: string;
+}) => call<{ data: MailTransport; sideEffects: { summary: string }[] }>(
+  "setMailTransport", { body: b });
+
+export const testMailTransport = () =>
+  call<{ data: { ok: boolean; sentTo: string | null; error: string | null } }>(
+    "testMailTransport", { body: {} });

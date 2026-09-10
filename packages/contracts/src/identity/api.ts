@@ -3,6 +3,8 @@ import { define } from "../kernel/registry.js";
 import { Uuid, QueryBool } from "../kernel/primitives.js";
 import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
+import { MailTransport, MailTestResult,
+  SetMailTransportBody, TestMailTransportBody } from "./model.js";
 import { Account, Principal, Role, Team, AuditEntry,
   CreateAccountBody, UpdateAccountBody, SetAccountPasswordBody,
   CreateTeamBody, UpdateRolePermissionsBody, ListAccountsQuery,
@@ -171,4 +173,52 @@ define({
   description: "只追加、不可改删。外部方只看得到本院中心相关的条目。",
   query: ListAuditEntriesQuery,
   response: page(AuditEntry)
+});
+
+/* ── 登录链接的投递通道 ──────────────────────────────────────────── */
+
+define({
+  id: "getMailTransport", method: "get", path: "/v1/mail-transport",
+  layer: "L1", context: CTX, summary: "投递通道设置", action: "manage",
+  description:
+    "登录链接靠它送出去。在此之前只能改环境变量、重启进程 —— " +
+    "也就是说**签发登录链接的权限等同于运维权限**。\n\n" +
+    "**响应里没有口令**，只有 `secretSet: boolean`。一个能把口令读回来的" +
+    "设置页，等于给每个管理员发了一份邮箱凭证，而他们要做的事" +
+    "（改服务器、换发件人、试发一封）一件也不需要读它。\n\n" +
+    "`source` 说清这份配置从哪儿来：`db` 是在页面上配的，`env` 是还在用" +
+    "环境变量（开机那条路），`none` 是两处都没有 —— 那时链接照样签得出来，" +
+    "但没有人收得到。",
+  response: MailTransport
+});
+
+define({
+  id: "setMailTransport", method: "post", path: "/v1/mail-transport:set",
+  layer: "L2", context: CTX, summary: "改投递通道", action: "manage",
+  description:
+    "**敏感动作，必须写原因。** 换一台 SMTP 服务器，就是换一台机器去读" +
+    "所有人的登录链接 —— 指向一台会记日志的中继，等于把每一个链接抄送一份。\n\n" +
+    "口令三种意思分得开：**省略 = 不动已存的那一个**（改个端口不该被迫" +
+    "重输口令），传空串 = 清掉，传值 = 换成新的。\n\n" +
+    "服务器上没有 `SITEDESK_SECRET_KEY` 时**拒绝保存口令**并说清为什么 —— " +
+    "而不是悄悄存明文。一份会进备份、进从库、进 dump 的明文口令，" +
+    "比「这个功能暂时不能用」糟得多。",
+  body: SetMailTransportBody,
+  response: commandResult(MailTransport),
+  errors: ["invariant-violated", "conflict-version", "idempotency-key-reused"]
+});
+
+define({
+  id: "testMailTransport", method: "post", path: "/v1/mail-transport:test",
+  layer: "L2", context: CTX, summary: "试发一封", action: "manage",
+  description:
+    "**配好了要能自己验一次。** 否则「配对了没有」这件事要等第一个真人" +
+    "申请登录链接时才知道 —— 而没收到的那个人不会来报，他只会以为系统坏了。\n\n" +
+    "收件人**不接受传入**，一律发给当前登录者自己登记的地址：" +
+    "一个可以指定收件人的「试发」就是一个开放的转发器。\n\n" +
+    "结果连同时间一起记在通道上（`lastTestAt` / `lastTestOk`），" +
+    "页面据此显示「最近一次试发」。",
+  body: TestMailTransportBody,
+  response: commandResult(MailTestResult),
+  errors: ["invariant-violated", "idempotency-key-reused"]
 });

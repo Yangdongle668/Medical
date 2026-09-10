@@ -56,6 +56,10 @@ export const SENSITIVE_ACTIONS = new Set<string>([
      原来那个组的 PM 看不见这个项目、它下面的全部中心、
      那些中心上的受试者与工时。和改角色同一档。 */
   "setStudyTeam",
+  /* 改投递通道 —— 换一台 SMTP 服务器，就是换一台机器去读所有人的
+     登录链接。指向一台会记日志的中继，等于把每一个链接抄送一份，
+     而被冒用的人在审计轨迹里看到的是他自己。 */
+  "setMailTransport",
   "voidTimesheet"
 ]);
 export const needsReason = (operationId: string): boolean =>

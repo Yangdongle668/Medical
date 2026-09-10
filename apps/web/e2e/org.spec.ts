@@ -237,6 +237,70 @@ test.describe("经营层：组织与权限", () => {
   });
 });
 
+/* ══════════════════════════════════════════════════════════════════
+   投递通道。
+
+   通道本身早就写好了，缺的是**填它的地方** —— 在此之前
+   SITEDESK_SMTP_URL 只能由能改环境变量、能重启进程的人来设。
+   于是一套装好的系统里，管理员建得了账号、设得了口令、登记得了
+   收件地址，唯独没法让登录链接真的发出去。
+   ══════════════════════════════════════════════════════════════════ */
+test.describe("投递通道", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("**没配的时候，标签页上就标出来，并说清后果**", async ({ page }) => {
+    await page.goto("/org?as=boss");
+    await expect(page.getByTestId("account-row").first()).toBeVisible();
+    /* 标签上带一个"未配" —— 这一格是"人进不进得来"的前提 */
+    await expect(page.getByTestId("tab-mail")).toContainText("未配");
+
+    await page.getByTestId("tab-mail").click();
+    await expect(page.getByTestId("mail-none")).toContainText("登录链接发不出去");
+    /* 后果要说到底：签发权限现在等同于运维权限 */
+    await expect(page.getByTestId("mail-none")).toContainText("运维权限");
+  });
+
+  test("**配完能自己验一次** —— 而且没写原因存不下去", async ({ page }) => {
+    await page.goto("/org?as=boss");
+    await expect(page.getByTestId("account-row").first()).toBeVisible();
+    await page.getByTestId("tab-mail").click();
+
+    await page.getByTestId("mail-kind").selectOption("smtp");
+    await page.getByTestId("mail-url").fill("smtps://smtp.example.com:465");
+    await page.getByTestId("mail-from").fill("中心台 <no-reply@example.com>");
+    /* 没写原因：存不下去。改通道是权限变更，不是显示偏好。 */
+    await expect(page.getByTestId("mail-save")).toBeDisabled();
+
+    await page.getByTestId("mail-reason").fill("接入公司邮件服务器，登录链接不再靠运维代发");
+    await expect(page.getByTestId("mail-save")).toBeEnabled();
+    await page.getByTestId("mail-save").click();
+    await expect(page.getByTestId("org-said")).toContainText("投递通道");
+
+    /* 配完就能验 —— 否则真假要等第一个真人申请链接时才知道 */
+    await page.getByTestId("mail-test").click();
+    await expect(page.getByTestId("mail-test-said")).toContainText("发出去了");
+    /* 收件地址掩码：试发结果不该把通讯录抄出来 */
+    await expect(page.getByTestId("mail-test-said")).toContainText("*");
+  });
+
+  test("**口令读不回来** —— 页面上只说「存了没有」", async ({ page }) => {
+    await page.goto("/org?as=boss");
+    await expect(page.getByTestId("account-row").first()).toBeVisible();
+    await page.getByTestId("tab-mail").click();
+    await page.getByTestId("mail-kind").selectOption("smtp");
+    /* 口令那一栏是 password 类型，且从不预填 —— 一个能把口令读回来的
+       设置页，等于给每个管理员发了一份邮箱凭证。 */
+    const pw = page.getByTestId("mail-secret");
+    await expect(pw).toHaveAttribute("type", "password");
+    await expect(pw).toHaveValue("");
+  });
+
+  test("**PM 进不去这一页** —— 这是 manage 动作", async ({ page }) => {
+    await page.goto("/org?as=pm");
+    await expect(page.getByTestId("org-forbidden")).toBeVisible();
+  });
+});
+
 test("CRC 手敲进来：一句话，不是一串 403", async ({ page }) => {
   await page.goto("/org");
   await expect(page.getByTestId("org-forbidden")).toContainText("服务端不答应");

@@ -9,10 +9,11 @@ import {
   listAccounts, listRoles, listTeams, createAccount, updateAccount,
   disableAccount, enableAccount, setAccountPassword, setLoginAddress,
   createTeam, updateRole, listStudies, setStudyTeam,
+  getMailTransport, setMailTransport, testMailTransport, type MailTransport,
   ROW_RULE, NEEDS_ORG_REF, FIELD_LABEL, ACTION_LABEL,
   type Account, type Role, type Team, type Study
 } from "./api.js";
-import { Pick } from "../../shell/CreateForm.js";
+import { Pick, Field } from "../../shell/CreateForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    组织与权限 —— 管理员的主界面（原型 26-org.html）。
@@ -30,7 +31,7 @@ import { Pick } from "../../shell/CreateForm.js";
    每一次改都进审计轨迹。表单上那个「原因」不是走过场。
    ════════════════════════════════════════════════════════════════════ */
 
-type Tab = "user" | "group" | "perm";
+type Tab = "user" | "group" | "perm" | "mail";
 
 export function OrgPage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -39,13 +40,17 @@ export function OrgPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [studies, setStudies] = useState<Study[]>([]);
+  const [mail, setMail] = useState<MailTransport | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [said, setSaid] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    const [a, r, t, st] = await Promise.all([
-      listAccounts(), listRoles(), listTeams(), listStudies()]);
+    const [a, r, t, st, m] = await Promise.all([
+      listAccounts(), listRoles(), listTeams(), listStudies(),
+      /* 通道读不到不该让整页挂掉 —— 它是这一页里最新的一块。 */
+      getMailTransport().catch(() => null)]);
     setAccounts(a.items); setRoles(r.items); setTeams(t.items); setStudies(st.items);
+    setMail(m);
   }, []);
 
   useEffect(() => { void loadMe().then(setMe); void reload(); }, [reload]);
@@ -102,7 +107,11 @@ export function OrgPage() {
       <div className="seg" style={{ marginBottom: 14 }}>
         {([["user", `人员账号 ${accounts?.length ?? 0}`],
            ["group", `分组 ${teams.length}`],
-           ["perm", `角色权限 ${roles.length}`]] as [Tab, string][]).map(([k, label]) => (
+           ["perm", `角色权限 ${roles.length}`],
+           /* 通道没配的时候标出来 —— 它是"人进不进得来"的前提，
+              而没配的表现是：链接签得出来、一封都发不出去、没有人报障。 */
+           ["mail", `投递通道${mail && mail.source === "none" ? " ·未配" : ""}`]
+          ] as [Tab, string][]).map(([k, label]) => (
           <button key={k} aria-pressed={tab === k} data-testid={`tab-${k}`}
             onClick={() => { setTab(k); setProblem(null); setSaid(null); }}>{label}</button>
         ))}
@@ -126,6 +135,7 @@ export function OrgPage() {
       {accounts === null ? <p className="muted">加载中…</p>
         : tab === "user" ? <UserTab {...{ me, accounts, roles, teams, run }} goTab={setTab} />
         : tab === "group" ? <GroupTab {...{ accounts, teams, studies, run }} />
+        : tab === "mail" ? <MailTab {...{ mail, run }} />
         : <PermTab {...{ roles, run }} />}
     </>
   );
@@ -795,6 +805,186 @@ function MoveStudy({ study, teams, run }: {
         也看不见那些中心上的受试者与工时。他们不会收到通知。
       </span>
     </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   投递通道。
+
+   登录链接靠它送出去。在此之前**没有这一页** —— SITEDESK_SMTP_URL
+   只能由能改环境变量、能重启进程的人来设，于是一套装好的系统里，
+   管理员建得了账号、设得了口令、登记得了收件地址，
+   **唯独没法让链接真的发出去**。login-delivery.ts 自己把这条写着：
+   「签发权限等同于运维权限，这是上线前该补掉的一项。」
+
+   三件事这一页必须说清楚：
+   ① 现在到底有没有通道（没有的话，链接照签、没人收得到、没有人会报障）；
+   ② 口令存了没有 —— 但**不给看**（能读回口令的设置页 = 发凭证）；
+   ③ 配完能自己验一次，否则真假要等第一个人申请链接时才知道。
+   ════════════════════════════════════════════════════════════════════ */
+function MailTab({ mail, run }: { mail: MailTransport | null; run: Run }) {
+  const [kind, setKind] = useState<"smtp" | "none">(mail?.kind ?? "none");
+  const [url, setUrl] = useState(mail?.url ?? "");
+  const [from, setFrom] = useState(mail?.fromAddr ?? "");
+  const [user, setUser] = useState(mail?.username ?? "");
+  const [secret, setSecret] = useState("");
+  const [clearSecret, setClearSecret] = useState(false);
+  const [reason, setReason] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testSaid, setTestSaid] = useState<string | null>(null);
+
+  if (!mail) return <p className="muted">投递通道读不出来 —— 刷新一次看看。</p>;
+
+  const 源 = { db: "在这一页配的", env: "还在用环境变量", none: "两处都没有" }[mail.source];
+  const ready = reason.trim().length >= 4 &&
+    (kind === "none" || (url.trim() !== "" && from.trim() !== ""));
+
+  return (
+    <>
+      {/* 最要紧的一句放最上面：现在到底发不发得出去。 */}
+      {mail.source === "none" ? (
+        <div className="problem" data-testid="mail-none" style={{ marginBottom: 12 }}>
+          <b>还没有投递通道 —— 登录链接发不出去。</b>
+          系统照样签得出令牌，但没有人收得到：忘记口令的人只能找能进服务器的人
+          用 <span className="mono">deploy/login-link.sh</span> 代发，
+          也就是说<b>签发登录链接的权限现在等同于运维权限</b>。
+        </div>
+      ) : (
+        <p className="muted" data-testid="mail-source" style={{ marginBottom: 12 }}>
+          当前通道：<b>{mail.kind === "smtp" ? mail.url : "已关闭"}</b>（{源}）
+          {mail.updatedByName && <> · 最近由 {mail.updatedByName} 改过</>}
+        </p>
+      )}
+
+      <div className="card stack" style={{ marginBottom: 12 }}>
+        <div className="spread">
+          <h3>SMTP 服务器</h3>
+          <span className="muted">登录链接与系统通知都走这一条</span>
+        </div>
+
+        <Pick label="通道" v={kind} on={v => setKind(v as "smtp" | "none")}
+          testid="mail-kind" placeholder={null}
+          options={[{ value: "smtp", label: "SMTP（发邮件）" },
+                    { value: "none", label: "关闭 —— 链接照签，但没有人收得到" }]}
+          empty="通道类型是一份固定清单，这里空了说明前端常量没打包进来。" />
+
+        {kind === "smtp" && (
+          <>
+            <div className="grid-form">
+              <Field label="服务器地址" testid="mail-url" v={url} on={setUrl}
+                hint="smtps://host:465 或 smtp://host:587 —— 不要带口令"
+                placeholder="smtps://smtp.example.com:465" />
+              <Field label="发件人" testid="mail-from" v={from} on={setFrom}
+                hint="没有它，多数服务器直接拒收"
+                placeholder="中心台 <no-reply@example.com>" />
+              <Field label="用户名" testid="mail-user" v={user} on={setUser}
+                hint="服务器不需要认证就留空" placeholder="no-reply@example.com" />
+            </div>
+
+            {/* 口令那一栏。**读不回来**，所以这里只说"存了没有"。 */}
+            <label className="field">
+              <span>
+                口令
+                <span className="t-mut">
+                  {" · "}
+                  {mail.secretSet ? "已存一个（读不回来）· 留空 = 不动它" : "还没有存"}
+                </span>
+              </span>
+              <input type="password" autoComplete="new-password" value={secret}
+                data-testid="mail-secret" disabled={clearSecret || !mail.keyReady}
+                onChange={e => setSecret(e.target.value)}
+                placeholder={mail.secretSet ? "不改就留空" : "服务器的登录口令"} />
+              {!mail.keyReady && (
+                <span className="t-crit" data-testid="mail-nokey" style={{ fontSize: 12 }}>
+                  <b>服务器上还没有配 SITEDESK_SECRET_KEY，口令存不下来。</b>
+                  在服务器上设一个（<span className="mono">openssl rand -base64 32</span>）
+                  再回来填 —— 这里<b>不会悄悄存明文</b>：一份会进备份、进从库、
+                  进 dump 的明文口令，比这个功能暂时不能用糟得多。
+                  服务器不需要认证的话，这一栏本来就该空着。
+                </span>
+              )}
+              {mail.secretSet && (
+                <label className="cbx" style={{ marginTop: 6 }}>
+                  <input type="checkbox" checked={clearSecret} data-testid="mail-clear"
+                    onChange={e => { setClearSecret(e.target.checked); setSecret(""); }} />
+                  <span>清掉已存的口令（这台服务器不需要认证）</span>
+                </label>
+              )}
+            </label>
+          </>
+        )}
+
+        <Field label="原因" testid="mail-reason" v={reason} on={setReason}
+          hint="至少 4 字，进审计轨迹"
+          placeholder="例：接入公司邮件服务器，登录链接不再靠运维代发" />
+
+        <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+          <button className="btn primary" data-testid="mail-save" disabled={!ready}
+            onClick={() => void run("投递通道已更新", async () => {
+              await setMailTransport({
+                kind,
+                url: url.trim() || null, fromAddr: from.trim() || null,
+                username: user.trim() || null,
+                /* 三种意思分得开：勾了「清掉」传空串，填了传新的，
+                   都没有就**整个不传** —— 那是"不动它"。 */
+                ...(clearSecret ? { secret: "" } : secret ? { secret } : {}),
+                reason: reason.trim()
+              });
+              setSecret(""); setClearSecret(false); setReason("");
+            })}>
+            保存
+          </button>
+        </div>
+
+        <div className="derive">
+          <b>换一台服务器就是换一台机器去读所有人的登录链接。</b>
+          指向一台会记日志的中继，等于把每一个链接抄送一份 —— 而被冒用的人
+          在审计轨迹里看到的是他自己。所以这一步写审计、必须写原因。
+        </div>
+      </div>
+
+      {/* 配完要能自己验一次 —— 否则真假要等第一个真人申请链接时才知道，
+          而没收到的那个人不会来报，他只会以为系统坏了。 */}
+      <div className="card stack">
+        <div className="spread">
+          <h3>试发一封</h3>
+          <span className="muted">发给你自己登记的收件地址，不能指定别人</span>
+        </div>
+        {mail.lastTestAt && (
+          <p className="muted" data-testid="mail-last-test" style={{ margin: 0 }}>
+            最近一次试发：
+            <span className={`chip ${mail.lastTestOk ? "good" : "crit"}`}>
+              {mail.lastTestOk ? "成功" : "失败"}
+            </span>{" "}
+            {mail.lastTestAt.slice(0, 16).replace("T", " ")}
+            {mail.lastTestError && <> · {mail.lastTestError}</>}
+          </p>
+        )}
+        {testSaid && <p data-testid="mail-test-said">{testSaid}</p>}
+        <div className="row" style={{ justifyContent: "flex-end" }}>
+          <button className="btn" data-testid="mail-test" disabled={testing}
+            onClick={() => void (async () => {
+              setTesting(true); setTestSaid(null);
+              try {
+                const r = await testMailTransport();
+                setTestSaid(r.data.ok
+                  ? `发出去了，收件地址 ${r.data.sentTo} —— 去收件箱看一眼再走。`
+                  : `没发出去：${r.data.error}`);
+              } catch (e) {
+                setTestSaid(e instanceof ApiError
+                  ? (e.problem.detail ?? e.problem.title) : String(e));
+              } finally { setTesting(false); }
+            })()}>
+            {testing ? "发送中…" : "试发一封"}
+          </button>
+        </div>
+        <div className="derive">
+          <b>「配好了」和「发得出去」是两件事。</b>
+          不验这一次的话，真假要等第一个真人申请登录链接时才知道 ——
+          而没收到的那个人不会来报障，他只会以为系统坏了。
+        </div>
+      </div>
+    </>
   );
 }
 

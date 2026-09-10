@@ -135,6 +135,25 @@ scenario.studies.forEach((st, i) => {
   if (t) studyTeam.set(st.id, t.id);
 });
 
+/* 投递通道。**初值是"还没配"** —— 那正是新装系统的样子，
+   也是这一页最要紧的一格：链接照签、一封发不出去、没有人会来报障。 */
+const mailTransport = {
+  kind: "none" as "smtp" | "none",
+  url: null as string | null,
+  fromAddr: null as string | null,
+  username: null as string | null,
+  secretSet: false,
+  source: "none" as "db" | "env" | "none",
+  /* 演示环境当作已经配好钥匙 —— 否则口令那一栏永远是禁用的，
+     "存了但读不回来"这条就演不出来。 */
+  keyReady: true,
+  lastTestAt: null as string | null,
+  lastTestOk: null as boolean | null,
+  lastTestError: null as string | null,
+  updatedAt: null as string | null,
+  updatedByName: null as string | null
+};
+
 export const setEmptyOps = (ops: string[]) => { emptied = new Set(ops); };
 const isEmptied = (op: string) => emptied.has(op);
 const identity = () => IDENTITIES[mockRole];
@@ -531,6 +550,74 @@ export const scenarioHandlers = [
 
   http.post(pathToRegExp("/v1/accounts/{id}:set-password"), () =>
     new HttpResponse(null, { status: 204 })),
+
+  /* ── 投递通道 ────────────────────────────────────────────────────
+     登录链接靠它送出去。mock 上要演得出三件事：**还没配**（那是新装
+     系统的样子，也是最要紧的一格）、口令**存了但读不回来**、
+     以及"试发失败不是事故，是一次诊断"。 */
+  http.get(pathToRegExp("/v1/mail-transport"), () => {
+    if (!identity().actions.includes("manage")) return HttpResponse.json(
+      problem("forbidden-action", 403, "你的角色不能管理投递通道"), { status: 403 });
+    return HttpResponse.json(mailTransport);
+  }),
+
+  http.post(pathToRegExp("/v1/mail-transport:set"), async ({ request }) => {
+    if (!identity().actions.includes("manage")) return HttpResponse.json(
+      problem("forbidden-action", 403, "你的角色不能管理投递通道"), { status: 403 });
+    const b = await request.json() as {
+      kind: "smtp" | "none"; url?: string | null; fromAddr?: string | null;
+      username?: string | null; secret?: string | null; reason?: string;
+    };
+    if ((b.reason ?? "").trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "改投递通道必须写原因（至少 4 字）"), { status: 422 });
+    if (b.kind === "smtp") {
+      if (!b.url?.trim() || !b.fromAddr?.trim()) return HttpResponse.json(
+        problem("invariant-violated", 422,
+          "选了 SMTP 就必须给服务器地址和发件人"), { status: 422 });
+      if (/:\/\/[^/@]*@/.test(b.url)) return HttpResponse.json(
+        problem("invariant-violated", 422,
+          "地址里不要带用户名和口令 —— 它们分开填"), { status: 422 });
+    }
+    mailTransport.kind = b.kind;
+    mailTransport.url = b.url?.trim() || null;
+    mailTransport.fromAddr = b.fromAddr?.trim() || null;
+    mailTransport.username = b.username?.trim() || null;
+    /* 省略 = 不动；空串 = 清掉。和服务端同一条规矩。 */
+    if (b.secret !== undefined) mailTransport.secretSet = !!b.secret;
+    mailTransport.source = b.kind === "smtp" && mailTransport.url ? "db" : "none";
+    mailTransport.updatedByName = me().account.displayName;
+    mailTransport.updatedAt = new Date().toISOString();
+    /* 换了服务器，上一次试发的结果就作废 */
+    mailTransport.lastTestAt = null;
+    mailTransport.lastTestOk = null;
+    mailTransport.lastTestError = null;
+    return HttpResponse.json({
+      data: { ...mailTransport },
+      sideEffects: [{
+        type: "MailTransportChanged",
+        summary: b.kind === "smtp"
+          ? `投递通道已改为 ${mailTransport.url} —— **上一次试发的结果已经作废**`
+          : "投递通道已关闭 —— 登录链接照样签得出来，但没有人收得到"
+      }]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/mail-transport:test"), () => {
+    if (!identity().actions.includes("manage")) return HttpResponse.json(
+      problem("forbidden-action", 403, "你的角色不能管理投递通道"), { status: 403 });
+    if (mailTransport.source === "none") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        "还没有可用的投递通道 —— 先把上面那几栏填好并保存"), { status: 422 });
+    /* 演示里一律"发得出去"，但把掩码后的地址回出来 —— 那一栏本身
+       也是一条规矩：试发结果不该把通讯录抄出来。 */
+    mailTransport.lastTestAt = new Date().toISOString();
+    mailTransport.lastTestOk = true;
+    mailTransport.lastTestError = null;
+    return HttpResponse.json({
+      data: { ok: true, sentTo: "l****n@example.com", error: null },
+      sideEffects: [{ type: "MailTransportTested", summary: "试发成功" }]
+    }, { status: 201 });
+  }),
 
   http.get(pathToRegExp("/v1/teams"), () => {
     /* 一个分组都没有：新装的系统就是这个样子。见 setEmptyOps ——

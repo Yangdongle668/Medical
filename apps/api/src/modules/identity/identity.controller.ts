@@ -8,18 +8,23 @@ import { z } from "zod";
 import { Uuid, WithReason,
   CreateAccountBody, UpdateAccountBody, SetAccountPasswordBody,
   CreateTeamBody, UpdateRolePermissionsBody, ListAccountsQuery,
-  ListAuditEntriesQuery, SetLoginAddressBody } from "@sitedesk/contracts";
+  ListAuditEntriesQuery, SetLoginAddressBody,
+  SetMailTransportBody, TestMailTransportBody } from "@sitedesk/contracts";
 import { IdentityService } from "./identity.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
 import { command, idempotent } from "../../infra/command.js";
+import { MailTransportService } from "../../infra/mail-transport.service.js";
+import { AuditService } from "../../infra/audit.service.js";
 
 @Controller("/v1")
 export class IdentityController {
   constructor(
     private readonly svc: IdentityService,
-    private readonly idem: IdempotencyService
+    private readonly idem: IdempotencyService,
+    private readonly mail: MailTransportService,
+    private readonly trail: AuditService
   ) {}
 
   @Get("/me") @Operation("getMe")
@@ -91,6 +96,62 @@ export class IdentityController {
   ) {
     await idempotent(this.idem, key, { id, ...b },
       () => this.svc.setLoginAddress(id, b.address, b.reason));
+  }
+
+  /* ── 投递通道 ────────────────────────────────────────────────────
+     登录链接靠它送出去。在此之前只能改环境变量、重启进程 ——
+     也就是说签发登录链接的权限等同于运维权限（login-delivery.ts
+     自己把这条列为「上线前该补掉的一项」）。 */
+  @Get("/mail-transport") @Operation("getMailTransport")
+  mailTransport() { return this.mail.get(); }
+
+  @Post("/mail-transport\\:set") @Operation("setMailTransport") @HttpCode(201)
+  async setMailTransport(
+    @Body(new ZodPipe(SetMailTransportBody)) b: z.infer<typeof SetMailTransportBody>,
+    @Headers("idempotency-key") key: string
+  ) {
+    return command(this.idem, key, b, async () => {
+      const { before, after } = await this.mail.set(b);
+      await this.trail.write({
+        action: "改投递通道", targetType: "mail_transport", targetId: after.kind,
+        /* **不记口令，也不记密文** —— 只记"动没动过"。
+           审计轨迹是给核查员看的，而核查员要问的是"谁在什么时候把
+           收信这件事改成了什么"，不是那把口令长什么样。 */
+        before: { kind: before.kind, url: before.url, from: before.fromAddr,
+                  secretSet: before.secretSet },
+        after: { kind: after.kind, url: after.url, from: after.fromAddr,
+                 secretSet: after.secretSet },
+        reason: b.reason });
+      return {
+        data: after,
+        sideEffects: [{
+          type: "MailTransportChanged",
+          summary: after.kind === "smtp"
+            ? `投递通道已改为 ${after.url}（发件人 ${after.fromAddr}）—— ` +
+              "**上一次试发的结果已经作废**，用「试发一封」验一次再走"
+            : "投递通道已关闭 —— 登录链接照样签得出来，但没有人收得到"
+        }]
+      };
+    });
+  }
+
+  @Post("/mail-transport\\:test") @Operation("testMailTransport") @HttpCode(201)
+  async testMailTransport(
+    @Body(new ZodPipe(TestMailTransportBody)) _b: z.infer<typeof TestMailTransportBody>,
+    @Headers("idempotency-key") key: string
+  ) {
+    return command(this.idem, key, { at: Date.now() }, async () => {
+      const r = await this.mail.test();
+      return {
+        data: r,
+        sideEffects: [{
+          type: "MailTransportTested",
+          summary: r.ok
+            ? `试发成功，已送到 ${r.sentTo}`
+            : `试发失败：${r.error ?? "没有原因"}`
+        }]
+      };
+    });
   }
 
   @Get("/teams") @Operation("listTeams")
