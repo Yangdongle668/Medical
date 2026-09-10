@@ -65,7 +65,7 @@ define({
     answers: FeasibilityAnswers
   }),
   response: Feasibility,
-  errors: ["invariant-violated"]
+  errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
 define({
@@ -152,7 +152,7 @@ define({
     note: z.string().max(500).optional()
   }),
   response: Bid,
-  errors: ["invariant-violated"]
+  errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
 define({
@@ -228,7 +228,7 @@ define({
     note: z.string().max(500).optional()
   }),
   response: ContractChange,
-  errors: ["invariant-violated"]
+  errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
 define({

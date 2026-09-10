@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { yuan } from "./money.js";
+import { today } from "../../shell/dates.js";
 
 /* ════════════════════════════════════════════════════════════════════
    费率卡 —— I2 住在这里。
@@ -36,7 +37,6 @@ const addDays = (d: string, n: number) => {
   const x = new Date(d); x.setDate(x.getDate() + n);
   return x.toISOString().slice(0, 10);
 };
-const today = () => new Date().toISOString().slice(0, 10);
 
 export function RateCardPage() {
   const [cards, setCards] = useState<Card[] | null>(null);

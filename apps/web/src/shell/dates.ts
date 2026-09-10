@@ -1,7 +1,7 @@
 /* ════════════════════════════════════════════════════════════════════
-   日期差。
+   日历日。**这一整个模块处理的是「哪一天」，不是「哪一刻」。**
 
-   **两端必须归到同一个零点。**
+   ── 两端必须归到同一个零点 ────────────────────────────────────────
    `Date.now()` 带着时分秒，拿它直接和一个 `YYYY-MM-DD` 相减，
    同一条数据在上午和下午会算出差一天的结果 ——
    而"在途 21 天"和"在途 22 天"在页面上没人看得出哪个是错的。
@@ -10,18 +10,54 @@
    当天到期的清单项算出「逾期 0 天」，既进了逾期清单，又显示 0 天。
    **差一天的错误在访视窗口上就是一次方案偏离。**
 
-   这里统一用 UTC 的零点：日期串本来就是 `toISOString()` 切出来的，
-   两端同源才谈得上相减。
+   ── 零点取本地，不取 UTC ──────────────────────────────────────────
+   这里原来统一用 UTC 零点，理由是「日期串本来就是 toISOString() 切出来的，
+   两端同源才谈得上相减」。那句话对**服务端怎么序列化**是成立的，
+   但它把两件不同的东西当成了一件：
+
+   · 服务端给的 `YYYY-MM-DD` 是一个**日历日**，没有时区
+     （访视窗口 09-05、知情签署日 09-09，都不是某个瞬间）；
+   · 用户的「今天」也是一个**本地日历日** —— 他在北京早上七点问
+     "今天几号"，答案是 09-09，不是 UTC 那边还没过完的 09-08。
+
+   绕一趟 UTC 就把这两件事错开了。实测（TZ=Asia/Shanghai）：
+
+       北京 07:59  旧的 today() → 2026-09-08   本地日期是 2026-09-09
+       北京 08:00  旧的 today() → 2026-09-09   对上了
+
+   **也就是每天早上那八个小时它是错的**，而 CRC 是七点上工的人：
+   `daysSince(今天)` 返回 −1 而不是 0（"今天到期"显示成还剩一天），
+   十三个日期控件默认填成昨天，工时那一栏的 `max` 还会直接
+   卡住让人选不了今天。
+
+   所以：日期串按**本地**日历日解析，"今天"取**本地**日历日。
+   两端仍然同源 —— 只是同的是本地这一源。
+
+   ── 为什么用 Math.round 而不是整除 ────────────────────────────────
+   有夏令时的时区里一天可能是 23 或 25 小时。中国没有夏令时，
+   但这套系统没规定只能装在中国。
    ════════════════════════════════════════════════════════════════════ */
 
-const utcMidnightToday = () => {
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** `YYYY-MM-DD` → 本地零点的毫秒数。**不走 Date.parse** ——
+ *  `Date.parse("2026-09-09")` 按 UTC 解析，正是这里要避开的那件事。 */
+const localMidnight = (isoDate: string): number => {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  return new Date(y!, m! - 1, d!).getTime();
+};
+
+const todayMidnight = (): number => {
   const n = new Date();
-  return Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
 };
 
 /** 从 `YYYY-MM-DD` 到今天，过了几个日历日。今天 = 0，昨天 = 1。 */
-export const daysSince = (isoDate: string) =>
-  Math.round((utcMidnightToday() - Date.parse(isoDate + "T00:00:00Z")) / 86_400_000);
+export const daysSince = (isoDate: string): number =>
+  Math.round((todayMidnight() - localMidnight(isoDate)) / 86_400_000);
 
-/** 今天，`YYYY-MM-DD`。 */
-export const today = () => new Date().toISOString().slice(0, 10);
+/** 今天，`YYYY-MM-DD`。**本地日历日** —— 它会被填进用户要记录的那一栏。 */
+export const today = (): string => {
+  const n = new Date();
+  return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}`;
+};

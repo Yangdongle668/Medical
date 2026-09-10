@@ -7,7 +7,7 @@ import {
 import { FeasibilityService } from "./feasibility.service.js";
 import { BidService } from "./bid.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
-import { command } from "../../infra/command.js";
+import { command, idempotent } from "../../infra/command.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
 
@@ -99,9 +99,17 @@ export class BizdevController {
     return this.feas.list(q);
   }
 
+  /* 幂等键可选：带了就走幂等那条路，没带照旧。
+     这几个创建端点断网时会进发件箱（见 apps/web/src/api/outbox.ts），
+     而重放意味着同一个请求可能到两次 —— 在此之前它们不认这把键：
+     `createBid` 实测重放出两条投标，`createFeasibility` 撞唯一约束回 500。
+     两种都不是"返回首次的结果"。 */
   @Post("/feasibility") @Operation("createFeasibility") @HttpCode(201)
-  create(@Body(new ZodPipe(CreateFeas)) b: z.infer<typeof CreateFeas>) {
-    return this.feas.create(b);
+  create(
+    @Body(new ZodPipe(CreateFeas)) b: z.infer<typeof CreateFeas>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    return idempotent(this.idem, key, b, () => this.feas.create(b));
   }
 
   @Post("/feasibility/:id\\:decide") @Operation("decideFeasibility")
@@ -135,8 +143,11 @@ export class BizdevController {
   }
 
   @Post("/bids") @Operation("createBid") @HttpCode(201)
-  createBid(@Body(new ZodPipe(CreateBid)) b: z.infer<typeof CreateBid>) {
-    return this.bids.createBid(b);
+  createBid(
+    @Body(new ZodPipe(CreateBid)) b: z.infer<typeof CreateBid>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    return idempotent(this.idem, key, b, () => this.bids.createBid(b));
   }
 
   @Post("/bids/:id\\:decide") @Operation("decideBid")
@@ -158,8 +169,11 @@ export class BizdevController {
   }
 
   @Post("/contract-changes") @Operation("createContractChange") @HttpCode(201)
-  createChange(@Body(new ZodPipe(CreateChange)) b: z.infer<typeof CreateChange>) {
-    return this.bids.createChange(b);
+  createChange(
+    @Body(new ZodPipe(CreateChange)) b: z.infer<typeof CreateChange>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    return idempotent(this.idem, key, b, () => this.bids.createChange(b));
   }
 
   @Post("/contract-changes/:id\\:settle") @Operation("settleContractChange")

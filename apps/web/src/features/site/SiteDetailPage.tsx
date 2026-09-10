@@ -38,6 +38,21 @@ interface Unmet { code: string; message: string; module?: string }
 interface Gate { from: string; to: string; satisfied: boolean; unmet: Unmet[] }
 interface SideEffect { type: string; summary: string; ref?: string }
 
+/* 闸门的四种状态。**「读不到」和「没有」不是一回事** ——
+   这里原来只有 `Gate | null`，而 null 是 `.catch(() => null)` 兜出来的：
+   403、500、断网、超时，全都落成同一个 null，界面照着 null 画出的是
+
+       「入组中」已是状态机的最后一个节点。
+
+   一个正在入组的中心，因为一次网络抖动被告知它已经走到头了。
+   服务端只在**真的没有下一节点**时回 422（site.service.ts 的 gate()），
+   所以只有那一种才算「没有」，其余一律是「不知道」。 */
+type GateState =
+  | { kind: "loading" }
+  | { kind: "gate"; gate: Gate }
+  | { kind: "terminal" }
+  | { kind: "unreadable"; problem: ProblemDetails | null };
+
 /** siv 会写下 siv_on 并放行受试者相关工作，closed 是终态 —— 都走不回来。
  *  这**不是**校验规则（原因是每次都要写的），只是给按钮旁边加一句提醒。 */
 const IRREVERSIBLE = new Set(["siv", "closed"]);
@@ -48,7 +63,7 @@ const yuan = (cents: number) => (cents / 100).toLocaleString("zh-CN",
 export function SiteDetailPage() {
   const { id = "" } = useParams();
   const [site, setSite] = useState<Site | null>(null);
-  const [gate, setGate] = useState<Gate | null>(null);
+  const [gate, setGate] = useState<GateState>({ kind: "loading" });
   const [canAdvance, setCanAdvance] = useState<boolean | null>(null);
   /** 递交立项材料要 `advance` —— 与推进同一个动作：
    *  两者都是「把这个中心往前推一格」，只是一个推的是自己的状态机，
@@ -64,8 +79,19 @@ export function SiteDetailPage() {
     setSite(s);
     /* 闸门预检：**在按钮点下去之前**就给出答案。
        让人点一次再看错误，是把服务端的校验当成了交互设计。
-       终态（closed）没有下一节点，后端回 422 —— 这里当作"没有闸门"。 */
-    setGate(await call<Gate>("getSiteGate", { params: { id } }).catch(() => null));
+
+       终态（closed）没有下一节点，后端回 422 —— 只有这一种当作"没有闸门"。
+       别的错误（没权限、服务端出错、断网）是**读不到**，得照实说：
+       兜底成"没有"的话，界面会替服务端编一句它从没说过的话。 */
+    try {
+      setGate({ kind: "gate", gate: await call<Gate>("getSiteGate", { params: { id } }) });
+    } catch (e) {
+      if (e instanceof ApiError)
+        setGate(e.problem.status === 422
+          ? { kind: "terminal" }
+          : { kind: "unreadable", problem: e.problem });
+      else setGate({ kind: "unreadable", problem: null });
+    }
   }, [id]);
 
   useEffect(() => { void load(); }, [load]);
@@ -82,14 +108,18 @@ export function SiteDetailPage() {
      所以这里不做"哪些节点要填"的判断：那种判断一旦和策略层分家，
      界面就会放行一次服务端注定拒绝的提交。 */
   const reasonMissing = reason.trim().length < 4;
+  /* 收窄一次，下面整段渲染都用它 —— 也就把"读不到"挡在了这张卡片之外。 */
+  const g = gate.kind === "gate" ? gate.gate : null;
+  /* 单独取一次：下面是按 g 分支的，TS 没法从 g 反推 gate 已经收窄成哪一支。 */
+  const gateProblem = gate.kind === "unreadable" ? gate.problem : null;
 
   async function advance() {
-    if (!gate) return;
+    if (!g) return;
     setBusy(true); setProblem(null); setEffects(null);
     try {
       const r = await call<{ data: Site; sideEffects: SideEffect[] }>(
         "advanceStudySite",
-        { params: { id }, body: { to: gate.to, reason } });
+        { params: { id }, body: { to: g.to, reason } });
       setEffects(r.sideEffects); setReason(""); await load();
     } catch (e) {
       if (e instanceof ApiError) setProblem(e.problem); else throw e;
@@ -120,21 +150,21 @@ export function SiteDetailPage() {
           </ol>
         </section>
 
-        {gate ? (
+        {g ? (
           <section className="card stack" data-testid="gate">
             <div className="spread">
-              <h3>推进到「{SITE_STATE_LABEL[gate.to] ?? gate.to}」</h3>
-              {gate.satisfied
+              <h3>推进到「{SITE_STATE_LABEL[g.to] ?? g.to}」</h3>
+              {g.satisfied
                 ? <span className="chip good" data-testid="gate-open">前置条件已满足</span>
                 : <span className="chip warn" data-testid="gate-blocked">
-                    还差 {gate.unmet.length} 项
+                    还差 {g.unmet.length} 项
                   </span>}
             </div>
 
-            {!gate.satisfied && (
+            {!g.satisfied && (
               /* 不是一个变灰的按钮，而是一张「还差什么、去哪儿处理」的清单 */
               <ul className="unmet" data-testid="unmet">
-                {gate.unmet.map(u => (
+                {g.unmet.map(u => (
                   <li key={u.code}>
                     {u.module && <span className="chip flat">{u.module}</span>}
                     <span>{u.message}</span>
@@ -185,19 +215,44 @@ export function SiteDetailPage() {
 
             <div className="row">
               <button className="btn primary" data-testid="advance"
-                disabled={busy || !gate.satisfied || canAdvance === false || reasonMissing}
+                disabled={busy || !g.satisfied || canAdvance === false || reasonMissing}
                 onClick={() => void advance()}>
-                {busy ? "推进中…" : `推进到「${SITE_STATE_LABEL[gate.to] ?? gate.to}」`}
+                {busy ? "推进中…" : `推进到「${SITE_STATE_LABEL[g.to] ?? g.to}」`}
               </button>
-              {IRREVERSIBLE.has(gate.to) &&
+              {IRREVERSIBLE.has(g.to) &&
                 <span className="chip warn" data-testid="irreversible">走不回来的一步</span>}
             </div>
           </section>
-        ) : (
+        ) : gate.kind === "terminal" ? (
           <section className="card">
             <p className="muted" data-testid="no-gate">
               「{SITE_STATE_LABEL[site.state] ?? site.state}」已是状态机的最后一个节点。
             </p>
+          </section>
+        ) : gate.kind === "loading" ? (
+          <section className="card">
+            <p className="muted" data-testid="gate-loading">正在读取闸门…</p>
+          </section>
+        ) : (
+          /* **读不到 ≠ 没有。** 这一屏原来说的是「已是最后一个节点」——
+             一个正在入组的中心，因为一次 403 或断网被告知它走到头了。
+             照实说：读不到，而且把服务端的原话摆出来。 */
+          <section className="card">
+            <p className="problem" data-testid="gate-unreadable">
+              <strong>读不到这个中心的闸门。</strong>
+              {" "}下一步能不能推、还差什么，现在**都不知道** ——
+              这不表示它已经走到最后一个节点。
+            </p>
+            {gateProblem && (
+              <p className="muted">
+                服务端说：{gateProblem.title}
+                {gateProblem.detail ? ` —— ${gateProblem.detail}` : ""}
+              </p>
+            )}
+            <div className="row">
+              <button className="btn" data-testid="gate-retry"
+                onClick={() => void load()}>重试</button>
+            </div>
           </section>
         )}
 

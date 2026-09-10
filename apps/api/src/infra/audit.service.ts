@@ -11,6 +11,13 @@ export interface AuditInput {
   after?: unknown;
   studySiteId?: string | null;
   reason?: string | null;
+  /** 显式标记这一条是否敏感，覆盖按 operationId 查表的默认判定。
+   *
+   *  给的是**条件敏感**那一类：同一个端点，敏不敏感取决于这一次的负载。
+   *  `decideFeasibility` 就是 —— 高分入选不必写理由，低于 65 分入选必须写。
+   *  这种事表达不进 SENSITIVE_ACTIONS（那是按 operationId 查的），
+   *  但服务自己知道，所以让它说。 */
+  sensitive?: boolean;
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -22,7 +29,8 @@ export class AuditService {
   async write(input: AuditInput): Promise<void> {
     const c = ctx();
     const p = c.principal;
-    const sensitive = c.operationId ? needsReason(c.operationId) : false;
+    const sensitive = input.sensitive
+      ?? (c.operationId ? needsReason(c.operationId) : false);
 
     if (sensitive && !(input.reason && input.reason.trim().length >= 4))
       /* 数据库的 CHECK 也会拦，但在这里失败能给出更清楚的信息。

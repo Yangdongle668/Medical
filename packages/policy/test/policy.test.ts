@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { canField, maskFields, canAct, canModule, needsReason, SENSITIVE_ACTIONS,
          type Principal, type FieldGates } from "../src/index.js";
+import { allEndpoints } from "@sitedesk/contracts";
 
 const base: Principal = {
   accountId: "a1", tenantId: "t1", login: "x", roleCode: "cra", rowRule: "assigned",
@@ -85,10 +86,21 @@ describe("动作维度：看得到不等于能操作", () => {
   });
 });
 
+/* ── 这一组曾经是绿的，而且正因为它是绿的才没人发现问题 ──────────────
+   原来这里断言 `needsReason("updateVisitTargetDate")` 为真，它确实为真 ——
+   因为 SENSITIVE_ACTIONS 里就写着这个名字。**但契约里从来没有过这个端点。**
+   断言"名字在这张手写清单里"是在拿清单证明清单：清单写错什么，
+   测试就跟着确认什么。真正要成立的性质是**它对得上一个真实端点**。
+
+   三条死名字里最贵的是 `changeAccountRole`（真名是 `updateAccount`）：
+   `needsReason()` 查不到只返回 false，于是"谁把谁调成了什么角色"
+   进了审计轨迹却没被标成敏感，而审计页默认只看敏感那一档 ——
+   核查员打开的第一屏里没有它。 */
 describe("敏感动作必须留原因", () => {
-  it("权限与账号变更、阶段推进、关键日期修改都在清单里", () => {
-    for (const id of ["disableAccount", "updateRolePermissions", "advanceStudySite",
-                      "updateVisitTargetDate"])
+  it("接管账号、改权限、推进阶段都在清单里", () => {
+    for (const id of ["disableAccount", "enableAccount", "updateAccount",
+                      "updateRolePermissions", "setAccountPassword", "setLoginAddress",
+                      "advanceStudySite", "voidTimesheet"])
       expect(needsReason(id), id).toBe(true);
   });
   it("普通读写不在清单里", () => {
@@ -97,5 +109,15 @@ describe("敏感动作必须留原因", () => {
   });
   it("清单不为空 —— 空清单等于这条约束没生效", () => {
     expect(SENSITIVE_ACTIONS.size).toBeGreaterThan(4);
+  });
+
+  /* 拿契约本身当唯一权威，而不是再抄一份名单。
+     `tools/arch-check.mjs` 里有同样一条 —— 那份是文本解析，跑在不需要
+     数据库的第一个 CI job 里，比这里早失败几分钟；这份是语义的，
+     不会因为 SENSITIVE_ACTIONS 换个写法就解析不出来。两份都留着。 */
+  it("清单里的每一条都得是真的 operationId —— 写错名字不报错，只是静默地不算敏感", () => {
+    const declared = new Set(allEndpoints().map(e => e.id));
+    const 死名字 = [...SENSITIVE_ACTIONS].filter(id => !declared.has(id));
+    expect(死名字, "这些名字不对应任何端点，needsReason() 对它们永远返回 false").toEqual([]);
   });
 });

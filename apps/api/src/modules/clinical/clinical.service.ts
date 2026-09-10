@@ -588,10 +588,29 @@ export class ClinicalService {
     const v = await this.visit(visitId);
     if (v.status !== "planned")
       this.invariant("visit-state", `访视当前是「${v.status}」，不能再改任务`);
-    await c.client.query(
+    const r = await c.client.query(
       `UPDATE subject_visit_task SET done_at = now(), done_by = $3
         WHERE visit_id = $1 AND seq = $2 AND done_at IS NULL`,
       [visitId, seq, principal().accountId]);
+
+    /* **匹配 0 行不是成功。** WHERE 里的 `seq = $2` 和 `done_at IS NULL`
+       都是上面那次读**没有验证过**的条件：seq 不存在、或这一项已经被
+       别人勾掉了，UPDATE 都会匹配 0 行 —— 而在此之前这里照样返回 200，
+       调用方分不出"勾上了"和"根本没这一项"。
+
+       这正是迁移 0027 点名过的那种失守：那次是管理员改口令的 UPDATE
+       被 RLS 挡在门外匹配到 0 行，接口回 204，口令没换、旧会话还开着。
+       同一个形状：**SQL 成功了，事情没发生。**
+
+       两种情况分开说，因为它们要采取的行动完全不同：
+       没这一项是客户端发错了；已经勾过是并发 —— 两个 CRC 同时在勾同一张
+       任务单，后到的那个该看到"已经有人勾了"，而不是以为是自己勾的。 */
+    if (!r.rowCount) {
+      const t = v.tasks.find(x => x.seq === seq);
+      if (!t) throw notFound(`本次访视没有第 ${seq} 项任务`);
+      throw new ProblemException("conflict-version", {
+        detail: `「${t.task}」已经完成过了 —— 刷新看看最新的清单` });
+    }
     return { data: await this.visit(visitId), sideEffects: [] as Effect[] };
   }
 

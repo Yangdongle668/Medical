@@ -4,7 +4,7 @@ import { PageQuery, Uuid, DateOnly, WithReason, AcceptanceState, SubmitAcceptanc
   IsfCategory, QueryBool } from "@sitedesk/contracts";
 import { AcceptanceService } from "./acceptance.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
-import { command } from "../../infra/command.js";
+import { command, idempotent } from "../../infra/command.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
 
@@ -41,9 +41,15 @@ export class AcceptanceController {
     return this.svc.listAcceptances(q);
   }
 
+  /* 幂等键可选。递材料这件事**最容易在医院的网里断掉**，
+     而断掉就会进发件箱重放 —— 没有这一层的话，重放出来的是
+     第二份受理单，机构办那边看到同一家医院递了两次。 */
   @Post("/site-acceptances") @Operation("submitSiteAcceptance")
-  submit(@Body(new ZodPipe(SubmitAcceptance)) b: z.infer<typeof SubmitAcceptance>) {
-    return this.svc.submit(b);
+  submit(
+    @Body(new ZodPipe(SubmitAcceptance)) b: z.infer<typeof SubmitAcceptance>,
+    @Headers("idempotency-key") key?: string
+  ) {
+    return idempotent(this.idem, key, b, () => this.svc.submit(b));
   }
 
   @Post("/site-acceptances/:id/docs/:seq\\:set") @Operation("setAcceptanceDoc")

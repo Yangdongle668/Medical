@@ -229,7 +229,14 @@ export class FeasibilityService {
       targetType: "feasibility", targetId: before.code,
       before: { status: before.status },
       after: { status: b.decision, score: Math.round(score.total) },
-      reason: reason || null });
+      reason: reason || null,
+      /* **敏感与否取决于这一次的负载，不取决于端点。**
+         高分入选是常规决定；低分入选和拒绝是要被追问的那两种，
+         上面刚刚强制它们写了理由 —— 那句话得能在审计页第一屏找得到，
+         而那一屏默认只显示敏感条目。
+         这条判定不能放进 SENSITIVE_ACTIONS：那张表按 operationId 查，
+         而这里同一个 operationId 两种结果。 */
+      sensitive: needsReason });
 
     const data = toDto(await this.one(id));
     /* 低分入选要在界面上说一句 —— 它已经写进审计了，

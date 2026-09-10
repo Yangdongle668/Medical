@@ -312,6 +312,17 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -662,6 +673,17 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -771,6 +793,17 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -1649,6 +1682,17 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -2166,6 +2210,17 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -2404,6 +2459,17 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -3847,6 +3913,17 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -9023,6 +9100,17 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -14335,6 +14423,17 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { quote, type QuoteParams, type QuoteRates, CALC_VERSION } from "@sitedesk/calc";
 import { call } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
+import { today } from "../../shell/dates.js";
 import { yuan, pct, days } from "../cost/money.js";
 
 /* ════════════════════════════════════════════════════════════════════
@@ -79,10 +80,12 @@ const FIELDS: Field[] = [
 /** 今天现行的那一张卡。**不是最新的那一张** ——
  *  一张 2027 年才生效的费率卡不该被今天的报价用上。 */
 function currentRate(cards: RateCard[], kind: string): number | null {
-  const today = new Date().toISOString().slice(0, 10);
+  /* 用本地日历日：费率卡的生效区间是日历日，而"今天"要按用它的人算。
+     UTC 的话，北京早上八点之前会选中昨天那一张 —— 正好调过价的那天报错价。 */
+  const d = today();
   const hit = cards.filter(c =>
     c.roleKind === kind && c.level === null
-    && c.validFrom <= today && (c.validTo === null || c.validTo >= today));
+    && c.validFrom <= d && (c.validTo === null || c.validTo >= d));
   return hit[0]?.dayCostCents ?? null;
 }
 

@@ -49,6 +49,7 @@ services:
     environment:
       # 迁移以 owner 身份执行 —— 它要建表、建策略、授权
       DATABASE_URL: *db-owner
+      TZ: UTC
     # 走明确的路径，不用 npx —— npx 找不到的时候会去**下载**一个，
     # 于是一个"镜像里漏装了迁移工具"的问题，会变成一次静默的联网安装，
     # 而离线的机器上它又表现成超时。直接指路径，缺了就当场报错。
@@ -68,6 +69,7 @@ services:
     restart: "no"
     environment:
       DATABASE_URL: *db-owner
+      TZ: UTC
     command: ["node", "db/scripts/seed.mjs"]
     depends_on:
       db: { condition: service_healthy }
@@ -85,6 +87,11 @@ services:
         postgres://sitedesk_app:${SITEDESK_DB_APP_PASSWORD}@db:5432/${POSTGRES_DB:-sitedesk}
       NODE_ENV: production
       PORT: "3000"
+      # **服务端只在 UTC 下正确。** pg 把无时区的 date 列解析成本地零点，
+      # 而全仓用 toISOString() 把它切成日期串 —— 换个时区每个日期都少一天，
+      # 而且不报任何错。启动自检会拒绝非 UTC 的 TZ（infra/preflight.ts）。
+      # 这里显式写出来，是为了让它是一条**决定**，而不是一个碰巧成立的默认值。
+      TZ: UTC
       SITEDESK_LOG_FORMAT: json
       SITEDESK_LOG_LEVEL: ${SITEDESK_LOG_LEVEL:-info}
       # ── 排空 ──────────────────────────────────────────────────────

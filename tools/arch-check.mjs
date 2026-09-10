@@ -242,6 +242,146 @@ for (const file of walk(path.join(ROOT, "apps/api/src"))) {
       `    留着一个还不清的数，下一个人会以为这活还没干`);
 }
 
+/* ── 敏感动作清单里的每个名字都得是真的 operationId ──────────────────
+   `SENSITIVE_ACTIONS` 是一张手抄的 operationId 表，而 `needsReason()`
+   拿 operationId 去里面查 —— **查不到就返回 false，不报错**。
+
+   八条里曾经有三条对不上任何端点：`changeAccountRole`（真名 updateAccount）、
+   `overrideFeasibility`（真名 decideFeasibility，且它是条件敏感）、
+   `updateVisitTargetDate`（这个端点从来没建过）。
+   于是「谁把谁调成了什么角色」写进了轨迹却没标成敏感，
+   而审计页默认只看敏感那一档 —— 核查员打开的第一屏里没有它。
+
+   仓库对每一张同类名单都有守卫（ACTION_KEYS、FIELD_KEYS、模块表、
+   mock 身份、schema 待还清单），唯独这张没有。补上。 */
+{
+  const src = fs.readFileSync(
+    path.join(ROOT, "packages/policy/src/action.ts"), "utf8");
+  const block = src.match(/SENSITIVE_ACTIONS\s*=\s*new Set<string>\(\[([\s\S]*?)\]\)/);
+  if (!block)
+    violations.push("tools/arch-check.mjs\n    没解析出 SENSITIVE_ACTIONS —— 它的写法变了，这条规则已经形同虚设");
+  else {
+    /* 先剥注释再取引号里的词 —— 注释里本来就会出现引号
+       （"标成敏感"、"改了吗"），把它们当成 operationId 会得到一串假阳性，
+       而假阳性多了之后真的那条就没人看了。 */
+    const names = [...block[1]
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "")
+      .matchAll(/"([^"]+)"/g)].map(m => m[1]);
+    if (names.length === 0)
+      violations.push("packages/policy/src/action.ts\n    SENSITIVE_ACTIONS 是空的？");
+    for (const n of names)
+      if (!declared.has(n))
+        violations.push(`packages/policy/src/action.ts\n` +
+          `    SENSITIVE_ACTIONS 里的 "${n}" 不是任何一个 operationId\n` +
+          `    needsReason() 查不到它只会返回 false —— 那条动作会静默地不算敏感`);
+
+    /* ── 反向也要查 ────────────────────────────────────────────────
+       上面那条只管「表里的名字是不是真端点」。**另一个方向同样会漏，
+       而且漏得一模一样地安静**：契约的 description 里白纸黑字写着
+       「这是敏感动作」，而这张表里没有它 —— needsReason() 返回 false，
+       动作照常进轨迹，却不在核查员默认那一屏上。
+
+       `reopenStartupItem` 就是这么漏的：契约写着「撤销是敏感动作……
+       必须写原因」，原因也确实强制了（body 是 WithReason），
+       唯独"标成敏感"这一下没有。而 updateAccount 与 setLoginAddress
+       的 description 里同样写着 isSensitive=true —— 它们漏了三个版本，
+       没有任何东西红过。
+
+       判据取"契约自己说敏感"，不取"契约要求写原因"：
+       后者还包含关闭质量事件、答复质疑这类**常规流程**
+       （closeQualityEvent / closeDataQuery / returnDataQuery /
+       chaseDataQuery / requestAcceptanceAmend）——
+       它们要写经过，但不是治理意义上的敏感动作。
+       把那五条一并算成敏感，等于把第一屏灌满，而灌满的第一屏
+       和没有第一屏是一回事。 */
+    const 表里有 = new Set(names);
+    for (const f of ["identity", "site", "clinical", "cost", "bizdev",
+                     "finance", "oversight", "platform", "auth"]) {
+      const p = path.join(ROOT, `packages/contracts/src/${f}/api.ts`);
+      if (!fs.existsSync(p)) continue;
+      const api = fs.readFileSync(p, "utf8");
+      for (const m of api.matchAll(/define\(\{([\s\S]*?)\n\}\);/g)) {
+        const blk = m[1];
+        const id = /id:\s*"(\w+)"/.exec(blk)?.[1];
+        if (!id || 表里有.has(id)) continue;
+        /* 只认 description 里的话 —— summary 太短，容易把"敏感"用作形容词。 */
+        const desc = /description:\s*([\s\S]*?)(?=\n  \w+:|\n\}\);)/.exec(blk)?.[1] ?? "";
+        if (!/敏感/.test(desc)) continue;
+        violations.push(`packages/contracts/src/${f}/api.ts\n` +
+          `    ${id} 的契约里写着它是敏感动作，但 SENSITIVE_ACTIONS 里没有它\n` +
+          `    needsReason() 返回 false —— 这条动作进得了轨迹，\n` +
+          `    却不在审计页默认那一屏（sensitiveOnly=true）上`);
+      }
+    }
+  }
+}
+
+/* ── 客户端会发幂等键的端点，服务端必须认这把键 ─────────────────────
+   这是一条**跨越前后端的不变式**，而它两侧各写各的，谁都不知道对方：
+
+     · 前端（api/client.ts）给 `L2 || (非 GET && 非 auth)` 的每一个端点
+       生成幂等键并发出去；
+     · 发件箱（api/outbox.ts）的 QUEUEABLE 用同一个判据收断网的请求，
+       重连时**原样带着那把键重放**；
+     · 服务端这一侧要认这把键，靠的是控制器里包了 command() 或 idempotent()。
+
+   第三条漏了不会有任何提示：键照发、请求照过、200 照回 ——
+   只是重放那一次又执行了一遍。实测（改之前）：
+
+       createBid         同一把键发两次 → 两条投标，两个 id，都是 201
+       createFeasibility 同一把键发两次 → 第二次 500（撞唯一约束）
+
+   两种都不是 client.ts 里写着的那句保证：「重放带着同一把键，
+   服务端认得它，返回首次的结果，不会产生第二次副作用」。
+   十个端点漏了这一层，其中五个是建档类 —— 重放就是多一条记录。
+
+   auth 的几个端点不在此列：登录本来就不该被重放，前端也不给它们发键。
+   （auth 里没有 L2，所以判据可以收成「非 GET 且非 auth」。下面顺带钉住
+   这件事：哪天 auth 里加了 L2，这条规则的判据就得跟着改。） */
+{
+  /* 从 openapi.yaml 里取 (方法, operationId, tag) —— 与上面 declared 同源。 */
+  const eps = [...spec.matchAll(
+    /^    (get|post|patch|put|delete):\n\s+operationId:\s*(\S+)\n\s+tags:\n\s+-\s*(\S+)/gm)]
+    .map(m => ({ method: m[1], id: m[2], tag: m[3] }));
+
+  if (eps.length < declared.size * 0.9)
+    violations.push("tools/arch-check.mjs\n" +
+      `    只从 openapi.yaml 解析出 ${eps.length} 个端点，契约里有 ${declared.size} 个 ——\n` +
+      "    yaml 的排版变了，这条规则已经形同虚设");
+
+  /* auth 里出现 L2 的话，前端那个 `L2 ||` 分支就会给 auth 端点也发键，
+     而下面这条判据看不见它。钉住。 */
+  const authL2 = fs.readFileSync(
+    path.join(ROOT, "packages/contracts/src/auth/api.ts"), "utf8").includes('layer: "L2"');
+  if (authL2)
+    violations.push("packages/contracts/src/auth/api.ts\n" +
+      "    auth 里出现了 L2 端点 —— 前端会给它发幂等键（client.ts 的 `L2 ||` 那一支），\n" +
+      "    而 arch-check 这条规则的判据是「非 GET 且非 auth」，看不见它。两边一起改");
+
+  /* 每个 @Operation 处理函数的函数体 —— 到下一个装饰器为止。 */
+  const bodies = new Map();
+  for (const file of walk(path.join(ROOT, "apps/api/src/modules"))) {
+    if (!file.endsWith(".controller.ts")) continue;
+    const src = fs.readFileSync(file, "utf8");
+    for (const m of src.matchAll(
+      /@Operation\(["']([^"']+)["']\)([\s\S]*?)(?=\n  @(?:Get|Post|Patch|Put|Delete)\b|\n}\s*$)/g))
+      bodies.set(m[1], { file: path.relative(ROOT, file), body: m[2] });
+  }
+
+  for (const { method, id, tag } of eps) {
+    if (method === "get" || tag === "auth") continue;
+    const h = bodies.get(id);
+    if (!h) continue;               // 上面那条「端点无人实现」已经管了
+    if (/\b(command|idempotent)\s*\(/.test(h.body)) continue;
+    violations.push(`${h.file}\n` +
+      `    ${id} 没有幂等外壳，而前端会给它发幂等键并在断网时重放\n` +
+      `    （client.ts 生成键、outbox.ts 的 QUEUEABLE 收它）——\n` +
+      `    重放那一次会**再执行一遍**：建档类就是多一条记录。\n` +
+      `    包一层 idempotent(this.idem, key, body, () => …)，键可选，不是破坏性变更`);
+  }
+}
+
 /* ── 部署脚本：变量名必须是 ASCII，而且 --help 得真的能跑 ─────────────
    `deploy/update.sh` 从写出来那天起**一次都没跑通过**：
 

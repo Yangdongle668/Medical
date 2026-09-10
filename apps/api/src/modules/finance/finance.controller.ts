@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PageQuery, Uuid, DateOnly, QueryBool, MilestoneState } from "@sitedesk/contracts";
 import { FinanceService } from "./finance.service.js";
 import { IdempotencyService } from "../../infra/idempotency.service.js";
-import { command } from "../../infra/command.js";
+import { command, idempotent } from "../../infra/command.js";
 import { ZodPipe } from "../../infra/zod.pipe.js";
 import { Operation } from "../../auth/guards.js";
 
@@ -87,9 +87,10 @@ export class FinanceController {
   @Patch("/clients/:id") @Operation("updateClient")
   updateClient(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(UpdateClient)) b: z.infer<typeof UpdateClient>
+    @Body(new ZodPipe(UpdateClient)) b: z.infer<typeof UpdateClient>,
+    @Headers("idempotency-key") key?: string
   ) {
-    return this.svc.updateClient(id, b);
+    return idempotent(this.idem, key, { id, ...b }, () => this.svc.updateClient(id, b));
   }
 
   @Get("/cash-forecast") @Operation("getCashForecast")
