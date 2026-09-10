@@ -166,8 +166,14 @@ function mockRoleFromUrl(): MockRole {
 
 async function boot() {
   if (USE_MOCKS) {
-    const { worker, setMockRole } = await import("./mocks/browser.js");
+    const { worker, setMockRole, setFailingOps } = await import("./mocks/browser.js");
     setMockRole(mockRoleFromUrl());
+    /* `?fail=getSiteGate` 让那个端点回 500。
+       界面上「读不到」是一条独立的画法，而它在 mock 里本来走不到 ——
+       走不到的分支等于没写过：中心详情页原来就把任何一种读取失败
+       都画成「已是最后一个节点」，没有任何测试拦得住。 */
+    setFailingOps((new URLSearchParams(location.search).get("fail") ?? "")
+      .split(",").map(s => s.trim()).filter(Boolean));
     await worker.start({ onUnhandledRequest: "bypass", quiet: true });
   }
   createRoot(document.getElementById("root")!).render(

@@ -112,3 +112,54 @@ test("CRC 把清单做完了，按钮仍然点不动 —— 而界面说得出�
   /* 填不了的原因框干脆不出现 —— 一个永远提交不了的输入框只会浪费人的时间 */
   await expect(page.getByTestId("advance-reason")).toHaveCount(0);
 });
+
+
+/* ════════════════════════════════════════════════════════════════════
+   闸门读不到的时候，界面**不许替服务端编一句它没说过的话**。
+
+   这一段原来是：
+
+       setGate(await call<Gate>("getSiteGate", …).catch(() => null));
+
+   注释写的是「终态没有下一节点，后端回 422 —— 这里当作没有闸门」，
+   但那个 catch 吞的是**全部**：403、500、断网、超时。
+   而 gate 为 null 时画出来的是
+
+       「入组中」已是状态机的最后一个节点。
+
+   一个正在入组的中心，因为一次网络抖动被告知它已经走到头了。
+   和伦理页那条「把"还没到"说成"没有"」是同一类，只是这一句更硬：
+   它不是含糊，是**断言了一件假的事**。
+   ════════════════════════════════════════════════════════════════════ */
+test("闸门读不到：说「读不到」，不许说「已是最后一个节点」", async ({ page }) => {
+  /* SS-01 停在「入组中」，下一步是 enrolled —— 它**有**下一节点。
+     `?fail=getSiteGate` 让那个端点回 500（见 mocks/handlers.ts 的 setFailingOps）。 */
+  await page.goto("/sites/s1?as=boss&fail=getSiteGate");
+  await expect(page.getByTestId("flow")).toBeVisible();
+
+  const unreadable = page.getByTestId("gate-unreadable");
+  await expect(unreadable).toBeVisible();
+  await expect(unreadable).toContainText("读不到");
+
+  /* 关键的那条：**那句假话不许出现**。 */
+  await expect(page.getByTestId("no-gate")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("已是状态机的最后一个节点");
+
+  /* 读不到就不该有推进按钮 —— 拿什么推都不知道 */
+  await expect(page.getByTestId("advance")).toHaveCount(0);
+  /* 而且得给一条出路，不是让人重开页面 */
+  await expect(page.getByTestId("gate-retry")).toBeVisible();
+});
+
+test("服务端说没有下一节点（422）时，那句话照常说", async ({ page }) => {
+  /* 反过来那一半也要守住：把「读不到」分出去之后，
+     终态那条**正当的**说法不能跟着一起没了。
+
+     mock 里三个中心都还没走到 closed（要走完整条状态机才到得了），
+     所以这里直接让那个端点回它对终态会回的那个 422 ——
+     测的本来就是「422 与其它错误分成两种画法」这件事本身。 */
+  await page.goto("/sites/s1?as=boss&fail=getSiteGate:422");
+  await expect(page.getByTestId("flow")).toBeVisible();
+  await expect(page.getByTestId("no-gate")).toContainText("已是状态机的最后一个节点");
+  await expect(page.getByTestId("gate-unreadable")).toHaveCount(0);
+});

@@ -77,6 +77,26 @@ export const currentScenario = () => scenario;
  *  四个身份的目录在 `mocks/roles.ts`，与迁移 0026 逐字同源。 */
 let mockRole: MockRole = "crc";
 export const setMockRole = (r: MockRole) => { mockRole = r; };
+
+/** 让某几个端点回 500 —— 由 `?fail=getSiteGate` 驱动（见 main.tsx）。
+ *
+ *  **界面上「读不到」和「没有」是两种画法，而只有前者没法自己走到。**
+ *  停用、断网、403 在 mock 里都演不出来，于是那条分支从来没被打开过 ——
+ *  中心详情页正因如此把任何一种失败都画成了「已是最后一个节点」，
+ *  而一个正在入组的中心被那句话说成走到了头。
+ *
+ *  只在 mock 构建里存在（main.tsx 那段整个在 USE_MOCKS 里面）。 */
+let failing = new Map<string, number>();
+/** 传 `["getSiteGate"]` 回 500；`["getSiteGate:422"]` 回 422。
+ *  状态码要能指定，因为**这两个码在界面上是两种画法**：
+ *  422 是「服务端说没有下一节点」，500 是「读不到」。 */
+export const setFailingOps = (ops: string[]) => {
+  failing = new Map(ops.map(o => {
+    const [op, code] = o.split(":");
+    return [op!, Number(code) || 500] as const;
+  }));
+};
+const failStatus = (op: string) => failing.get(op);
 const identity = () => IDENTITIES[mockRole];
 
 /** mock 的行范围。
@@ -1928,6 +1948,13 @@ export const scenarioHandlers = [
      哪天路径正则改一个字符，靠推理成立的那一版会静默走错分支。 */
   http.get(pathToRegExp("/v1/study-sites/{id}/gate"), ({ request }) => {
     const id = seg(request.url, /\/study-sites\/([^/]+)\/gate/);
+    /* 终态 422 与「读不到」500 是界面上的两种画法，
+       而两者在 mock 里本来都走不到 —— 见 setFailingOps。 */
+    const fail = failStatus("getSiteGate");
+    if (fail === 422) return HttpResponse.json(
+      problem("validation-failed", 422, "已是状态机的最后一个节点"), { status: 422 });
+    if (fail) return HttpResponse.json(
+      problem("internal", fail, "读取闸门时服务端出错"), { status: fail });
     const g = gateFor(id);
     if (!g) return HttpResponse.json(
       problem("validation-failed", 422, "已是状态机的最后一个节点"), { status: 422 });
