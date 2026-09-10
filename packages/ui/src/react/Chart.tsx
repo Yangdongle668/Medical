@@ -202,13 +202,15 @@ export function HBars({ rows, max, fmt = (v: number) => v.toFixed(1), unit = "",
             {r.marker != null && (
               <div style={{
                 position: "absolute", left: `${clamp(r.marker / M * 100, 0, 100)}%`,
-                top: 0, bottom: 0, width: 1.5, background: "var(--ink)", opacity: .45
+                top: 0, bottom: 0, width: 1.5, background: "var(--ink-3)", opacity: .45
               }} />
             )}
             {band?.map(t => (
               <div key={t} style={{
                 position: "absolute", left: `${clamp(t / M * 100, 0, 100)}%`,
-                top: -3, bottom: -3, width: 2, background: "var(--accent)", borderRadius: 2
+                /* 刻度线（合同例数）要和数据条分得开。条现在是品牌蓝，
+                   刻度再用品牌蓝就成了同一根东西的两截。 */
+                top: -3, bottom: -3, width: 2, background: "var(--ink-3)", borderRadius: 2
               }} />
             ))}
           </div>
@@ -254,7 +256,7 @@ export function Diverging({ rows, fmt = (v: number) => (v > 0 ? "+" : "") + v.to
               }} />
               <div style={{
                 position: "absolute", top: 0, bottom: 0, width: `${w}%`,
-                background: pos ? "var(--ink-2)" : "var(--crit)",
+                background: pos ? "var(--accent)" : "var(--crit)",
                 ...(pos
                   ? { left: "50%", borderRadius: "0 99px 99px 0" }
                   : { right: "50%", borderRadius: "99px 0 0 99px" })
