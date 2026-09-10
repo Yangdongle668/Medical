@@ -166,14 +166,19 @@ function mockRoleFromUrl(): MockRole {
 
 async function boot() {
   if (USE_MOCKS) {
-    const { worker, setMockRole, setFailingOps } = await import("./mocks/browser.js");
+    const { worker, setMockRole, setFailingOps, setEmptyOps } =
+      await import("./mocks/browser.js");
     setMockRole(mockRoleFromUrl());
     /* `?fail=getSiteGate` 让那个端点回 500。
        界面上「读不到」是一条独立的画法，而它在 mock 里本来走不到 ——
        走不到的分支等于没写过：中心详情页原来就把任何一种读取失败
        都画成「已是最后一个节点」，没有任何测试拦得住。 */
-    setFailingOps((new URLSearchParams(location.search).get("fail") ?? "")
-      .split(",").map(s => s.trim()).filter(Boolean));
+    const 取 = (k: string) => (new URLSearchParams(location.search).get(k) ?? "")
+      .split(",").map(s => s.trim()).filter(Boolean);
+    setFailingOps(取("fail"));
+    /* `?empty=listPnl` 让那个列表返回空。「一个都没有」同样是一条
+       界面上独立的说法，而场景里永远有数据 —— 走不到的分支等于没写过。 */
+    setEmptyOps(取("empty"));
     await worker.start({ onUnhandledRequest: "bypass", quiet: true });
   }
   createRoot(document.getElementById("root")!).render(

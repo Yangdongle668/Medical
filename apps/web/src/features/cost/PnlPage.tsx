@@ -46,11 +46,32 @@ export function PnlPage() {
   const showMoney = rows.some(r => r.grossProfitCents !== undefined);
   const showCost = rows.some(r => r.cost.totalCostCents !== undefined);
 
+  /* ── 一个中心都没有 ≠ 看不到钱 ──────────────────────────────────
+     下面那句"你的角色…看不到它们的钱"是从 `rows.some(…)` 推出来的，
+     而**空数组上 some() 永远是 false** —— 于是在一次干净部署之后、
+     还没有任何中心的时候，拥有全部金额权限的经营层打开这一页，
+     得到的是一句关于他权限的断言，而且是假的：他看得见，
+     只是没有东西可看。**而那正是他第一次打开这一页的时刻。**
+
+     实测（改之前，mock 里把 listPnl 换成空列表）：
+       ?as=boss → "你的角色看得到这些中心，看不到它们的钱。"
+
+     和这一轮修的其它几条同一类：把"没有数据"说成"没有权限"。 */
+  if (rows.length === 0) return (
+    <>
+      <div className="page-head"><h2>成本与毛利</h2></div>
+      <p className="muted" data-testid="pnl-empty">
+        你的范围里还没有中心 —— 这一页要等有中心、有工时、有里程碑之后
+        才算得出账。<b>这不是权限问题</b>：等第一个中心建起来，数就会出现在这里。
+      </p>
+    </>
+  );
+
   if (!showMoney && !showCost) return (
     <>
       <div className="page-head"><h2>成本与毛利</h2></div>
       <p className="problem" data-testid="pnl-masked">
-        你的角色看得到这些中心，看不到它们的钱。
+        你的角色看得到这 {rows.length} 个中心，看不到它们的钱。
         这一页除了金额没有别的内容 —— 与其画一排「—」，不如直说。
       </p>
     </>

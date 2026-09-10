@@ -97,6 +97,16 @@ export const setFailingOps = (ops: string[]) => {
   }));
 };
 const failStatus = (op: string) => failing.get(op);
+
+/** 让某几个列表端点返回空列表 —— 由 `?empty=listPnl` 驱动（见 main.tsx）。
+ *
+ *  和 setFailingOps 同一个理由：**「一个都没有」是界面上一种独立的说法，
+ *  而 mock 里的场景永远有数据** —— 于是那条分支从来没被打开过。
+ *  成本与毛利那一页正因如此，在一次干净部署之后（还没有任何中心）
+ *  会告诉经营层「你的角色…看不到它们的钱」，而他看得到。 */
+let emptied = new Set<string>();
+export const setEmptyOps = (ops: string[]) => { emptied = new Set(ops); };
+const isEmptied = (op: string) => emptied.has(op);
 const identity = () => IDENTITIES[mockRole];
 
 /** mock 的行范围。
@@ -2653,6 +2663,10 @@ export const scenarioHandlers = [
      I8' 的话，这个系统就有了第四套口径（服务端、calc、mock 单中心、
      mock 汇总），而"汇总页和详情页对不上"正是它最先长出来的样子。 */
   http.get(pathToRegExp("/v1/pnl"), ({ request }) => {
+    /* 「一个中心都没有」是干净部署之后的第一个状态，而场景里永远有三个 ——
+       见 setEmptyOps。 */
+    if (isEmptied("listPnl"))
+      return HttpResponse.json({ items: [], nextCursor: null });
     const q = new URL(request.url).searchParams;
     let items = visibleSites()
       .map(x => { const dto = siteDto(x.id); return dto ? pnlFor(x.id, dto) : null; })

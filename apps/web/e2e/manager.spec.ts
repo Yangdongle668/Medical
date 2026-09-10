@@ -153,3 +153,32 @@ test("CRC 打开成本与毛利：整块金额不画，而且直说为什么", a
   await page.goto("/pnl");
   await expect(page.getByTestId("pnl-masked")).toContainText("看不到它们的钱");
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   **一个中心都没有 ≠ 看不到钱。**
+
+   上面那句话是从 `rows.some(r => r.grossProfitCents !== undefined)` 推出来的，
+   而**空数组上 some() 永远是 false**。于是在一次干净部署之后、
+   还没有任何中心的时候，拥有全部金额权限的经营层打开这一页，
+   得到的是一句关于他权限的断言，而且是假的：他看得见，只是没有东西可看。
+   **而那正是他第一次打开这一页的时刻。**
+
+   `?empty=listPnl` 让那个列表返回空（见 mocks/handlers.ts 的 setEmptyOps）——
+   场景里永远有三个中心，这条分支本来走不到，而走不到的分支等于没写过。
+   ════════════════════════════════════════════════════════════════════ */
+test("干净部署后还没有中心：说没有中心，不许说没有权限", async ({ page }) => {
+  await page.goto("/pnl?as=boss&empty=listPnl");
+  await expect(page.getByTestId("pnl-empty")).toBeVisible();
+  await expect(page.getByTestId("pnl-empty")).toContainText("还没有中心");
+  /* 关键的那一条：**那句假话不许出现**。 */
+  await expect(page.getByTestId("pnl-masked")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("看不到它们的钱");
+});
+
+test("有中心但看不到钱时，那句话照常说", async ({ page }) => {
+  /* 反过来那一半也要守住：把"没有中心"分出去之后，
+     真正的无权限那条说法不能跟着一起没了。 */
+  await page.goto("/pnl?as=crc");
+  await expect(page.getByTestId("pnl-masked")).toContainText("看不到它们的钱");
+  await expect(page.getByTestId("pnl-empty")).toHaveCount(0);
+});
