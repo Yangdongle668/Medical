@@ -78,7 +78,9 @@ export function SubmitAcceptanceForm({ onCreated, fixed }: {
             <Pick label="项目" v={studyId} on={setStudyId} testid="sa-study"
               options={(studies ?? []).map(s => ({
                 value: s.id, label: `${s.code} · ${s.shortName}（${s.sponsorName}）`
-              }))} />
+              }))}
+              empty={studies === null ? "加载中…"
+                : "你的范围里还没有项目 —— 立项材料是递给某一个项目的，得先有一份立项申请被批准。"} />
             <Field label="医院" v={hospital} on={setHospital} testid="sa-hospital"
               placeholder="例：四川大学华西医院" />
           </div>}

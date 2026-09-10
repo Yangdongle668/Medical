@@ -229,10 +229,10 @@ export class IntakeService {
       id: string; code: string; state: string; drug: string; sponsor_name: string;
       phase: string; indication: string; planned_sites: number;
       planned_subjects: number; contract_cents: string; submitted_by: string;
-      submitted_by_name: string;
+      submitted_by_name: string; submitted_by_team: string | null;
     }>(`SELECT i.id, i.code, i.state, i.drug, i.sponsor_name, i.phase, i.indication,
                i.planned_sites, i.planned_subjects, i.contract_cents, i.submitted_by,
-               sb.display_name AS submitted_by_name
+               sb.display_name AS submitted_by_name, sb.team_id AS submitted_by_team
           FROM intake_application i JOIN account sb ON sb.id = i.submitted_by
          WHERE i.id = $1`, [id]);
     if (!rows[0]) throw notFound("立项申请");
@@ -278,10 +278,16 @@ export class IntakeService {
        ON CONFLICT (tenant_id, name) DO UPDATE SET name = EXCLUDED.name
        RETURNING id`, [a.sponsor_name]);
 
-    const year = new Date().getFullYear();
-    const seq = await c.client.query<{ n: string }>(
-      `SELECT count(*) + 1 AS n FROM study WHERE code LIKE $1`, [`HJ-${year}-%`]);
-    const studyCode = `HJ-${year}-${String(seq.rows[0]!.n).padStart(3, "0")}`;
+    /* 编号由数据库取。**这里原来是 `count(*) + 1`** —— 行数不是序号：
+       序号一旦有缺口，行数就永远追不上最大号，每次都撞在缺口后面
+       那个已经用掉的号上（演示数据里有 HJ-2026-004 而没有 001–003，
+       于是第三次批准必然 500）。而且那句 count 是在 RLS 下数的 ——
+       行范围为 team 的人（pm 也持有 approve）数出来的是"本组的项目数"，
+       撞得更早。取号问的是"这个号有没有被人用过"，不是"你看得见谁"。
+       见迁移 0042。 */
+    const seq = await c.client.query<{ code: string }>(
+      `SELECT app.next_study_code() AS code`);
+    const studyCode = seq.rows[0]!.code;
 
     const st = await c.client.query<{ id: string }>(
       `INSERT INTO study (code, short_name, client_id, phase, indication,
@@ -289,6 +295,23 @@ export class IntakeService {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CURRENT_DATE) RETURNING id`,
       [studyCode, a.drug.slice(0, 40), cl.rows[0]!.id, a.phase, a.indication,
        a.planned_subjects, a.planned_sites, a.contract_cents]);
+
+    /* ── 顺手把项目归给一个组 ────────────────────────────────────
+       `team_study` 是 row_rule=team 的唯一来源（迁移 0004/0041），
+       而在这之前**没有任何代码往里写过一行** —— 只有 seed 灌过。
+       于是每一个真正走完立项流程的项目都没有归属组，
+       项目组（pm，行范围 team）从此看不见它：
+       可行性调查、中心建档那几张表单的「选项目」里永远没有它。
+
+       归给谁：**提交人所在的组** —— 把生意谈进来的那个组接着做，
+       这是唯一不需要再问一句的答案。提交人没有组（出厂管理员代提）
+       时退到审批人的组；两人都没有组，就没有归属 ——
+       那不静默，下面那句 sideEffect 会说出来。 */
+    const ownerTeam = a.submitted_by_team ?? p.teamId;
+    if (ownerTeam)
+      await c.client.query(
+        `INSERT INTO team_study (team_id, study_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`, [ownerTeam, st.rows[0]!.id]);
 
     await c.client.query(
       `UPDATE intake_application
@@ -299,7 +322,7 @@ export class IntakeService {
     await this.audit.write({
       action: "批准立项", targetType: "intake_application", targetId: a.code,
       before: { state: "submitted" },
-      after: { state: "approved", studyCode },
+      after: { state: "approved", studyCode, teamId: ownerTeam },
       reason: b.reason ?? `批准 ${a.drug}` });
 
     return {
@@ -307,7 +330,10 @@ export class IntakeService {
       sideEffects: [{
         type: "IntakeApproved",
         summary: `${a.drug} 已批准立项，方案编号 ${studyCode} —— ` +
-          `合同写了 ${a.planned_sites} 个中心，现在一个都还没建档`,
+          `合同写了 ${a.planned_sites} 个中心，现在一个都还没建档` +
+          (ownerTeam ? "" :
+            "。**这个项目还没有归属组** —— 提交人和审批人都不在任何组里，" +
+            "行范围为 team 的项目总监暂时看不到它"),
         ref: id
       }]
     };

@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { siteScopeSql } from "@sitedesk/policy";
+import { siteScopeSql, studyScopeSql } from "@sitedesk/policy";
 import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
@@ -58,11 +58,18 @@ export class SiteService {
    *  两处都在，才能同时防住「应用层忘了加条件」和「有人写了裸 SQL」。 */
   private scope(start = 1) { return siteScopeSql(principal(), "s", start); }
 
+  /** 项目范围走 studyScopeSql —— **不是** siteScopeSql 套一层 EXISTS。
+   *
+   *  这里原来手写的正是那个 EXISTS，而它在空集上恒为假：一个刚批下来、
+   *  还没有中心的项目，谁都看不见 —— 包括 row_rule=all 的管理员，
+   *  因为这句 WHERE 漏了数据库策略里一直有的那个短路。
+   *  于是「选项目」那一栏里永远没有新项目，而建中心必须先选项目。
+   *  见迁移 0041 与 policy/src/row.ts 的长注释。 */
   async listStudies(limit: number, cursor?: string) {
     const c = ctx();
-    const sc = this.scope(1);
+    const sc = studyScopeSql(principal(), "st", 1);
     const params: unknown[] = [...sc.params];
-    let where = `EXISTS (SELECT 1 FROM study_site s WHERE s.study_id = st.id AND ${sc.sql})`;
+    let where = sc.sql;
     if (cursor) { params.push(cursor); where += ` AND st.code > $${params.length}`; }
     params.push(limit + 1);
     const { rows } = await c.client.query<Record<string, never> & {

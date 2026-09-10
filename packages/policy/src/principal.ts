@@ -59,3 +59,10 @@ export interface SiteFacts {
   hospital: string;
   piAccountId: string | null;
 }
+
+/** 判定一个**项目**是否可见所需的事实。见 canSeeStudy —— 项目的范围
+ *  不等于"它有没有一个可见的中心"，因为刚批下来的项目一个中心都没有。 */
+export interface StudyFacts {
+  id: string;
+  tenantId: string;
+}

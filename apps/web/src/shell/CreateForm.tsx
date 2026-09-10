@@ -133,17 +133,24 @@ export function Area({ label, v, on, testid, rows, placeholder, hint }: {
 
 /** 下拉。选项是固定集合时用它，而不是让人打字 ——
  *  打字进来的枚举值最后总要在服务端被拒一次。 */
-export function Pick({ label, v, on, testid, options, hint }: {
+/* 一个空的下拉框什么都不说。它看起来和"加载中"、"你没权限"、
+   "还没有这种东西"三件事完全一样，而这三件事该做的下一步互不相同 ——
+   于是人只能一遍遍点开它。`empty` 就是用来把那句话说出来的。 */
+export function Pick({ label, v, on, testid, options, hint, empty }: {
   label: string; v: string; on: (v: string) => void; testid: string;
-  options: { value: string; label: string }[]; hint?: string;
+  options: { value: string; label: string }[]; hint?: string; empty?: string;
 }) {
+  const none = options.length === 0;
   return (
     <label className="field">
       <span>{label}{hint && <span className="t-mut"> · {hint}</span>}</span>
-      <select value={v} data-testid={testid} onChange={e => on(e.target.value)}>
-        <option value="">— 选一个 —</option>
+      <select value={v} data-testid={testid} onChange={e => on(e.target.value)}
+        disabled={none}>
+        <option value="">{none ? "— 没有可选的 —" : "— 选一个 —"}</option>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
+      {none && empty &&
+        <span className="t-mut" data-testid={`${testid}-empty`}>{empty}</span>}
     </label>
   );
 }

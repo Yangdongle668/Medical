@@ -13,7 +13,13 @@ const ById = z.object({ id: Uuid });
 define({
   id: "listStudies", method: "get", path: "/v1/studies", layer: "L1", context: CTX,
   summary: "项目列表",
-  description: "只返回本行范围内有中心的项目 —— 范围之外的项目不存在，不是「无权访问」。",
+  description:
+    "范围之外的项目**不存在**，不是「无权访问」。\n\n" +
+    "范围按行规则分三支：`all` 看本租户全部；`team` 看本组承接的项目" +
+    "（直接由 `team_study` 决定，**与有没有中心无关**）；" +
+    "`assigned` / `hospital` / `pi` 由中心决定 —— 看得到中心才看得到它的项目。\n\n" +
+    "前两支不能写成「有没有一个可见的中心」：一个刚批下来的项目一个中心都没有，" +
+    "而建中心的表单第一栏就是选项目 —— 那是个死锁，不是收紧。",
   query: PageQuery.extend({ q: z.string().max(64).optional() }),
   response: page(Study)
 });

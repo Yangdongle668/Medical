@@ -3,8 +3,9 @@ import pg from "pg";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  canSeeSite, visibleSites, siteScopeSql,
-  type Principal, type ScopeContext, type SiteFacts, type RowRule, type ActionKey
+  canSeeSite, visibleSites, siteScopeSql, canSeeStudy, studyScopeSql,
+  type Principal, type ScopeContext, type SiteFacts, type StudyFacts,
+  type RowRule, type ActionKey
 } from "../src/index.js";
 import type { FieldKey } from "@sitedesk/contracts";
 
@@ -41,6 +42,7 @@ let owner: pg.Client, app: pg.Client;
 interface Loaded { key: string; p: Principal; ctx: ScopeContext }
 let loaded: Loaded[];
 let sites: SiteFacts[];
+let studies: StudyFacts[];
 
 /** 按登录名取一个演示租户里的账号。撞名的（admin）不走这里，走 loaded。 */
 function who(login: string): Loaded {
@@ -112,8 +114,44 @@ beforeAll(async () => {
     id: r.id, tenantId: r.tenant_id, studyId: r.study_id,
     hospital: r.hospital, piAccountId: r.pi_account_id
   }));
+
+  /* 项目范围要单独比 —— 它不是"有没有一个可见的中心"的同义词。
+     而且这里**故意造一个没有中心的项目**：项目范围出过的那个 bug
+     只在这种项目上显形，用现有 seed（每个项目都有中心）比一万遍都是绿的。 */
+  await owner.query(`
+    INSERT INTO study (code, short_name, client_id, phase, indication,
+                       planned_subjects, planned_sites, contract_amount_cents, started_on)
+    SELECT 'ZZ-NOSITE-001', '没有中心的项目', cl.id, 'II', '等价性测试',
+           10, 1, 100000, CURRENT_DATE
+      FROM client cl ORDER BY cl.id LIMIT 1
+    ON CONFLICT (tenant_id, code) DO NOTHING`);
+  /* 把它归给一个组 —— team 那一支只有归了组才谈得上比对。 */
+  await owner.query(`
+    INSERT INTO team_study (team_id, study_id)
+    SELECT (SELECT id FROM team ORDER BY id LIMIT 1), st.id
+      FROM study st WHERE st.code = 'ZZ-NOSITE-001'
+    ON CONFLICT DO NOTHING`);
+
+  const stq = await owner.query<{ id: string; tenant_id: string }>(
+    `SELECT id, tenant_id FROM study ORDER BY code`);
+  studies = stq.rows.map(r => ({ id: r.id, tenantId: r.tenant_id }));
+
+  /* 上面新插的那一行会改变 teamStudyIds，必须重新装 ctx —— 否则
+     TS 那一侧读的是插入前的快照，比出来的"不一致"是测试自己造的。 */
+  const teamStudies2 = await owner.query<TeamStudyRow>(
+    `SELECT team_id, study_id FROM team_study`);
+  for (const l of loaded)
+    l.ctx = { ...l.ctx, teamStudyIds: new Set(
+      teamStudies2.rows.filter(x => x.team_id === l.p.teamId).map(x => x.study_id)) };
 });
-afterAll(async () => { await owner.end(); await app.end(); });
+afterAll(async () => {
+  /* 把造出来的那个项目收走 —— 同一个库还要跑别的测试文件
+     （vitest 在本包里是 fileParallelism:false，共用一个库）。 */
+  await owner.query(`DELETE FROM team_study WHERE study_id IN
+    (SELECT id FROM study WHERE code = 'ZZ-NOSITE-001')`);
+  await owner.query(`DELETE FROM study WHERE code = 'ZZ-NOSITE-001'`);
+  await owner.end(); await app.end();
+});
 
 /** 以某账号身份，问数据库「你看得到哪些中心」—— RLS 真实生效 */
 async function dbVisible(accountId: string): Promise<Set<string>> {
@@ -130,6 +168,24 @@ async function sqlVisible(p: Principal): Promise<Set<string>> {
   const { sql, params } = siteScopeSql(p, "s");
   const { rows } = await owner.query<{ id: string }>(
     `SELECT s.id FROM study_site s WHERE ${sql}`, params);
+  return new Set(rows.map(r => r.id));
+}
+
+/** 以某账号身份，问数据库「你看得到哪些项目」—— study_scope 策略真实生效 */
+async function dbStudies(accountId: string): Promise<Set<string>> {
+  await app.query("BEGIN");
+  try {
+    await app.query("SELECT set_config('app.account_id', $1, true)", [accountId]);
+    const { rows } = await app.query<{ id: string }>("SELECT id FROM study");
+    return new Set(rows.map(r => r.id));
+  } finally { await app.query("ROLLBACK"); }
+}
+
+/** 用 studyScopeSql 注入范围（owner 连接，绕过 RLS） */
+async function sqlStudies(p: Principal): Promise<Set<string>> {
+  const { sql, params } = studyScopeSql(p, "st");
+  const { rows } = await owner.query<{ id: string }>(
+    `SELECT st.id FROM study st WHERE ${sql}`, params);
   return new Set(rows.map(r => r.id));
 }
 
@@ -223,5 +279,68 @@ describe("行范围：三处实现必须逐一致", () => {
       expect(visibleSites(p, ctx, sites).length,
         `${p.login}（all）应当看到本租户的 ${mine.length} 个中心`).toBe(mine.length);
     }
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   项目范围 —— 与行范围同一套办法，但**不是同一条判定**。
+
+   写成「有没有一个可见的中心」曾经是这里唯一的实现，而它在
+   一个还没有中心的项目上恒为假：项目从批下来那一刻起谁也看不见，
+   包括 row_rule=all 的管理员（数据库那侧一直有短路，应用层没有）。
+   而建中心、登记可行性、递交立项材料、提合同变更这四张表单
+   第一栏都是「选项目」—— 于是新项目永远建不出第一个中心。
+
+   所以下面这组测试的分母里**必须有一个没有中心的项目**
+   （ZZ-NOSITE-001，在 beforeAll 里造）：
+   用现有 seed 比，每个项目都有中心，这个 bug 一次也不会显形。
+   ════════════════════════════════════════════════════════════════════ */
+describe("项目范围：TS 与 RLS 必须一致", () => {
+  it("分母里确实有一个没有中心的项目 —— 否则下面几条测的是别的东西", () => {
+    const 无中心 = studies.filter(st => !sites.some(s => s.studyId === st.id));
+    expect(无中心.length, "一个没有中心的项目都没有，这组测试证明不了什么").toBeGreaterThan(0);
+  });
+
+  it("每个账号 × 每个项目：canSeeStudy === 数据库 study_scope", async () => {
+    const mismatches: string[] = [];
+    let checked = 0;
+    for (const { key, p, ctx } of loaded) {
+      const fromDb = await dbStudies(p.accountId);
+      for (const st of studies) {
+        const ts = canSeeStudy(p, ctx, st, sites);
+        const db = fromDb.has(st.id);
+        checked++;
+        if (ts !== db) mismatches.push(`${key}(${p.rowRule}) × ${st.id}：TS=${ts} DB=${db}`);
+      }
+    }
+    expect(checked).toBe(loaded.length * studies.length);
+    expect(mismatches, `${mismatches.length} 处不一致`).toEqual([]);
+  });
+
+  it("每个账号：studyScopeSql 注入的范围 === 数据库 study_scope", async () => {
+    const mismatches: string[] = [];
+    for (const { key, p } of loaded) {
+      const viaSql = await sqlStudies(p);
+      const viaRls = await dbStudies(p.accountId);
+      const only = (a: Set<string>, b: Set<string>) => [...a].filter(x => !b.has(x));
+      if (only(viaSql, viaRls).length || only(viaRls, viaSql).length)
+        mismatches.push(`${key}：SQL ${viaSql.size} 个 vs RLS ${viaRls.size} 个`);
+    }
+    expect(mismatches).toEqual([]);
+  });
+
+  it("没有中心的项目：all 看得见，承接它的组看得见，其余看不见", async () => {
+    const 无中心 = studies.find(st => !sites.some(s => s.studyId === st.id))!;
+    const 看得见 = new Set<string>();
+    for (const { p } of loaded)
+      if ((await dbStudies(p.accountId)).has(无中心.id)) 看得见.add(p.rowRule);
+
+    /* all 必须在里面 —— 这正是原来那句 EXISTS 锁掉的人。 */
+    expect([...看得见], "row_rule=all 看不到一个没有中心的项目").toContain("all");
+    /* team 也必须在里面：可行性调查是在建中心之前做的，而 feas 授予 pm。 */
+    expect([...看得见], "承接项目的组看不到自己还没建中心的项目").toContain("team");
+    /* 这三条的范围由中心定义，没有中心就确实还轮不到他们。 */
+    for (const r of ["assigned", "hospital", "pi"])
+      expect([...看得见], `${r} 不该看到一个没有中心的项目`).not.toContain(r);
   });
 });
