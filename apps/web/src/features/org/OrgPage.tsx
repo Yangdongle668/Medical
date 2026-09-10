@@ -121,7 +121,7 @@ export function OrgPage() {
       {said && <p className="muted" data-testid="org-said">{said}</p>}
 
       {accounts === null ? <p className="muted">加载中…</p>
-        : tab === "user" ? <UserTab {...{ me, accounts, roles, teams, run }} />
+        : tab === "user" ? <UserTab {...{ me, accounts, roles, teams, run }} goTab={setTab} />
         : tab === "group" ? <GroupTab {...{ accounts, teams, run }} />
         : <PermTab {...{ roles, run }} />}
     </>
@@ -142,8 +142,9 @@ function Stat({ label, value, unit, note }:
 type Run = (what: string, fn: () => Promise<unknown>) => Promise<void>;
 
 /* ── 人员账号 ─────────────────────────────────────────────────────── */
-function UserTab({ me, accounts, roles, teams, run }: {
+function UserTab({ me, accounts, roles, teams, run, goTab }: {
   me: Me; accounts: Account[]; roles: Role[]; teams: Team[]; run: Run;
+  goTab: (t: Tab) => void;
 }) {
   const [login, setLogin] = useState("");
   const [name, setName] = useState("");
@@ -203,11 +204,28 @@ function UserTab({ me, accounts, roles, teams, run }: {
               <option value="">— 选一个 —</option>
               {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select></label>
-          <label className="field"><span>分组</span>
+          {/* 分组是在**另一个标签页**里建的，而人是在这里发现自己需要它的。
+               一个只列现有分组的下拉框答不出"没有我要的那个怎么办"——
+               而这一栏空着的时候，它长得和"这个功能不存在"一模一样。 */}
+          <label className="field">
+            <span>分组 <span className="t-mut">· 决定 PM 看得到哪些项目</span></span>
             <select value={teamId} data-testid="new-team" onChange={e => setTeamId(e.target.value)}>
               <option value="">不分组</option>
               {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select></label>
+            </select>
+            {teams.length === 0
+              ? <span className="t-crit" data-testid="new-team-empty" style={{ fontSize: 12 }}>
+                  <b>还一个分组都没有。</b>项目总监（PM）的行范围规则是「本组承接的项目」——
+                  没有分组，他登进来一个项目都看不到。
+                  <button className="btn link" data-testid="go-group" style={{ marginLeft: 4 }}
+                    onClick={() => goTab("group")}>去建一个分组</button>
+                </span>
+              : <span className="t-mut" data-testid="new-team-hint" style={{ fontSize: 12 }}>
+                  没有要找的那个组？
+                  <button className="btn link" data-testid="go-group" style={{ marginLeft: 4 }}
+                    onClick={() => goTab("group")}>去「分组」页建一个</button>
+                </span>}
+          </label>
         </div>
         {needsOrg && (
           <label className="field"><span>
@@ -672,8 +690,13 @@ function GroupTab({ accounts, teams, run }: {
               他们不在任何 PM 的行范围里，那些 PM 看不到他们的工时与负载。</>
           : " 当前所有内部人员均已分组。"}
         <br />
-        「本组承接哪些项目」（team_study）还不能在这里改 —— 那要一个项目侧的入口，
-        目前只有直接改库。
+        <b>项目是怎么归到组里的：批准立项那一刻，归给提交人所在的组。</b>
+        （这句话从前是"只有直接改库"——「批准立项」当时根本不写 team_study，
+        于是每个走完流程的项目都没有归属组，而 PM 的行范围全靠它：
+        项目批下来了，做可行性调查的那个人却选不到它。）
+        <br />
+        <b>还缺一个入口：把项目从 A 组划到 B 组。</b> 现在改归属仍然只能直接改库 ——
+        接手、拆组、并组都会需要它。
       </div>
     </>
   );

@@ -515,12 +515,18 @@ export const scenarioHandlers = [
   http.post(pathToRegExp("/v1/accounts/{id}:set-password"), () =>
     new HttpResponse(null, { status: 204 })),
 
-  http.get(pathToRegExp("/v1/teams"), () =>
-    HttpResponse.json({ items: scenario.teams.map(t => ({
+  http.get(pathToRegExp("/v1/teams"), () => {
+    /* 一个分组都没有：新装的系统就是这个样子。见 setEmptyOps ——
+       「新增人员」那张表上的分组下拉框空着的时候界面该说什么，
+       只有这样才演得出来，而那正是最容易被读成"没有这个功能"的一格。 */
+    if (isEmptied("listTeams"))
+      return HttpResponse.json({ items: [] });
+    return HttpResponse.json({ items: scenario.teams.map(t => ({
       ...t,
       memberCount: scenario.accounts.filter(
         a => a.team?.id === t.id && a.status === "active").length
-    })) })),
+    })) });
+  }),
 
   http.post(pathToRegExp("/v1/teams"), async ({ request }) => {
     const b = await request.json() as
