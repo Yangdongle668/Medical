@@ -49,10 +49,16 @@ export function PrescreenPage() {
     })();
   }, []);
 
+  /* fn 返回字符串时，用它当回执 —— 有些动作要等服务端回来才知道
+     该说什么（比如筛选号是服务端发的，登记之前这里并不知道号是多少）。 */
   const run = async (what: string, fn: () => Promise<unknown>) => {
     setProblem(null); setSaid(null);
-    try { await fn(); await reload(); setSaid(what); setActing(null); }
-    catch (e) { if (e instanceof ApiError) setProblem(e.problem); else throw e; }
+    try {
+      const r = await fn();
+      await reload();
+      setSaid(typeof r === "string" ? r : what);
+      setActing(null);
+    } catch (e) { if (e instanceof ApiError) setProblem(e.problem); else throw e; }
   };
 
   if (!subs) return <p className="muted">加载中…</p>;
@@ -99,11 +105,16 @@ export function PrescreenPage() {
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="btn primary" data-testid="pre-create"
             disabled={!siteId}
-            onClick={() => void run(no.trim() ? `已登记 ${no.trim()}` : "已登记，筛选号已自动生成",
-              async () => {
-                await createSubject(siteId, no.trim() || undefined);
-                setNo("");
-              })}>
+            onClick={() => void run("已登记", async () => {
+              const s = await createSubject(siteId, no.trim() || undefined);
+              setNo("");
+              /* 号是服务端发的，**发完要说出来** —— 不说的话，
+                 人得自己去台账里找哪一条是刚才那个。
+                 看不到筛选号的角色（列权限）就退回一句通用的。 */
+              return s.screeningNo
+                ? `已登记 ${s.screeningNo}${no.trim() ? "" : "（筛选号已自动生成）"}`
+                : "已登记";
+            })}>
             登记
           </button>
         </div>

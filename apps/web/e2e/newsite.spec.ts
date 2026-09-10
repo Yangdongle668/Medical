@@ -229,8 +229,13 @@ test("预筛：筛选号留空即按中心发号", async ({ page }) => {
   /* 筛选号一个字都不填 —— 登记按钮照样可用。 */
   await expect(page.getByTestId("pre-create")).toBeEnabled();
   await page.getByTestId("pre-create").click();
-  await expect(page.getByTestId("toast")).toContainText("筛选号已自动生成");
-  /* 台账最上面那条是刚发的号，形状是 中心号-PNNN */
-  await expect(page.getByTestId("pre-row").first().locator("td").first())
-    .toHaveText(/^SS-\d+-P\d{3}$/);
+  /* 这一页有自己的一句回执（pre-said），不走全局吐司。 */
+  await expect(page.getByTestId("pre-said")).toContainText("筛选号已自动生成");
+  /* 而且回执里带着发出来的那个号 */
+  /* 发出来的号写在那句回执里 —— 台账的排序不是"最新在最上面"，
+     按位置找会找到一条本来就在的。 */
+  const 号 = (await page.getByTestId("pre-said").textContent() ?? "")
+    .match(/SS-\d+-P\d{3}/)?.[0];
+  expect(号, "回执里没有一个 中心号-PNNN 形状的筛选号").toBeTruthy();
+  await expect(page.getByTestId("pre-row").filter({ hasText: 号! })).toHaveCount(1);
 });
