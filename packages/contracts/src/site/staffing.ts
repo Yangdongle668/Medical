@@ -126,6 +126,43 @@ export const SiteStaff = z.object({
     "PI 不在其中 —— 他是医院自己的人，证书归医院管，我方手里那份不会更新。"
 });
 
+/* ── 派工 ────────────────────────────────────────────────────────────
+   `site_assignment` 一行 = 一个人在一个中心上负责的一段时间。
+
+   **它不是排班表，它是行规则 `assigned` 的唯一来源**（迁移 0002）。
+   多一行，那个人就多看得见一个中心的受试者、访视、质疑、药品台账；
+   少一行，他当场看不见。所以这张台账上的每一次增减都写审计、
+   都要写原因 —— 和改角色权限同一档。
+
+   为什么按「中心」而不是按「项目」：一个 CRA 常常只跑一个项目里的
+   三家医院，而不是全部十五家。按项目派，等于把另外十二家的
+   受试者明细一并给他 —— 那不是方便，是超范围。
+   界面上按项目挑、一次勾一批中心，是同一件事的说法，
+   落到库里仍然是一个中心一行。 */
+export const SiteAssignment = z.object({
+  id: Uuid,
+  accountId: Uuid,
+  displayName: z.string(),
+  /** **不给 login。** 这张台账机构办也看得到（他们本院那几个中心的行），
+   *  而登录名是我方的人事账 —— `SiteStaff` 那份注释说的是同一件事。 */
+  roleKind: RoleKind,
+  studySiteId: Uuid,
+  siteCode: Code,
+  hospital: z.string(),
+  studyId: Uuid,
+  studyCode: Code,
+  studyShortName: z.string(),
+  since: DateOnly.describe("从这一天起负责（含当天）"),
+  /** 到这一天为止**不含当天** —— daterange 是左闭右开。
+   *  null = 还在负责。 */
+  until: DateOnly.nullable(),
+  active: z.boolean().describe("今天是否在有效期内 —— 它决定这个人现在看不看得见这个中心")
+}).meta({
+  id: "SiteAssignment",
+  description:
+    "谁在哪个中心上负责、从哪天到哪天。**这一行就是 CRA / CRC 的可见范围本身。**"
+});
+
 /* ── 交接 ────────────────────────────────────────────────────────── */
 export const HandoverStatus = z.enum(["pending", "completed", "cancelled"])
   .meta({ id: "HandoverStatus" });

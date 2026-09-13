@@ -1,4 +1,6 @@
-import { ListStartupChecklistsQuery, ListStaffQuery, ListSiteStaffQuery, ListHandoversQuery, CreateHandoverBody } from "@sitedesk/contracts";
+import { ListStartupChecklistsQuery, ListStaffQuery, ListSiteStaffQuery,
+  ListSiteAssignmentsQuery, AssignSiteStaffBody, EndSiteAssignmentBody,
+  ListHandoversQuery, CreateHandoverBody } from "@sitedesk/contracts";
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
 import { PageQuery, Uuid, DateOnly, WithReason, RoleKind, HandoverStatus, QueryBool }
@@ -49,6 +51,33 @@ export class StaffingController {
   @Get("/site-staff") @Operation("listSiteStaff")
   siteStaff(@Query(new ZodPipe(ListSiteStaffQuery)) q: z.infer<typeof ListSiteStaffQuery>) {
     return this.svc.listSiteStaff(q);
+  }
+
+  @Get("/site-assignments") @Operation("listSiteAssignments")
+  assignments(@Query(new ZodPipe(ListSiteAssignmentsQuery)) q: z.infer<typeof ListSiteAssignmentsQuery>) {
+    return this.svc.listAssignments(q);
+  }
+
+  /* 派工的两端。**幂等键必需**（command 而不是 idempotent）——
+     它们改的是行范围本身：重放一次「派上去」和真的派两次，
+     在审计上是两件不同的事，而重叠约束会让第二次以 23P01 收场，
+     报错指不到这里。 */
+  @Post("/staff/:id\\:assign-sites") @Operation("assignSiteStaff")
+  assign(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(AssignSiteStaffBody)) b: z.infer<typeof AssignSiteStaffBody>,
+    @Headers("idempotency-key") key: string
+  ) {
+    return command(this.idem, key, { id, ...b }, () => this.svc.assign(id, b));
+  }
+
+  @Post("/staff/:id\\:end-assignments") @Operation("endSiteAssignment")
+  endAssignment(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(EndSiteAssignmentBody)) b: z.infer<typeof EndSiteAssignmentBody>,
+    @Headers("idempotency-key") key: string
+  ) {
+    return command(this.idem, key, { id, ...b }, () => this.svc.endAssignment(id, b));
   }
 
   @Get("/handovers") @Operation("listHandovers")

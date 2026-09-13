@@ -56,6 +56,15 @@ export const SENSITIVE_ACTIONS = new Set<string>([
      原来那个组的 PM 看不见这个项目、它下面的全部中心、
      那些中心上的受试者与工时。和改角色同一档。 */
   "setStudyTeam",
+  /* 派工与指定 PI —— **和改角色同一档，只是粒度更细**。
+     `setStudyTeam` 动的是「一个组能看见哪些项目」，这三条动的是
+     「一个人能看见哪些中心」：`site_assignment` 是 `assigned` 行范围的
+     唯一来源，`study_site.pi_account_id` 是 `pi` 行范围的唯一来源。
+     核查员第一屏要看得见的正是这类操作 —— 上个月是谁把张三接到
+     那个中心上的，他从此看得见那里的全部受试者。 */
+  "assignSiteStaff",
+  "endSiteAssignment",
+  "setStudySitePi",
   /* 改投递通道 —— 换一台 SMTP 服务器，就是换一台机器去读所有人的
      登录链接。指向一台会记日志的中继，等于把每一个链接抄送一份，
      而被冒用的人在审计轨迹里看到的是他自己。 */

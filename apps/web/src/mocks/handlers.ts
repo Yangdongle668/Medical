@@ -27,7 +27,7 @@ import type { MockAccount, MockSoaVisit,
   MockAcceptance, MockIsf } from "./scenario.js";
 import { CLIENTS } from "./scenario.js";
 import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
-  mkTimesheet, WORK_TYPE_META,
+  ASSIGNMENTS, newAssignmentId, mkTimesheet, WORK_TYPE_META,
   type MockSubject, type MockPayment,
   type Scenario, type MockVisit, type MockHandover, type MockRateCard,
   type MockTimesheet } from "./scenario.js";
@@ -3040,6 +3040,171 @@ export const scenarioHandlers = [
     return HttpResponse.json({ items, nextCursor: null });
   }),
 
+  /* ── 派工 ──────────────────────────────────────────────────────────
+     这一组要演出来的是**可见范围本身在动**：派上去他就看得见那个中心，
+     撤下来他就看不见。所以 ASSIGNMENTS 是可变的 —— 一份只读的假数据
+     演不出这件事，点完按钮列表纹丝不动，看的人只会以为按钮坏了。 */
+  http.get(pathToRegExp("/v1/site-assignments"), ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    const ids = visibleSiteIds();
+    let items = ASSIGNMENTS.filter(a => ids.has(a.studySiteId));
+    if (q.get("includeEnded") !== "true")
+      items = items.filter(a => !a.until || a.until > TODAY_STR);
+    const site = q.get("studySiteId");
+    if (site) items = items.filter(a => a.studySiteId === site);
+    const acct = q.get("accountId");
+    if (acct) items = items.filter(a => a.accountId === acct);
+    const study = q.get("studyId");
+    if (study) items = items.filter(a =>
+      (SITES_LIST.find(s => s.id === a.studySiteId)?.studyId ?? scenario.studies[0]!.id)
+        === study);
+    return HttpResponse.json({ items: items.map(assignmentDto), nextCursor: null });
+  }),
+
+  http.post(pathToRegExp("/v1/staff/{id}:assign-sites"), async ({ request }) => {
+    const who = seg(request.url, /\/staff\/([^/:]+):assign-sites/);
+    const b = await request.json() as
+      { studySiteIds?: string[]; since?: string; reason?: string };
+    if (!identity().actions.includes("assign")) return HttpResponse.json(
+      problem("forbidden-action", 403, "你的角色不能派工"), { status: 403 });
+    if ((b.reason ?? "").trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "派工必须写原因（至少 4 字）"), { status: 422 });
+
+    const 人 = STAFF_LIST.find(s => s.accountId === who);
+    if (!人) return HttpResponse.json(problem("invariant-violated", 422,
+      "这个账号不在员工名册里 —— 派工派的是我方的 CRA / CRC"), { status: 422 });
+    if (人.roleKind !== "CRA" && 人.roleKind !== "CRC")
+      return HttpResponse.json(problem("invariant-violated", 422,
+        `${人.displayName} 的工种是 ${人.roleKind}，派不了工 —— ` +
+        "PM 的范围来自项目归属组，QA / DM 看全部"), { status: 422 });
+    if (!人.active) return HttpResponse.json(problem("invariant-violated", 422,
+      `${人.displayName} 的账号已停用 —— 派给他等于把中心交给一个登不进来的人`),
+      { status: 422 });
+    const since = b.since ?? TODAY_STR;
+    if (since > TODAY_STR) return HttpResponse.json(problem("validation-failed", 422,
+      `起始日 ${since} 在将来 —— 派工从落库那一刻就该看得见效果`), { status: 422 });
+
+    const ids = visibleSiteIds();
+    const 目标 = (b.studySiteIds ?? []).map(id => SITES_LIST.find(s => s.id === id))
+      .filter((s): s is NonNullable<typeof s> => !!s && ids.has(s.id));
+    if (目标.length !== (b.studySiteIds ?? []).length)
+      return HttpResponse.json(problem("not-found", 404, "中心不存在"), { status: 404 });
+
+    const 在跑 = new Set(ASSIGNMENTS
+      .filter(a => a.accountId === who && (!a.until || a.until > TODAY_STR))
+      .map(a => a.studySiteId));
+    const 新的 = 目标.filter(s => !在跑.has(s.id));
+    const 跳过 = 目标.length - 新的.length;
+    if (!新的.length) return HttpResponse.json(problem("invariant-violated", 422,
+      `${人.displayName} 本来就在跑这 ${跳过} 个中心 —— 没有变化就不该留一条审计`),
+      { status: 422 });
+
+    const made = 新的.map(s => {
+      const row = { id: newAssignmentId(), accountId: who,
+        displayName: 人.displayName, roleKind: 人.roleKind,
+        studySiteId: s.id, since, until: null };
+      ASSIGNMENTS.push(row);
+      return row;
+    });
+    return HttpResponse.json({
+      data: made.map(assignmentDto),
+      sideEffects: [{
+        type: "SiteAssignmentChanged", ref: who, studySiteId: 新的[0]!.id,
+        summary: `${人.displayName}（${人.roleKind}）已派到 ` +
+          `${新的.map(s => s.code).join("、")} —— ` +
+          "他从这一刻起看得见这些中心的受试者与访视" +
+          (跳过 ? `；另 ${跳过} 个本来就在他名下，跳过` : "")
+      }, ...(人.gcpDaysLeft === null || 人.gcpDaysLeft < 0 ? [{
+        type: "SiteAssignmentChanged", ref: who,
+        summary: 人.gcpDaysLeft === null
+          ? `注意：${人.displayName} 的 GCP 证书没有登记 —— ` +
+            "核查时「没有证书」和「证书过期」是同一件事"
+          : `注意：${人.displayName} 的 GCP 证书已过期 ${-人.gcpDaysLeft} 天 —— ` +
+            "过期即不得开展工作。派工照做了，但在复训之前他不该出现在中心里。"
+      }] : [])]
+    }, { status: 201 });
+  }),
+
+  http.post(pathToRegExp("/v1/staff/{id}:end-assignments"), async ({ request }) => {
+    const who = seg(request.url, /\/staff\/([^/:]+):end-assignments/);
+    const b = await request.json() as { studySiteIds?: string[]; reason?: string };
+    if (!identity().actions.includes("assign")) return HttpResponse.json(
+      problem("forbidden-action", 403, "你的角色不能派工"), { status: 403 });
+    if ((b.reason ?? "").trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "撤下必须写原因（至少 4 字）"), { status: 422 });
+    /* 撤下这一端**不查在职、不查工种** —— 最常见的撤下理由就是
+       「他离职了」，而那时账号已经停用。两端共用同一套判定的话，
+       一个人一走，他名下那几个中心就再也撤不下来了。 */
+    const 人 = STAFF_LIST.find(s => s.accountId === who);
+    if (!人) return HttpResponse.json(problem("invariant-violated", 422,
+      "这个账号不在员工名册里"), { status: 422 });
+
+    const 要撤的 = new Set(b.studySiteIds ?? []);
+    const live = ASSIGNMENTS.filter(a => a.accountId === who
+      && 要撤的.has(a.studySiteId) && (!a.until || a.until > TODAY_STR));
+    if (!live.length) return HttpResponse.json(problem("invariant-violated", 422,
+      `${人.displayName} 现在一个都不在跑这些中心 —— 没有变化就不该留一条审计`),
+      { status: 422 });
+
+    /* 今天派今天撤的删掉（一天都没生效过），生效过的收口到今天。 */
+    const 当天 = live.filter(a => a.since >= TODAY_STR);
+    for (const a of 当天) ASSIGNMENTS.splice(ASSIGNMENTS.indexOf(a), 1);
+    for (const a of live.filter(a => a.since < TODAY_STR)) a.until = TODAY_STR;
+
+    const codes = live.map(a => SITES_LIST.find(s => s.id === a.studySiteId)!.code);
+    return HttpResponse.json({
+      data: ASSIGNMENTS.filter(a => a.accountId === who && 要撤的.has(a.studySiteId))
+        .map(assignmentDto),
+      sideEffects: [{
+        type: "SiteAssignmentChanged", ref: who, studySiteId: live[0]!.studySiteId,
+        summary: `${人.displayName} 已从 ${codes.join("、")} 撤下 —— ` +
+          "他从这一刻起看不见这些中心的受试者与访视" +
+          (当天.length ? `；其中 ${当天.length} 条是今天派今天撤，一天都没生效过，已删除` : "")
+      }]
+    }, { status: 201 });
+  }),
+
+  /* 给中心指定研究者。**这是 pi 行范围本身** —— 在这一版之前
+     这一栏只有建档那一次能写，而建档表单从来没有那一栏。 */
+  http.post(pathToRegExp("/v1/study-sites/{id}:set-pi"), async ({ request }) => {
+    const id = seg(request.url, /\/study-sites\/([^/:]+):set-pi/);
+    const b = await request.json() as
+      { piAccountId?: string | null; piName?: string; reason?: string };
+    if (!identity().actions.includes("assign")) return HttpResponse.json(
+      problem("forbidden-action", 403, "你的角色不能指定研究者"), { status: 403 });
+    if ((b.reason ?? "").trim().length < 4) return HttpResponse.json(
+      problem("validation-failed", 422, "指定研究者必须写原因（至少 4 字）"), { status: 422 });
+    const s = SITES_LIST.find(x => x.id === id);
+    if (!s || !siteInScope(id)) return HttpResponse.json(
+      problem("not-found", 404, "中心不存在"), { status: 404 });
+
+    const 目标 = b.piAccountId ?? null;
+    const 候选 = piAccounts();
+    if (目标 && !候选.some(a => a.id === 目标))
+      return HttpResponse.json(problem("invariant-violated", 422,
+        "这个账号不按「pi」切行 —— 绑上去那一栏对他不起作用，而界面上看着是绑好了"),
+        { status: 422 });
+    if ((s.piAccountId ?? null) === 目标) return HttpResponse.json(
+      problem("invariant-violated", 422, 目标
+        ? `${s.code} 的研究者账号本来就是这一个 —— 没有变化就不该留一条审计`
+        : `${s.code} 本来就没有绑定研究者账号`), { status: 422 });
+
+    const 名 = b.piName?.trim()
+      ?? (目标 ? 候选.find(a => a.id === 目标)!.displayName : s.piName);
+    s.piAccountId = 目标; s.piName = 名;
+    return HttpResponse.json({
+      data: siteDto(id),
+      sideEffects: [{
+        type: "SiteAssignmentChanged", ref: id, studySiteId: id,
+        summary: 目标
+          ? `${名} 现在是 ${s.code}（${s.hospital}）的研究者 —— ` +
+            "他从这一刻起看得见这个中心的受试者与访视，也能确认访视"
+          : `${s.code} 已解除研究者账号绑定 —— ` +
+            `原来那位研究者从这一刻起看不见这个中心；中心上仍然登记着 ${名}`
+      }]
+    }, { status: 201 });
+  }),
+
   http.get(pathToRegExp("/v1/handovers"), () =>
     HttpResponse.json({ items: scenario.handovers.map(handoverDto), nextCursor: null })),
 
@@ -3208,6 +3373,32 @@ const nextState = (cur: string) => SITE_STATES[SITE_STATES.indexOf(cur as never)
  *  台账要的是"这个人自助进得来吗"，不是一屋子人的邮箱手机号。
  *  raw 直接下发的话，mock 上会多出一个真库没有的字段，
  *  而那种差别只有在联调那天才发现。 */
+/** 能当 PI 绑的那些账号：**按行规则判，不按"是不是外部方"判**。
+ *  机构办也是外部方，但他按所属医院切行 —— 绑上去那一栏对他不起作用，
+ *  而界面上看着是绑好了。这一条与服务端 setPi 的判据同源。 */
+function piAccounts() {
+  const pi = scenario.roles.find(r => r.code === "pi");
+  return scenario.accounts.filter(a =>
+    a.role.id === pi?.id && a.status === "active");
+}
+
+function assignmentDto(a: {
+  id: string; accountId: string; displayName: string; roleKind: string;
+  studySiteId: string; since: string; until: string | null;
+}) {
+  const s = SITES_LIST.find(x => x.id === a.studySiteId)!;
+  const st = scenario.studies.find(x => x.id === (s.studyId ?? "st1"))
+    ?? scenario.studies[0]!;
+  return {
+    id: a.id, accountId: a.accountId, displayName: a.displayName,
+    roleKind: a.roleKind,
+    studySiteId: s.id, siteCode: s.code, hospital: s.hospital,
+    studyId: st.id, studyCode: st.code, studyShortName: st.shortName,
+    since: a.since, until: a.until,
+    active: !a.until || a.until > TODAY_STR
+  };
+}
+
 function accountDto(a: MockAccount) {
   const { loginAddress, ...rest } = a;
   return { ...rest, hasLoginAddress: !!loginAddress };

@@ -170,6 +170,87 @@ export class SiteService {
     };
   }
 
+  /* ── 给中心指定研究者 PI ──────────────────────────────────────────
+     `row_rule=pi` 的行范围就是「`study_site.pi_account_id` 指向我的
+     那些中心」（迁移 0005 的 `app.site_visible`）。而在这一版之前，
+     这一栏**只有建档那一次能写** —— 而建档表单从来没有那一栏。
+
+     于是 PI 账号建得出来、登得进去、菜单也在，**一个中心都看不到**：
+     `pi` 这条行规则从头到尾是空的，而空的表现是"研究者工作台是空页"，
+     不是一条报错。 */
+  async setPi(id: string, b: {
+    piAccountId: string | null; piName?: string; reason: string;
+  }) {
+    const c = ctx();
+    const before = await this.get(id);
+
+    let bound: { id: string; name: string } | null = null;
+    if (b.piAccountId) {
+      /* 必须是**外部方且按 pi 切行**的账号。绑一个内部账号上去，
+         那一栏在 `app.site_visible` 里永远匹配不上（内部角色不走 pi 规则），
+         而界面上看起来是"绑好了" —— 一个不报错的空操作。 */
+      const { rows } = await c.client.query<{
+        name: string; row_rule: string; is_external: boolean;
+        status: string; role_name: string;
+      }>(`SELECT a.display_name AS name, r.row_rule, a.is_external,
+                 a.status, r.name AS role_name
+            FROM account a JOIN role r ON r.id = a.role_id
+           WHERE a.id = $1`, [b.piAccountId]);
+      const a = rows[0];
+      if (!a) throw notFound("账号");
+      if (a.row_rule !== "pi")
+        throw new ProblemException("invariant-violated", {
+          invariant: "pi-account-wrong-row-rule",
+          detail: `${a.name} 的角色是「${a.role_name}」，按「${a.row_rule}」切行，` +
+            "不是「pi」—— 绑上去这一栏对他不起作用，而界面上看起来是绑好了。\n" +
+            "研究者账号要用行规则为 pi 的角色建（「组织与权限」里那个「研究者 PI（外部）」）。"
+        });
+      if (a.status !== "active")
+        throw new ProblemException("invariant-violated", {
+          invariant: "pi-account-disabled",
+          detail: `${a.name} 的账号已停用 —— 绑上去他也登不进来`
+        });
+      bound = { id: b.piAccountId, name: a.name };
+    }
+
+    if (before.piAccountId === b.piAccountId)
+      throw new ProblemException("invariant-violated", {
+        invariant: "site-pi-unchanged",
+        detail: bound
+          ? `${before.code} 的研究者账号本来就是 ${bound.name} —— 没有变化就不该留一条审计`
+          : `${before.code} 本来就没有绑定研究者账号`
+      });
+
+    /* 绑定时 `pi_name` 跟着改成该账号的显示名（`piName` 可覆盖）——
+       否则中心上登记的是「李四」、绑的账号是「张三」，
+       两个事实同时挂在一行上，而没有任何一处会报错。 */
+    const piName = b.piName?.trim() ?? (bound ? bound.name : before.piName);
+    await c.client.query(
+      "UPDATE study_site SET pi_account_id = $2, pi_name = $3 WHERE id = $1",
+      [id, b.piAccountId, piName]);
+
+    await this.audit.write({
+      action: b.piAccountId ? "指定中心研究者" : "解除中心研究者绑定",
+      targetType: "study_site", targetId: before.code,
+      before: { piAccountId: before.piAccountId, piName: before.piName },
+      after: { piAccountId: b.piAccountId, piName },
+      studySiteId: id, reason: b.reason });
+
+    return {
+      data: await this.get(id),
+      sideEffects: [{
+        type: "SiteAssignmentChanged" as const,
+        summary: bound
+          ? `${bound.name} 现在是 ${before.code}（${before.hospital}）的研究者 —— ` +
+            "他从这一刻起看得见这个中心的受试者与访视，也能确认访视"
+          : `${before.code} 已解除研究者账号绑定 —— ` +
+            "原来那位研究者从这一刻起看不见这个中心；" +
+            `中心上仍然登记着 ${piName}，那是方案上的姓名，不是一个账号`,
+        ref: id, studySiteId: id
+      }]
+    };
+  }
+
   async list(q: { limit: number; cursor?: string; studyId?: string; state?: string[];
                   hospital?: string; q?: string; startupInvalidated?: boolean }) {
     const c = ctx();

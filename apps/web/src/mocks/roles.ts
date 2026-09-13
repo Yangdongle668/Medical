@@ -42,8 +42,9 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
      几乎只有他打得开。第一次有人以 admin 登进真库时，
      发现的是权限矩阵少了五列 —— 那件事在 mock 上永远撞不上。
 
-     授予与迁移 0039 的 catalogue 逐字同源（arch-check 会逐个比对）：
-     18 个动作全给、45 个模块全给、行范围 all；
+     授予与最后一版 provision_tenant_roles 的 catalogue 逐字同源
+     （arch-check 会逐个比对动作**与模块**两栏）：
+     19 个动作全给、45 个模块全给、行范围 all；
      **唯独 subject 字段不给** —— 系统管理员管的是账号、角色、租户，
      不是受试者。要给，他自己去「组织与权限」里点两下，而那两下会进审计轨迹。 */
   admin: {
@@ -51,7 +52,7 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     role: { id: "r-admin", code: "admin", name: "系统管理员" },
     isExternal: false, orgRef: null,
     rowRule: "all", fields: ["cost", "margin", "price", "staff"],
-    actions: ["accept", "advance", "approve", "audit", "bid", "capaWrite",
+    actions: ["accept", "advance", "approve", "assign", "audit", "bid", "capaWrite",
       "closeQ", "closeQA", "ethics", "isfWrite", "manage", "monitor",
       "piConfirm", "raiseQ", "rateWrite", "subjRead", "subjWrite", "timeWrite"],
     modules: ["org", "dash", "sites", "intake", "enr", "screen", "client", "cash",
@@ -97,10 +98,10 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     role: { id: "r-pm", code: "pm", name: "项目总监 PM" },
     isExternal: false, orgRef: null,
     rowRule: "team", fields: ["cost", "margin", "price", "subject"],
-    actions: ["advance", "approve", "bid", "capaWrite", "ethics", "monitor",
+    actions: ["advance", "approve", "assign", "bid", "capaWrite", "ethics", "monitor",
       "raiseQ", "subjRead", "subjWrite", "timeWrite"],
     modules: ["pm", "team", "approve", "intake", "feas", "sites", "enr", "screen",
-      "mon", "change", "qa", "pnl", "trail"]
+      "mon", "change", "staff", "qa", "pnl", "trail"]
   },
   /* **质量保证 QA。** 内部稽查那一页只有它点得动 ——
      发起稽查（audit）、验证整改并关闭（closeQA）三个动作里，
@@ -133,7 +134,7 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     role: { id: "r-boss", code: "boss", name: "经营层" },
     isExternal: false, orgRef: null,
     rowRule: "all", fields: ["cost", "margin", "price", "staff"],
-    actions: ["advance", "approve", "bid", "manage", "rateWrite",
+    actions: ["advance", "approve", "assign", "bid", "manage", "rateWrite",
       "subjRead", "timeWrite"],
     modules: ["dash", "intake", "sites", "enr", "screen", "client", "cash", "bid",
       "change", "staff", "people", "time", "pnl", "bill", "qa", "mon", "price",

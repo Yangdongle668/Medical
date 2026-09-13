@@ -9840,6 +9840,149 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/site-assignments:
+    get:
+      operationId: listSiteAssignments
+      tags:
+        - site
+      summary: 派工台账
+      description: |-
+        谁在哪个中心上负责、从哪天到哪天。**这张表就是 `assigned` 行范围本身。**
+
+        与 `/v1/site-staff`（备案名册）的区别：那一份按人合并、只列在岗的、给机构办备案用；这一份按**派工行**出列，带得起止日与已结束的那些 —— 「这个中心去年三月归谁」只有它答得出来。
+      x-layer: L1
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: studyId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: studySiteId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: accountId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: includeEnded
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
+      responses:
+        '200':
+          description: 派工台账
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSiteAssignmentsResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/site-staff:
     get:
       operationId: listSiteStaff
@@ -10189,6 +10332,249 @@ paths:
                 title: 资源不存在
                 status: 404
                 code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/staff/{id}:assign-sites:
+    post:
+      operationId: assignSiteStaff
+      tags:
+        - site
+      summary: 把人派到中心上
+      description: |-
+        **这是权限变更，不是排班。** 多一行派工，那个人当场看得见这个中心的受试者、访视、质疑、药品台账；所以它写审计、`isSensitive=true`、必须写原因。
+
+        工种（CRA / CRC）**不接受传入**，从 `staff.role_kind` 取 —— 请求说 CRC 而名册说 CRA，那是一个矛盾，不是一个可选项。
+        工种不是 CRA / CRC 的人派不了：PM 的行范围来自项目归属组（`POST /v1/studies/{id}:set-team`），QA / DM 看全部，都与派工无关。
+
+        已经在跑的那几个中心**跳过而不是报错** —— 「给他再加一个中心」时，另外三个本来就在他名下，那是正常情况。
+        但**一个都没派成就是错**：返回 422，整笔回滚。
+      x-layer: L2
+      x-required-action: assign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignSiteStaffRequest'
+      responses:
+        '200':
+          description: 把人派到中心上
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignSiteStaffResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/staff/{id}:end-assignments:
+    post:
+      operationId: endSiteAssignment
+      tags:
+        - site
+      summary: 把人从中心上撤下
+      description: |-
+        撤下那一刻他就看不见这个中心了 —— 和派上去同一档，必须写原因。
+
+        **已经生效过的派工收口，不删。** 区间的上界收到今天：他确实负责过那一段，而「去年三月那次访视谁负责」是核查会问的事实。
+        **今天派、今天撤的删掉**：它一天都没生效过，在备案名册上留一条零长度的记录，只会让人多问一句「这是什么」。
+
+        交接（`POST /v1/handovers`）不走这条路：那一条要把中心**转给**另一个人，带清单、带逐例交底。撤下是「不归他了」，转交是「归另一个人了」。
+      x-layer: L2
+      x-required-action: assign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndSiteAssignmentRequest'
+      responses:
+        '200':
+          description: 把人从中心上撤下
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndSiteAssignmentResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -11625,6 +12011,133 @@ paths:
                 title: 版本冲突：资源已被他人修改
                 status: 409
                 code: conflict-version
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/study-sites/{id}:set-pi:
+    post:
+      operationId: setStudySitePi
+      tags:
+        - site
+      summary: 给中心指定研究者 PI
+      description: >-
+        **这是权限变更，不是改一个名字。** `row_rule=pi` 的行范围就是「`study_site.pi_account_id` 指向我的那些中心」——
+        绑上那一刻，这位院方研究者看得见这个中心的受试者与访视；解绑那一刻看不见。
+
+
+        在此之前**只有建档那一次能设**（`createStudySite` 的 `piAccountId`），而建档表单从来没有那一栏 —— 于是 PI 账号建得出来、登得进去，一个中心也看不到，`pi`
+        这条行规则从头到尾是空的。
+
+
+        `piAccountId` 传 null = 解绑（中心仍然记着 `piName`，那是方案上的登记名）。
+
+        绑定时 `pi_name` 跟着改成该账号的显示名 —— 否则中心上登记的是「李四」、绑的账号是「张三」，两个事实同时挂在一行上，而没有任何一处会报错。确实要写「张三 教授」的，同时传 `piName`
+        覆盖。
+      x-layer: L2
+      x-required-action: assign
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetStudySitePiRequest'
+      responses:
+        '200':
+          description: 给中心指定研究者 PI
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetStudySitePiResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
         '422':
           description: 请求校验未通过
           content:
@@ -15547,6 +16060,7 @@ components:
         - accept
         - advance
         - approve
+        - assign
         - audit
         - bid
         - capaWrite
@@ -15566,19 +16080,48 @@ components:
       type: string
       enum:
         - TimesheetPosted
+        - TimesheetApproved
         - CostPosted
         - CompensationDue
         - DeviationDetected
+        - SaeReportedLate
         - QualityEventOpened
+        - CapaPlanned
         - NextVisitScheduled
+        - SoaRevised
         - SubjectEnrolled
-        - MilestoneReached
+        - SpecimenClosed
+        - CloseoutApproved
+        - DataQueryRaised
+        - DataQueryAnswered
+        - DataQueryReturned
+        - DataQueryChased
+        - DataQueryClosed
+        - MonitorVisitPlanned
+        - MonitorVisitPerformed
+        - MonitorVisitConfirmed
+        - MonitorReportSubmitted
+        - InternalAuditOpened
+        - AuditFindingAdded
+        - AuditFindingClosed
+        - IntakeSubmitted
+        - IntakeApproved
+        - IntakeReturned
+        - SiteAccepted
+        - AcceptanceAmendRequested
         - EthicsTaskCreated
         - SiteStateChanged
         - FeasibilityOverride
         - FeasibilityBias
         - BidDecided
         - ScopeCreepRecorded
+        - MilestoneReached
+        - StudyTeamChanged
+        - SiteAssignmentChanged
+        - AccountEnabled
+        - StartupTemplateReplaced
+        - MailTransportChanged
+        - MailTransportTested
       x-extensible: true
       description: 副作用类型。**新增取值是非破坏性变更** —— 客户端必须忽略不认识的 type。破坏性变更门禁据此放行本枚举的新增。
     SideEffect:
@@ -16825,6 +17368,29 @@ components:
         - reason
         - teamId
       additionalProperties: false
+    SetStudySitePiRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 4
+          maxLength: 500
+          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
+        piAccountId:
+          nullable: true
+          description: 要绑的 PI 账号；null = 解绑（中心仍记着 piName，那是方案上的登记名）
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        piName:
+          type: string
+          minLength: 1
+          maxLength: 64
+      required:
+        - reason
+        - piAccountId
+      additionalProperties: false
     StartupCategory:
       type: string
       enum:
@@ -17170,6 +17736,78 @@ components:
       description: |-
         备案视角的人员：我看得到的中心上，在岗的 CRA / CRC 是谁、证书还有效吗。
         PI 不在其中 —— 他是医院自己的人，证书归医院管，我方手里那份不会更新。
+    SiteAssignment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        accountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        displayName:
+          type: string
+        roleKind:
+          $ref: '#/components/schemas/RoleKind'
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        hospital:
+          type: string
+        studyId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        studyCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        studyShortName:
+          type: string
+        since:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+          description: 从这一天起负责（含当天）
+        until:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        active:
+          type: boolean
+          description: 今天是否在有效期内 —— 它决定这个人现在看不看得见这个中心
+      required:
+        - id
+        - accountId
+        - displayName
+        - roleKind
+        - studySiteId
+        - siteCode
+        - hospital
+        - studyId
+        - studyCode
+        - studyShortName
+        - since
+        - until
+        - active
+      additionalProperties: false
+      description: 谁在哪个中心上负责、从哪天到哪天。**这一行就是 CRA / CRC 的可见范围本身。**
     HandoverStatus:
       type: string
       enum:
@@ -22471,6 +23109,23 @@ components:
         - data
         - sideEffects
       additionalProperties: false
+    ListSiteAssignmentsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SiteAssignment'
+        nextCursor:
+          nullable: true
+          description: null 表示已到末页
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+        - items
+        - nextCursor
+      additionalProperties: false
     ListSiteStaffResponse:
       type: object
       properties:
@@ -22536,6 +23191,85 @@ components:
       required:
         - items
         - nextCursor
+      additionalProperties: false
+    AssignSiteStaffRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 4
+          maxLength: 500
+          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
+        studySiteIds:
+          minItems: 1
+          maxItems: 50
+          type: array
+          items:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        since:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+      required:
+        - reason
+        - studySiteIds
+      additionalProperties: false
+    AssignSiteStaffResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SiteAssignment'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    EndSiteAssignmentRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 4
+          maxLength: 500
+          description: 变更原因。会写入审计轨迹；核查时真正被问的就是这一栏。
+        studySiteIds:
+          minItems: 1
+          maxItems: 50
+          type: array
+          items:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      required:
+        - reason
+        - studySiteIds
+      additionalProperties: false
+    EndSiteAssignmentResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SiteAssignment'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
       additionalProperties: false
     ListStartupChecklistsResponse:
       type: object
@@ -22829,6 +23563,20 @@ components:
         - reason
       additionalProperties: false
     AdvanceStudySiteResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/StudySite'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    SetStudySitePiResponse:
       type: object
       properties:
         data:

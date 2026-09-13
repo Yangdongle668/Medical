@@ -556,6 +556,37 @@ export const SITE_STAFF: MockSiteStaff[] = [
     active: false, sites: [at(0, "2024-11-05")] }
 ];
 
+/* ── 派工台账（`/v1/site-assignments`）────────────────────────────────
+   `site_assignment` 是行规则 `assigned` 的唯一来源。mock 上它**必须是
+   可变的**：这一组端点存在的理由就是"派上去他就看得见、撤下来他就看不见"，
+   而一份只读的假数据演不出这件事 —— 演示里点完按钮列表纹丝不动，
+   看的人只会以为按钮坏了。
+
+   它和 `SITE_STAFF`（备案名册）是两份数据，不是一份的两个投影 ——
+   理由与上面那段相同：备案名册按行范围重算中心列表，派工台账按
+   派工行出列，还带得出已经结束的那些。 */
+export interface MockAssignment {
+  id: string; accountId: string; displayName: string; roleKind: string;
+  studySiteId: string; since: string; until: string | null;
+}
+let 派工序号 = 0;
+export const newAssignmentId = () => `sa-${++派工序号}`;
+const 派 = (accountId: string, displayName: string, roleKind: string,
+  i: number, since: string, until: string | null = null): MockAssignment =>
+  ({ id: newAssignmentId(), accountId, displayName, roleKind,
+     studySiteId: SITES[i]!.id, since, until });
+
+export const ASSIGNMENTS: MockAssignment[] = [
+  派("a-wutong",  "吴桐",   "CRC", 0, "2024-09-01"),
+  派("a-wutong",  "吴桐",   "CRC", 1, "2025-03-04"),
+  派("a-tangyan", "唐延",   "CRC", 0, "2025-06-16"),
+  派("a-duan",    "段志远", "CRA", 0, "2024-09-01"),
+  派("a-duan",    "段志远", "CRA", 2, "2025-01-13"),
+  /* 一条**已经结束的** —— 默认列表看不到它，勾上「连已结束的一起看」
+     才出现。核查问的「去年三月那个中心谁负责」就靠这一行。 */
+  派("a-zhouqi",  "周琦",   "CRA", 0, "2024-11-05", "2025-06-30")
+];
+
 /** 候选中心（可行性调查）。
  *
  *  **五条各有各的用处**，缺一条界面上就有一条分支画不出来：
