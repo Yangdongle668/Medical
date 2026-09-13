@@ -91,6 +91,53 @@ describe("递交：不列清单也递得出去", () => {
   });
 });
 
+describe("撞上一条自己看不见的受理记录", () => {
+  /* ── 这一条是被真事故逼出来的 ──────────────────────────────────────
+     CRC 在中心详情页点「登记递交」，界面上回一句**「服务内部错误」**。
+
+     `site_acceptance` 上有 UNIQUE (tenant_id, study_id, hospital)，
+     而服务层那句 pre-check 是**带行策略的** —— 行规则为 assigned 的
+     CRA / CRC 看不见别人递的那一条（那时 study_site_id 还是空的，
+     app.site_visible 判不出来），于是 pre-check 查回 0 行、一路放行，
+     最后撞在唯一约束上；pg 的 23505 落到兜底分支就是 500。
+
+     一句"服务内部错误"教会用户的是**重试**，而重试一万次结果都一样。 */
+  it("**说得出编号和递交人，而不是一句「服务内部错误」**", async () => {
+    const hospital = 医院();
+    /* 先由 admin 递一条 —— CRC 看不见它（下面那句断言钉住这个前提）。 */
+    expect((await 递交(admin, hospital)).status).toBe(201);
+    const 他看得见的 = (await crc.get("/v1/site-acceptances?limit=200")).body.items as
+      { hospital: string }[];
+    expect(他看得见的.some(x => x.hospital === hospital),
+      "前提变了：CRC 现在看得见这一条，那这条测试就不再测它要测的东西")
+      .toBe(false);
+
+    const r = await 递交(crc, hospital);
+    expect(r.status, JSON.stringify(r.body)).toBe(422);
+    expect(r.body.invariant).toBe("acceptance-duplicate");
+    /* 三样都要说出来：已经有了、编号是多少、谁递的 ——
+       最后一样才是"我该去找谁"的答案。 */
+    expect(r.body.detail).toMatch(/AC-/);
+    expect(r.body.detail).toContain("系统管理员");
+    expect(r.body.detail, "没说清他为什么在台账上看不到它").toContain("可见范围");
+  });
+
+  it("**兜底那一层也要在**：任何约束违例都不该出口成 500", async () => {
+    /* 上面那条修的是这一处的根因。但同一个形状在别处还会再长出来 ——
+       每一条唯一约束、排他约束、CHECK 都是一次潜在的 500。
+       这里验的是 ProblemFilter 那一道：约束违例一律落 422。
+
+       用同一条路再走一次（pre-check 已经拦住了，所以这一条实际上
+       验的是"拦住之后仍然是 422"）；真正的兜底行为由 problem.ts
+       的 pgConstraint 负责，它在这里与 pre-check 同一个出口。 */
+    const hospital = 医院();
+    expect((await 递交(admin, hospital)).status).toBe(201);
+    const r = await 递交(admin, hospital);
+    expect(r.status).toBe(422);
+    expect(r.status).not.toBe(500);
+  });
+});
+
 describe("登记受理意向函", () => {
   it("**一个日期 + 一份 PDF，就是这条流程的终点**", async () => {
     const a = (await 递交(crc, 医院())).body;

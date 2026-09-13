@@ -26,6 +26,35 @@ export const notFound = (what = "资源") =>
 export const forbidden = (action: string) =>
   new ProblemException("forbidden-action", { detail: `当前角色无「${action}」动作权限` });
 
+/* ── 数据库说"不行"的那几种，都不该出口成 500 ────────────────────────
+   pg 的约束违例是一个带 `code` 的普通 Error，落到兜底分支就是
+   「服务内部错误」—— 而那句话教会用户的是**重试**，
+   重试一万次结果都一样。
+
+   这一条是被真事故逼出来的：CRC 登记递交立项材料时撞上一条**自己看不见的**
+   受理记录（唯一约束按租户建，而行策略只放行看得见的那些），
+   服务层的 pre-check 因此查回 0 行、一路放行，最后撞在约束上 → 500。
+   那一次的根因在 acceptance.service 里补了（迁移 0049），
+   但**同一个形状在别处还会再长出来**：每一条唯一约束、排他约束、
+   CHECK 都是一次潜在的 500。
+
+   所以这里兜一道：约束违例一律落 422，并把**约束名**说出来。
+   约束名在这个仓库里就是文档（`acceptance_accepted_shape`、
+   `site_assignment` 上那条 EXCLUDE…），运维看到它能直接定位；
+   而**不带出 detail / 表名 / 列值** —— 那里面会有真实数据。 */
+const PG_CONSTRAINT: Record<string, string> = {
+  "23505": "有一条记录已经占住了这个值（唯一约束）",
+  "23P01": "这一条和已有的记录在时间上重叠了（排他约束）",
+  "23514": "这一行不满足一条数据约束（CHECK）",
+  "23503": "引用了一条不存在的记录（外键）"
+};
+function pgConstraint(err: unknown): { title: string; name?: string } | null {
+  if (typeof err !== "object" || err === null) return null;
+  const e = err as { code?: string; constraint?: string };
+  const t = e.code ? PG_CONSTRAINT[e.code] : undefined;
+  return t ? { title: t, ...(e.constraint ? { name: e.constraint } : {}) } : null;
+}
+
 /** body-parser 的 413。**按形状认，不按类型认** —— 那个类是它内部的，
  *  import 过来等于把一个私有实现钉进异常处理里。 */
 function isTooLarge(err: unknown): boolean {
@@ -58,6 +87,20 @@ export class ProblemFilter implements ExceptionFilter {
       extra = { detail:
         "请求体太大，超过了服务端的解析上限 —— " +
         "如果传的是文件，换一份小一点的（受理意向函的上限是 10 MB）。" };
+    }
+    else if (pgConstraint(err)) {
+      const k = pgConstraint(err)!;
+      code = "invariant-violated";
+      extra = {
+        detail: `${k.title}。这不是一次可以重试成功的失败 —— 改一处再来。` +
+          (k.name ? `（约束：${k.name}）` : ""),
+        ...(k.name ? { invariant: k.name } : {})
+      };
+      /* **照样进日志。** 出口不再是 500，但它仍然是一处"服务层本该先拦下来"
+         的地方：每一条走到这里的约束违例，都意味着某个 pre-check 漏了。 */
+      emit("warn", "Problem",
+        `约束违例出口成 422，但它本该在服务层被拦下：${k.name ?? "（未命名）"}`,
+        { method: req.method, path: req.originalUrl.split("?")[0] });
     }
     else if (err instanceof HttpException) {
       const s = err.getStatus();
