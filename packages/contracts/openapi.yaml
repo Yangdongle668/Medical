@@ -9843,6 +9843,127 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/site-acceptances/{id}:record-letter:
+    post:
+      operationId: recordAcceptanceLetter
+      tags:
+        - site
+      summary: 登记拿到立项受理意向函
+      description: |-
+        一线报给项目管理员的**第二个日期**，也是这条流程真正的终点。
+
+        在此之前「拿到受理意向函」在系统里唯一的痕迹是一个日期，而核查要看的是那张纸 —— 所以这里连 PDF 一起收（≤ 10 MB，只收 PDF）。
+
+        **文件可以不传**：纸还没拿到手、先把日期登记上，是常事；补传一次覆盖前一份。
+        **受理人不必填** —— 医院那边是谁受理的，由那份意向函回答；填一个下拉框里挑出来的名字是编的（见迁移 0048）。谁在系统里登记的这一条，进审计轨迹。
+      x-layer: L2
+      x-required-action: advance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordAcceptanceLetterRequest'
+      responses:
+        '200':
+          description: 登记拿到立项受理意向函
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordAcceptanceLetterResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/site-acceptances/{id}/docs/{seq}:set:
     post:
       operationId: setAcceptanceDoc
@@ -9935,6 +10056,98 @@ paths:
                 title: 幂等键被不同的请求体复用
                 status: 409
                 code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/site-acceptances/{id}/letter:
+    get:
+      operationId: getAcceptanceLetter
+      tags:
+        - site
+      summary: 取立项受理意向函原件
+      description: |-
+        返回 PDF 本身（`application/pdf`），不是 JSON。
+        行范围跟着那条受理走 —— 看不见那条受理的人取不到这份文件。
+      x-layer: L1
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      responses:
+        '200':
+          description: 取立项受理意向函原件
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetAcceptanceLetterResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
         '422':
           description: 请求校验未通过
           content:
@@ -17827,6 +18040,29 @@ components:
         - present
       additionalProperties: false
       description: '**每一项都要能单独勾** —— 一个「材料齐备 6/8」的进度条，说不出缺的是哪两份。'
+    AcceptanceLetter:
+      type: object
+      properties:
+        filename:
+          type: string
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+          maximum: 9007199254740991
+        uploadedAt:
+          type: string
+        uploadedByName:
+          type: string
+      required:
+        - filename
+        - contentType
+        - sizeBytes
+        - uploadedAt
+        - uploadedByName
+      additionalProperties: false
     SiteAcceptance:
       type: object
       properties:
@@ -17905,6 +18141,10 @@ components:
           type: array
           items:
             type: string
+        letter:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AcceptanceLetter'
       required:
         - id
         - code
@@ -17926,6 +18166,7 @@ components:
         - docs
         - presentDocs
         - missingDocs
+        - letter
       additionalProperties: false
       description: '**受理不对外部方关闭** —— 它是双方共同的记录：递交方要看到缺什么，受理方要出具受理通知。'
     SubmitAcceptance:
@@ -17940,8 +18181,12 @@ components:
           type: string
           minLength: 2
           maxLength: 80
+        submittedOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
         docs:
-          minItems: 1
           maxItems: 20
           type: array
           items:
@@ -17951,7 +18196,32 @@ components:
       required:
         - studyId
         - hospital
-        - docs
+      additionalProperties: false
+    RecordAcceptanceLetterRequest:
+      type: object
+      properties:
+        receivedOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+          description: 哪天拿到的受理意向函。不收将来的日期
+        file:
+          type: object
+          properties:
+            filename:
+              type: string
+              minLength: 1
+              maxLength: 200
+            contentBase64:
+              type: string
+              minLength: 1
+          required:
+            - filename
+            - contentBase64
+          additionalProperties: false
+      required:
+        - receivedOn
       additionalProperties: false
     IsfCategory:
       type: string
@@ -23273,6 +23543,20 @@ components:
         - data
         - sideEffects
       additionalProperties: false
+    RecordAcceptanceLetterResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/SiteAcceptance'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
     SetAcceptanceDocRequest:
       type: object
       properties:
@@ -23295,6 +23579,9 @@ components:
         - data
         - sideEffects
       additionalProperties: false
+    GetAcceptanceLetterResponse:
+      type: string
+      description: PDF 字节流
     ListSiteAssignmentsResponse:
       type: object
       properties:

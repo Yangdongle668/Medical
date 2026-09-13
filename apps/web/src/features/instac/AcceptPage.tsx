@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { SubmitAcceptanceForm } from "./SubmitAcceptanceForm.js";
+import { RecordLetterForm } from "./RecordLetterForm.js";
 
 /* ════════════════════════════════════════════════════════════════════
    立项受理（机构办）。
@@ -39,7 +40,14 @@ interface Acceptance {
   amendNote: string | null;
   acceptedOn: string | null; acceptedByName: string | null;
   docs: Doc[]; presentDocs: number; missingDocs: string[];
+  letter: { filename: string; sizeBytes: number;
+            uploadedAt: string; uploadedByName: string } | null;
 }
+
+/** 文件大小说给人听。KB / MB 的分界取 1 MB —— 一份扫描件通常在几百 KB，
+ *  报成「0.3 MB」不如报「320 KB」好认。 */
+const kb = (n: number) => n < 1048576
+  ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(1)} MB`;
 
 const STATE: Record<Acceptance["state"], { text: string; chip: string }> = {
   review: { text: "形式审查中", chip: "warn" },
@@ -55,6 +63,9 @@ export function AcceptPage() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [said, setSaid] = useState<string | null>(null);
+  /** 正在登记意向函的那一条 —— **一次只开一个**：同时摊开几张表，
+   *  "我刚才改的是哪一条"就答不出来了。 */
+  const [letterFor, setLetterFor] = useState<Acceptance | null>(null);
 
   const reload = () =>
     call<{ items: Acceptance[] }>("listSiteAcceptances", { query: { limit: 100 } })
@@ -164,6 +175,16 @@ export function AcceptPage() {
                 不是「八项都齐」。它只作数，不能在这里改。
               </p>
             ) : (
+              a.docs.length === 0 ? (
+                /* **空清单不是「齐备」。** 材料清单从必填改成了可省略
+                   （迁移 0048），于是 in_system 上也会出现空清单 ——
+                   而 0/0 在界面上长得像"全齐了"。照实说：没列。 */
+                <p className="muted" style={{ margin: 0, fontSize: 13 }}
+                  data-testid="ac-no-docs">
+                  <b>没有列材料清单。</b>递交方没在系统里逐项列 ——
+                  这不是「八项都齐」，是这条受理不走本系统的形式审查。
+                </p>
+              ) : (
               <>
                 <div className="spread">
                   <b style={{ fontSize: 13 }}>
@@ -189,7 +210,7 @@ export function AcceptPage() {
                   ))}
                 </div>
               </>
-            )}
+            ))}
 
             {a.state === "amend" && a.amendNote && (
               <p className="problem" style={{ margin: 0, fontSize: 13 }}
@@ -198,15 +219,75 @@ export function AcceptPage() {
               </p>
             )}
 
-            {a.state === "accepted" ? (
-              <p className="muted" style={{ margin: 0, fontSize: 13 }} data-testid="ac-done">
-                {a.acceptedOn} 受理
-                {a.acceptedByName ? <>，受理人 {a.acceptedByName}</> : <>（系统外受理，仅登记受理号）</>}。
-                {a.studySiteId
-                  ? <> 该中心现在可以推进到「伦理递交」。</>
-                  : <> <b>受理了但没建档</b> —— 那几个中心的成本已经在发生。</>}
+            {/* ── 受理意向函 ────────────────────────────────────────────
+                日期与那张纸分开两栏，是有意的：日期是一线报上来的事实，
+                纸是核查要看的凭证，**先有日期后有纸**是常态。
+                所以已受理但没传纸的那些要显眼 —— 那是一件没做完的事。 */}
+            {a.letter ? (
+              <p className="muted" style={{ margin: 0, fontSize: 13 }} data-testid="ac-letter">
+                受理意向函：
+                <a href={`/v1/site-acceptances/${a.id}/letter`}
+                  target="_blank" rel="noreferrer" data-testid={`ac-letter-open-${a.id}`}>
+                  {a.letter.filename}
+                </a>
+                <span className="t-mut">
+                  （{kb(a.letter.sizeBytes)}，{a.letter.uploadedByName} 上传）
+                </span>
               </p>
-            ) : canAccept && (
+            ) : a.state === "accepted" && a.origin !== "registered" && (
+              <p className="problem" style={{ margin: 0, fontSize: 13 }}
+                data-testid="ac-letter-missing">
+                <b>已受理，但受理意向函还没传。</b>
+                核查要看的是那张纸，不是台账上的一个日期 —— 拿到之后回来补一次。
+              </p>
+            )}
+
+            {a.state === "accepted" ? (
+              <>
+                <p className="muted" style={{ margin: 0, fontSize: 13 }} data-testid="ac-done">
+                  {a.acceptedOn} 受理
+                  {a.acceptedByName
+                    ? <>，受理人 {a.acceptedByName}</>
+                    : <>（受理人不在本系统 —— 医院那边是谁受理的由意向函回答）</>}。
+                  {a.studySiteId
+                    ? <> 该中心现在可以推进到「伦理递交」。</>
+                    : <> <b>受理了但没建档</b> —— 那几个中心的成本已经在发生。</>}
+                </p>
+                {/* 已受理之后仍然改得动：日期登记错了、纸后来才拿到，
+                    都是常事。registered 那种存根除外（它记的是几年前的事）。 */}
+                {canSubmit && a.origin !== "registered" && (
+                  <div className="row">
+                    <button className="btn" data-testid={`ac-letter-edit-${a.id}`}
+                      onClick={() => setLetterFor(a)}>
+                      {a.letter ? "换一份意向函 / 改日期" : "补传受理意向函"}
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : canSubmit && a.origin !== "registered" ? (
+              /* **一线的那条路。** 它和下面「予以受理」是两条：
+                 那一条是机构办在本系统里点的（要先逐项勾清单），
+                 这一条是一线把手里那张纸登记进来。
+                 多数医院的机构办不在这个系统里，所以这一条才是常走的。 */
+              <div className="row" style={{ flexWrap: "wrap" }}>
+                <button className="btn btn-p" data-testid={`ac-record-${a.id}`}
+                  onClick={() => setLetterFor(a)}>
+                  登记受理意向函
+                </button>
+                <span className="note">
+                  拿到医院给的受理意向函之后点这里：填上收到日期，传那份 PDF。
+                  {canAccept && <> 机构办在本系统里逐项审的，走右边那条。</>}
+                </span>
+              </div>
+            ) : null}
+
+            {letterFor?.id === a.id && (
+              <RecordLetterForm acceptance={a}
+                onCancel={() => setLetterFor(null)}
+                onDone={() => { setLetterFor(null); void reload(); }} />
+            )}
+
+            {a.state !== "accepted" && canAccept && (
               <div className="row" style={{ flexWrap: "wrap" }}>
                 <button className="btn primary" data-testid={`ac-accept-${a.id}`}
                   disabled={busy}

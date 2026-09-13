@@ -124,6 +124,16 @@ export const AcceptanceDoc = z.object({
   description: "**每一项都要能单独勾** —— 一个「材料齐备 6/8」的进度条，说不出缺的是哪两份。"
 });
 
+/** 落库的那份意向函 —— **不含内容**。
+ *  列表页要的是「有没有、多大、谁传的」，内容单独一条端点取。 */
+export const AcceptanceLetter = z.object({
+  filename: z.string(),
+  contentType: z.string(),
+  sizeBytes: z.int().positive(),
+  uploadedAt: z.string(),
+  uploadedByName: z.string()
+}).meta({ id: "AcceptanceLetter" });
+
 export const SiteAcceptance = z.object({
   id: Uuid,
   code: Code,
@@ -153,7 +163,11 @@ export const SiteAcceptance = z.object({
   docs: z.array(AcceptanceDoc),
   presentDocs: z.int().min(0),
   /** 缺的是哪几份 —— 名字，不是数目。 */
-  missingDocs: z.array(z.string())
+  missingDocs: z.array(z.string()),
+  /** 立项受理意向函。**null = 没传过那张纸** ——
+   *  与 `acceptedOn` 分开两栏是有意的：日期是一线报上来的事实，
+   *  那张纸是核查要看的凭证，**先有日期后有纸**是常态。 */
+  letter: AcceptanceLetter.nullable()
 }).meta({
   id: "SiteAcceptance",
   description:
@@ -176,10 +190,42 @@ export const ACCEPTANCE_DOC_TEMPLATE = [
 export const SubmitAcceptance = z.object({
   studyId: Uuid,
   hospital: z.string().trim().min(2).max(80),
+  /** 哪天递交的。**省略即今天** —— 一线常常是过两天才回到系统里补登，
+   *  而那时默认成今天，「递交日期」这一栏就成了「登记日期」，
+   *  两者差的那几天恰恰是伦理排期要算的。不收将来的日期。 */
+  submittedOn: DateOnly.optional(),
   /** 这家医院要审的那几份材料的名字。**递进去一律未勾** ——
-   *  勾是机构办形式审查的动作。 */
-  docs: z.array(z.string().trim().min(2).max(60)).min(1).max(20)
+   *  勾是机构办形式审查的动作。
+   *
+   *  ── 它从必填改成了可省略 ──────────────────────────────────────
+   *  这套模型假定医院的机构办是本系统的用户：递交方列清单 → 机构办逐项勾。
+   *  实际上多数医院的机构办不在这个系统里（迁移 0038 自己写着这句话），
+   *  于是这张清单由递交方自己填、自己不勾、也没有第二个人来勾 ——
+   *  **一张永远不会被勾的清单，不是记录，是每次递交都要重填一遍的仪式。**
+   *
+   *  要列的照样列得出来（机构办那条流程一行没动），收回的是"必须先编一张
+   *  清单才递得出去"。空清单在 `in_system` 上要读成**「没列清单」**，
+   *  不是「八项都齐」—— 界面上那一栏因此显示「未列清单」。 */
+  docs: z.array(z.string().trim().min(2).max(60)).max(20).optional()
 }).meta({ id: "SubmitAcceptance" });
+
+/** 登记「拿到立项受理意向函」。
+ *
+ *  这是一线报给项目管理员的**第二个日期**，也是这条流程真正的终点：
+ *  在此之前系统里唯一的痕迹是一个日期，而核查要看的是那张纸。 */
+export const RecordAcceptanceLetterBody = z.object({
+  receivedOn: DateOnly.describe("哪天拿到的受理意向函。不收将来的日期"),
+  /** 意向函扫描件。**可省略** —— 纸还没拿到手、先把日期登记上，是常事；
+   *  补传一次覆盖前一份。 */
+  file: z.object({
+    filename: z.string().trim().min(1).max(200),
+    /** PDF 的 base64。**10 MB 上限**，超了当场拒 ——
+     *  一份受理意向函是几百 KB 的扫描件，10 MB 已经宽得离谱；
+     *  不卡一道的话，一次误传的大文件会把整条请求链拖住。 */
+    contentBase64: z.string().min(1)
+  }).optional()
+}).meta({ id: "RecordAcceptanceLetterRequest" });
+
 
 /* ── 中心文件与物资（ISF） ────────────────────────────────────────
    **库里只存事实（在不在、什么时候到期、还剩几份），不存状态。**

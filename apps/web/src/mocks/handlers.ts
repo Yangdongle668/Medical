@@ -251,6 +251,7 @@ function findAcceptance(url: string, re: RegExp):
 function acceptanceDto(a: MockAcceptance) {
   return {
     ...a,
+    letter: a.letter ?? null,
     presentDocs: a.docs.filter(d => d.present).length,
     /* **缺的是哪几份 —— 名字，不是数目。** 补正通知要写的正是这几个名字。 */
     missingDocs: a.docs.filter(d => !d.present).map(d => d.name)
@@ -1498,7 +1499,7 @@ export const scenarioHandlers = [
      那条推理不是 —— 哪天正则改一个字符，靠推理成立的那一版会静默走错。） */
   http.post(pathToRegExp("/v1/site-acceptances"), async ({ request }) => {
     const b = await request.json() as {
-      studyId: string; hospital: string; docs: string[];
+      studyId: string; hospital: string; docs?: string[]; submittedOn?: string;
     };
     if (!identity().actions.includes("advance")) return HttpResponse.json(
       problem("forbidden", 403, "你的角色不能递交立项材料"), { status: 403 });
@@ -1514,14 +1515,53 @@ export const scenarioHandlers = [
       studyId: b.studyId, studyCode: "HJ-2024-017",
       drug: "艾瑞替尼", sponsorName: "恒瑞医药", phase: "III 期",
       hospital: b.hospital, studySiteId: null, siteCode: null,
-      submittedByName: me.name, submittedOn: TODAY_STR,
+      submittedByName: me.name, submittedOn: b.submittedOn ?? TODAY_STR,
       state: "review", origin: "in_system", amendNote: null,
       acceptedOn: null, acceptedByName: null,
       /* **一律未勾** —— 勾是机构办形式审查的动作。 */
-      docs: b.docs.map((name, seq) => ({ seq, name, present: false }))
+      /* 清单可以是空的 —— 多数医院的机构办不在本系统里（迁移 0048）。 */
+      docs: (b.docs ?? []).map((name, seq) => ({ seq, name, present: false })),
+      letter: null
     };
     scenario.acceptances.unshift(row);
     return HttpResponse.json(acceptanceDto(row), { status: 201 });
+  }),
+
+  /* 一线的第二个日期 + 那张纸。**mock 只留元信息，不留字节** ——
+     演示要看的是"登记完那一行上有没有那张纸"，而不是真的能下载。 */
+  http.post(pathToRegExp("/v1/site-acceptances/{id}:record-letter"), async ({ request }) => {
+    const found = findAcceptance(request.url, /site-acceptances\/([^:]+):record-letter/);
+    if ("problem" in found) return found.problem;
+    const b = await request.json() as {
+      receivedOn: string; file?: { filename: string; contentBase64: string } };
+    if (!identity().actions.includes("advance")) return HttpResponse.json(
+      problem("forbidden-action", 403, "你的角色不能登记受理意向函"), { status: 403 });
+    const a = found.a;
+    if (a.origin === "registered") return HttpResponse.json(problem("invariant-violated", 422,
+      `${a.code} 是系统外受理的登记存根 —— 它记的是一件已经发生过的事`), { status: 422 });
+    if (b.receivedOn > TODAY_STR) return HttpResponse.json(problem("validation-failed", 422,
+      `收到日期 ${b.receivedOn} 在将来`), { status: 422 });
+    if (b.receivedOn < a.submittedOn) return HttpResponse.json(problem("invariant-violated", 422,
+      `收到日期 ${b.receivedOn} 早于递交日期 ${a.submittedOn} —— 受理意向函不会比材料先到`),
+      { status: 422 });
+
+    a.state = "accepted";
+    a.acceptedOn = b.receivedOn;
+    if (b.file) a.letter = {
+      filename: b.file.filename, contentType: "application/pdf",
+      /* base64 还原成字节数：每 4 个字符 3 字节，减去结尾的填充。 */
+      sizeBytes: Math.max(1, Math.floor(b.file.contentBase64.length * 3 / 4)
+        - (b.file.contentBase64.match(/=+$/)?.[0].length ?? 0)),
+      uploadedAt: new Date().toISOString(), uploadedByName: identity().name
+    };
+    return HttpResponse.json({
+      data: acceptanceDto(a),
+      sideEffects: [{
+        type: "SiteAccepted", ref: a.id,
+        summary: `${a.code} 已受理（${b.receivedOn} 收到意向函）` +
+          (a.letter ? "" : " —— **扫描件还没传**，核查要看的是那张纸，别忘了补上")
+      }]
+    }, { status: 201 });
   }),
 
   http.post(pathToRegExp("/v1/site-acceptances/{id}/docs/{seq}:set"),

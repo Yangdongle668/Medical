@@ -26,6 +26,14 @@ export const notFound = (what = "资源") =>
 export const forbidden = (action: string) =>
   new ProblemException("forbidden-action", { detail: `当前角色无「${action}」动作权限` });
 
+/** body-parser 的 413。**按形状认，不按类型认** —— 那个类是它内部的，
+ *  import 过来等于把一个私有实现钉进异常处理里。 */
+function isTooLarge(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const e = err as { status?: number; statusCode?: number; type?: string };
+  return e.type === "entity.too.large" || e.status === 413 || e.statusCode === 413;
+}
+
 @Catch()
 export class ProblemFilter implements ExceptionFilter {
   catch(err: unknown, host: ArgumentsHost): void {
@@ -37,10 +45,25 @@ export class ProblemFilter implements ExceptionFilter {
     let extra: ProblemExtra = {};
 
     if (err instanceof ProblemException) { code = err.code; extra = err.extra; }
+    /* ── 请求体超过解析上限 ────────────────────────────────────────
+       body-parser 抛的 `PayloadTooLargeError` **不是 HttpException** ——
+       它是一个带 `status = 413` / `type = 'entity.too.large'` 的普通
+       Error，于是掉进最下面那个兜底分支，出口是一句「服务内部错误」。
+
+       这一条原来碰不到（全仓库的请求体都远在 100 KB 以下）。上传受理
+       意向函那条端点一开，它每天都会被走到 —— 而 500 教会用户的是重试，
+       不是换一份小一点的文件。 */
+    else if (isTooLarge(err)) {
+      code = "validation-failed";
+      extra = { detail:
+        "请求体太大，超过了服务端的解析上限 —— " +
+        "如果传的是文件，换一份小一点的（受理意向函的上限是 10 MB）。" };
+    }
     else if (err instanceof HttpException) {
       const s = err.getStatus();
       code = s === 401 ? "unauthenticated" : s === 403 ? "forbidden-action"
            : s === 404 ? "not-found" : s === 429 ? "rate-limited"
+           : s === 413 ? "validation-failed"
            : s === 422 ? "validation-failed" : "internal";
       extra = { detail: err.message };
     } else {

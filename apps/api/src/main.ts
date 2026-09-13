@@ -1,4 +1,6 @@
 import "reflect-metadata";
+import { json } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module.js";
 import { assertPreflight } from "./infra/preflight.js";
@@ -17,6 +19,23 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     bodyParser: true, logger: new JsonLogger()
   });
+  /* ── 只有上传受理意向函那一条路放大请求体 ──────────────────────────
+     express 的 JSON 解析默认上限是 **100 KB**。全仓库的请求体都远在
+     这条线以下，只有一条不是：`:record-letter` 里那份 PDF 的 base64。
+     一份几百 KB 的扫描件编码后一兆出头 —— 不动这个限制的话，
+     那条端点对**任何**真实文件都回 413，而 413 长得像"服务拒绝了你"，
+     不像"你的文件太大"。
+
+     **不全局放大。** 把上限提到 15 MB 等于给每一条 POST 都开了那么大的口子，
+     而那是一条最便宜的拖垮路径。所以只认这一条路径：
+     大小的真正判定在服务层（10 MB，按 base64 解出来之后算）与库里的
+     CHECK 上，这里放的是"让它进得来"那一道。15 MB 是 10 MB 的 base64
+     膨胀（×4/3）再留一点余量。 */
+  const bigJson = json({ limit: "15mb" });
+  app.use("/v1/site-acceptances", (req: Request, res: Response, next: NextFunction) =>
+    req.method === "POST" && req.url.includes(":record-letter")
+      ? bigJson(req, res, next)
+      : next());
   /* 不用 enableShutdownHooks 自带的信号处理：它收到 SIGTERM 就直接关，
      而我们要在关之前先让就绪探针转 503，给负载均衡一个探测周期把自己摘掉。
      顺序见 infra/shutdown.ts。 */
