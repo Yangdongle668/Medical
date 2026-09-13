@@ -1500,6 +1500,7 @@ export const scenarioHandlers = [
   http.post(pathToRegExp("/v1/site-acceptances"), async ({ request }) => {
     const b = await request.json() as {
       studyId: string; hospital: string; docs?: string[]; submittedOn?: string;
+      acceptedOn?: string; letter?: { filename: string; contentBase64: string };
     };
     if (!identity().actions.includes("advance")) return HttpResponse.json(
       problem("forbidden", 403, "你的角色不能递交立项材料"), { status: 403 });
@@ -1516,12 +1517,18 @@ export const scenarioHandlers = [
       drug: "艾瑞替尼", sponsorName: "恒瑞医药", phase: "III 期",
       hospital: b.hospital, studySiteId: null, siteCode: null,
       submittedByName: me.name, submittedOn: b.submittedOn ?? TODAY_STR,
-      state: "review", origin: "in_system", amendNote: null,
-      acceptedOn: null, acceptedByName: null,
+      /* 一步填完：给了受理日期，这条受理**建出来就是已受理的** ——
+         不经过「形式审查中」，也不等机构办点任何东西。 */
+      state: b.acceptedOn ? "accepted" : "review", origin: "in_system", amendNote: null,
+      acceptedOn: b.acceptedOn ?? null, acceptedByName: null,
       /* **一律未勾** —— 勾是机构办形式审查的动作。 */
       /* 清单可以是空的 —— 多数医院的机构办不在本系统里（迁移 0048）。 */
       docs: (b.docs ?? []).map((name, seq) => ({ seq, name, present: false })),
-      letter: null
+      letter: b.letter && b.acceptedOn ? {
+        filename: b.letter.filename, contentType: "application/pdf",
+        sizeBytes: Math.max(1, Math.floor(b.letter.contentBase64.length * 3 / 4)),
+        uploadedAt: new Date().toISOString(), uploadedByName: me.name
+      } : null
     };
     scenario.acceptances.unshift(row);
     return HttpResponse.json(acceptanceDto(row), { status: 201 });
@@ -3584,15 +3591,15 @@ function gateFor(siteId: string) {
       : undefined;
     if (!a) return { from, to, satisfied: false, unmet: [{
       code: "site-acceptance", module: "instac",
-      message: "还没向机构办递交立项材料 —— 受理是医院承接项目的第一道闸门"
+      message: "还没登记立项材料递交 —— 受理是医院承接项目的第一道闸门"
     }] };
     if (a.state === "accepted") return { from, to, satisfied: true, unmet: [] };
     const missing = a.docs.filter(d => !d.present).map(d => d.name);
     return { from, to, satisfied: false, unmet: [{
       code: "site-acceptance", module: "instac",
       message: missing.length
-        ? `${a.code} 尚未受理，缺 ${missing.length} 项材料：${missing.join("、")}`
-        : `${a.code} 材料已齐，等机构办出具受理通知`
+        ? `${a.code} 还差 ${missing.length} 项材料：${missing.join("、")}`
+        : `${a.code} 还没登记《立项受理意见函》—— 拿到之后在受理台账上登记收到日期`
     }] };
   }
 

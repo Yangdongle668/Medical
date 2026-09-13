@@ -153,19 +153,26 @@ const irbNeedsAcceptance: Checker = async (client, siteId) => {
   const a = rows[0];
   if (!a)
     return { code: "site-acceptance", module: "instac", status: "unmet",
-             message: "还没向机构办递交立项材料 —— 受理是医院承接项目的第一道闸门" };
+             message: "还没登记立项材料递交 —— 受理是医院承接项目的第一道闸门" };
   if (a.state === "accepted")
     return { code: "site-acceptance", status: "ok",
              /* 系统外登记的受理照样放行，但要说出它是登记的 ——
                 「凭什么放行」的答案是一张本系统没见过的受理通知。 */
              message: a.origin === "registered"
-               ? `机构已受理（${a.code}，系统外受理登记）`
-               : `机构已受理（${a.code}）` };
+               ? `已受理（${a.code}，系统外受理登记）`
+               : `已受理（${a.code}）` };
+  /* ── 这句话原来是「材料已齐，等机构办出具受理通知」 ──────────────
+     而它把闸门指向了一个**不会来的人**：院方的机构办不是这套系统的用户。
+     站在这里的 CRC 手里拿着（或者还没拿到）那张《立项受理意见函》——
+     他要做的是把日期和那张纸登记进来，不是等谁来点一下。
+
+     材料清单那一支留着：真有机构办在本系统里做形式审查的租户，
+     那句话对他们仍然成立。但它不再是默认的那句。 */
   return {
     code: "site-acceptance", module: "instac", status: "unmet",
     message: a.missing
-      ? `${a.code} 尚未受理，缺 ${a.missing.split("、").length} 项材料：${a.missing}`
-      : `${a.code} 材料已齐，等机构办出具受理通知`
+      ? `${a.code} 还差 ${a.missing.split("、").length} 项材料：${a.missing}`
+      : `${a.code} 还没登记《立项受理意见函》—— 拿到之后在受理台账上登记收到日期`
   };
 };
 

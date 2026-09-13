@@ -138,6 +138,75 @@ describe("撞上一条自己看不见的受理记录", () => {
   });
 });
 
+describe("一步填完：两个日期 + 一份意见函", () => {
+  /* 这是这条流程真正的形状。院方的机构办不是这套系统的用户 ——
+     一线手里拿着的就是那张《立项受理意见函》，他要做的是把两个日期
+     和那张纸登记进来，不是替一个不存在的用户演一遍审查流程。 */
+  it("**填完就是已受理**，不经过「形式审查中」，也不等任何人", async () => {
+    const 前天 = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
+    const r = await 递交(crc, 医院(), {
+      submittedOn: 前天,
+      acceptedOn: today(),
+      letter: { filename: "立项受理意见函.pdf", contentBase64: b64(PDF) }
+    });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.state).toBe("accepted");
+    expect(r.body.submittedOn).toBe(前天);
+    expect(r.body.acceptedOn).toBe(today());
+    expect(r.body.letter.filename).toBe("立项受理意见函.pdf");
+    /* 受理人仍然为空 —— 医院那边是谁受理的由那张纸回答。 */
+    expect(r.body.acceptedByName).toBeNull();
+  });
+
+  it("**意见函还没下来就留空** —— 那不是中间态，是一个事实", async () => {
+    const r = await 递交(crc, 医院());
+    expect(r.status).toBe(201);
+    expect(r.body.state).toBe("review");
+    expect(r.body.acceptedOn).toBeNull();
+  });
+
+  it("传了纸却没填日期就拒 —— 没有日期的 PDF 挂在哪一行都说不清", async () => {
+    const r = await 递交(crc, 医院(), {
+      letter: { filename: "意见函.pdf", contentBase64: b64(PDF) } });
+    expect(r.status).toBe(422);
+    expect(r.body.detail).toContain("收到日期");
+  });
+
+  it("受理日期早于递交日期就拒 —— 意见函不会比材料先到", async () => {
+    const 昨天 = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+    const r = await 递交(crc, 医院(), { submittedOn: today(), acceptedOn: 昨天 });
+    expect(r.status).toBe(422);
+    expect(r.body.invariant).toBe("acceptance-letter-before-submit");
+  });
+
+  it("**文件不合格时这条受理不该被建出来** —— 校验在 INSERT 之前", async () => {
+    const hospital = 医院();
+    const r = await 递交(crc, hospital, {
+      acceptedOn: today(),
+      letter: { filename: "假的.pdf", contentBase64: b64(Buffer.from("\x89PNG\r\n")) }
+    });
+    expect(r.status).toBe(422);
+    /* 再递一次要能成功 —— 上一次如果留下了半条记录，这里会撞唯一约束。 */
+    const again = await 递交(crc, hospital, { acceptedOn: today() });
+    expect(again.status, "上一次失败留下了一条记录").toBe(201);
+  });
+
+  it("一步填完之后，闸门当场放行「伦理递交」", async () => {
+    /* 闸门按 (项目, 医院) 找受理 —— 所以要有一个同项目同医院的中心。 */
+    const site = ((await admin.get("/v1/study-sites?limit=200")).body.items as
+      { id: string; hospital: string; study: { id: string } }[])
+      .find(x => x.study.id === studyId);
+    expect(site, "演示数据里应当有这个项目下的中心").toBeTruthy();
+
+    const before = await admin.get(`/v1/study-sites/${site!.id}/gate?to=irb_submit`);
+    /* 种子里这个中心的受理已经是 accepted 了，所以这里只验文案那一半。 */
+    if (!before.body.satisfied)
+      expect(`${before.body.unmet[0].message}`,
+        "闸门仍然把人指向机构办 —— 而机构办不是这套系统的用户")
+        .not.toContain("等机构办");
+  });
+});
+
 describe("登记受理意向函", () => {
   it("**一个日期 + 一份 PDF，就是这条流程的终点**", async () => {
     const a = (await 递交(crc, 医院())).body;

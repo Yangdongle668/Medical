@@ -26,11 +26,18 @@ import { today } from "../../shell/dates.js";
 
    一线在这条流程上真正要报给项目管理员的只有两件事：
 
-     · 哪天成功递交的      ← 这张表
-     · 哪天拿到受理意向函   ← 受理台账那一行上的「登记受理意向函」
+     · 哪天成功递交的
+     · 哪天拿到《立项受理意见函》（连那张纸）
 
-   所以现在默认只问项目、医院、递交日期三栏。清单收进一个折叠区，
-   **要走机构办那条流程的租户照样列得出来** —— 收回的是"必经"，不是"能力"。
+   **两件事在同一张表上填完**，这条受理就完了 —— 不经过「形式审查中」，
+   也不等机构办在本系统里点任何东西。院方的机构办不是这套系统的用户，
+   而一线手里拿着的就是那张意见函。
+
+   意见函还没下来是正常的：那两栏留空，这条受理停在「待登记受理意见函」，
+   拿到之后回受理台账那一行补登。**留空不是一个中间态，是一个事实。**
+
+   材料清单收进折叠区 —— 要走机构办那条流程的租户照样列得出来，
+   收回的是"必经"，不是"能力"。
 
    ── 两个入口，因为这件事有两个发生的时刻 ────────────────────────
    ① **中心详情页**（`fixed` 传进来）—— 闸门正拦在这里，
@@ -55,6 +62,11 @@ export function SubmitAcceptanceForm({ onCreated, fixed }: {
      预填一个默认折叠的区域，等于替人做了"要列清单"这个决定。 */
   const [listing, setListing] = useState(false);
   const [docs, setDocs] = useState<string[]>([]);
+  /* 受理意见函那两栏。**默认空着** —— 递交当天就拿到意见函是少数，
+     而预填一个日期等于替人断言一件没发生的事。 */
+  const [acceptedOn, setAcceptedOn] = useState("");
+  const [file, setFile] = useState<{ name: string; size: number; b64: string } | null>(null);
+  const [fileErr, setFileErr] = useState<string | null>(null);
 
   /* 项目列表只在要人自己挑的时候才拉。 */
   useEffect(() => {
@@ -64,25 +76,56 @@ export function SubmitAcceptanceForm({ onCreated, fixed }: {
   }, [fixed]);
 
   const 将来 = submittedOn > today();
-  const ready = !!(studyId && hospital.trim().length >= 2 && submittedOn && !将来);
+  const 受理将来 = !!acceptedOn && acceptedOn > today();
+  const 受理早于递交 = !!acceptedOn && !!submittedOn && acceptedOn < submittedOn;
+  /* 传了纸却没填日期 —— 没有日期的一份 PDF，台账上挂在哪一行都说不清。 */
+  const 缺日期 = !!file && !acceptedOn;
+  const ready = !!(studyId && hospital.trim().length >= 2 && submittedOn)
+    && !将来 && !受理将来 && !受理早于递交 && !缺日期 && !fileErr;
+
+  async function pick(f: File | undefined) {
+    setFileErr(null); setFile(null);
+    if (!f) return;
+    if (f.size > 10 * 1024 * 1024)
+      return setFileErr("超过 10 MB 上限 —— 意见函是一页扫描件，这么大通常是扫描分辨率调得太高。");
+    if (f.size === 0) return setFileErr("这份文件是空的（0 字节）。");
+    const buf = new Uint8Array(await f.arrayBuffer());
+    /* 认前五个字节，不认扩展名 —— 改个后缀不会让它变成 PDF。 */
+    if (String.fromCharCode(...buf.subarray(0, 5)) !== "%PDF-")
+      return setFileErr("这不是一个 PDF 文件（开头不是 %PDF-）—— 请传扫描件的 PDF。");
+    /* 分块转 base64：`String.fromCharCode(...buf)` 在几百 KB 上就会栈溢出，
+       而那个报错跟 PDF 毫无关系。 */
+    let bin = "";
+    for (let i = 0; i < buf.length; i += 0x8000)
+      bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    setFile({ name: f.name, size: f.size, b64: btoa(bin) });
+  }
 
   return (
     <CreateForm
       testid="submit-acceptance" cta="登记递交" title="登记立项材料递交"
-      sub={fixed ? fixed.label : "只记两件事：递给谁、哪天递的"}
+      sub={fixed ? fixed.label : "两个日期 + 一份意见函，这一步就完了"}
       ready={ready}
-      note={<>登记之后由机构办受理。<b>未受理的中心推不到「伦理递交」</b>。
-        拿到受理意向函后，回到受理台账那一行点「登记受理意向函」。</>}
+      note={acceptedOn
+        ? <>填了受理日期，这条受理<b>直接是「已受理」</b> —— 该中心可以推进到「伦理递交」。</>
+        : <>意见函还没下来就留空 —— 这条受理停在<b>「待登记受理意见函」</b>，
+            拿到之后回受理台账那一行补登。<b>未受理的中心推不到「伦理递交」</b>。</>}
       onSubmit={async () => {
         await call("submitSiteAcceptance", {
           body: {
             studyId, hospital: hospital.trim(), submittedOn,
-            ...(docs.length ? { docs } : {})
+            ...(docs.length ? { docs } : {}),
+            ...(acceptedOn ? { acceptedOn } : {}),
+            ...(file && acceptedOn
+              ? { letter: { filename: file.name, contentBase64: file.b64 } } : {})
           }
         });
-        const said = `已登记：${submittedOn} 向 ${hospital.trim()} 递交立项材料`;
+        const said = acceptedOn
+          ? `已登记：${submittedOn} 递交，${acceptedOn} 收到受理意见函`
+          : `已登记：${submittedOn} 向 ${hospital.trim()} 递交立项材料`;
         if (!fixed) { setStudyId(""); setHospital(""); }
         setDocs([]); setListing(false); setSubmittedOn(today());
+        setAcceptedOn(""); setFile(null); setFileErr(null);
         onCreated();
         return said;
       }}>
@@ -114,6 +157,50 @@ export function SubmitAcceptanceForm({ onCreated, fixed }: {
       {将来 && (
         <span className="t-crit" data-testid="sa-date-future" style={{ fontSize: 12 }}>
           这个日期在将来 —— 这一栏记的是「哪天递出去的」，还没递的不用先登记。
+        </span>
+      )}
+
+      {/* ── 受理意见函：这一步的另一半 ────────────────────────────────
+          和递交日期并排,不折叠 —— 折起来就等于说"这是可选的附加项",
+          而它恰恰是这条流程的终点。留空也是一个明确的事实（还没拿到）。 */}
+      <div className="derive" data-testid="sa-letter-note">
+        <b>拿到《立项受理意见函》了吗？</b> 填上收到日期并传那份 PDF，
+        这条受理就完了 —— <b>不用等机构办在系统里做任何事</b>。
+        还没拿到就留空，回头在受理台账上补登。
+      </div>
+      <div className="grid-form">
+        <Field label="哪天拿到受理意见函" v={acceptedOn} on={setAcceptedOn}
+          testid="sa-accepted-on" type="date" hint="还没拿到就留空" />
+        <label className="field">
+          <span>受理意见函扫描件 <span className="t-mut">· PDF · 不超过 10 MB</span></span>
+          <input type="file" accept="application/pdf,.pdf" data-testid="sa-letter"
+            onChange={e => void pick(e.target.files?.[0])} />
+          {fileErr && (
+            <span className="t-crit" data-testid="sa-letter-bad" style={{ fontSize: 12 }}>
+              {fileErr}
+            </span>
+          )}
+          {file && !fileErr && (
+            <span className="muted" data-testid="sa-letter-ok" style={{ fontSize: 12 }}>
+              已选中：{file.name}（{Math.round(file.size / 1024)} KB）
+            </span>
+          )}
+        </label>
+      </div>
+      {受理将来 && (
+        <span className="t-crit" data-testid="sa-accepted-future" style={{ fontSize: 12 }}>
+          收到日期在将来 —— 这一栏记的是「哪天拿到的」，还没拿到的留空就行。
+        </span>
+      )}
+      {受理早于递交 && !受理将来 && (
+        <span className="t-crit" data-testid="sa-accepted-before" style={{ fontSize: 12 }}>
+          收到日期早于递交日期（{submittedOn}）—— 受理意见函不会比材料先到。
+        </span>
+      )}
+      {缺日期 && (
+        <span className="t-crit" data-testid="sa-letter-no-date" style={{ fontSize: 12 }}>
+          传了意见函却没填收到日期 —— 两样要一起给：没有日期的一份 PDF，
+          台账上挂在哪一行都说不清。
         </span>
       )}
 

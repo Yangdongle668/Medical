@@ -179,6 +179,7 @@ export class AcceptanceService {
    *  写死在服务端等于替所有医院决定它们该查什么。 */
   async submit(b: {
     studyId: string; hospital: string; docs?: string[]; submittedOn?: string;
+    acceptedOn?: string; letter?: { filename: string; contentBase64: string };
   }) {
     const c = ctx();
     const p = principal();
@@ -188,11 +189,36 @@ export class AcceptanceService {
        默认成今天的话「递交日期」这一栏就成了「登记日期」——
        而那几天差额恰恰是伦理排期要算的。 */
     const today = await this.today();
-    if (b.submittedOn && b.submittedOn > today)
+    const submittedOn = b.submittedOn ?? today;
+    if (submittedOn > today)
       throw new ProblemException("validation-failed", {
-        detail: `递交日期 ${b.submittedOn} 在将来 —— 这一栏记的是「哪天递出去的」，` +
+        detail: `递交日期 ${submittedOn} 在将来 —— 这一栏记的是「哪天递出去的」，` +
           "还没递的不用先登记"
       });
+
+    /* ── 一步填完的那一支 ────────────────────────────────────────────
+       给了受理日期，这条受理**建出来就是已受理的** —— 不经过
+       「形式审查中」，也不等机构办在本系统里点任何东西。
+       院方的机构办不是这套系统的用户，一线手里拿着的就是那张意见函。 */
+    if (b.acceptedOn) {
+      if (b.acceptedOn > today)
+        throw new ProblemException("validation-failed", {
+          detail: `收到受理意见函的日期 ${b.acceptedOn} 在将来 —— ` +
+            "这一栏记的是「哪天拿到的」，还没拿到的留空就行"
+        });
+      if (b.acceptedOn < submittedOn)
+        this.invariant("acceptance-letter-before-submit",
+          `收到日期 ${b.acceptedOn} 早于递交日期 ${submittedOn} —— ` +
+          "受理意见函不会比材料先到");
+    }
+    /* 没有日期的一份 PDF，台账上挂在哪一行都说不清。 */
+    if (b.letter && !b.acceptedOn)
+      throw new ProblemException("validation-failed", {
+        detail: "传了受理意见函却没填收到日期 —— 两样要一起给；" +
+          "纸还没到手就两样都留空，拿到之后回来补登"
+      });
+    /* 先解一遍，**在 INSERT 之前** —— 文件不合格时这条受理不该被建出来。 */
+    const bytes = AcceptanceService.readLetter(b.letter);
 
     /* 同名两遍的清单，勾了一个另一个还缺着 —— 而它俩看起来一模一样。 */
     const dup = docs.find((d, i) => docs.indexOf(d) !== i);
@@ -242,12 +268,13 @@ export class AcceptanceService {
        顺带修掉它剩下的那半个问题：那句 max 是在 RLS 下数的。 */
     const { rows } = await c.client.query<{ id: string }>(
       `INSERT INTO site_acceptance (code, study_id, study_code, drug, sponsor_name,
-                                    phase, hospital, submitted_by, origin, submitted_on)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'in_system', COALESCE($9::date, CURRENT_DATE))
+                                    phase, hospital, submitted_by, origin, submitted_on,
+                                    state, accepted_on)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'in_system', $9::date, $10, $11::date)
        RETURNING id`,
       [await nextCode("acceptance"), b.studyId, study.code, study.short_name,
        study.sponsor_name, study.phase, b.hospital, p.accountId,
-       b.submittedOn ?? null]);
+       submittedOn, b.acceptedOn ? "accepted" : "review", b.acceptedOn ?? null]);
     const id = rows[0]!.id;
 
     /* **递进去一律未勾** —— 勾是机构办形式审查的动作，
@@ -257,16 +284,20 @@ export class AcceptanceService {
         `INSERT INTO acceptance_doc (acceptance_id, seq, name, present)
          VALUES ($1, $2, $3, false)`, [id, seq, name]);
 
+    if (bytes) await this.putLetter(id, b.letter!.filename, bytes);
+
     const dto = await this.reloadAcceptance(id);
     await this.audit.write({
-      action: "递交立项材料", targetType: "site_acceptance", targetId: dto.code,
-      after: { hospital: b.hospital, docs: docs.length,
-               submittedOn: b.submittedOn ?? today },
+      action: b.acceptedOn ? "登记立项递交与受理" : "登记立项材料递交",
+      targetType: "site_acceptance", targetId: dto.code,
+      after: { hospital: b.hospital, docs: docs.length, submittedOn,
+               ...(b.acceptedOn ? { acceptedOn: b.acceptedOn, letter: !!bytes } : {}) },
       /* 清单为空是正常的 —— 多数医院的机构办不在本系统里，
          那张清单没有第二个人来勾（见迁移 0048）。审计里照实说。 */
-      reason: docs.length
-        ? `向 ${b.hospital} 机构办递交 ${docs.length} 项立项材料`
-        : `向 ${b.hospital} 机构办递交立项材料（未列清单）` });
+      reason: b.acceptedOn
+        ? `${submittedOn} 向 ${b.hospital} 递交立项材料，${b.acceptedOn} 收到受理意见函` +
+          (bytes ? "（扫描件已上传）" : "（扫描件待补）")
+        : `${submittedOn} 向 ${b.hospital} 递交立项材料，受理意见函待登记` });
     return dto;
   }
 
@@ -283,6 +314,51 @@ export class AcceptanceService {
   /** PDF 的上限。契约里也写着，这里是第二道 —— 两处都在，
    *  才防得住"有人绕过前端直接打接口"。库里还有第三道（CHECK）。 */
   private static readonly LETTER_MAX = 10 * 1024 * 1024;
+
+  /** 把传上来的 base64 解成字节，并把三道判定走一遍。
+   *
+   *  **递交（一步填完）与补登共用这一个** —— 两处各写一份，
+   *  "多大算大""认不认扩展名"迟早会有两个答案，而分叉的那天
+   *  一条路收下的文件另一条路打不开。 */
+  private static readLetter(
+    f?: { filename: string; contentBase64: string }
+  ): Buffer | null {
+    if (!f) return null;
+    /* base64 解出来才知道真实大小。**按解出来的判**，不按字符串长度 ——
+       base64 比原文大三分之一，拿字符串长度当大小会把一份 7.5 MB 的
+       PDF 报成"超过 10 MB"，而报错里那个数字对不上人看到的文件大小。 */
+    const bytes = Buffer.from(f.contentBase64, "base64");
+    if (!bytes.length)
+      throw new ProblemException("validation-failed", {
+        detail: "文件内容是空的 —— base64 解出来一个字节都没有" });
+    if (bytes.length > AcceptanceService.LETTER_MAX)
+      throw new ProblemException("validation-failed", {
+        detail: `文件 ${(bytes.length / 1048576).toFixed(1)} MB，超过 10 MB 上限 —— ` +
+          "受理意向函是一页扫描件，这么大通常是扫描分辨率调得太高"
+      });
+    /* **认一下它是不是真的 PDF。** 只看扩展名或 contentType 的话，
+       传上来的可能是任何东西，而下载的人拿到一个打不开的文件时，
+       第一反应是"系统坏了"。PDF 的前五个字节是 %PDF-。 */
+    if (bytes.subarray(0, 5).toString("latin1") !== "%PDF-")
+      throw new ProblemException("validation-failed", {
+        detail: "这不是一个 PDF 文件（开头不是 %PDF-）—— " +
+          "受理意向函请传扫描件的 PDF；改个扩展名不会让它变成 PDF"
+      });
+    return bytes;
+  }
+
+  /** 把一份意向函写进去（覆盖前一份）。递交与补登共用。 */
+  private async putLetter(id: string, filename: string, bytes: Buffer) {
+    await ctx().client.query(
+      `INSERT INTO acceptance_letter
+         (acceptance_id, filename, bytes, size_bytes, uploaded_by)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (acceptance_id) DO UPDATE
+         SET filename = EXCLUDED.filename, bytes = EXCLUDED.bytes,
+             size_bytes = EXCLUDED.size_bytes,
+             uploaded_by = EXCLUDED.uploaded_by, uploaded_at = now()`,
+      [id, filename.trim(), bytes, bytes.length, principal().accountId]);
+  }
 
   async recordLetter(id: string, b: {
     receivedOn: string;
@@ -304,29 +380,7 @@ export class AcceptanceService {
         `收到日期 ${b.receivedOn} 早于递交日期 ${day(a.submitted_on)} —— ` +
         "受理意向函不会比材料先到");
 
-    let bytes: Buffer | null = null;
-    if (b.file) {
-      /* base64 解出来才知道真实大小。**按解出来的判**，不按字符串长度 ——
-         base64 比原文大三分之一，拿字符串长度当大小会把一份 7.5 MB 的
-         PDF 报成"超过 10 MB"，而报错里那个数字对不上人看到的文件大小。 */
-      bytes = Buffer.from(b.file.contentBase64, "base64");
-      if (!bytes.length)
-        throw new ProblemException("validation-failed", {
-          detail: "文件内容是空的 —— base64 解出来一个字节都没有" });
-      if (bytes.length > AcceptanceService.LETTER_MAX)
-        throw new ProblemException("validation-failed", {
-          detail: `文件 ${(bytes.length / 1048576).toFixed(1)} MB，超过 10 MB 上限 —— ` +
-            "受理意向函是一页扫描件，这么大通常是扫描分辨率调得太高"
-        });
-      /* **认一下它是不是真的 PDF。** 只看扩展名或 contentType 的话，
-         传上来的可能是任何东西，而下载的人拿到一个打不开的文件时，
-         第一反应是"系统坏了"。PDF 的前五个字节是 %PDF-。 */
-      if (bytes.subarray(0, 5).toString("latin1") !== "%PDF-")
-        throw new ProblemException("validation-failed", {
-          detail: "这不是一个 PDF 文件（开头不是 %PDF-）—— " +
-            "受理意向函请传扫描件的 PDF；改个扩展名不会让它变成 PDF"
-        });
-    }
+    const bytes = AcceptanceService.readLetter(b.file);
 
     const before = { acceptedOn: day(a.accepted_on), hasLetter: !!a.letter };
 
@@ -335,16 +389,7 @@ export class AcceptanceService {
           SET state = 'accepted', accepted_on = $2::date
         WHERE id = $1`, [id, b.receivedOn]);
 
-    if (bytes)
-      await c.client.query(
-        `INSERT INTO acceptance_letter
-           (acceptance_id, filename, bytes, size_bytes, uploaded_by)
-         VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (acceptance_id) DO UPDATE
-           SET filename = EXCLUDED.filename, bytes = EXCLUDED.bytes,
-               size_bytes = EXCLUDED.size_bytes,
-               uploaded_by = EXCLUDED.uploaded_by, uploaded_at = now()`,
-        [id, b.file!.filename.trim(), bytes, bytes.length, p.accountId]);
+    if (bytes) await this.putLetter(id, b.file!.filename, bytes);
 
     await this.audit.write({
       action: "登记受理意向函", targetType: "site_acceptance", targetId: a.code,
