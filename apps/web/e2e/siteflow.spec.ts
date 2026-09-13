@@ -24,9 +24,10 @@ async function clearBlockers(page: Page) {
 }
 
 test("启动一个中心：闸门拦下 → 清阻塞项 → 放行 → 推进到 SIV", async ({ page }) => {
-  /* `?as=boss` 换成有 advance 动作权限的身份。
-     mock 里的 CRC **没有** advance —— 那是种子里的真实口径，
-     不能为了让测试跑通而把它抹平（下一个测试正是验这条差别）。 */
+  /* `?as=boss` —— 有 advance 的身份。
+     （迁移 0046 之后 CRC 也有了：递交材料与推进阶段是一线的活。
+     这里仍用 boss 是因为下面那条走的是 SS-14，而 boss 看得到全部中心；
+     "轮不轮得到你点"那条差别改由 QA 来验，见下一个测试。） */
   await page.goto("/sites?as=boss");
 
   /* ① 从台账进详情。SS-14 停在「合同签署」，下一步正是 siv */
@@ -97,13 +98,18 @@ test("交接：逐项确认之前，'完成'点下去会逐条告诉你还差什
 });
 
 
-test("CRC 把清单做完了，按钮仍然点不动 —— 而界面说得出为什么", async ({ page }) => {
+test("QA 面前闸门是开的，按钮仍然点不动 —— 而界面说得出为什么", async ({ page }) => {
   /* 上一个测试已经把 SS-14 推到 siv 了，所以这里看的是 SS-01：
      它在「入组中」，下一步 enrolled 没有闸门 —— 前置条件天然满足。
      于是按钮点不动的原因**只剩一个**：这个人没有 advance。
      这正是要单独拿出来说的那一半：
-     "还差什么" 和 "轮不轮得到你" 是两件事，混成一个灰按钮就都说不清。 */
-  await page.goto("/sites?as=crc");
+     "还差什么" 和 "轮不轮得到你" 是两件事，混成一个灰按钮就都说不清。
+
+     这条原来用的是 CRC。迁移 0046 把 advance 给了一线（CRA / CRC）——
+     递交材料与推进阶段本来就是现场那个人的活 —— 所以换成 QA：
+     质量保证看全部、查全部，但**不推进中心阶段**，它是旁观者不是当事人。
+     要验的从来不是"CRC 不行"，是"没有这个动作的人不行"。 */
+  await page.goto("/sites?as=qa");
   await page.getByRole("link", { name: "SS-01" }).click();
 
   await expect(page.getByTestId("gate-open")).toBeVisible();
