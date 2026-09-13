@@ -143,9 +143,17 @@ paths:
       tags:
         - identity
       summary: 新增账号
-      description: |-
+      description: >-
         不设密码：内部走 OIDC（企业微信 / 飞书），外部走一次性魔法链接。
+
         row_rule=hospital 的角色必须同时给出 orgRef，否则账号能登录却一行数据都看不到。
+
+
+        **CRA / CRC / PM / QA / DM 这几个角色要一并给 `staff`**（工种 / 级别 / 城市）——`account` 回答「谁能登录、看得到什么」，`staff`
+        回答「他是什么工种、几级」，是两张表两件事。只建第一张，建出来的是半个人：能登录，但派工的下拉里没有他、填工时被拒 422（费率按 `staff.level` 挑）、备案名册上没有他、发起不了交接
+        ——**四处都不报「这个账号没有名册」**。
+
+        缺了它仍然建得出账号（旧调用方不带它也能用），但响应里 `staffRoleKind` 是 null，账号台账会把那几行标出来，并给一个补登的入口。
       x-layer: L1
       x-required-action: manage
       parameters:
@@ -760,6 +768,126 @@ paths:
       responses:
         '204':
           description: 给账号设一个初始口令
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/accounts/{id}:set-staff:
+    post:
+      operationId: setAccountStaff
+      tags:
+        - identity
+      summary: 登记 / 修改员工名册
+      description: |-
+        补上建号时没填的那一行，或改工种 / 级别 / 城市 / 证书到期日。
+
+        **级别不是一个标签**：费率卡按「工种 × 级别」挑（`app.rate_on`），填错一级，那个人往后每一条工时的成本都是错的。所以这里不猜 —— 工种推不出来时必须显式给，级别与城市一律必填。
+
+        外部方（机构办 / PI）没有名册：他们的工种归医院管，我方手里那份不会更新，摆一列永远为空的 GCP 比不摆更糟。
+      x-layer: L2
+      x-required-action: manage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetAccountStaffRequest'
+      responses:
+        '200':
+          description: 登记 / 修改员工名册
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetAccountStaffResponse'
         '401':
           description: 未认证
           content:
@@ -16119,6 +16247,7 @@ components:
         - StudyTeamChanged
         - SiteAssignmentChanged
         - AccountEnabled
+        - StaffRecordChanged
         - StartupTemplateReplaced
         - MailTransportChanged
         - MailTransportTested
@@ -16212,6 +16341,608 @@ components:
         - accepted
         - message
       additionalProperties: false
+    StartupCategory:
+      type: string
+      enum:
+        - ethics
+        - contract
+        - isf
+        - training
+        - ip
+        - lab
+        - systems
+        - meeting
+      description: 伦理与批件 / 合同与预算 / 研究者文件夹 / 人员与培训 / 药品与物资 / 检验与设备 / 系统与账号 / 启动会筹备
+    StartupItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        category:
+          $ref: '#/components/schemas/StartupCategory'
+        categoryLabel:
+          type: string
+        item:
+          type: string
+        ownerAccountId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        ownerName:
+          nullable: true
+          type: string
+        dueOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        isBlocking:
+          type: boolean
+          description: 没有它就不能合法开展受试者相关工作。未清零不得推进到 SIV启动。
+        doneAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        doneByName:
+          nullable: true
+          type: string
+        overdueDays:
+          nullable: true
+          description: 已逾期天数；未逾期或已完成为 null
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+      required:
+        - id
+        - studySiteId
+        - category
+        - categoryLabel
+        - item
+        - ownerAccountId
+        - ownerName
+        - dueOn
+        - isBlocking
+        - doneAt
+        - doneByName
+        - overdueDays
+      additionalProperties: false
+    StartupChecklist:
+      type: object
+      properties:
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        hospital:
+          type: string
+        state:
+          type: string
+        sivPlannedOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        daysToSiv:
+          nullable: true
+          description: 距计划 SIV 的天数；负数表示已过计划日
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        total:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        done:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        blockingOpen:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+          description: 未完成的阻塞项数 —— 它为 0 才能推进 SIV
+        overdue:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StartupItem'
+      required:
+        - studySiteId
+        - siteCode
+        - hospital
+        - state
+        - sivPlannedOn
+        - daysToSiv
+        - total
+        - done
+        - blockingOpen
+        - overdue
+        - items
+      additionalProperties: false
+      description: 启动慢一个月，这个中心的整条收入曲线右移一个月。
+    StartupSummary:
+      type: object
+      properties:
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        hospital:
+          type: string
+        state:
+          type: string
+        sivPlannedOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        daysToSiv:
+          nullable: true
+          description: 距计划 SIV 的天数；负数表示已过计划日
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        total:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        done:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        blockingOpen:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+          description: 未完成的阻塞项数 —— 它为 0 才能推进 SIV
+        overdue:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+      required:
+        - studySiteId
+        - siteCode
+        - hospital
+        - state
+        - sivPlannedOn
+        - daysToSiv
+        - total
+        - done
+        - blockingOpen
+        - overdue
+      additionalProperties: false
+    RoleKind:
+      type: string
+      enum:
+        - CRA
+        - CRC
+        - PM
+        - QA
+        - DM
+    StaffLevel:
+      type: string
+      enum:
+        - 初级
+        - 中级
+        - 高级
+        - 经理
+        - 总监
+    Staff:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        login:
+          type: string
+        displayName:
+          type: string
+        roleKind:
+          $ref: '#/components/schemas/RoleKind'
+        level:
+          type: string
+        city:
+          type: string
+        gcpExpiresOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        gcpDaysLeft:
+          nullable: true
+          description: 负数表示已过期 —— 过期即不得开展工作
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        mentorName:
+          nullable: true
+          type: string
+        successorName:
+          nullable: true
+          type: string
+        siteCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+          description: 当前有效派工的中心数
+        successionGap:
+          type: boolean
+        active:
+          type: boolean
+        disabledReason:
+          nullable: true
+          description: 停用原因，如「离职 —— 转甲方 CRA」
+          type: string
+      required:
+        - accountId
+        - login
+        - displayName
+        - roleKind
+        - level
+        - city
+        - gcpExpiresOn
+        - gcpDaysLeft
+        - mentorName
+        - successorName
+        - siteCount
+        - successionGap
+        - active
+        - disabledReason
+      additionalProperties: false
+      description: account 回答「谁能登录、看得到什么」；staff 回答「他是什么工种、带谁、谁接他」。
+    SiteStaff:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        displayName:
+          type: string
+        roleKind:
+          $ref: '#/components/schemas/RoleKind'
+        gcpExpiresOn:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        gcpDaysLeft:
+          nullable: true
+          description: 负数表示已过期 —— 过期即不得开展工作
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        active:
+          type: boolean
+        sites:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+                pattern: >-
+                  ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              code:
+                type: string
+                minLength: 1
+                maxLength: 64
+                pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+              hospital:
+                type: string
+              studyShortName:
+                type: string
+              since:
+                type: string
+                format: date
+                pattern: >-
+                  ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+                description: 这次派工的起始日
+            required:
+              - id
+              - code
+              - hospital
+              - studyShortName
+              - since
+            additionalProperties: false
+          description: '**只含本行范围内的中心**'
+      required:
+        - accountId
+        - displayName
+        - roleKind
+        - gcpExpiresOn
+        - gcpDaysLeft
+        - active
+        - sites
+      additionalProperties: false
+      description: |-
+        备案视角的人员：我看得到的中心上，在岗的 CRA / CRC 是谁、证书还有效吗。
+        PI 不在其中 —— 他是医院自己的人，证书归医院管，我方手里那份不会更新。
+    SiteAssignment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        accountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        displayName:
+          type: string
+        roleKind:
+          $ref: '#/components/schemas/RoleKind'
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        siteCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        hospital:
+          type: string
+        studyId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        studyCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+        studyShortName:
+          type: string
+        since:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+          description: 从这一天起负责（含当天）
+        until:
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        active:
+          type: boolean
+          description: 今天是否在有效期内 —— 它决定这个人现在看不看得见这个中心
+      required:
+        - id
+        - accountId
+        - displayName
+        - roleKind
+        - studySiteId
+        - siteCode
+        - hospital
+        - studyId
+        - studyCode
+        - studyShortName
+        - since
+        - until
+        - active
+      additionalProperties: false
+      description: 谁在哪个中心上负责、从哪天到哪天。**这一行就是 CRA / CRC 的可见范围本身。**
+    HandoverStatus:
+      type: string
+      enum:
+        - pending
+        - completed
+        - cancelled
+    HandoverItem:
+      type: object
+      properties:
+        seq:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        item:
+          type: string
+        doneAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        doneByName:
+          nullable: true
+          type: string
+      required:
+        - seq
+        - item
+        - doneAt
+        - doneByName
+      additionalProperties: false
+    Handover:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        fromAccountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        fromName:
+          type: string
+        toAccountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        toName:
+          type: string
+        reason:
+          type: string
+        plannedOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+        status:
+          $ref: '#/components/schemas/HandoverStatus'
+        completedAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        sites:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+                pattern: >-
+                  ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              code:
+                type: string
+                minLength: 1
+                maxLength: 64
+                pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
+              hospital:
+                type: string
+            required:
+              - id
+              - code
+              - hospital
+            additionalProperties: false
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HandoverItem'
+        doneCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        totalCount:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+      required:
+        - id
+        - fromAccountId
+        - fromName
+        - toAccountId
+        - toName
+        - reason
+        - plannedOn
+        - status
+        - completedAt
+        - sites
+        - items
+        - doneCount
+        - totalCount
+      additionalProperties: false
+      description: 清单里最容易漏也最要命的一项是「在组受试者逐例交底」：哪个依从性差、哪个家属有顾虑、哪个只能周三来 —— 这些不在 EDC 里，只在上一个 CRC 脑子里。
+    StartupTemplateItem:
+      type: object
+      properties:
+        sortOrder:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        category:
+          $ref: '#/components/schemas/StartupCategory'
+        item:
+          type: string
+          minLength: 1
+          maxLength: 200
+        isBlocking:
+          type: boolean
+        dueOffset:
+          type: integer
+          minimum: -365
+          maximum: 365
+          description: 相对计划 SIV 日的天数，负数 = SIV 之前几天
+      required:
+        - sortOrder
+        - category
+        - item
+        - isBlocking
+        - dueOffset
+      additionalProperties: false
+    StartupTemplate:
+      type: object
+      properties:
+        version:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StartupTemplateItem'
+        updatedAt:
+          nullable: true
+          type: string
+          format: date-time
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
+        updatedByName:
+          nullable: true
+          type: string
+        reason:
+          nullable: true
+          type: string
+      required:
+        - version
+        - items
+        - updatedAt
+        - updatedByName
+        - reason
+      additionalProperties: false
+      description: |-
+        决定每个**新**中心怎么启动的那份清单。
+        **改它不影响在途中心**：清单在建档那一刻铺开成行，此后与模板无关。一个已经做到第 12 项的中心，模板改一次就多出三项从来没人见过的阻塞 —— 没有人会认为那是「配置生效了」。
     RowRule:
       type: string
       enum:
@@ -16416,6 +17147,11 @@ components:
         hasLoginAddress:
           type: boolean
           description: 登记过登录链接的收件地址（auth_identity, provider=magic-link）
+        staffRoleKind:
+          nullable: true
+          description: 员工名册上的工种。null = 还没登记名册 —— 那样的账号派不了工、也填不了工时
+          allOf:
+            - $ref: '#/components/schemas/RoleKind'
       required:
         - id
         - login
@@ -16430,6 +17166,7 @@ components:
         - disabledReason
         - lastLoginAt
         - hasLoginAddress
+        - staffRoleKind
       additionalProperties: false
     Principal:
       type: object
@@ -16540,6 +17277,32 @@ components:
         - isSensitive
       additionalProperties: false
       description: 只追加。四个 W：谁 / 何时 / 改了什么 / 为什么。第四个由约束强制。
+    StaffRecordRequest:
+      type: object
+      properties:
+        roleKind:
+          allOf:
+            - $ref: '#/components/schemas/RoleKind'
+        level:
+          $ref: '#/components/schemas/StaffLevel'
+        city:
+          type: string
+          minLength: 1
+          maxLength: 32
+        gcpExpiresOn:
+          description: GCP 证书到期日。留空 = 未登记，而核查时「没有证书」和「证书过期」是同一件事
+          nullable: true
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
+      required:
+        - level
+        - city
+      additionalProperties: false
+    SetAccountStaffRequest:
+      allOf:
+        - $ref: '#/components/schemas/StaffRecordRequest'
     CreateAccountRequest:
       type: object
       properties:
@@ -16570,6 +17333,9 @@ components:
           type: string
           minLength: 8
           maxLength: 200
+        staff:
+          allOf:
+            - $ref: '#/components/schemas/StaffRecordRequest'
       required:
         - login
         - displayName
@@ -17391,600 +18157,6 @@ components:
         - reason
         - piAccountId
       additionalProperties: false
-    StartupCategory:
-      type: string
-      enum:
-        - ethics
-        - contract
-        - isf
-        - training
-        - ip
-        - lab
-        - systems
-        - meeting
-      description: 伦理与批件 / 合同与预算 / 研究者文件夹 / 人员与培训 / 药品与物资 / 检验与设备 / 系统与账号 / 启动会筹备
-    StartupItem:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        studySiteId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        category:
-          $ref: '#/components/schemas/StartupCategory'
-        categoryLabel:
-          type: string
-        item:
-          type: string
-        ownerAccountId:
-          nullable: true
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        ownerName:
-          nullable: true
-          type: string
-        dueOn:
-          nullable: true
-          type: string
-          format: date
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
-        isBlocking:
-          type: boolean
-          description: 没有它就不能合法开展受试者相关工作。未清零不得推进到 SIV启动。
-        doneAt:
-          nullable: true
-          type: string
-          format: date-time
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-        doneByName:
-          nullable: true
-          type: string
-        overdueDays:
-          nullable: true
-          description: 已逾期天数；未逾期或已完成为 null
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-      required:
-        - id
-        - studySiteId
-        - category
-        - categoryLabel
-        - item
-        - ownerAccountId
-        - ownerName
-        - dueOn
-        - isBlocking
-        - doneAt
-        - doneByName
-        - overdueDays
-      additionalProperties: false
-    StartupChecklist:
-      type: object
-      properties:
-        studySiteId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        siteCode:
-          type: string
-          minLength: 1
-          maxLength: 64
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        hospital:
-          type: string
-        state:
-          type: string
-        sivPlannedOn:
-          nullable: true
-          type: string
-          format: date
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
-        daysToSiv:
-          nullable: true
-          description: 距计划 SIV 的天数；负数表示已过计划日
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        total:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        done:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        blockingOpen:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-          description: 未完成的阻塞项数 —— 它为 0 才能推进 SIV
-        overdue:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/StartupItem'
-      required:
-        - studySiteId
-        - siteCode
-        - hospital
-        - state
-        - sivPlannedOn
-        - daysToSiv
-        - total
-        - done
-        - blockingOpen
-        - overdue
-        - items
-      additionalProperties: false
-      description: 启动慢一个月，这个中心的整条收入曲线右移一个月。
-    StartupSummary:
-      type: object
-      properties:
-        studySiteId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        siteCode:
-          type: string
-          minLength: 1
-          maxLength: 64
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        hospital:
-          type: string
-        state:
-          type: string
-        sivPlannedOn:
-          nullable: true
-          type: string
-          format: date
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
-        daysToSiv:
-          nullable: true
-          description: 距计划 SIV 的天数；负数表示已过计划日
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        total:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        done:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        blockingOpen:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-          description: 未完成的阻塞项数 —— 它为 0 才能推进 SIV
-        overdue:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-      required:
-        - studySiteId
-        - siteCode
-        - hospital
-        - state
-        - sivPlannedOn
-        - daysToSiv
-        - total
-        - done
-        - blockingOpen
-        - overdue
-      additionalProperties: false
-    RoleKind:
-      type: string
-      enum:
-        - CRA
-        - CRC
-        - PM
-        - QA
-        - DM
-    Staff:
-      type: object
-      properties:
-        accountId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        login:
-          type: string
-        displayName:
-          type: string
-        roleKind:
-          $ref: '#/components/schemas/RoleKind'
-        level:
-          type: string
-        city:
-          type: string
-        gcpExpiresOn:
-          nullable: true
-          type: string
-          format: date
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
-        gcpDaysLeft:
-          nullable: true
-          description: 负数表示已过期 —— 过期即不得开展工作
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        mentorName:
-          nullable: true
-          type: string
-        successorName:
-          nullable: true
-          type: string
-        siteCount:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-          description: 当前有效派工的中心数
-        successionGap:
-          type: boolean
-        active:
-          type: boolean
-        disabledReason:
-          nullable: true
-          description: 停用原因，如「离职 —— 转甲方 CRA」
-          type: string
-      required:
-        - accountId
-        - login
-        - displayName
-        - roleKind
-        - level
-        - city
-        - gcpExpiresOn
-        - gcpDaysLeft
-        - mentorName
-        - successorName
-        - siteCount
-        - successionGap
-        - active
-        - disabledReason
-      additionalProperties: false
-      description: account 回答「谁能登录、看得到什么」；staff 回答「他是什么工种、带谁、谁接他」。
-    SiteStaff:
-      type: object
-      properties:
-        accountId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        displayName:
-          type: string
-        roleKind:
-          $ref: '#/components/schemas/RoleKind'
-        gcpExpiresOn:
-          nullable: true
-          type: string
-          format: date
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
-        gcpDaysLeft:
-          nullable: true
-          description: 负数表示已过期 —— 过期即不得开展工作
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        active:
-          type: boolean
-        sites:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-                format: uuid
-                pattern: >-
-                  ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-              code:
-                type: string
-                minLength: 1
-                maxLength: 64
-                pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-              hospital:
-                type: string
-              studyShortName:
-                type: string
-              since:
-                type: string
-                format: date
-                pattern: >-
-                  ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
-                description: 这次派工的起始日
-            required:
-              - id
-              - code
-              - hospital
-              - studyShortName
-              - since
-            additionalProperties: false
-          description: '**只含本行范围内的中心**'
-      required:
-        - accountId
-        - displayName
-        - roleKind
-        - gcpExpiresOn
-        - gcpDaysLeft
-        - active
-        - sites
-      additionalProperties: false
-      description: |-
-        备案视角的人员：我看得到的中心上，在岗的 CRA / CRC 是谁、证书还有效吗。
-        PI 不在其中 —— 他是医院自己的人，证书归医院管，我方手里那份不会更新。
-    SiteAssignment:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        accountId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        displayName:
-          type: string
-        roleKind:
-          $ref: '#/components/schemas/RoleKind'
-        studySiteId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        siteCode:
-          type: string
-          minLength: 1
-          maxLength: 64
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        hospital:
-          type: string
-        studyId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        studyCode:
-          type: string
-          minLength: 1
-          maxLength: 64
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-        studyShortName:
-          type: string
-        since:
-          type: string
-          format: date
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
-          description: 从这一天起负责（含当天）
-        until:
-          nullable: true
-          type: string
-          format: date
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
-        active:
-          type: boolean
-          description: 今天是否在有效期内 —— 它决定这个人现在看不看得见这个中心
-      required:
-        - id
-        - accountId
-        - displayName
-        - roleKind
-        - studySiteId
-        - siteCode
-        - hospital
-        - studyId
-        - studyCode
-        - studyShortName
-        - since
-        - until
-        - active
-      additionalProperties: false
-      description: 谁在哪个中心上负责、从哪天到哪天。**这一行就是 CRA / CRC 的可见范围本身。**
-    HandoverStatus:
-      type: string
-      enum:
-        - pending
-        - completed
-        - cancelled
-    HandoverItem:
-      type: object
-      properties:
-        seq:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        item:
-          type: string
-        doneAt:
-          nullable: true
-          type: string
-          format: date-time
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-        doneByName:
-          nullable: true
-          type: string
-      required:
-        - seq
-        - item
-        - doneAt
-        - doneByName
-      additionalProperties: false
-    Handover:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        fromAccountId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        fromName:
-          type: string
-        toAccountId:
-          type: string
-          format: uuid
-          pattern: >-
-            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-        toName:
-          type: string
-        reason:
-          type: string
-        plannedOn:
-          type: string
-          format: date
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
-        status:
-          $ref: '#/components/schemas/HandoverStatus'
-        completedAt:
-          nullable: true
-          type: string
-          format: date-time
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-        sites:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-                format: uuid
-                pattern: >-
-                  ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
-              code:
-                type: string
-                minLength: 1
-                maxLength: 64
-                pattern: ^[A-Za-z0-9][A-Za-z0-9._-]*$
-              hospital:
-                type: string
-            required:
-              - id
-              - code
-              - hospital
-            additionalProperties: false
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/HandoverItem'
-        doneCount:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        totalCount:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-      required:
-        - id
-        - fromAccountId
-        - fromName
-        - toAccountId
-        - toName
-        - reason
-        - plannedOn
-        - status
-        - completedAt
-        - sites
-        - items
-        - doneCount
-        - totalCount
-      additionalProperties: false
-      description: 清单里最容易漏也最要命的一项是「在组受试者逐例交底」：哪个依从性差、哪个家属有顾虑、哪个只能周三来 —— 这些不在 EDC 里，只在上一个 CRC 脑子里。
-    StartupTemplateItem:
-      type: object
-      properties:
-        sortOrder:
-          type: integer
-          minimum: 0
-          maximum: 9007199254740991
-        category:
-          $ref: '#/components/schemas/StartupCategory'
-        item:
-          type: string
-          minLength: 1
-          maxLength: 200
-        isBlocking:
-          type: boolean
-        dueOffset:
-          type: integer
-          minimum: -365
-          maximum: 365
-          description: 相对计划 SIV 日的天数，负数 = SIV 之前几天
-      required:
-        - sortOrder
-        - category
-        - item
-        - isBlocking
-        - dueOffset
-      additionalProperties: false
-    StartupTemplate:
-      type: object
-      properties:
-        version:
-          type: integer
-          minimum: -9007199254740991
-          maximum: 9007199254740991
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/StartupTemplateItem'
-        updatedAt:
-          nullable: true
-          type: string
-          format: date-time
-          pattern: >-
-            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|([+-](?:[01]\d|2[0-3]):[0-5]\d)))$
-        updatedByName:
-          nullable: true
-          type: string
-        reason:
-          nullable: true
-          type: string
-      required:
-        - version
-        - items
-        - updatedAt
-        - updatedByName
-        - reason
-      additionalProperties: false
-      description: |-
-        决定每个**新**中心怎么启动的那份清单。
-        **改它不影响在途中心**：清单在建档那一刻铺开成行，此后与模板无关。一个已经做到第 12 项的中心，模板改一次就多出三项从来没人见过的阻塞 —— 没有人会认为那是「配置生效了」。
     SubjectState:
       type: string
       enum:
@@ -21607,6 +21779,20 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/Account'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    SetAccountStaffResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Staff'
         sideEffects:
           type: array
           items:

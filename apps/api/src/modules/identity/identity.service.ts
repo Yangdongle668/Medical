@@ -5,6 +5,9 @@ import { nextCode } from "../../infra/code.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { hashPassword, passwordProblem } from "../../auth/password.js";
+/* 角色代号 → 名册工种的映射**在契约里一处** —— 服务端与界面都读它。
+   在这里再写一份 switch，加一个角色那天必然只改一处。 */
+import { STAFF_ROLE_KIND } from "@sitedesk/contracts";
 
 
 interface AccountRow {
@@ -14,12 +17,18 @@ interface AccountRow {
   role_id: string; role_code: string; role_name: string; role_external: boolean;
   team_id: string | null; team_code: string | null; team_name: string | null;
   has_login_address: boolean;
+  /** 员工名册上的工种。null = 没有名册行 —— 那样的账号派不了工、也填不了工时。 */
+  staff_role_kind: string | null;
 }
 const ACCOUNT_COLS = `
   a.id, a.login, a.display_name, a.is_external, a.org_ref, a.status, a.joined_on,
   a.disabled_at, a.disabled_reason, a.last_login_at,
   r.id AS role_id, r.code AS role_code, r.name AS role_name, r.is_external AS role_external,
   t.id AS team_id, t.code AS team_code, t.name AS team_name,
+  /* 在员工名册上吗。**这一栏是这一页唯一能看出「半个人」的地方** ——
+     建号只写 account，而派工、工时费率、备案名册、发起交接四处都读 staff，
+     四处都不报「这个账号没有名册」，只是他不在名单里。 */
+  st.role_kind AS staff_role_kind,
   /* 登记过收件地址吗 —— 自助那条路（一次性链接）通不通。
      没有它时 /v1/auth/magic-link 照样回一句「已发送」而什么都没发，
      所以管理员这一侧必须看得见。
@@ -30,7 +39,11 @@ const ACCOUNT_COLS = `
      "没设过口令"—— 不报错，只是答案是错的。那条策略是对的，撤的是查询。 */
   EXISTS (SELECT 1 FROM auth_identity ai
            WHERE ai.account_id = a.id AND ai.provider = 'magic-link') AS has_login_address`;
-const ACCOUNT_FROM = `account a JOIN role r ON r.id = a.role_id LEFT JOIN team t ON t.id = a.team_id`;
+/* staff 是 **LEFT** JOIN —— 大多数账号没有名册行（外部方本来就不该有），
+   内连接会让台账整段消失，而那正是要看见的那些。 */
+const ACCOUNT_FROM = `account a JOIN role r ON r.id = a.role_id
+  LEFT JOIN team t ON t.id = a.team_id
+  LEFT JOIN staff st ON st.account_id = a.id`;
 const iso = (v: Date | null) => v ? v.toISOString() : null;
 const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
 
@@ -47,7 +60,8 @@ const toAccount = (r: AccountRow) => ({
   isExternal: r.is_external, orgRef: r.org_ref, status: r.status,
   joinedOn: day(r.joined_on), disabledAt: iso(r.disabled_at),
   disabledReason: r.disabled_reason, lastLoginAt: iso(r.last_login_at),
-  hasLoginAddress: r.has_login_address
+  hasLoginAddress: r.has_login_address,
+  staffRoleKind: r.staff_role_kind
 });
 
 @Injectable()
@@ -107,6 +121,103 @@ export class IdentityService {
     return { items, nextCursor: rows.length > q.limit ? items.at(-1)!.login : null };
   }
 
+  /* ── 员工名册：账号的另一半 ────────────────────────────────────────
+     `account` 回答「谁能登录、看得到什么」，`staff` 回答「他是什么工种、
+     几级、在哪个城市」。**两张表，两件事**，而建号一直只写第一张。
+
+     于是在「组织与权限」里建出来的 CRC 是半个人：登录进得来、菜单也在，但
+
+       · 派工的下拉里没有他 —— listStaff 是从 staff 出的
+       · 填工时被拒 422     —— 费率按「工种 × 级别」挑（cost.service）
+       · 备案名册上没有他   —— app.site_staff_registry() 从 staff 起跳
+       · 发起不了交接       —— createHandover 要比对双方工种
+
+     四处**都不报「这个账号没有名册」**，只是他不在名单里。
+     而站在派工那一页的人看到的是一个空下拉。 */
+
+  /** 写一行名册。建号与补登共用 —— 两处各写一份 upsert，
+   *  「工种推不出来怎么办」迟早会有两个答案。 */
+  private async writeStaff(accountId: string, roleCode: string, s: {
+    roleKind?: string; level: string; city: string; gcpExpiresOn?: string | null;
+  }) {
+    const kind = s.roleKind ?? STAFF_ROLE_KIND[roleCode];
+    /* 推不出来就拒，**不猜**。猜一个工种，费率就跟着猜了 ——
+       而那条成本会一直躺在报表里，没人发现。 */
+    if (!kind)
+      throw new ProblemException("invariant-violated", {
+        invariant: "staff-role-kind-unknown",
+        detail: `从角色「${roleCode}」推不出工种 —— 请直接指定 roleKind（CRA / CRC / PM / QA / DM）。` +
+          "这里不猜：费率卡按「工种 × 级别」挑，猜错一档，那个人往后每一条工时的成本都是错的。"
+      });
+    await ctx().client.query(
+      `INSERT INTO staff (account_id, role_kind, level, city, gcp_expires_on)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (account_id) DO UPDATE
+         SET role_kind = EXCLUDED.role_kind, level = EXCLUDED.level,
+             city = EXCLUDED.city, gcp_expires_on = EXCLUDED.gcp_expires_on`,
+      [accountId, kind, s.level, s.city.trim(), s.gcpExpiresOn ?? null]);
+    return kind;
+  }
+
+  /** 补登 / 修改一行名册。**外部方没有名册** —— 他们的工种归医院管。 */
+  async setAccountStaff(id: string, b: {
+    roleKind?: string; level: string; city: string; gcpExpiresOn?: string | null;
+  }) {
+    const c = ctx();
+    const before = await c.client.query<AccountRow>(
+      `SELECT ${ACCOUNT_COLS} FROM ${ACCOUNT_FROM} WHERE a.id = $1`, [id]);
+    if (!before.rows[0]) throw notFound("账号");
+    const a = before.rows[0];
+    if (a.is_external)
+      throw new ProblemException("invariant-violated", {
+        invariant: "staff-external-account",
+        detail: `${a.display_name} 是外部方账号（${a.role_name}）—— 外部方没有员工名册：` +
+          "他的工种与证书归医院管，我方手里那份不会更新，摆一列永远为空的 GCP 比不摆更糟。"
+      });
+
+    const kind = await this.writeStaff(id, a.role_code, b);
+    await this.audit.write({
+      action: a.staff_role_kind ? "修改员工名册" : "登记员工名册",
+      targetType: "account", targetId: a.login,
+      before: { roleKind: a.staff_role_kind },
+      after: { roleKind: kind, level: b.level, city: b.city.trim(),
+               gcpExpiresOn: b.gcpExpiresOn ?? null } });
+
+    const { rows } = await c.client.query<{
+      account_id: string; login: string; display_name: string; role_kind: string;
+      level: string; city: string; gcp_expires_on: Date | null;
+      status: string; disabled_reason: string | null;
+    }>(`SELECT st.account_id, a.login, a.display_name, st.role_kind, st.level, st.city,
+               st.gcp_expires_on, a.status, a.disabled_reason
+          FROM staff st JOIN account a ON a.id = st.account_id
+         WHERE st.account_id = $1`, [id]);
+    const r = rows[0]!;
+    const gcpDaysLeft = r.gcp_expires_on
+      ? Math.round((new Date(day(r.gcp_expires_on)! + "T00:00:00").getTime()
+          - new Date(new Date().toISOString().slice(0, 10) + "T00:00:00").getTime()) / 86_400_000)
+      : null;
+
+    return {
+      data: {
+        accountId: r.account_id, login: r.login, displayName: r.display_name,
+        roleKind: r.role_kind, level: r.level, city: r.city,
+        gcpExpiresOn: day(r.gcp_expires_on), gcpDaysLeft,
+        mentorName: null, successorName: null,
+        siteCount: 0, successionGap: false,
+        active: r.status === "active", disabledReason: r.disabled_reason
+      },
+      sideEffects: [{
+        type: "StaffRecordChanged" as const,
+        summary: a.staff_role_kind
+          ? `${a.display_name} 的名册已更新为 ${kind} · ${b.level} · ${b.city.trim()}` +
+            "（级别决定费率，往后的工时按新费率入账）"
+          : `${a.display_name} 已登记为 ${kind} · ${b.level} —— ` +
+            "从这一刻起他才派得了工、填得了工时；在此之前他只是一个能登录的账号",
+        ref: id
+      }]
+    };
+  }
+
   /** 建号。**可以顺带给一个初始口令**。
    *
    *  在此之前这是两次调用：先建号，再从台账那一行点「设口令」。
@@ -121,6 +232,7 @@ export class IdentityService {
   async createAccount(b: {
     login: string; displayName: string; roleId: string;
     teamId?: string | null; orgRef?: string | null; password?: string;
+    staff?: { roleKind?: string; level: string; city: string; gcpExpiresOn?: string | null };
   }) {
     const c = ctx();
     /* 口令先验，在 INSERT 之前 —— 事务本来也会回滚，但先验的话
@@ -129,17 +241,28 @@ export class IdentityService {
       const bad = passwordProblem(b.password);
       if (bad) throw new ProblemException("validation-failed", { detail: bad });
     }
-    const role = await c.client.query<{ is_external: boolean }>(
-      `SELECT is_external FROM role WHERE id = $1`, [b.roleId]);
+    const role = await c.client.query<{ is_external: boolean; code: string }>(
+      `SELECT is_external, code FROM role WHERE id = $1`, [b.roleId]);
     if (!role.rows[0]) throw notFound("角色");
+    if (b.staff && role.rows[0].is_external)
+      throw new ProblemException("invariant-violated", {
+        invariant: "staff-external-account",
+        detail: "外部方账号没有员工名册 —— 他的工种与证书归医院管，我方手里那份不会更新"
+      });
     try {
       const { rows } = await c.client.query<{ id: string }>(
         `INSERT INTO account (login, display_name, role_id, team_id, is_external, org_ref)
          VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
         [b.login, b.displayName, b.roleId, b.teamId ?? null,
          role.rows[0].is_external, b.orgRef ?? null]);
+      /* 名册与账号**在同一个事务里**。分两次调用的话，中间失败留下的
+         正是这个缺口本身：一个能登录、却派不了工也填不了工时的账号。 */
+      const kind = b.staff
+        ? await this.writeStaff(rows[0]!.id, role.rows[0].code, b.staff)
+        : null;
       await this.audit.write({ action: "新增账号", targetType: "account", targetId: b.login,
-        after: { login: b.login, displayName: b.displayName } });
+        after: { login: b.login, displayName: b.displayName,
+                 ...(kind ? { staffRoleKind: kind, level: b.staff!.level } : {}) } });
       if (b.password !== undefined) {
         /* 第三个参数 true = 标成初始口令：本人登录后顶上挂红条，
            改掉才消失，而且翻不回去。"管理员知道别人的口令"是个短期状态，

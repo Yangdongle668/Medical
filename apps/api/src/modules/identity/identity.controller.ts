@@ -6,7 +6,7 @@ import { z } from "zod";
    跟在后面的那句中文提示没抄，于是把登录名填成「周敏」的管理员
    收到的是一串正则，而那几乎必然被读成"这功能坏了"。 */
 import { Uuid, WithReason,
-  CreateAccountBody, UpdateAccountBody, SetAccountPasswordBody,
+  CreateAccountBody, UpdateAccountBody, SetAccountPasswordBody, SetAccountStaffBody,
   CreateTeamBody, UpdateRolePermissionsBody, ListAccountsQuery,
   ListAuditEntriesQuery, SetLoginAddressBody,
   SetMailTransportBody, TestMailTransportBody } from "@sitedesk/contracts";
@@ -86,6 +86,18 @@ export class IdentityController {
   ) {
     await idempotent(this.idem, key, { id, ...b },
       () => this.svc.setAccountPassword(id, b.password, b.reason));
+  }
+
+  /* 补登 / 修改员工名册。**L2** —— 它决定这个人往后每一条工时按什么费率
+     入账（费率卡按「工种 × 级别」挑），所以幂等键是必需的：
+     重放一次"改级别"和真的改两次，在审计上是两件不同的事。 */
+  @Post("/accounts/:id\\:set-staff") @Operation("setAccountStaff")
+  setStaff(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(SetAccountStaffBody)) b: z.infer<typeof SetAccountStaffBody>,
+    @Headers("idempotency-key") key: string
+  ) {
+    return command(this.idem, key, { id, ...b }, () => this.svc.setAccountStaff(id, b));
   }
 
   @Post("/accounts/:id\\:set-login-address") @Operation("setLoginAddress") @HttpCode(204)

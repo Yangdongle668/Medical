@@ -64,10 +64,20 @@ test.describe("经营层：组织与权限", () => {
     await page.getByTestId("new-name").fill("周敏");
     await page.getByTestId("new-login").fill("zhoumin");
     await page.getByTestId("new-role").selectOption({ label: "临床协调员 CRC" });
+
+    /* CRC 要一并登记员工名册 —— **账号建好了不等于名册上有他**：
+       派工的下拉是从名册出的，填工时的费率也按名册上的级别挑。
+       所以这三栏在这里必填，按钮在城市填上之前不该亮。 */
+    await expect(page.getByTestId("new-staff")).toBeVisible();
+    await expect(page.getByTestId("create-account")).toBeDisabled();
+    await page.getByTestId("new-staff-city").fill("北京");
+
     await page.getByTestId("create-account").click();
 
     await expect(page.getByTestId("account-row")).toHaveCount(before + 1);
     await expect(page.getByTestId("org-said")).toContainText("周敏");
+    /* 名册那一列立刻有他 —— 而在这一版之前，这里是「未登记 · 派不了工」。 */
+    await expect(page.getByTestId("staff-zhoumin")).toContainText("CRC");
 
     /* 停用要理由：不填就点不动。半年后"这个人三月为什么被停用"
        只有这一行答得出来。 */

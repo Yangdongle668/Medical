@@ -90,6 +90,9 @@ export const SIDE_EFFECT_TYPES = [
   "StudyTeamChanged",       // 项目换了承接组 —— 原来那个组的 PM 当场看不见它
   "SiteAssignmentChanged",  // 派工或 PI 变了 —— 那个人的可见中心当场增减
   "AccountEnabled",         // 账号重新启用 —— 他又能登进来了
+  /* 名册那一行 —— 它不改可见范围，但决定这个人**存不存在于名单上**：
+     没有它，派工的下拉里没有他、填工时被拒、备案名册上也没有他。 */
+  "StaffRecordChanged",     // 登记或修改了员工名册（工种 / 级别 / 城市 / 证书）
 
   /* ── 系统配置 ──────────────────────────────────────────────────── */
   "StartupTemplateReplaced", // 发布了新一版启动清单模板（只对此后建档的中心生效）
