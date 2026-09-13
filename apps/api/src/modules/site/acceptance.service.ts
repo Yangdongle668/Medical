@@ -200,15 +200,29 @@ export class AcceptanceService {
       this.invariant("acceptance-docs-duplicate",
         `材料清单里「${dup}」出现了两次 —— 勾了一个另一个还缺着，而它俩看起来一样`);
 
-    const { rows: dupe } = await c.client.query<{ code: string; state: string }>(
-      `SELECT code, state FROM site_acceptance WHERE study_id = $1 AND hospital = $2`,
-      [b.studyId, b.hospital]);
-    /* 一家医院在同一个项目上只有一次立项受理。补正重交仍是同一条 ——
-       两条的话「这个中心受理号是多少」就有两个答案。 */
+    /* 一家医院在同一个项目上只有一次立项受理（迁移 0038 的唯一约束）。
+       补正重交仍是同一条 —— 两条的话「这个中心受理号是多少」就有两个答案。
+
+       ── 这句查询**不能带行策略** ────────────────────────────────────
+       原来它是一句普通的 SELECT，于是行规则为 `assigned` 的 CRA / CRC
+       看不见别人递的那一条（那时 study_site_id 还是空的，
+       app.site_visible 判不出来）—— pre-check 查回 0 行、一路放行，
+       最后撞在唯一约束上，而 pg 的 23505 落到兜底分支就是 **500**。
+
+       一句"服务内部错误"教会用户的是重试，而重试一万次结果都一样。
+       `app.acceptance_for`（迁移 0049）只回答这一个问题：
+       这个(项目, 医院)上有没有、编号多少、谁递的。 */
+    const { rows: dupe } = await c.client.query<{
+      code: string; submitted_by_name: string; submitted_on: Date;
+    }>("SELECT * FROM app.acceptance_for($1, $2)", [b.studyId, b.hospital]);
     if (dupe[0])
       this.invariant("acceptance-duplicate",
-        `${b.hospital} 在这个项目上已经有受理记录 ${dupe[0].code} —— ` +
-        `补正重交走的是同一条，不是新开一条`);
+        `${b.hospital} 在这个项目上已经有一条受理记录：${dupe[0].code}` +
+        `（${dupe[0].submitted_by_name} 于 ${day(dupe[0].submitted_on)} 递交）。\n` +
+        "补正重交走的是同一条，不是新开一条 —— " +
+        "这条记录可能不在你的可见范围里（受理是在建档之前发生的，" +
+        "那时还没有中心可以按派工切行），所以你在受理台账上看不到它。" +
+        "要跟进它，找递交人或项目总监。");
 
     /* 项目得看得见 —— 看不见的项目对本人而言不存在（404，不是 403）。
        项目的这几项事实同时抄到受理行上：递交之后医院要读的是那份材料，

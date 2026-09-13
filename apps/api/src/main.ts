@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { readdir } from "node:fs/promises";
 import { json } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { NestFactory } from "@nestjs/core";
@@ -54,7 +55,60 @@ async function bootstrap() {
     loginEmail: delivery.email, loginSms: delivery.sms
   });
 
+  await warnSchemaBehind(app.get<Pool>(POOL));
   await warnFactoryPasswords(app.get<Pool>(POOL));
+}
+
+/** 库里的迁移比代码旧了 —— **每次启动大声报一次**。
+ *
+ *  ── 这一条是被一次真事故逼出来的 ────────────────────────────────
+ *  代码部署上去了，迁移没跑。症状不是"起不来"，是**某几条端点回 500**，
+ *  而别的一切看起来都正常 —— 因为新代码引用了一张还不存在的表、
+ *  一个还不存在的函数，或者指望着一条还没放松的约束。
+ *
+ *  查这种事要花掉的时间，和它值得的时间差着两个数量级：日志里那句
+ *  `relation "acceptance_letter" does not exist` 埋在一堆请求日志中间，
+ *  而界面上只说「服务内部错误」。
+ *
+ *  ── 为什么不拒绝启动 ────────────────────────────────────────────
+ *  有些部署顺序是先起服务再跑迁移（容器编排里很常见）。拒绝启动会把
+ *  那种编排变成一个重启循环，而重启循环比 500 更难看出原因。
+ *  所以：**照常起，但在启动那一行里把缺的迁移逐个点名**。
+ *
+ *  ── 判据 ────────────────────────────────────────────────────────
+ *  比的是 `db/migrations` 下的文件名与 `schema_migration` 表里的记录。
+ *  打包之后那个目录通常不在镜像里 —— 找不到就跳过，不报错：
+ *  一条对着空目录永远绿的检查，比没有检查更糟，所以它说的是"跳过"。 */
+async function warnSchemaBehind(pool: Pool): Promise<void> {
+  try {
+    const dir = new URL("../../../db/migrations", import.meta.url);
+    const files = await readdir(dir);
+    const onDisk = files.filter(f => f.endsWith(".sql"))
+      .map(f => f.replace(/\.sql$/, "")).sort();
+    if (!onDisk.length) {
+      emit("info", "schema", "迁移自检跳过：镜像里没有 db/migrations");
+      return;
+    }
+    const { rows } = await pool.query<{ name: string }>(
+      "SELECT name FROM schema_migration");
+    const applied = new Set(rows.map(r => r.name));
+    const missing = onDisk.filter(n => !applied.has(n));
+    if (!missing.length) {
+      emit("info", "schema", `迁移已是最新（${onDisk.at(-1)}）`);
+      return;
+    }
+    emit("error", "schema",
+      `库里的迁移比代码旧 ${missing.length} 条 —— **先跑 npm run db:up 再用**。\n` +
+      `    缺：${missing.join("、")}\n` +
+      "    症状不会是「起不来」，而是某几条端点回 500（新代码引用了还不存在的表 / 函数），\n" +
+      "    而界面上只说「服务内部错误」。",
+      { missing });
+  } catch (err) {
+    /* 连不上库、没有 schema_migration 表（全新库还没跑过任何迁移）——
+       两种都不该把启动拖死。 */
+    emit("info", "schema", "迁移自检跳过", {
+      err: err instanceof Error ? err.message : String(err) });
+  }
 }
 
 /** 还在用出厂口令的账号，每次启动报一次。

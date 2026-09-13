@@ -43,15 +43,43 @@ describe("受理的形状约束", () => {
       .rejects.toThrow(/acceptance_accepted_shape/);
   });
 
-  it("本系统办的受理**必须有受理人**", async () => {
+  /* ── 这一条翻了面，记下为什么 ────────────────────────────────────
+     原来这里断言的是「本系统办的受理必须有受理人」
+     （`acceptance_actor_shape`）。迁移 0048 把那条约束去掉了。
+
+     理由是那条约束的前提不成立：它假定"本系统里办的受理"是常态，
+     而 0038 自己在同一个文件里写着相反的事实 ——
+     **多数医院的机构办根本不是本系统的用户**。一条由一线登记的受理，
+     受理人是医院里某个不在本系统的老师：**填谁都是编的**，
+     而约束逼着填，得到的就是编的。
+
+     丢掉的问责没有真的丢：「谁在系统里登记了这一条」进审计轨迹
+     （记的是登记人，不是受理人 —— 那两件事本来就不该混），
+     而「医院那边是谁受理的」由受理意向函那份 PDF 回答，
+     它比一个下拉框里挑出来的名字可靠得多。
+
+     `acceptance_accepted_shape`（已受理必须有日期）**一个字没动** ——
+     上一条测试还在钉着它。 */
+  it("**已受理可以没有受理人** —— 填一个本系统的账号进去是编的", async () => {
     const a = await inSystem();
-    await expect(tx(() => o.query(
-      `UPDATE site_acceptance SET state = 'accepted', accepted_on = CURRENT_DATE,
-              accepted_by = NULL WHERE id = $1`, [a.id])))
-      .rejects.toThrow(/acceptance_actor_shape/);
+    await tx(async () => {
+      await o.query(
+        `UPDATE site_acceptance SET state = 'accepted', accepted_on = CURRENT_DATE,
+                accepted_by = NULL WHERE id = $1`, [a.id]);
+      const { rows } = await o.query(
+        `SELECT accepted_by FROM site_acceptance WHERE id = $1`, [a.id]);
+      expect(rows[0].accepted_by, "受理人为空是一个有意义的事实，不是漏填").toBeNull();
+    });
   });
 
-  it("**但系统外登记的可以没有** —— 受理人是医院里某个不在本系统的老师", async () => {
+  it("那条约束确实没了 —— 不然上一条是靠运气绿的", async () => {
+    const { rows } = await o.query(
+      `SELECT conname FROM pg_constraint
+        WHERE conrelid = 'site_acceptance'::regclass AND conname = 'acceptance_actor_shape'`);
+    expect(rows, "acceptance_actor_shape 还在，迁移 0048 没跑到").toEqual([]);
+  });
+
+  it("**系统外登记的同样可以没有** —— 受理人是医院里某个不在本系统的老师", async () => {
     const { rows } = await o.query(
       `SELECT count(*)::int AS n FROM site_acceptance
         WHERE origin = 'registered' AND accepted_by IS NULL`);
