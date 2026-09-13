@@ -164,7 +164,10 @@ test("新建的中心：伦理递交被闸门拦下，就地递交材料后放�
   /* 闸门拦下，而且说得出还差什么 —— 不是一个变灰的按钮 */
   await expect(page.getByTestId("gate-blocked")).toBeVisible();
   const unmet = page.getByTestId("unmet");
-  await expect(unmet).toContainText("还没向机构办递交立项材料");
+  /* 「还没向机构办递交立项材料」→「还没登记立项材料递交」：那句话原来
+     把这一步指向了一个**不会来的人**（院方的机构办不是本系统的用户），
+     而站在这里的人自己就办得掉 —— 填两个日期、传一份意见函。 */
+  await expect(unmet).toContainText("还没登记立项材料递交");
   await expect(unmet).toContainText("instac");
 
   /* **就地办掉。** 项目与医院来自这个中心自己，不用挑。 */

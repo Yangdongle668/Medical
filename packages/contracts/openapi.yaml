@@ -14469,8 +14469,20 @@ paths:
       operationId: confirmSubjectVisit
       tags:
         - clinical
-      summary: PI 确认访视
-      description: '**只有该中心的 PI 本人可以确认**（I3）。确认前访视不计入「已完成」统计 ——CRC 说做完了和 PI 确认做完了，在核查时是两回事。'
+      summary: 登记 PI 确认访视
+      description: >-
+        **PI 签的字仍然是放行条件**（I3）：确认前访视不计入「已完成」统计 ——
+
+        CRC 说做完了和 PI 确认做完了，在核查时是两回事。
+
+
+        变的是**谁来点这一下**。原来只有绑了账号的 PI 本人能点，而院方的研究者多数没有本系统的账号 —— 于是那些中心的访视永远推不动，统计系统性偏低而没有任何地方报错（实测：189 / 429
+        卡住，15 个中心只有 1 个绑了账号）。
+
+        现在 CRA / CRC 也能点，语义是**登记「PI 已于某日签字确认」**；真绑了账号的 PI 照样自己点，那时 `piConfirmedByName` 记的是他本人。
+
+
+        与「登记伦理批复」同一个形状：院外发生的事，由院内的人带着日期登记进来。
       x-layer: L2
       x-required-action: piConfirm
       parameters:
@@ -14497,7 +14509,7 @@ paths:
               $ref: '#/components/schemas/ConfirmSubjectVisitRequest'
       responses:
         '200':
-          description: PI 确认访视
+          description: 登记 PI 确认访视
           content:
             application/json:
               schema:
@@ -18622,7 +18634,7 @@ components:
         - locked
         - missed
       description: |-
-        planned 已排期 → done_pending_pi CRC 已完成待 PI 确认 → locked 已锁定；missed 未按窗完成。
+        planned 已排期 → done_pending_pi CRC 已完成、**待登记 PI 确认** → locked 已锁定；missed 未按窗完成。
         **done_pending_pi 不计入「已完成」统计**（I3）—— CRC 说做完了和 PI 确认做完了，在核查时是两回事。
     EdcStatus:
       type: string
@@ -24335,7 +24347,12 @@ components:
       additionalProperties: false
     ConfirmSubjectVisitRequest:
       type: object
-      properties: {}
+      properties:
+        confirmedOn:
+          type: string
+          format: date
+          pattern: >-
+            ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))$
       additionalProperties: false
     ConfirmSubjectVisitResponse:
       type: object

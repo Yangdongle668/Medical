@@ -67,8 +67,8 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     role: { id: "r-crc", code: "crc", name: "临床协调员 CRC" },
     isExternal: false, orgRef: null,
     rowRule: "assigned", fields: ["subject"],
-    actions: ["advance", "capaWrite", "ethics", "isfWrite", "subjRead", "subjWrite",
-      "timeWrite"],
+    actions: ["advance", "capaWrite", "ethics", "isfWrite", "piConfirm", "subjRead",
+      "subjWrite", "timeWrite"],
     /* **module_key，不是路径。** 这里曾经写的是 ["today","sites",…]，
        而真接口给的是 role_module 里的键 —— 两者恰好长得像，
        所以在导航还是写死数组的时候看不出区别。侧栏改成按模块出之后，
@@ -85,8 +85,8 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     role: { id: "r-cra", code: "cra", name: "临床监查员 CRA" },
     isExternal: false, orgRef: null,
     rowRule: "assigned", fields: ["subject"],
-    actions: ["advance", "capaWrite", "isfWrite", "monitor", "raiseQ", "subjRead",
-      "timeWrite"],
+    actions: ["advance", "capaWrite", "isfWrite", "monitor", "piConfirm", "raiseQ",
+      "subjRead", "timeWrite"],
     modules: ["cra", "mysites", "mon", "query", "screen", "feas", "material",
       "time", "qa", "capa", "trail"]
   },

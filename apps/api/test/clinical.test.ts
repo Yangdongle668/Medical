@@ -8,7 +8,7 @@ import { VISIT_COMPLETED_SUBSCRIBERS } from "../src/modules/clinical/visit-compl
 /* ════════════════════════════════════════════════════════════════════
    ClinicalOps —— 这一组测试要证明的是三条不变量真的不能被绕过：
 
-     I3  访视必须经**该中心的 PI 本人**确认才锁定
+     I3  访视必须有**PI 签字确认**才锁定（签字由一线带着日期登记进来）
      I4  超窗**必须**生成方案偏离，且与访视完成在同一个事务里
      I10 明细与聚合是两种权限：QA 看得到漏斗，看不到是哪几例
 
@@ -212,7 +212,25 @@ describe("受试者生命周期", () => {
   });
 });
 
-describe("I3：PI 不确认，访视不锁定，受试者不能入组", () => {
+/* ── I3 的形式变了，实质没变 ──────────────────────────────────────────
+   原来这一组钉的是「**只有该中心的 PI 本人**能确认」，服务层还额外要求
+   `study_site.pi_account_id = 当前账号`。那条规矩的实质是对的
+   —— CRC 说做完了和 PI 确认做完了，在核查时是两回事 ——
+   但它假定了 PI 会登录这套系统来点那一下。
+
+   实测：15 个中心只有 1 个绑了 PI 账号，另外 14 个中心的访视
+   做完之后**永远推不动**（189 条卡在 done_pending_pi），
+   而那个状态不计入「已完成」统计 —— 入组进度、完成率、成本归集
+   全都系统性偏低，**没有任何地方报错**。
+
+   迁移 0050 改的是形式：PI 签的字仍然是放行条件，只是那件事
+   由一线**带着日期**登记进来（与「登记伦理批复」同一个形状）。
+   所以这一组现在钉三件事：
+     ① 有 piConfirm 的人登记得了，没有的人 403 —— 仍是动作维度的事；
+     ② 一线登记时 `piConfirmedByName` **留空**（不许冒充成确认人），
+        真 PI 自己点时记他本人；
+     ③ 签字日期不许在将来、不许早于访视日。 */
+describe("I3：没有 PI 确认，访视不锁定，受试者不能入组", () => {
   it("筛选期访视未锁定就入组，被闸门拦下", async () => {
     const s = await siteByCode(crc, "SS-01");
     const { id } = await freshSubject(crc, s.id);
@@ -225,12 +243,52 @@ describe("I3：PI 不确认，访视不锁定，受试者不能入组", () => {
     expect(e.body.unmet[0].code).toBe("screening-visit-not-locked");
   });
 
-  it("CRC 自己确认不了 —— 有没有 piConfirm 权限，是动作维度的事", async () => {
+  it("没有 piConfirm 的角色确认不了 —— 仍然是动作维度的事", async () => {
     const s = await siteByCode(crc, "SS-01");
     const { id } = await freshSubject(crc, s.id);
     const { visit } = await doVisit(crc, id);
-    const r = await crc.post(`/v1/subject-visits/${visit.id}:confirm`, {}, K());
+    /* QA 的动作是 audit / capaWrite / closeQA / raiseQ —— 没有 piConfirm。
+       换成 CRC 不再能证明这一条（他现在有了），而"谁都能点"
+       和"该给的给了"在绿灯上长得一模一样。 */
+    const r = await qa.post(`/v1/subject-visits/${visit.id}:confirm`, {}, K());
     expect(r.status).toBe(403);
+  });
+
+  it("CRC 登记得了，但**确认人留空** —— 登记人不是确认人", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const { id } = await freshSubject(crc, s.id);
+    const { visit } = await doVisit(crc, id);
+
+    const r = await crc.post(`/v1/subject-visits/${visit.id}:confirm`, {}, K());
+    expect(r.status).toBe(201);
+    expect(r.body.data.status).toBe("locked");
+    /* **这一条是整条改动的要害。** 填成登记人自己的话，
+       核查时轨迹里写着"吴桐确认了"，而吴桐是 CRC ——
+       那比空着糟得多。空着是一个有意义的事实：PI 签在纸上。 */
+    expect(r.body.data.piConfirmedByName).toBeNull();
+    /* 日期省略时取访视当天，不取今天 —— 一份上周的访视
+       不该挂上今天的确认日期。 */
+    expect(r.body.data.piConfirmedAt.slice(0, 10)).toBe(r.body.data.actualDate);
+  });
+
+  it("签字日期不许在将来，也不许早于访视日", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const { id } = await freshSubject(crc, s.id);
+    const { visit } = await doVisit(crc, id);
+
+    const future = await crc.post(`/v1/subject-visits/${visit.id}:confirm`,
+      { confirmedOn: shift(today(), 3) }, K());
+    expect(future.status).toBe(422);
+    expect(future.body.detail).toContain("在将来");
+
+    const early = await crc.post(`/v1/subject-visits/${visit.id}:confirm`,
+      { confirmedOn: shift(visit.windowFrom, -30) }, K());
+    expect(early.status).toBe(422);
+    expect(early.body.invariant).toBe("pi-confirm-before-visit");
+
+    /* 两次都被拒之后它**还停在待确认** —— 拒绝不是半途而废。 */
+    expect((await crc.get(`/v1/subject-visits/${visit.id}`)).body.status)
+      .toBe("done_pending_pi");
   });
 
   it("PI 确认后锁定，受试者才能入组，并自动排出第 1 次访视", async () => {
@@ -238,6 +296,9 @@ describe("I3：PI 不确认，访视不锁定，受试者不能入组", () => {
     const { id } = await freshSubject(crc, s.id);
     const { visit } = await doVisit(crc, id);
 
+    /* SS-01 是那 1 / 15 个真绑了 PI 账号的中心 —— 他自己点，
+       `piConfirmedByName` 记的就是他本人。上面那条 CRC 登记的是
+       同一个动作的另一半：两条一起，才说得清这一栏什么时候有名字。 */
     const cf = await pi.post(`/v1/subject-visits/${visit.id}:confirm`, {}, K());
     expect(cf.status).toBe(201);
     expect(cf.body.data.status).toBe("locked");

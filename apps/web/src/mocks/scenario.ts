@@ -13,7 +13,8 @@
    ════════════════════════════════════════════════════════════════════ */
 
 import {
-  DEFAULT_STARTUP_ITEMS, DEFAULT_HANDOVER_ITEMS, STARTUP_CATEGORY_LABEL
+  DEFAULT_STARTUP_ITEMS, DEFAULT_HANDOVER_ITEMS, STARTUP_CATEGORY_LABEL,
+  type VisitStatus
 } from "@sitedesk/contracts";
 /* 角色目录由 mock 身份派生 —— 见下面 ROLE_CATALOGUE 上的说明。 */
 import { MOCK_ROLES, IDENTITIES } from "./roles.js";
@@ -62,7 +63,12 @@ export interface MockVisit {
   studySiteId: string; siteCode: string; seq: number;
   visitCode: string; visitLabel: string;
   targetDate: string; windowDays: number; windowFrom: string; windowTo: string;
-  actualDate: string | null; status: string; edcStatus: string;
+  actualDate: string | null;
+  /** **用契约的类型，不用 `string`** —— 见下面 `done()` 上那段：
+   *  这一栏是 `string` 的时候，种子里写着一个契约里根本不存在的状态值，
+   *  而**没有任何地方会报错**。定成契约的类型，那一行就编译不过，
+   *  守卫不必写成一条测试。 */
+  status: VisitStatus; edcStatus: string;
   edcDaysLate: number | null; outOfWindow: boolean; daysLeft: number | null;
   piConfirmedAt: string | null; piConfirmedByName: string | null;
   tasks: MockTask[];
@@ -138,15 +144,24 @@ function mkVisit(
   };
 }
 
-/** 把一条访视标成"已完成"。
+/** 把一条访视标成"做完了、还没登记 PI 确认"。
+ *
  *  `outOfWindow` 在完成之后判的是**实际完成日在不在窗口内**，
- *  不再是"窗口关了还没做" —— 两种判法在 planned / done 上各管一段，
+ *  不再是"窗口关了还没做" —— 两种判法在 planned / 已完成上各管一段，
  *  写成一个 `dueIn + win < 0` 通吃的话，一条按时做完的历史访视
- *  会因为窗口早就过去而被标成超窗。 */
+ *  会因为窗口早就过去而被标成超窗。
+ *
+ *  **状态原来写的是 `"done"`** —— 而契约的 VISIT_STATUSES 里根本没有
+ *  这个取值（planned / done_pending_pi / locked / missed）。真接口回的是
+ *  `done_pending_pi`，mock 的 `:complete` 处理器也写的 `done_pending_pi`；
+ *  只有这一处是 `done`。症状不会报错：确认处理器判的是 `!== "done"`，
+ *  于是**种子里的访视确认得了、刚在 mock 里做完的那条确认不了**（422），
+ *  而两者在界面上长得一模一样。`MockVisit.status` 现在是契约的类型，
+ *  再写错编译不过。 */
 function done(v: MockVisit, doneIn: number): MockVisit {
   const actualDate = shift(TODAY, doneIn);
   return {
-    ...v, actualDate, status: "done", daysLeft: null,
+    ...v, actualDate, status: "done_pending_pi", daysLeft: null,
     outOfWindow: actualDate < v.windowFrom || actualDate > v.windowTo,
     tasks: v.tasks.map(t => ({ ...t, doneAt: new Date().toISOString() }))
   };
@@ -366,9 +381,12 @@ export function makeScenario(): Scenario {
       done(mkVisit("v8", SITES[0]!, "S-0203", "u2", 9, "C9D1 第 9 周期给药",
         -1, 3, TASKS_ONCO), -1),
       /* 已经签过字的那条 —— 队列里**不该**出现它。
-         少了这条对照，"pendingPi 到底筛没筛"在界面上看不出来。 */
+         少了这条对照，"pendingPi 到底筛没筛"在界面上看不出来。
+         它是 `locked`：确认过的访视就是锁定的，而 `done_pending_pi`
+         带着一个 piConfirmedAt 是库里的 CHECK 直接拦掉的形状。 */
       { ...done(mkVisit("v9", SITES[0]!, "S-0417", "u5", 3, "C3D1 给药",
           -20, 3, TASKS_ONCO), -20),
+        status: "locked",
         piConfirmedAt: new Date(TODAY.getTime() - 18 * 86_400_000).toISOString(),
         piConfirmedByName: "陈国栋" }
     ],

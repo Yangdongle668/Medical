@@ -21,6 +21,12 @@ import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
+/* 「今天」取**本地**日历日，和界面用的是同一个函数。
+   mock 目录在 dates.test.ts 那条守卫的扫描之外（它演的是服务端，
+   `createdAt` 这类瞬间用 UTC 是对的），但**日期比较不能各算各的**：
+   界面默认填 today()，mock 用 UTC 切，东八区早上八点前
+   界面刚填好的日期会被 mock 判成「在将来」。 */
+import { today } from "../shell/dates.js";
 /* 角色代号 → 名册工种的映射**用契约里那一份** —— 服务端读的是同一张表。 */
 import { STAFF_ROLE_KIND } from "@sitedesk/contracts";
 import type { MockAccount, MockSoaVisit,
@@ -716,11 +722,11 @@ export const scenarioHandlers = [
     if (q.get("outOfWindow") === "true") items = items.filter(v => v.outOfWindow);
     const status = q.getAll("status");
     if (status.length) items = items.filter(v => status.includes(v.status));
-    /* 待 PI 确认 = 已完成、但还没签字。**在服务端筛** ——
+    /* 待登记 PI 确认 = 已完成、但还没签字。**在服务端筛** ——
        前端取一页回来自己挑，访视上了几百条之后第一页全是历史，
        研究者工作台就永远是空的。 */
     if (q.get("pendingPi") === "true")
-      items = items.filter(v => v.status === "done" && !v.piConfirmedAt);
+      items = items.filter(v => v.status === "done_pending_pi" && !v.piConfirmedAt);
     items.sort(byWindow);
     return HttpResponse.json({ items, nextCursor: null });
   }),
@@ -747,21 +753,54 @@ export const scenarioHandlers = [
     return HttpResponse.json({ data: withDaysLeft(v), sideEffects: [] }, { status: 201 });
   }),
 
-  /* PI 确认。**只有该中心的 PI 本人能按** —— 服务端那条 I3 在这里
-     演成两半：别的角色没有 piConfirm 动作（按钮画不出来），
-     范围外的访视 404（连行都看不到）。 */
-  http.post(pathToRegExp("/v1/subject-visits/{id}:confirm"), ({ request }) => {
+  /* 登记 PI 确认。**语义变了**（迁移 0050）：原来是"PI 本人登录来点"，
+     现在是"一线带着日期把 PI 签的那一下登记进来"。
+     I3 的实质不动 —— 签字仍然是放行条件，未确认的访视不计入「已完成」。
+
+     mock 要把这三件事演对：
+     ① 没有 piConfirm 动作 → 403（DM、QA、机构办按不动）；
+     ② 范围外的访视 → 404（连行都看不到，不给 403：那等于承认它存在）；
+     ③ `piConfirmedByName` **只在本人是该中心 PI 时才填** ——
+        一线登记的留空，那正是界面上「由一线登记（PI 签在纸上）」那一行
+        唯一的依据。填成登记人自己的话，那句话永远画不出来。 */
+  http.post(pathToRegExp("/v1/subject-visits/{id}:confirm"), async ({ request }) => {
     const id = seg(request.url, /\/subject-visits\/([^/:]+):confirm/);
     const v = scenario.visits.find(x => x.id === id);
     if (!v || !siteInScope(v.studySiteId)) return HttpResponse.json(
       problem("not-found", 404, "访视不存在"), { status: 404 });
     if (!identity().actions.includes("piConfirm")) return HttpResponse.json(
-      problem("forbidden", 403, "只有该中心的研究者可以确认访视"), { status: 403 });
-    if (v.status !== "done") return HttpResponse.json(
-      problem("invariant-violated", 422, "访视尚未完成，没有可确认的内容"), { status: 422 });
-    v.piConfirmedAt = new Date().toISOString();
-    v.piConfirmedByName = identity().name;
-    return HttpResponse.json({ data: withDaysLeft(v), sideEffects: [] }, { status: 201 });
+      problem("forbidden-action", 403, "需要「登记 PI 确认访视」权限"), { status: 403 });
+    if (v.status !== "done_pending_pi") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `访视当前是「${v.status}」，只有待确认的可以确认`), { status: 422 });
+
+    const b = await request.json().catch(() => ({})) as { confirmedOn?: string };
+    /* 省略即访视当天 —— 默认成"今天"会让一份上周的访视挂上今天的确认日期。 */
+    const confirmedOn = b.confirmedOn ?? v.actualDate ?? today();
+    if (confirmedOn > today()) return HttpResponse.json(
+      problem("validation-failed", 422,
+        `签字日期 ${confirmedOn} 在将来 —— 这一栏记的是「PI 哪天签的字」`), { status: 422 });
+    if (v.actualDate && confirmedOn < v.actualDate) return HttpResponse.json({
+      ...problem("invariant-violated", 422,
+        `签字日期 ${confirmedOn} 早于访视日 ${v.actualDate} —— PI 不会在访视发生前确认它`),
+      invariant: "pi-confirm-before-visit"
+    }, { status: 422 });
+
+    const site = SITES_LIST.find(s => s.id === v.studySiteId);
+    const 是本人 = !!site && site.piAccountId === identity().id;
+    v.status = "locked";
+    v.piConfirmedAt = `${confirmedOn}T18:00:00.000Z`;
+    v.piConfirmedByName = 是本人 ? identity().name : null;
+    /* 筛选期访视（seq 0）锁定 → 这一例可以入组了。
+       服务端在这里下发 SubjectEnrolled，mock 也得下发，
+       否则"确认完还差什么"这条链在演示上是断的。 */
+    return HttpResponse.json({
+      data: withDaysLeft(v),
+      sideEffects: v.seq === 0
+        ? [{ type: "SubjectEnrolled",
+             summary: "筛选期访视已锁定，该受试者现在可以入组随机化" }]
+        : []
+    }, { status: 201 });
   }),
 
   http.post(pathToRegExp("/v1/subject-visits/{id}:edc-entered"), ({ request }) => {
