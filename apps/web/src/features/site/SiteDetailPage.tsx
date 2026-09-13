@@ -4,6 +4,7 @@ import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { SITE_STATE_LABEL, SITE_ORDER } from "./states.js";
 import { SubmitAcceptanceForm } from "../instac/SubmitAcceptanceForm.js";
+import { SiteCrew } from "./SiteCrew.js";
 
 /* ════════════════════════════════════════════════════════════════════
    中心详情 = 状态机 + 闸门。
@@ -27,7 +28,7 @@ import { SubmitAcceptanceForm } from "../instac/SubmitAcceptanceForm.js";
 
 interface Site {
   id: string; code: string; hospital: string; dept: string; city: string;
-  piName: string; state: string; contracted: number;
+  piName: string; piAccountId: string | null; state: string; contracted: number;
   study: { id: string; code: string; shortName: string };
   irbApprovedOn: string | null; sivOn: string | null;
   sivPlannedOn: string | null; fpiOn: string | null;
@@ -69,6 +70,9 @@ export function SiteDetailPage() {
    *  两者都是「把这个中心往前推一格」，只是一个推的是自己的状态机，
    *  一个推的是医院那一侧的流程。 */
   const [canSubmitAcceptance, setCanSubmitAcceptance] = useState(false);
+  /** 派工与指定 PI 都走 `assign` —— 两者都是「把一个人接到这个中心上，
+   *  从此他看得见它」。见 packages/contracts 的 ACTION_LABEL。 */
+  const [canAssign, setCanAssign] = useState(false);
   const [reason, setReason] = useState("");
   const [effects, setEffects] = useState<SideEffect[] | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
@@ -99,6 +103,7 @@ export function SiteDetailPage() {
     void loadMe().then(m => {
       setCanAdvance(m.permissions.actions.includes("advance"));
       setCanSubmitAcceptance(m.permissions.actions.includes("advance"));
+      setCanAssign(m.permissions.actions.includes("assign"));
     }).catch(() => setCanAdvance(null));
   }, []);
 
@@ -275,6 +280,11 @@ export function SiteDetailPage() {
             </ul>
           </section>
         )}
+
+        {/* 谁看得见这个中心 —— 两条不同的行规则（派工 / PI 绑定），
+            在这一版之前**两条都没有入口**。 */}
+        <SiteCrew siteId={id} piName={site.piName} piAccountId={site.piAccountId ?? null}
+          canAssign={canAssign} onChanged={() => void load()} />
 
         <section className="card">
           <h3 style={{ marginBottom: 10 }}>关键日期</h3>

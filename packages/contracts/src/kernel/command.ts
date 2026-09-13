@@ -22,21 +22,79 @@ import { Uuid, CentsNonNeg, IdempotencyKey } from "./primitives.js";
  *   · 新增一个 type 是**非破坏性**的 —— 客户端必须忽略不认识的 type
  *   · 修改或删除已有 type 的字段是**破坏性**的
  */
+/* ── 这张表曾经只有十四条，而服务端在发四十三种 ────────────────────
+   补登这一版之前，`apps/api` 里有 **26 个 type 字面量不在这张表里** ——
+   五条数据质疑、四条监查访视、三条内部稽查、三条立项、两条投递通道…
+   一路长到了这张表之外。
+
+   它不报错，因为响应不按这个枚举校验；枚举又声明了 `x-extensible`
+   （「客户端必须忽略不认识的 type」），所以连拿 OpenAPI 做校验的
+   调用方也只是**静静地丢掉那一条**。症状是少了一句话，不是一次失败。
+
+   而少的那句话恰恰是本文件开头说的那件事：「这次操作还顺带生成了
+   一条方案偏离」。一个只认得十四种 type 的前端，遇到
+   `DataQueryRaised` 时画不出任何东西 —— 提质疑的人按完按钮，
+   屏幕上什么也没说。
+
+   `tools/arch-check.mjs` 现在反查：服务层里写出来的每一个
+   side effect 的 type 字面量，都必须在这张表里。 */
 export const SIDE_EFFECT_TYPES = [
+  /* ── 临床作业 ──────────────────────────────────────────────────── */
   "TimesheetPosted",     // 记了一条工时
+  "TimesheetApproved",   // 工时获批，成本随之落到中心上
   "CostPosted",          // 成本归集到了某个中心
   "CompensationDue",     // 产生一笔待发放的受试者补偿
   "DeviationDetected",   // 生成了方案偏离质量事件
+  "SaeReportedLate",     // SAE 超过 24 小时才报 —— 这是要上报的事
   "QualityEventOpened",  // 生成了其他质量事件
+  "CapaPlanned",         // 质量事件有了整改措施与责任人
   "NextVisitScheduled",  // 按 SOA 生成了下一次访视窗口
+  "SoaRevised",          // 访视计划表改版 —— 在途受试者的窗口跟着变
   "SubjectEnrolled",     // 受试者由筛选期转为已入组
-  "MilestoneReached",    // 里程碑达成，进入待开票队列
+  "SpecimenClosed",      // 样本链闭环（收 / 存 / 运 / 到达都有记录）
+  "CloseoutApproved",    // 结题报告获批 —— 中心关闭的最后一项前置
+
+  /* ── 数据质疑 ──────────────────────────────────────────────────── */
+  "DataQueryRaised",     // 提了一条质疑
+  "DataQueryAnswered",   // 中心回了一条质疑
+  "DataQueryReturned",   // 回答不成立，退回中心重答
+  "DataQueryChased",     // 逾期未回，催了一次
+  "DataQueryClosed",     // 质疑关闭
+
+  /* ── 监查与稽查 ────────────────────────────────────────────────── */
+  "MonitorVisitPlanned",    // 排了一次监查访视
+  "MonitorVisitPerformed",  // 监查访视执行完毕
+  "MonitorVisitConfirmed",  // 中心确认监查访视已发生
+  "MonitorReportSubmitted", // 监查报告递交，跟进项随之生成
+  "InternalAuditOpened",    // 开了一次内部稽查
+  "AuditFindingAdded",      // 稽查发现项落账
+  "AuditFindingClosed",     // 稽查发现项关闭
+
+  /* ── 立项 · 受理 · 商务 ────────────────────────────────────────── */
+  "IntakeSubmitted",     // 递了一份立项申请
+  "IntakeApproved",      // 立项获批 —— 项目建档，归到提交人所在的组
+  "IntakeReturned",      // 立项被退回
+  "SiteAccepted",        // 机构予以受理
+  "AcceptanceAmendRequested", // 机构发出补正通知，缺的那几份已列名
   "EthicsTaskCreated",   // 生成了伦理递交待办
   "SiteStateChanged",    // 中心状态机推进
   "FeasibilityOverride", // 评分不够却入选了一个候选中心 —— 理由已入审计
   "FeasibilityBias",     // 实际入组与当初预测差得离谱 —— 评分口径该校准了
   "BidDecided",          // 开标结果回写，且价格偏差值得一看
-  "ScopeCreepRecorded"   // 一张变更单没要到钱 —— 那部分工作量白做了
+  "ScopeCreepRecorded",  // 一张变更单没要到钱 —— 那部分工作量白做了
+  "MilestoneReached",    // 里程碑达成，进入待开票队列
+
+  /* ── 谁看得见什么 ──────────────────────────────────────────────────
+     这一组不是业务事件的副产品，**它们就是权限本身在动**。
+     点完那一下必须当场被告知，否则他不会知道自己刚给谁开了门。 */
+  "StudyTeamChanged",       // 项目换了承接组 —— 原来那个组的 PM 当场看不见它
+  "SiteAssignmentChanged",  // 派工或 PI 变了 —— 那个人的可见中心当场增减
+  "AccountEnabled",         // 账号重新启用 —— 他又能登进来了
+
+  /* ── 系统配置 ──────────────────────────────────────────────────── */
+  "StartupTemplateReplaced", // 发布了新一版启动清单模板（只对此后建档的中心生效）
+  "MailTransportChanged",    // 换了投递通道 —— 登录链接从此走另一台服务器
+  "MailTransportTested"      // 试发了一封，结果在响应里
 ] as const;
 export const SideEffectType = z.enum(SIDE_EFFECT_TYPES).meta({
   id: "SideEffectType",

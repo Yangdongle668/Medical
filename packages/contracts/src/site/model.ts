@@ -264,3 +264,13 @@ export const CreateStudySiteBody = z.object({
 export const SetStudyTeamBody = WithReason.extend({
   teamId: Uuid.nullable().describe("null = 收回归属，谁也不承接")
 }).meta({ id: "SetStudyTeamRequest" });
+
+/** **具名导出，路由层直接用这一个** —— 路由层再写一份副本就会分叉。 */
+export const SetStudySitePiBody = WithReason.extend({
+  piAccountId: Uuid.nullable()
+    .describe("要绑的 PI 账号；null = 解绑（中心仍记着 piName，那是方案上的登记名）"),
+  /** 覆盖中心上登记的研究者姓名。省略时：绑定 → 取该账号的显示名，
+   *  解绑 → 不动。留这条口子是因为方案上写的常常是「张三 教授」，
+   *  而账号的显示名是「张三」。 */
+  piName: z.string().trim().min(1).max(64).optional()
+}).meta({ id: "SetStudySitePiRequest" });

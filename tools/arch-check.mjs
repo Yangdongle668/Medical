@@ -143,7 +143,7 @@ for (const id of declared)
     violations.push(`packages/contracts/openapi.yaml\n    端点 ${id} 已进契约但无人实现\n` +
       `    前端会照着它写 mock，联调时才发现是空的`);
 
-/* ── mock 身份的动作权限必须与库里的授予一致 ────────────────────────
+/* ── mock 身份的动作权限**与模块清单**必须与库里的授予一致 ──────────
    这条是被咬出来的：迁移 0039 给 crc / cra 加了 `isfWrite`、
    给 inst 加了 `accept`，而 `apps/web/src/mocks/roles.ts` 没跟上。
    症状**不是报错**：`me.permissions.actions.includes("isfWrite")` 返回 false，
@@ -151,7 +151,14 @@ for (const id of declared)
    页面照常渲染，接口照常返回，只是按钮不见了。
    我是靠 e2e 干等 30 秒一个不存在的按钮才发现的。
 
-   真相在库里（provision_tenant_roles 的 catalogue）。这里逐角色比对。 */
+   ── 模块那一栏是后补的，补的理由和上面一样 ──────────────────────
+   第一版只比动作。而迁移 0045 给 PM 加了 `assign` 动作时，
+   「派工与产能」那一页（module_key = `staff`）**不在 PM 的模块清单里** ——
+   路由照通（BUILT 表按路径登记，不按角色），所以直接敲地址进得去，
+   但侧栏上没有那一行。于是一个拿到了权限的人找不到入口。
+
+   这条规则当时一声没吭，因为它只看动作。**「有动作没页面」和
+   「有页面没动作」是同一个坑的两面**，只比一面等于只防住一半。 */
 const provisionFiles = fs.readdirSync(path.join(ROOT, "db/migrations"))
   .filter(f => fs.readFileSync(path.join(ROOT, "db/migrations", f), "utf8")
     .includes("CREATE OR REPLACE FUNCTION app.provision_tenant_roles")).sort();
@@ -167,10 +174,11 @@ else {
   const granted = new Map();
   for (const row of rows) {
     const code = row.match(/^(\w+)'/)?.[1];
-    /* 三个 ARRAY 依次是 fields / actions / modules —— 取第二个。 */
+    /* 三个 ARRAY 依次是 fields / actions / modules —— 取后两个。 */
     const arrays = [...row.matchAll(/ARRAY\[([\s\S]*?)\]::text\[\]/g)];
     if (!code || arrays.length < 3) continue;
-    granted.set(code, [...arrays[1][1].matchAll(/'([^']+)'/g)].map(x => x[1]).sort());
+    const pick = i => [...arrays[i][1].matchAll(/'([^']+)'/g)].map(x => x[1]).sort();
+    granted.set(code, { actions: pick(1), modules: pick(2) });
   }
   if (granted.size < 8)
     violations.push(`db/migrations/${latestProvision}\n` +
@@ -180,20 +188,31 @@ else {
     path.join(ROOT, "apps/web/src/mocks/roles.ts"), "utf8");
   const identities = rolesSrc.slice(rolesSrc.indexOf("export const IDENTITIES"));
   let checked = 0;
-  for (const m of identities.matchAll(/\n  (\w+): \{[\s\S]*?actions: \[([\s\S]*?)\]/g)) {
+  for (const m of identities.matchAll(
+    /\n  (\w+): \{[\s\S]*?actions: \[([\s\S]*?)\][\s\S]*?modules: \[([\s\S]*?)\]/g)) {
     const role = m[1];
     const want = granted.get(role);
     if (!want) continue;
     checked++;
-    const got = [...m[2].matchAll(/"([^"]+)"/g)].map(x => x[1]).sort();
-    const missing = want.filter(a => !got.includes(a));
-    const extra = got.filter(a => !want.includes(a));
-    if (missing.length || extra.length)
-      violations.push(`apps/web/src/mocks/roles.ts\n` +
-        `    身份 ${role} 的动作权限与 db/migrations/${latestProvision} 里的授予不一致\n` +
-        (missing.length ? `    少了：${missing.join("、")}\n` : "") +
-        (extra.length ? `    多了：${extra.join("、")}\n` : "") +
-        `    症状不会报错 —— 只是 mock 模式下那一页少了几个按钮`);
+    for (const [栏, 说法, idx] of [
+      ["actions", "动作权限", 2],
+      /* 模块清单决定侧栏上有没有那一行。对不上时**同样不报错** ——
+         只是那一页在 mock 模式下从导航里消失，或者凭空多出一行
+         真库里那个角色打不开的页。 */
+      ["modules", "模块清单", 3]
+    ]) {
+      const got = [...m[idx].matchAll(/"([^"]+)"/g)].map(x => x[1]).sort();
+      const missing = want[栏].filter(a => !got.includes(a));
+      const extra = got.filter(a => !want[栏].includes(a));
+      if (missing.length || extra.length)
+        violations.push(`apps/web/src/mocks/roles.ts\n` +
+          `    身份 ${role} 的${说法}与 db/migrations/${latestProvision} 里的授予不一致\n` +
+          (missing.length ? `    少了：${missing.join("、")}\n` : "") +
+          (extra.length ? `    多了：${extra.join("、")}\n` : "") +
+          (栏 === "actions"
+            ? "    症状不会报错 —— 只是 mock 模式下那一页少了几个按钮"
+            : "    症状不会报错 —— 只是 mock 模式下侧栏上多一行或少一行"));
+    }
   }
   /* 一条比对不到任何身份的规则，会一直绿着。 */
   if (checked !== 9)
@@ -569,6 +588,58 @@ else {
   if (checked < 8)
     violations.push("tools/arch-check.mjs\n" +
       `    只扫到 ${checked} 个带 .map() 的 <select> —— 判据的写法过时了，这条规则已经形同虚设`);
+}
+
+/* ── 服务层发出的 side effect，type 必须在 SIDE_EFFECT_TYPES 里 ──────
+   这一条是被两个已经躺在仓库里的例子逼出来的：`StartupTemplateReplaced`
+   与 `StudyTeamChanged` 服务端一直在发，而契约的枚举里没有它们 ——
+   OpenAPI 文档说的和服务端发的不是一回事。
+
+   没人报错，因为响应不按这个枚举校验；枚举又声明了 `x-extensible`
+   （"客户端必须忽略不认识的 type"），所以连拿文档做校验的调用方
+   也只是静静地丢掉那一条。**症状是少了一句话，不是一次失败** ——
+   而"这次操作还顺带把谁的可见范围改了"正是最不该少的那句话。
+
+   判据：服务层里所有 `type: "Xxx"` 形式的字面量（side effect 的 type
+   一律是大驼峰，其他地方的 type 字段是小写的枚举值或字符串常量），
+   逐个对照契约里的 SIDE_EFFECT_TYPES。 */
+{
+  const src = fs.readFileSync(
+    path.join(ROOT, "packages/contracts/src/kernel/command.ts"), "utf8");
+  const block = src.slice(src.indexOf("SIDE_EFFECT_TYPES = ["),
+                          src.indexOf("] as const", src.indexOf("SIDE_EFFECT_TYPES = [")));
+  const known = new Set([...block.matchAll(/"([A-Z][A-Za-z]+)"/g)].map(m => m[1]));
+  if (known.size < 10)
+    violations.push("tools/arch-check.mjs\n" +
+      `    只从 kernel/command.ts 里解析出 ${known.size} 个 side effect 取值 —— ` +
+      "SIDE_EFFECT_TYPES 的写法变了，这条规则已经形同虚设");
+
+  const files = [];
+  (function walk(d) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) walk(f);
+      else if (e.name.endsWith(".ts")) files.push(f);
+    }
+  })(path.join(ROOT, "apps/api/src/modules"));
+
+  let seen = 0;
+  for (const f of files) {
+    const code = fs.readFileSync(f, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    for (const m of code.matchAll(/\btype:\s*"([A-Z][A-Za-z]+)"/g)) {
+      seen++;
+      if (!known.has(m[1]))
+        violations.push(`${path.relative(ROOT, f)}\n` +
+          `    发出了一个契约里没有的 side effect：\`${m[1]}\`\n` +
+          "    加进 packages/contracts/src/kernel/command.ts 的 SIDE_EFFECT_TYPES —— \n" +
+          "    不加不会报错，只会让 OpenAPI 文档说的和服务端发的不是一回事，\n" +
+          "    而拿文档做校验的调用方会静静地丢掉那一条");
+    }
+  }
+  if (seen < 15)
+    violations.push("tools/arch-check.mjs\n" +
+      `    只扫到 ${seen} 处 side effect 的 type 字面量 —— 判据的写法过时了，这条规则已经形同虚设`);
 }
 
 if (violations.length) {

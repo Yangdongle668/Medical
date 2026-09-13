@@ -3,7 +3,7 @@ import {
   Post, Query, Headers, HttpCode } from "@nestjs/common";
 import { z } from "zod";
 import {
-  PageQuery, Uuid, CreateStudySiteBody, SetStudyTeamBody,
+  PageQuery, Uuid, CreateStudySiteBody, SetStudyTeamBody, SetStudySitePiBody,
   ListStudySitesQuery, ReplaceStartupTemplateBody, AdvanceStudySiteBody
 } from "@sitedesk/contracts";
 import { SiteService } from "./site.service.js";
@@ -68,6 +68,18 @@ export class SiteController {
     @Headers("idempotency-key") key?: string
   ) {
     return idempotent(this.idem, key, b, () => this.svc.create(b));
+  }
+
+  /* 给中心指定研究者。和 setStudyTeam 同一档：它改的是 `pi` 那条
+     行范围本身 —— 绑上那一刻，这位院方研究者看得见这个中心的
+     受试者与访视。所以幂等键是必需的。 */
+  @Post("/study-sites/:id\\:set-pi") @Operation("setStudySitePi")
+  setPi(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(SetStudySitePiBody)) b: z.infer<typeof SetStudySitePiBody>,
+    @Headers("idempotency-key") key: string
+  ) {
+    return command(this.idem, key, { id, ...b }, () => this.svc.setPi(id, b));
   }
 
   @Get("/study-sites/:id/gate") @Operation("getSiteGate")

@@ -23,7 +23,7 @@ import { z } from "zod";
    ════════════════════════════════════════════════════════════════════ */
 
 export const ACTION_KEYS = [
-  "accept", "advance", "approve", "audit", "bid", "capaWrite", "closeQ", "closeQA",
+  "accept", "advance", "approve", "assign", "audit", "bid", "capaWrite", "closeQ", "closeQA",
   "ethics", "isfWrite", "manage", "monitor", "piConfirm", "raiseQ", "rateWrite",
   "subjRead", "subjWrite", "timeWrite"
 ] as const;
@@ -31,7 +31,7 @@ export const ACTION_KEYS = [
 export const ActionKey = z.enum(ACTION_KEYS).meta({ id: "ActionKey" });
 export type ActionKey = (typeof ACTION_KEYS)[number];
 
-/** 十八个动作的中文名。**放在契约里，与 ACTION_KEYS 并排** ——
+/** 十九个动作的中文名。**放在契约里，与 ACTION_KEYS 并排** ——
  *
  *  上一版这份表在前端（`apps/web/src/features/org/api.ts`），只有 13 条。
  *  「组织与权限」的动作矩阵是按它出列的，于是 `accept` / `audit` /
@@ -47,6 +47,11 @@ export const ACTION_LABEL: Record<ActionKey, string> = {
   accept: "受理立项材料（机构）",
   advance: "推进中心阶段",
   approve: "审批工时 / 差旅 / 偏离",
+  /** 派工与指定 PI —— **这一个动作管的是别人能看见什么。**
+   *  CRA / CRC 的行范围来自 `site_assignment`，PI 的来自
+   *  `study_site.pi_account_id`；两者都是"把一个人接到一个中心上"。
+   *  给它的人要清楚：这不是排班表，是发钥匙。 */
+  assign: "派工到中心 / 指定 PI",
   audit: "发起内部稽查",
   bid: "维护报价与投标",
   capaWrite: "填写质量整改措施",

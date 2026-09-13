@@ -5,7 +5,8 @@ import { PageQuery, page } from "../kernel/pagination.js";
 import { commandResult, WithReason } from "../kernel/command.js";
 import { Study, StudySite, SiteState, SiteGate,
   SiteAcceptance, AcceptanceState, SubmitAcceptance,
-  IsfBoard, IsfCategory, CreateStudySiteBody, SetStudyTeamBody } from "./model.js";
+  IsfBoard, IsfCategory, CreateStudySiteBody, SetStudyTeamBody,
+  SetStudySitePiBody } from "./model.js";
 
 const CTX = "site";
 const ById = z.object({ id: Uuid });
@@ -85,6 +86,26 @@ define({
   errors: ["invariant-violated"]
 });
 
+define({
+  id: "setStudySitePi", method: "post", path: "/v1/study-sites/{id}:set-pi",
+  layer: "L2", context: CTX, summary: "给中心指定研究者 PI", action: "assign",
+  description:
+    "**这是权限变更，不是改一个名字。** `row_rule=pi` 的行范围就是" +
+    "「`study_site.pi_account_id` 指向我的那些中心」—— 绑上那一刻，" +
+    "这位院方研究者看得见这个中心的受试者与访视；解绑那一刻看不见。\n\n" +
+    "在此之前**只有建档那一次能设**（`createStudySite` 的 `piAccountId`），" +
+    "而建档表单从来没有那一栏 —— 于是 PI 账号建得出来、登得进去，" +
+    "一个中心也看不到，`pi` 这条行规则从头到尾是空的。\n\n" +
+    "`piAccountId` 传 null = 解绑（中心仍然记着 `piName`，那是方案上的登记名）。\n" +
+    "绑定时 `pi_name` 跟着改成该账号的显示名 —— 否则中心上登记的是「李四」、" +
+    "绑的账号是「张三」，两个事实同时挂在一行上，而没有任何一处会报错。" +
+    "确实要写「张三 教授」的，同时传 `piName` 覆盖。",
+  params: ById,
+  body: SetStudySitePiBody,
+  response: commandResult(StudySite),
+  errors: ["invariant-violated", "validation-failed", "idempotency-key-reused"]
+});
+
 /** `getSiteGate` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
 export const GetSiteGateQuery = z.object({ to: SiteState.optional().describe("缺省为状态机的下一节点") });
 
@@ -133,8 +154,8 @@ define({
 /* ════════════════════════════════════════════════════════════════════
    启动清单 · 人员 · 交接
    ════════════════════════════════════════════════════════════════════ */
-import { StartupChecklist, StartupSummary, StartupItem, Staff, SiteStaff, Handover,
-  RoleKind, HandoverStatus, StartupTemplate, StartupTemplateItem }
+import { StartupChecklist, StartupSummary, StartupItem, Staff, SiteStaff, SiteAssignment,
+  Handover, RoleKind, HandoverStatus, StartupTemplate, StartupTemplateItem }
   from "./staffing.js";
 
 define({
@@ -235,6 +256,104 @@ define({
     "`sites` 只列本范围内的中心：那个 CRC 在别家医院还带着几个，与本院无关。",
   query: ListSiteStaffQuery,
   response: page(SiteStaff)
+});
+
+/* ── 派工：把人接到中心上 ─────────────────────────────────────────
+   这一组补的是一个从 0004 起就空着的格子：`site_assignment` 是行规则
+   `assigned` 的唯一来源，而**全系统没有一处往里写** ——
+   种子灌了 30 行，交接在两个人之间挪行，第一行从哪来没有答案。
+
+   后果不是"少个功能"。开发库的审计轨迹里躺着这一条：
+
+     09-06 11:13  admin  调整角色权限  crc
+                  rowRule: assigned → team    理由：「改为按组切行」
+
+   派不了工，就把整个角色的行规则改掉 —— 从此每个 CRC 看得到
+   本组全部项目的全部中心。**一个建不出来的东西，会被人用改规则的
+   方式绕过去**，而绕过去之后没有任何地方是红的。 */
+
+/** `listSiteAssignments` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListSiteAssignmentsQuery = PageQuery.extend({
+    studyId: Uuid.optional(),
+    studySiteId: Uuid.optional(),
+    accountId: Uuid.optional(),
+    /** 连已经结束的一起看。**默认不看** —— 这一页问的是"现在谁在跑"；
+     *  但核查问的是"去年三月那次访视谁负责"，那时就要它。 */
+    includeEnded: QueryBool.optional()
+  });
+
+define({
+  id: "listSiteAssignments", method: "get", path: "/v1/site-assignments",
+  layer: "L1", context: CTX,
+  summary: "派工台账",
+  description:
+    "谁在哪个中心上负责、从哪天到哪天。**这张表就是 `assigned` 行范围本身。**\n\n" +
+    "与 `/v1/site-staff`（备案名册）的区别：那一份按人合并、只列在岗的、" +
+    "给机构办备案用；这一份按**派工行**出列，带得起止日与已结束的那些 —— " +
+    "「这个中心去年三月归谁」只有它答得出来。",
+  query: ListSiteAssignmentsQuery,
+  response: page(SiteAssignment)
+});
+
+/** `assignSiteStaff` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const AssignSiteStaffBody = WithReason.extend({
+    /** 一次派一批中心。界面上是「挑一个项目 → 勾它下面的几个中心」，
+     *  落到库里仍然是一个中心一行 —— 按项目整体派工等于把那个项目下
+     *  全部医院的受试者明细一并给他，那不是方便，是超范围。 */
+    studySiteIds: z.array(Uuid).min(1).max(50),
+    /** 从哪天起算。缺省今天；**不接受将来的日期** ——
+     *  一条"下周一生效"的派工在今天看不出任何效果，
+     *  而派工的人会以为已经派好了。补登过去的日期是允许的：
+     *  「他上个月就接手了，系统里补一下」是真实情况。 */
+    since: DateOnly.optional()
+  });
+
+/* 路径挂在**人**下面（`/v1/staff/{id}`），不是 `/v1/site-assignments`：
+   一次派工动的是一个人和一批中心的关系，而"一批"没法做成一个资源 id。
+   L2 的路径形状（`/v1/xxx/{id}:action`）由 registry 强制，
+   它逼出来的这个形状恰好也更贴近使用者的说法 ——
+   「把张三派到这几个中心」，主语是张三。 */
+define({
+  id: "assignSiteStaff", method: "post", path: "/v1/staff/{id}:assign-sites",
+  layer: "L2", context: CTX,
+  summary: "把人派到中心上", action: "assign",
+  params: ById,
+  description:
+    "**这是权限变更，不是排班。** 多一行派工，那个人当场看得见这个中心的" +
+    "受试者、访视、质疑、药品台账；所以它写审计、`isSensitive=true`、必须写原因。\n\n" +
+    "工种（CRA / CRC）**不接受传入**，从 `staff.role_kind` 取 —— " +
+    "请求说 CRC 而名册说 CRA，那是一个矛盾，不是一个可选项。\n" +
+    "工种不是 CRA / CRC 的人派不了：PM 的行范围来自项目归属组" +
+    "（`POST /v1/studies/{id}:set-team`），QA / DM 看全部，都与派工无关。\n\n" +
+    "已经在跑的那几个中心**跳过而不是报错** —— " +
+    "「给他再加一个中心」时，另外三个本来就在他名下，那是正常情况。\n" +
+    "但**一个都没派成就是错**：返回 422，整笔回滚。",
+  body: AssignSiteStaffBody,
+  response: commandResult(z.array(SiteAssignment)),
+  errors: ["invariant-violated", "validation-failed", "idempotency-key-reused"]
+});
+
+/** `endSiteAssignment` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const EndSiteAssignmentBody = WithReason.extend({
+    studySiteIds: z.array(Uuid).min(1).max(50)
+  });
+
+define({
+  id: "endSiteAssignment", method: "post", path: "/v1/staff/{id}:end-assignments",
+  layer: "L2", context: CTX,
+  summary: "把人从中心上撤下", action: "assign",
+  params: ById,
+  description:
+    "撤下那一刻他就看不见这个中心了 —— 和派上去同一档，必须写原因。\n\n" +
+    "**已经生效过的派工收口，不删。** 区间的上界收到今天：" +
+    "他确实负责过那一段，而「去年三月那次访视谁负责」是核查会问的事实。\n" +
+    "**今天派、今天撤的删掉**：它一天都没生效过，" +
+    "在备案名册上留一条零长度的记录，只会让人多问一句「这是什么」。\n\n" +
+    "交接（`POST /v1/handovers`）不走这条路：那一条要把中心**转给**另一个人，" +
+    "带清单、带逐例交底。撤下是「不归他了」，转交是「归另一个人了」。",
+  body: EndSiteAssignmentBody,
+  response: commandResult(z.array(SiteAssignment)),
+  errors: ["invariant-violated", "idempotency-key-reused"]
 });
 
 /** `listHandovers` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */

@@ -331,6 +331,322 @@ export class StaffingService {
     };
   }
 
+  /* ── 派工 ─────────────────────────────────────────────────────────
+     `site_assignment` 是行规则 `assigned` 的**唯一来源**（迁移 0002），
+     而在这一版之前**全系统没有一处往里写**：种子灌了 30 行，
+     `app.transfer_handover_assignments()` 在两个人之间挪行 ——
+     挪的是已经存在的那些。第一行从哪来，没有答案。
+
+     后果不是"少个功能"。开发库的审计轨迹里躺着这一条：
+
+       09-06 11:13  admin  调整角色权限  crc
+                    rowRule: assigned → team    理由：「改为按组切行」
+
+     派不了工，就把整个角色的行规则改掉。**一个建不出来的东西，
+     会被人用改规则的方式绕过去**，而绕过去之后没有任何地方是红的。 */
+
+  private readonly ASSIGN_COLS = `
+    sa.id, sa.account_id, a.display_name, sa.role_kind,
+    sa.study_site_id, s.code AS site_code, s.hospital,
+    st.id AS study_id, st.code AS study_code, st.short_name AS study_short,
+    lower(sa.effective) AS since, upper(sa.effective) AS until,
+    sa.effective @> CURRENT_DATE AS active`;
+  private readonly ASSIGN_FROM = `
+    site_assignment sa
+    JOIN account    a  ON a.id  = sa.account_id
+    JOIN study_site s  ON s.id  = sa.study_site_id
+    JOIN study      st ON st.id = s.study_id`;
+
+  /** `tail` 是 ORDER BY / LIMIT 那一截 —— **由调用方给全**。
+   *  这里原来在末尾写死一句 ORDER BY，而分页那一端还要再排一次，
+   *  拼出来就是两个 ORDER BY 子句：语法错误，且要到真跑那条查询时才炸。 */
+  private async assignments(where: string, params: unknown[],
+    tail = "ORDER BY s.code, lower(sa.effective) DESC") {
+    const { rows } = await ctx().client.query<{
+      id: string; account_id: string; display_name: string; role_kind: string;
+      study_site_id: string; site_code: string; hospital: string;
+      study_id: string; study_code: string; study_short: string;
+      since: Date; until: Date | null; active: boolean;
+    }>(`SELECT ${this.ASSIGN_COLS} FROM ${this.ASSIGN_FROM}
+         WHERE ${where} ${tail}`, params);
+    return rows.map(r => ({
+      id: r.id, accountId: r.account_id, displayName: r.display_name,
+      roleKind: r.role_kind, studySiteId: r.study_site_id,
+      siteCode: r.site_code, hospital: r.hospital,
+      studyId: r.study_id, studyCode: r.study_code, studyShortName: r.study_short,
+      since: day(r.since)!, until: day(r.until), active: r.active
+    }));
+  }
+
+  async listAssignments(q: {
+    limit: number; cursor?: string; studyId?: string;
+    studySiteId?: string; accountId?: string; includeEnded?: boolean;
+  }) {
+    const params: unknown[] = [];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
+    const conds = ["true"];
+    if (q.studyId)     conds.push(`st.id = ${add(q.studyId)}`);
+    if (q.studySiteId) conds.push(`sa.study_site_id = ${add(q.studySiteId)}`);
+    if (q.accountId)   conds.push(`sa.account_id = ${add(q.accountId)}`);
+    /* 默认只看在跑的。已结束的那些是**核查视角**的数据
+       （「去年三月那次访视谁负责」），不是日常视角的 —— 混在一起，
+       "这个中心现在有几个人"这个数在页面上就凑不齐了。 */
+    if (!q.includeEnded) conds.push("sa.effective @> CURRENT_DATE");
+    /* 游标走 id：本来的排序键（中心编号 + 起始日）会重复 ——
+       派工台账里"同一个中心同一天派两个人"是正常的，
+       拿一个会重复的键翻页，第二页会漏掉或重复几行。 */
+    if (q.cursor)      conds.push(`sa.id > ${add(q.cursor)}`);
+    const rows = await this.assignments(conds.join(" AND "), params,
+      `ORDER BY sa.id LIMIT ${add(q.limit + 1)}`);
+    const page = rows.slice(0, q.limit);
+    return { items: page, nextCursor: rows.length > q.limit ? page.at(-1)?.id ?? null : null };
+  }
+
+  /** 派工的两端共用的那几步：这个人是谁、这几个中心在不在范围里。
+   *
+   *  `strict` 只在**派上去**那一端为真。撤下来那一端**必须放宽** ——
+   *  最常见的撤下理由就是「他离职了」，而那时账号已经停用；
+   *  两端共用同一套判定的话，一个人一走，他名下那几个中心
+   *  就再也撤不下来了：系统里永远挂着一个登不进来的人在负责。
+   *  （工种同理：有人从 CRA 转岗成 PM，他旧的派工照样要撤得掉。） */
+  private async assignable(accountId: string, siteIds: string[], strict = true) {
+    const c = ctx();
+    const who = await c.client.query<{
+      role_kind: string; display_name: string; status: string; gcp_expires_on: Date | null;
+    }>(`SELECT st.role_kind, a.display_name, a.status, st.gcp_expires_on
+          FROM staff st JOIN account a ON a.id = st.account_id
+         WHERE st.account_id = $1`, [accountId]);
+    if (!who.rows[0])
+      throw new ProblemException("invariant-violated", {
+        invariant: "assign-not-staff",
+        detail: "这个账号不在员工名册里 —— 派工派的是我方的 CRA / CRC。" +
+          "外部方（机构办按所属医院切行、PI 按 study_site.pi_account_id 切行）不走派工。"
+      });
+    const w = who.rows[0];
+
+    /* 工种从名册取，**不接受传入** —— 请求说 CRC 而名册说 CRA，
+       那是一个矛盾，不是一个可选项。而 site_assignment.role_kind 上
+       有 CHECK IN ('CRA','CRC')：传进来的话，矛盾会在约束那一层炸，
+       报错指不到这里。 */
+    if (strict && w.role_kind !== "CRA" && w.role_kind !== "CRC")
+      throw new ProblemException("invariant-violated", {
+        invariant: "assign-role-kind",
+        detail: `${w.display_name} 的工种是 ${w.role_kind}，派不了工 —— ` +
+          "派工只对 CRA / CRC 成立，因为只有他们按「被指派的中心」切行。\n" +
+          "PM 的范围来自项目归属组（把项目划给他的组：POST /v1/studies/{id}:set-team）；" +
+          "QA / DM 看全部；机构办按所属医院；PI 按中心上绑定的研究者账号。"
+      });
+    if (strict && w.status !== "active")
+      throw new ProblemException("invariant-violated", {
+        invariant: "assign-disabled-account",
+        detail: `${w.display_name} 的账号已停用 —— 派给他等于把中心交给一个登不进来的人`
+      });
+
+    /* 中心必须在**派工人自己的**行范围里。RLS 的 WITH CHECK 从
+       迁移 0045 起也拦这一条，这里是同一条判定的应用层那一份：
+       两处都在，才能同时防住"应用层忘了加条件"和"有人写了裸 SQL"。 */
+    const sc = siteScopeSql(principal(), "s", 2);
+    const { rows: sites } = await c.client.query<{ id: string; code: string; hospital: string }>(
+      /* 按编号排 —— 下面那句「已派到 SS-01、SS-02、SS-03」是给人读的，
+         而 ANY(...) 不保证顺序：同一批中心，两次调用可能排出两种样子。 */
+      `SELECT s.id, s.code, s.hospital FROM study_site s
+        WHERE s.id = ANY($1::uuid[]) AND ${sc.sql}
+        ORDER BY s.code`, [siteIds, ...sc.params]);
+    const seen = new Set(sites.map(s => s.id));
+    const missing = siteIds.filter(id => !seen.has(id));
+    /* 范围外与不存在返回同一个 404 —— 区分开就是在确认「它存在，
+       只是不归你」，而那个确认本身就是泄漏。 */
+    if (missing.length) throw notFound(`${missing.length} 个中心`);
+    return { ...w, sites };
+  }
+
+  async assign(accountId: string, b: {
+    studySiteIds: string[]; since?: string; reason: string;
+  }) {
+    const c = ctx();
+    const today = new Date().toISOString().slice(0, 10);
+    const since = b.since ?? today;
+    /* 将来的日期不收：一条"下周一生效"的派工在今天看不出任何效果，
+       而派工的人会以为已经派好了 —— 他下周一才发现没有。
+       补登过去的日期允许：「他上个月就接手了，系统里补一下」是真事。 */
+    if (since > today)
+      throw new ProblemException("validation-failed", {
+        detail: `起始日 ${since} 在将来 —— 派工从落库那一刻就该看得见效果。` +
+          "要预排下个月的人手，请到排期那一侧，不要在这里留一条今天不生效的派工。"
+      });
+
+    const w = await this.assignable(accountId, b.studySiteIds);
+
+    /* 与**任何**已有派工区间重叠的都要先分开看：
+       · 正在跑的 → 跳过（「给他再加一个中心」时另外三个本来就在他名下）
+       · 不在跑但区间重叠 → 这是补登日期撞上了他以前负责的那一段，
+         静静跳过就成了"派了却没派上"，所以报出来。 */
+    const { rows: clash } = await c.client.query<{
+      study_site_id: string; code: string; active: boolean; lo: Date; hi: Date | null;
+    }>(`SELECT sa.study_site_id, s.code, sa.effective @> CURRENT_DATE AS active,
+               lower(sa.effective) AS lo, upper(sa.effective) AS hi
+          FROM site_assignment sa JOIN study_site s ON s.id = sa.study_site_id
+         WHERE sa.account_id = $1 AND sa.study_site_id = ANY($2::uuid[])
+           AND sa.effective && daterange($3::date, NULL, '[)')`,
+      [accountId, b.studySiteIds, since]);
+
+    const overlap = clash.filter(r => !r.active);
+    if (overlap.length)
+      throw new ProblemException("invariant-violated", {
+        invariant: "assign-overlaps-past",
+        detail: `起始日 ${since} 撞上了 ${w.display_name} 以前在 ` +
+          `${overlap.map(r => r.code).join("、")} 上的派工` +
+          `（${overlap.map(r => `${day(r.lo)}→${day(r.hi) ?? "至今"}`).join("、")}）——` +
+          "同一人对同一中心的派工区间不得重叠，否则「他什么时候开始负责」没有答案。"
+      });
+
+    const running = new Set(clash.map(r => r.study_site_id));
+    const skipped = w.sites.filter(s => running.has(s.id));
+    const fresh = w.sites.filter(s => !running.has(s.id));
+
+    /* 一个都没派成不是"成功了但没变化"。和交接收单那一条同一个道理：
+       返回 201 而什么也没发生，点的人会以为派好了。 */
+    if (!fresh.length)
+      throw new ProblemException("invariant-violated", {
+        invariant: "assign-nothing-to-do",
+        detail: `${w.display_name} 本来就在跑这 ${skipped.length} 个中心` +
+          `（${skipped.map(s => s.code).join("、")}）—— 没有变化就不该留一条审计`
+      });
+
+    await c.client.query(
+      `INSERT INTO site_assignment (account_id, study_site_id, role_kind, effective)
+       SELECT $1, x, $2, daterange($3::date, NULL, '[)')
+         FROM unnest($4::uuid[]) AS x`,
+      [accountId, w.role_kind, since, fresh.map(s => s.id)]);
+
+    await this.audit.write({
+      action: "派工到中心", targetType: "account", targetId: w.display_name,
+      before: { sites: skipped.map(s => s.code) },
+      after: { sites: fresh.map(s => s.code), roleKind: w.role_kind, since },
+      studySiteId: fresh[0]!.id, reason: b.reason });
+
+    /* 被派的人要知道 —— 在此之前他打开系统只会发现多了几个中心，
+       没有任何人告诉他为什么。和交接那一条同一个理由。 */
+    this.notify.queue({
+      accountId,
+      subject: `派工：${fresh.length} 个中心现在归你`,
+      text: [
+        `${w.display_name}，你好：`, "",
+        `你被派到以下中心，自 ${since} 起生效：`,
+        ...fresh.map(s => `  · ${s.code} ${s.hospital}`), "",
+        `原因：${b.reason}`, "",
+        "从现在起这些中心的受试者、访视、质疑、药品台账你都看得见，也由你负责。"
+      ].join("\n")
+    });
+
+    const made = await this.assignments(
+      "sa.account_id = $1 AND sa.study_site_id = ANY($2::uuid[]) AND sa.effective @> CURRENT_DATE",
+      [accountId, fresh.map(s => s.id)]);
+
+    const gcpLeft = w.gcp_expires_on
+      ? daysBetween(new Date(), w.gcp_expires_on) : null;
+    return {
+      data: made,
+      sideEffects: [
+        {
+          type: "SiteAssignmentChanged" as const,
+          summary: `${w.display_name}（${w.role_kind}）已派到 ` +
+            `${fresh.map(s => s.code).join("、")} —— ` +
+            "他从这一刻起看得见这些中心的受试者与访视" +
+            (skipped.length ? `；另 ${skipped.length} 个本来就在他名下，跳过` : ""),
+          ref: accountId, studySiteId: fresh[0]!.id
+        },
+        /* GCP 过期**不拦派工，但必须当场说出来**：拦的话，
+           复训正在排期的人就一个中心也接不了；不说的话，
+           一个证书已经失效的人被派到中心上，没有任何地方是红的 ——
+           而那正是核查会开出来的发现项。 */
+        ...(gcpLeft === null || gcpLeft < 0 ? [{
+          type: "SiteAssignmentChanged" as const,
+          summary: gcpLeft === null
+            ? `注意：${w.display_name} 的 GCP 证书没有登记 —— ` +
+              "核查时「没有证书」和「证书过期」是同一件事"
+            : `注意：${w.display_name} 的 GCP 证书已过期 ${-gcpLeft} 天` +
+              `（${day(w.gcp_expires_on)}）—— 过期即不得开展工作。` +
+              "派工照做了，但在复训之前他不该出现在中心里。",
+          ref: accountId
+        }] : [])
+      ]
+    };
+  }
+
+  async endAssignment(accountId: string,
+    b: { studySiteIds: string[]; reason: string }) {
+    const c = ctx();
+    /* 放宽那一端：离职（账号停用）、转岗（工种不再是 CRA / CRC）
+       恰恰是最常见的两个撤下理由。 */
+    const w = await this.assignable(accountId, b.studySiteIds, false);
+
+    const { rows: live } = await c.client.query<{
+      id: string; study_site_id: string; code: string; same_day: boolean;
+    }>(`SELECT sa.id, sa.study_site_id, s.code,
+               lower(sa.effective) >= CURRENT_DATE AS same_day
+          FROM site_assignment sa JOIN study_site s ON s.id = sa.study_site_id
+         WHERE sa.account_id = $1 AND sa.study_site_id = ANY($2::uuid[])
+           AND sa.effective @> CURRENT_DATE`, [accountId, b.studySiteIds]);
+
+    if (!live.length)
+      throw new ProblemException("invariant-violated", {
+        invariant: "unassign-nothing-to-do",
+        detail: `${w.display_name} 现在一个都不在跑这些中心 —— 没有变化就不该留一条审计`
+      });
+
+    /* 今天派、今天撤的**删掉**：它一天都没生效过，
+       收口会得到一段零长度的区间，而备案名册上多出一行
+       「2026-09-13 → 2026-09-13」，只会让人多问一句"这是什么"。 */
+    const sameDay = live.filter(r => r.same_day).map(r => r.id);
+    /* 生效过的**收口，不删**：他确实负责过那一段，
+       而"去年三月那次访视谁负责"是核查会问的事实。 */
+    const older = live.filter(r => !r.same_day).map(r => r.id);
+    if (sameDay.length)
+      await c.client.query("DELETE FROM site_assignment WHERE id = ANY($1::uuid[])", [sameDay]);
+    if (older.length)
+      await c.client.query(
+        `UPDATE site_assignment
+            SET effective = daterange(lower(effective), CURRENT_DATE, '[)')
+          WHERE id = ANY($1::uuid[])`, [older]);
+
+    const codes = live.map(r => r.code);
+    await this.audit.write({
+      action: "从中心撤下", targetType: "account", targetId: w.display_name,
+      before: { sites: codes },
+      after: { until: new Date().toISOString().slice(0, 10),
+               cancelled: live.filter(r => r.same_day).map(r => r.code) },
+      studySiteId: live[0]!.study_site_id, reason: b.reason });
+
+    this.notify.queue({
+      accountId,
+      subject: `派工结束：${codes.length} 个中心不再归你`,
+      text: [
+        `${w.display_name}，你好：`, "",
+        "以下中心的派工已经结束，你从这一刻起看不见它们：",
+        ...codes.map(c2 => `  · ${c2}`), "",
+        `原因：${b.reason}`, "",
+        "如果还有没交代完的事，现在就找接手人讲 ——",
+        "要把在组受试者逐例交底的，走「交接」那条路，不要只撤派工。"
+      ].join("\n")
+    });
+
+    return {
+      data: await this.assignments(
+        "sa.account_id = $1 AND sa.study_site_id = ANY($2::uuid[])",
+        [accountId, b.studySiteIds]),
+      sideEffects: [{
+        type: "SiteAssignmentChanged" as const,
+        summary: `${w.display_name} 已从 ${codes.join("、")} 撤下 —— ` +
+          "他从这一刻起看不见这些中心的受试者与访视" +
+          (sameDay.length
+            ? `；其中 ${sameDay.length} 条是今天派今天撤，一天都没生效过，已删除`
+            : ""),
+        ref: accountId, studySiteId: live[0]!.study_site_id
+      }]
+    };
+  }
+
   /* ── 交接 ─────────────────────────────────────────────────────── */
 
   /** 一批交接单的完整装配 —— **固定 3 条 SQL，与条数无关**。
