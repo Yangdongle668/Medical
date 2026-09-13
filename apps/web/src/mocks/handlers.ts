@@ -21,13 +21,15 @@ import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
+/* 角色代号 → 名册工种的映射**用契约里那一份** —— 服务端读的是同一张表。 */
+import { STAFF_ROLE_KIND } from "@sitedesk/contracts";
 import type { MockAccount, MockSoaVisit,
   MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
   MockMonitorVisit, MockAudit, MockIntake,
   MockAcceptance, MockIsf } from "./scenario.js";
 import { CLIENTS } from "./scenario.js";
 import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
-  ASSIGNMENTS, newAssignmentId, mkTimesheet, WORK_TYPE_META,
+  ASSIGNMENTS, newAssignmentId, mkStaff, mkTimesheet, WORK_TYPE_META,
   type MockSubject, type MockPayment,
   type Scenario, type MockVisit, type MockHandover, type MockRateCard,
   type MockTimesheet } from "./scenario.js";
@@ -453,7 +455,9 @@ export const scenarioHandlers = [
   http.post(pathToRegExp("/v1/accounts"), async ({ request }) => {
     const b = await request.json() as {
       login: string; displayName: string; roleId: string;
-      teamId?: string | null; orgRef?: string | null; password?: string };
+      teamId?: string | null; orgRef?: string | null; password?: string;
+      staff?: { roleKind?: string; level: string; city: string;
+                gcpExpiresOn?: string | null } };
     if (scenario.accounts.some(a => a.login === b.login))
       return HttpResponse.json(
         problem("validation-failed", 422, `登录名 ${b.login} 已存在`), { status: 422 });
@@ -475,7 +479,45 @@ export const scenarioHandlers = [
       disabledAt: null, disabledReason: null, lastLoginAt: null
     };
     scenario.accounts.push(acc);
+    /* 名册与账号**同一次提交**。分开的话，mock 上就演不出那件真正要紧的事：
+       建号建出来的可能是半个人，而派工的下拉是从名册出的。 */
+    if (b.staff) STAFF_LIST.push(mkStaff(acc.id, acc.login, acc.displayName,
+      b.staff.roleKind ?? STAFF_ROLE_KIND[role.code] ?? "CRC",
+      b.staff.level, b.staff.city, b.staff.gcpExpiresOn ?? null));
     return HttpResponse.json(accountDto(acc), { status: 201 });
+  }),
+
+  /* 补登 / 修改员工名册。**已经建坏了的那些账号唯一的出路** ——
+     派工的下拉是从名册出的，名册上没有他，那个下拉就永远没有他。 */
+  http.post(pathToRegExp("/v1/accounts/{id}:set-staff"), async ({ request }) => {
+    const id = seg(request.url, /\/accounts\/([^/:]+):set-staff/);
+    const b = await request.json() as { roleKind?: string; level: string;
+      city: string; gcpExpiresOn?: string | null };
+    if (!identity().actions.includes("manage")) return HttpResponse.json(
+      problem("forbidden-action", 403, "你的角色不能改员工名册"), { status: 403 });
+    const a = scenario.accounts.find(x => x.id === id);
+    if (!a) return HttpResponse.json(problem("not-found", 404, "账号不存在"), { status: 404 });
+    if (a.isExternal) return HttpResponse.json(problem("invariant-violated", 422,
+      `${a.displayName} 是外部方账号 —— 外部方没有员工名册：他的工种与证书归医院管`),
+      { status: 422 });
+    const kind = b.roleKind ?? STAFF_ROLE_KIND[a.role.code];
+    if (!kind) return HttpResponse.json(problem("invariant-violated", 422,
+      `从角色「${a.role.code}」推不出工种 —— 请直接指定 roleKind`), { status: 422 });
+
+    const 旧 = STAFF_LIST.find(x => x.accountId === id);
+    const row = mkStaff(id, a.login, a.displayName, kind, b.level, b.city,
+      b.gcpExpiresOn ?? null);
+    if (旧) Object.assign(旧, row); else STAFF_LIST.push(row);
+    return HttpResponse.json({
+      data: 旧 ?? row,
+      sideEffects: [{
+        type: "StaffRecordChanged", ref: id,
+        summary: 旧
+          ? `${a.displayName} 的名册已更新为 ${kind} · ${b.level} · ${b.city}`
+          : `${a.displayName} 已登记为 ${kind} · ${b.level} —— ` +
+            "从这一刻起他才派得了工、填得了工时；在此之前他只是一个能登录的账号"
+      }]
+    }, { status: 201 });
   }),
 
   http.patch(pathToRegExp("/v1/accounts/{id}"), async ({ request }) => {
@@ -3401,7 +3443,12 @@ function assignmentDto(a: {
 
 function accountDto(a: MockAccount) {
   const { loginAddress, ...rest } = a;
-  return { ...rest, hasLoginAddress: !!loginAddress };
+  /* 名册那一栏从 STAFF_LIST 上取 —— **不是 account 自己的属性**。
+     两张表两件事，mock 上也得是两份数据，否则「账号建好了但名册上
+     没有他」这件事在 mock 里根本发生不了，而那正是要演的东西。 */
+  const st = STAFF_LIST.find(x => x.accountId === a.id);
+  return { ...rest, hasLoginAddress: !!loginAddress,
+    staffRoleKind: st?.roleKind ?? null };
 }
 
 function siteDto(id: string) {

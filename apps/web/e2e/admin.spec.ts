@@ -55,6 +55,9 @@ test.describe("管理员 · 组织与权限", () => {
     await page.getByTestId("new-login").fill("zhoumin");
     await expect(page.getByTestId("new-login-bad")).toHaveCount(0);
     await page.getByTestId("new-role").selectOption({ label: "临床协调员 CRC" });
+    /* CRC 还要登记员工名册：账号建好了不等于名册上有他，
+       而派工的下拉是从名册出的。城市填上按钮才亮。 */
+    await page.getByTestId("new-staff-city").fill("北京");
     await expect(page.getByTestId("create-account")).toBeEnabled();
   });
 
@@ -66,6 +69,7 @@ test.describe("管理员 · 组织与权限", () => {
     await page.getByTestId("new-name").fill("周敏");
     await page.getByTestId("new-login").fill("zhoumin");
     await page.getByTestId("new-role").selectOption({ label: "临床协调员 CRC" });
+    await page.getByTestId("new-staff-city").fill("北京");
 
     /* 留空是合法的 —— 机构老师和 PI 走一次性链接那条路。 */
     await expect(page.getByTestId("new-password")).toHaveValue("");

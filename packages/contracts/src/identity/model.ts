@@ -4,6 +4,10 @@ import { Uuid, Code, DateOnly, Timestamp, QueryBool } from "../kernel/primitives
 import { FieldKey } from "../kernel/fields.js";
 import { PageQuery } from "../kernel/pagination.js";
 import { WithReason } from "../kernel/command.js";
+/* 名册那一行的工种与级别**用 site/staffing 里那一份** —— 它们是同一个
+   枚举（`staff.role_kind` / `staff.level` 的 CHECK）。在这里再抄一份，
+   加一个级别那天必然只改一处。 */
+import { RoleKind, StaffLevel } from "../site/staffing.js";
 
 /* ════════════════════════════════════════════════════════════════════
    Identity & Access —— 权限是三维的：行 × 列 × 动作
@@ -83,7 +87,20 @@ export const Account = z.object({
      那条策略是对的（口令行是这个系统里最敏感的东西，管理员也不该读），
      所以撤掉的是这个字段，不是那条策略。 */
   hasLoginAddress: z.boolean()
-    .describe("登记过登录链接的收件地址（auth_identity, provider=magic-link）")
+    .describe("登记过登录链接的收件地址（auth_identity, provider=magic-link）"),
+  /* ── 这个账号在员工名册上吗 ──────────────────────────────────────
+     `account` 回答「谁能登录、看得到什么」，`staff` 回答「他是什么工种、
+     几级、在哪个城市」。**两张表，两件事**，而建号只写了第一张。
+
+     于是在「组织与权限」里建出来的 CRC 是半个人：登录进得来、菜单也在，
+     但**派工的下拉里没有他**（`listStaff` 从 staff 出）、**填工时被拒
+     422**（费率按 `staff.level` 挑）、备案名册上没有他、发起不了交接。
+     四处都不报「这个账号没有名册」，只是他不在名单里。
+
+     所以台账要看得见这一栏。null = 没有名册行；
+     配合 `needsStaffRecord(role.code)` 就能答出「该有而没有」。 */
+  staffRoleKind: RoleKind.nullable()
+    .describe("员工名册上的工种。null = 还没登记名册 —— 那样的账号派不了工、也填不了工时")
 }).meta({ id: "Account" });
 
 /**
@@ -174,6 +191,21 @@ export const AuditEntry = z.object({
    导出名叫 …Body 是给 TS 用的，而组件名是**公开契约的一部分**：
    改掉它，照着 OpenAPI 生成客户端的人就得跟着改一遍，
    而请求体本身一个字节都没变。改名不是不能做，是不该顺手做。 */
+/** 员工名册的一行。建号时一并给，或事后用
+ *  `POST /v1/accounts/{id}:set-staff` 补登 / 修改。 */
+export const StaffRecordBody = z.object({
+  /** 省略即按角色代号推（cra→CRA、crc→CRC、pm→PM、qa→QA、dm→DM）。
+   *  推不出来的角色必须显式给 —— 猜一个工种，费率就跟着猜了。 */
+  roleKind: RoleKind.optional(),
+  level: StaffLevel,
+  city: z.string().trim().min(1).max(32),
+  gcpExpiresOn: DateOnly.nullable().optional()
+    .describe("GCP 证书到期日。留空 = 未登记，而核查时「没有证书」和「证书过期」是同一件事")
+}).meta({ id: "StaffRecordRequest" });
+
+export const SetAccountStaffBody = StaffRecordBody
+  .meta({ id: "SetAccountStaffRequest" });
+
 export const CreateAccountBody = z.object({
   login: z.string().regex(/^[a-z][a-z0-9_]{2,31}$/,
     "3–32 位小写字母 / 数字 / 下划线，且以字母开头"),
@@ -191,7 +223,15 @@ export const CreateAccountBody = z.object({
      而对不上的那天没人知道该信哪一条。 */
   password: z.string().min(8, "口令至少 8 位").max(200, "口令最长 200 位")
     .optional()
-    .describe("初始口令。不填就是不设 —— 那个人得靠一次性链接进来")
+    .describe("初始口令。不填就是不设 —— 那个人得靠一次性链接进来"),
+  /** 同时登记员工名册。**CRA / CRC / PM / QA / DM 这几个角色缺了它，
+   *  建出来的就是半个人**：能登录，但派工的下拉里没有他、填工时会被拒
+   *  422（费率按 `staff.level` 挑）、备案名册上没有他、发起不了交接。
+   *  四处都不报「这个账号没有名册」。
+   *
+   *  这里是可选的（旧调用方不带它也建得出账号），而界面上**必填** ——
+   *  账号台账会把缺名册的那几行标出来，并给一个「补登名册」的入口。 */
+  staff: StaffRecordBody.optional()
 }).meta({ id: "CreateAccountRequest" });
 
 export const UpdateAccountBody = z.object({

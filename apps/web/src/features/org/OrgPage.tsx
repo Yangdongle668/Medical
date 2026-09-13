@@ -4,11 +4,12 @@ import { loadMe, type Me } from "../login/me.js";
 import { MODULES, GROUP_ORDER } from "../../shell/modules.js";
 /* 动作与列的清单来自契约，**表头与格子用同一份** —— 各用各的话，
    19 列表头配 13 列格子这种事不会报错，只会错位。 */
-import { ACTION_KEYS, FIELD_KEYS } from "@sitedesk/contracts";
+import { ACTION_KEYS, FIELD_KEYS, ROLE_KINDS, STAFF_LEVELS,
+  STAFF_ROLE_KIND, needsStaffRecord } from "@sitedesk/contracts";
 import {
   listAccounts, listRoles, listTeams, createAccount, updateAccount,
   disableAccount, enableAccount, setAccountPassword, setLoginAddress,
-  createTeam, updateRole, listStudies, setStudyTeam,
+  createTeam, updateRole, listStudies, setStudyTeam, setAccountStaff,
   getMailTransport, setMailTransport, testMailTransport, type MailTransport,
   ROW_RULE, NEEDS_ORG_REF, FIELD_LABEL, ACTION_LABEL,
   type Account, type Role, type Team, type Study
@@ -165,9 +166,17 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
   const [teamId, setTeamId] = useState("");
   const [orgRef, setOrgRef] = useState("");
   const [pw, setPw] = useState("");
+  /* 员工名册那三栏。工种由角色推出来一个默认值（下面那个 effect），
+     级别与城市**没有合理的默认** —— 级别决定费率，猜一档等于让那个人
+     往后每条工时的成本都错一点，而那条成本会一直躺在报表里。 */
+  const [staffKind, setStaffKind] = useState<string>("CRC");
+  const [staffLevel, setStaffLevel] = useState<string>("中级");
+  const [staffCity, setStaffCity] = useState("");
+  const [staffGcp, setStaffGcp] = useState("");
   const [editing, setEditing] = useState<Account | null>(null);
   const [pwFor, setPwFor] = useState<Account | null>(null);
   const [addrFor, setAddrFor] = useState<Account | null>(null);
+  const [staffFor, setStaffFor] = useState<Account | null>(null);
 
   /* 登录名的规则**与契约同一个正则**（CreateAccountBody）。
      在这里当场判，是因为服务端那句提示要等一次往返才看得到 ——
@@ -179,6 +188,16 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
   /* hospital 规则的角色没有 orgRef 就是个"登得进来、一行都看不到"的账号。
      库里的触发器会拦（迁移 0002），但让人先看见比让人先撞上强。 */
   const needsOrg = role?.rowRule === NEEDS_ORG_REF;
+  /* 这个角色该不该有员工名册 —— 判据在契约里一处（needsStaffRecord），
+     服务端与这里读的是同一张映射表。 */
+  const needsStaff = !!role && needsStaffRecord(role.code);
+
+  /* 角色一换，工种跟着推一个默认值。**推不出来时不动** ——
+     管理员自建的角色没有映射，那时让他自己选，而不是悄悄留着上一个。 */
+  useEffect(() => {
+    const k = role && STAFF_ROLE_KIND[role.code];
+    if (k) setStaffKind(k);
+  }, [role]);
 
   /* 初始口令是**可选**的：外部角色（机构办 / PI）走一次性链接那条路，
      本来就不该有口令。留空就是不设。
@@ -232,6 +251,46 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
             <input value={orgRef} data-testid="new-orgref"
               onChange={e => setOrgRef(e.target.value)} placeholder="例：北京协和医院" /></label>
         )}
+
+        {/* ── 员工名册：账号的另一半 ──────────────────────────────────
+            `account` 回答「谁能登录、看得到什么」，`staff` 回答
+            「他是什么工种、几级、在哪个城市」。**两张表，两件事**，
+            而建号一直只写第一张。
+
+            于是在这一页建出来的 CRC 是半个人：登录进得来、菜单也在，但
+            派工的下拉里没有他、填工时被拒 422（费率按级别挑）、
+            备案名册上没有他、发起不了交接 —— 四处都不报
+            「这个账号没有名册」，只是他不在名单里。
+
+            所以这三栏在这里**必填**（服务端那一侧是可选的，
+            旧调用方还在；缺了的那些由台账上的角标标出来）。 */}
+        {needsStaff && (
+          <div className="stack" data-testid="new-staff">
+            <div className="derive">
+              <b>这个角色要登记员工名册。</b> 不登记的话，这个账号建出来能登录，
+              但<b>派工的下拉里没有他</b>、填工时会被拒、备案名册上也没有他 ——
+              而这四处都不会报「这个账号没有名册」。
+            </div>
+            <div className="grid-form">
+              <Pick label="工种" v={staffKind} on={setStaffKind} testid="new-staff-kind"
+                hint="决定他能不能被派到中心上" placeholder={null}
+                options={ROLE_KINDS.map(k => ({ value: k, label: k }))}
+                empty="工种清单是空的 —— 契约里的 ROLE_KINDS 没了，这不该发生。" />
+              <Pick label="级别" v={staffLevel} on={setStaffLevel} testid="new-staff-level"
+                hint="**决定费率** —— 填错一级，他往后每条工时的成本都是错的"
+                placeholder={null}
+                options={STAFF_LEVELS.map(l => ({ value: l, label: l }))}
+                empty="级别清单是空的 —— 契约里的 STAFF_LEVELS 没了，这不该发生。" />
+              <label className="field"><span>常驻城市</span>
+                <input value={staffCity} data-testid="new-staff-city"
+                  onChange={e => setStaffCity(e.target.value)} placeholder="例：北京" /></label>
+              <label className="field">
+                <span>GCP 证书到期日 <span className="t-mut">· 可留空</span></span>
+                <input value={staffGcp} type="date" data-testid="new-staff-gcp"
+                  onChange={e => setStaffGcp(e.target.value)} /></label>
+            </div>
+          </div>
+        )}
         {/* 初始口令与建号在**同一次提交**里。分成两步的话中间那一格
             是真的会停在那里的：建完号手头有别的事，账号在库里、人进不来，
             而台账上看不出这两件事没配套（「怎么进来」那一列只报收件地址，
@@ -253,7 +312,9 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
         </label>
         <div className="row" style={{ justifyContent: "flex-end" }}>
           <button className="btn primary" data-testid="create-account"
-            disabled={!loginOk || !pwOk || !name.trim() || !roleId || (needsOrg && !orgRef.trim())}
+            disabled={!loginOk || !pwOk || !name.trim() || !roleId
+              || (needsOrg && !orgRef.trim())
+              || (needsStaff && !staffCity.trim())}
             onClick={() => void run(
               pw ? `已建号 ${name}（${login}），初始口令已设 —— 他第一次登录会被要求改掉`
                  : `已建号 ${name}（${login}）`,
@@ -261,9 +322,14 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
                 await createAccount({
                   login: login.trim(), displayName: name.trim(), roleId,
                   teamId: teamId || null, orgRef: needsOrg ? orgRef.trim() : null,
-                  ...(pw ? { password: pw } : {})
+                  ...(pw ? { password: pw } : {}),
+                  ...(needsStaff ? { staff: {
+                    roleKind: staffKind, level: staffLevel, city: staffCity.trim(),
+                    ...(staffGcp ? { gcpExpiresOn: staffGcp } : {})
+                  } } : {})
                 });
                 setLogin(""); setName(""); setTeamId(""); setOrgRef(""); setPw("");
+                setStaffCity(""); setStaffGcp("");
               })}>
             创建账号
           </button>
@@ -290,7 +356,8 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
             <thead>
               <tr>
                 <th>姓名</th><th>登录账号</th><th>角色</th><th>分组</th>
-                <th>行范围</th><th>怎么进来</th><th>最近登录</th><th>状态</th><th />
+                <th>行范围</th><th>员工名册</th><th>怎么进来</th>
+                <th>最近登录</th><th>状态</th><th />
               </tr>
             </thead>
             <tbody>
@@ -309,6 +376,22 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
                     <td><span className="chip flat">{a.role.name}</span></td>
                     <td className="muted">{a.team?.name ?? (a.isExternal ? a.orgRef ?? "外部机构" : "—")}</td>
                     <td className="muted">{r ? ROW_RULE[r.rowRule] ?? r.rowRule : "—"}</td>
+                    {/* 在员工名册上吗。**这一列是这一页唯一能看出「半个人」
+                        的地方** —— 建号只写 account，而派工、工时费率、
+                        备案名册、发起交接四处都读 staff，四处都不报
+                        「这个账号没有名册」，只是他不在名单里。 */}
+                    <td>
+                      {a.staffRoleKind
+                        ? <span className="chip flat" data-testid={`staff-${a.login}`}>
+                            {a.staffRoleKind}
+                          </span>
+                        : needsStaffRecord(a.role.code)
+                          ? <span className="chip crit" data-testid={`no-staff-${a.login}`}
+                              title="没有员工名册行 —— 派工的下拉里没有他，填工时也会被拒">
+                              未登记 · 派不了工
+                            </span>
+                          : <span className="muted">—</span>}
+                    </td>
                     {/* 自助那条路（一次性链接）通不通。**没登记收件地址时，
                         /v1/auth/magic-link 照样回一句「登录链接已发送」而
                         什么都没发** —— 对外含糊是防账号枚举，
@@ -353,6 +436,14 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
                           onClick={() => setAddrFor(a)}>
                           {a.hasLoginAddress ? "换收件地址" : "设收件地址"}
                         </button>
+                        {/* 外部方不给这个按钮：他们的工种与证书归医院管，
+                            我方手里那份不会更新 —— 服务端也会拒。 */}
+                        {!a.isExternal && (
+                          <button className="btn" data-testid={`staff-btn-${a.login}`}
+                            onClick={() => setStaffFor(a)}>
+                            {a.staffRoleKind ? "改名册" : "登记名册"}
+                          </button>
+                        )}
                         {self ? <span className="muted">当前登录</span>
                           : a.status === "active"
                             ? <DangerButton label="停用" testid={`disable-${a.login}`}
@@ -386,6 +477,12 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
             `${pwFor.displayName} 的口令已重设 —— 他下次登录会被要求改掉，之前的会话全部断开`,
             async () => { await setAccountPassword(pwFor.id, password, reason); setPwFor(null); })} />
       )}
+      {staffFor && (
+        <SetStaff account={staffFor} onClose={() => setStaffFor(null)}
+          onSave={(b, label) => run(label, async () => {
+            await setAccountStaff(staffFor.id, b); setStaffFor(null);
+          })} />
+      )}
       {addrFor && (
         <SetLoginAddress account={addrFor} onClose={() => setAddrFor(null)}
           onSave={(address, reason) => run(
@@ -393,6 +490,88 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
             async () => { await setLoginAddress(addrFor.id, address, reason); setAddrFor(null); })} />
       )}
     </>
+  );
+}
+
+/* ── 登记 / 修改员工名册 ────────────────────────────────────────────
+   `account` 回答「谁能登录、看得到什么」，`staff` 回答「他是什么工种、
+   几级、在哪个城市」。**两张表，两件事**，而建号一直只写第一张 ——
+   于是这一页建出来的 CRC 是半个人。
+
+   这个弹层是补那半个人的地方，也是**已经建坏了的那些账号唯一的出路**：
+   派工的下拉是从 staff 出的，名册上没有他，那个下拉就永远没有他。
+
+   级别不是标签：费率卡按「工种 × 级别」挑（app.rate_on），
+   填错一级，那个人往后每一条工时的成本都是错的 —— 所以这里不给默认值
+   之外的宽容，四个选项摆在明面上，由填的人自己认。 */
+function SetStaff({ account, onClose, onSave }: {
+  account: Account; onClose: () => void;
+  onSave: (b: { roleKind: string; level: string; city: string;
+                gcpExpiresOn?: string | null }, label: string) => void;
+}) {
+  const [kind, setKind] = useState<string>(
+    account.staffRoleKind ?? STAFF_ROLE_KIND[account.role.code] ?? "CRC");
+  const [level, setLevel] = useState<string>("中级");
+  const [city, setCity] = useState("");
+  const [gcp, setGcp] = useState("");
+  const 首次 = !account.staffRoleKind;
+
+  return (
+    <div className="card stack" data-testid="set-staff" style={{ marginTop: 12 }}>
+      <div className="spread">
+        <h3>{account.displayName} 的员工名册</h3>
+        <button className="btn link" data-testid="staff-cancel" onClick={onClose}>取消</button>
+      </div>
+
+      {首次 && (
+        <div className="problem" data-testid="staff-why">
+          <strong>这个账号还不在员工名册上。</strong>
+          <div>
+            他登得进来、菜单也在，但<b>派工的下拉里没有他</b>、
+            填工时会被拒（费率按「工种 × 级别」挑，没有名册就挑不出来）、
+            备案名册上没有他、也发起不了交接 ——
+            而这四处都不会报「这个账号没有名册」。
+          </div>
+        </div>
+      )}
+
+      <div className="grid-form">
+        <Pick label="工种" v={kind} on={setKind} testid="staff-kind"
+          hint="决定他能不能被派到中心上" placeholder={null}
+          options={ROLE_KINDS.map(k => ({ value: k, label: k }))}
+          empty="工种清单是空的 —— 契约里的 ROLE_KINDS 没了，这不该发生。" />
+        <Pick label="级别" v={level} on={setLevel} testid="staff-level"
+          hint="决定费率 —— 填错一级，他往后每条工时的成本都是错的"
+          placeholder={null}
+          options={STAFF_LEVELS.map(l => ({ value: l, label: l }))}
+          empty="级别清单是空的 —— 契约里的 STAFF_LEVELS 没了，这不该发生。" />
+        <label className="field"><span>常驻城市</span>
+          <input value={city} data-testid="staff-city"
+            onChange={e => setCity(e.target.value)} placeholder="例：北京" /></label>
+        <label className="field">
+          <span>GCP 证书到期日 <span className="t-mut">· 可留空</span></span>
+          <input value={gcp} type="date" data-testid="staff-gcp"
+            onChange={e => setGcp(e.target.value)} /></label>
+      </div>
+
+      <div className="derive">
+        <b>证书留空 = 未登记。</b> 核查时「没有证书」和「证书过期」是同一件事 ——
+        派工与备案名册两处都会把这种人单独顶出来，不会因为空着就当作没问题。
+      </div>
+
+      <div className="row">
+        <button className="btn primary" data-testid="staff-go"
+          disabled={!city.trim()}
+          onClick={() => onSave(
+            { roleKind: kind, level, city: city.trim(),
+              ...(gcp ? { gcpExpiresOn: gcp } : {}) },
+            首次
+              ? `${account.displayName} 已登记为 ${kind} · ${level} —— 现在派得了工了`
+              : `${account.displayName} 的名册已更新为 ${kind} · ${level}`)}>
+          {首次 ? "登记" : "保存"}
+        </button>
+      </div>
+    </div>
   );
 }
 

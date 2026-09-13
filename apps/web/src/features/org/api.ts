@@ -25,12 +25,25 @@ export const listAccounts = () =>
 export const listRoles = () => call<{ items: Role[] }>("listRoles");
 export const listTeams = () => call<{ items: Team[] }>("listTeams");
 
+/** 员工名册那一行。**建号时一并给** —— 缺了它建出来的是半个人：
+ *  能登录，但派工的下拉里没有他、填工时被拒 422（费率按级别挑）、
+ *  备案名册上没有他、发起不了交接，而四处都不报「这个账号没有名册」。 */
+export interface StaffRecord {
+  roleKind?: string; level: string; city: string; gcpExpiresOn?: string | null;
+}
+
 export const createAccount = (b: {
   login: string; displayName: string; roleId: string;
   teamId?: string | null; orgRef?: string | null;
   /** 初始口令。不传就是不设 —— 那个人得靠一次性链接进来。 */
   password?: string;
+  staff?: StaffRecord;
 }) => call<Account>("createAccount", { body: b });
+
+/** 补登 / 修改员工名册。 */
+export const setAccountStaff = (id: string, b: StaffRecord) =>
+  call<{ sideEffects: { summary: string }[] }>("setAccountStaff",
+    { params: { id }, body: b });
 
 export const updateAccount = (id: string, b: {
   roleId?: string; teamId?: string | null; orgRef?: string | null; reason: string;

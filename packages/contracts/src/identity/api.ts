@@ -6,10 +6,13 @@ import { commandResult, WithReason } from "../kernel/command.js";
 import { MailTransport, MailTestResult,
   SetMailTransportBody, TestMailTransportBody } from "./model.js";
 import { Account, Principal, Role, Team, AuditEntry,
-  CreateAccountBody, UpdateAccountBody, SetAccountPasswordBody,
+  CreateAccountBody, UpdateAccountBody, SetAccountPasswordBody, SetAccountStaffBody,
   CreateTeamBody, UpdateRolePermissionsBody, ListAccountsQuery,
   ListAuditEntriesQuery, SetLoginAddressBody } from "./model.js";
 import { FieldKey } from "../kernel/fields.js";
+/* `Staff` 的定义在 site/staffing —— **不在这里再写一份**。
+   名册是一样东西，只是「组织与权限」这一页也要写它。 */
+import { Staff } from "../site/staffing.js";
 
 const CTX = "identity";
 const ById = z.object({ id: Uuid });
@@ -36,10 +39,33 @@ define({
   summary: "新增账号", action: "manage", status: 201,
   description:
     "不设密码：内部走 OIDC（企业微信 / 飞书），外部走一次性魔法链接。\n" +
-    "row_rule=hospital 的角色必须同时给出 orgRef，否则账号能登录却一行数据都看不到。",
+    "row_rule=hospital 的角色必须同时给出 orgRef，否则账号能登录却一行数据都看不到。\n\n" +
+    "**CRA / CRC / PM / QA / DM 这几个角色要一并给 `staff`**（工种 / 级别 / 城市）——" +
+    "`account` 回答「谁能登录、看得到什么」，`staff` 回答「他是什么工种、几级」，" +
+    "是两张表两件事。只建第一张，建出来的是半个人：能登录，但派工的下拉里没有他、" +
+    "填工时被拒 422（费率按 `staff.level` 挑）、备案名册上没有他、发起不了交接 ——" +
+    "**四处都不报「这个账号没有名册」**。\n" +
+    "缺了它仍然建得出账号（旧调用方不带它也能用），但响应里 `staffRoleKind` 是 null，" +
+    "账号台账会把那几行标出来，并给一个补登的入口。",
   body: CreateAccountBody,
   response: Account,
   errors: ["invariant-violated"]
+});
+
+define({
+  id: "setAccountStaff", method: "post", path: "/v1/accounts/{id}:set-staff",
+  layer: "L2", context: CTX, summary: "登记 / 修改员工名册", action: "manage",
+  description:
+    "补上建号时没填的那一行，或改工种 / 级别 / 城市 / 证书到期日。\n\n" +
+    "**级别不是一个标签**：费率卡按「工种 × 级别」挑（`app.rate_on`），" +
+    "填错一级，那个人往后每一条工时的成本都是错的。所以这里不猜 —— " +
+    "工种推不出来时必须显式给，级别与城市一律必填。\n\n" +
+    "外部方（机构办 / PI）没有名册：他们的工种归医院管，" +
+    "我方手里那份不会更新，摆一列永远为空的 GCP 比不摆更糟。",
+  params: ById,
+  body: SetAccountStaffBody,
+  response: commandResult(Staff),
+  errors: ["invariant-violated", "validation-failed", "idempotency-key-reused"]
 });
 
 define({

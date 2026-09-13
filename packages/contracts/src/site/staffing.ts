@@ -72,6 +72,41 @@ export const StartupSummary = StartupChecklist.omit({ items: true })
 export const ROLE_KINDS = ["CRA", "CRC", "PM", "QA", "DM"] as const;
 export const RoleKind = z.enum(ROLE_KINDS).meta({ id: "RoleKind" });
 
+/** 级别。**与 `staff.level` 的 CHECK 逐字一致**（迁移 0008）——
+ *  它不是一个标签：费率卡按「工种 × 级别」挑（`app.rate_on`），
+ *  填错一级，那个人往后每一条工时的成本都是错的。 */
+export const STAFF_LEVELS = ["初级", "中级", "高级", "经理", "总监"] as const;
+export const StaffLevel = z.enum(STAFF_LEVELS).meta({ id: "StaffLevel" });
+
+/* ════════════════════════════════════════════════════════════════════
+   角色代号 → 员工名册的工种。
+
+   ── 为什么需要这张表 ────────────────────────────────────────────
+   `account` 回答「谁能登录、看得到什么」，`staff` 回答「他是什么工种、
+   几级、在哪个城市、证书什么时候过期」。**两张表，两件事。**
+
+   而建号只写了第一张。于是在「组织与权限」里建出来的 CRC：
+   登录进得来、菜单也在，但
+
+     · **派工的下拉里没有他**（listStaff 是从 staff 出的）
+     · **填工时会被拒 422**（费率按 staff.level 挑，见 cost.service）
+     · 备案名册上没有他、也发起不了交接
+
+   四处都不报「这个账号没有名册」，只是他不在名单里 ——
+   而站在派工那一页的人看到的是「一个空下拉」。
+
+   这张表让台账答得出「这个账号**应该**有名册行吗」：
+   映射得到工种的角色就该有；admin / boss 不干现场活，
+   机构办与 PI 是外部方（他们的工种归医院管），都不该有。
+   ════════════════════════════════════════════════════════════════════ */
+export const STAFF_ROLE_KIND: Record<string, (typeof ROLE_KINDS)[number] | undefined> = {
+  cra: "CRA", crc: "CRC", pm: "PM", qa: "QA", dm: "DM"
+};
+/** 这个角色代号的账号该不该有员工名册行。认不出的角色代号一律 false ——
+ *  管理员自建的角色不该被台账判成「缺了什么」。 */
+export const needsStaffRecord = (roleCode: string): boolean =>
+  STAFF_ROLE_KIND[roleCode] !== undefined;
+
 export const Staff = z.object({
   accountId: Uuid,
   login: z.string(),

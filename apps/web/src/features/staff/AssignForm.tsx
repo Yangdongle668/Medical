@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { call } from "../../api/client.js";
 import { CreateForm, Field, Pick } from "../../shell/CreateForm.js";
 
@@ -45,6 +46,7 @@ export function AssignForm({ staff, onDone, preset }: {
   const [held, setHeld] = useState<Set<string>>(new Set());
   const [since, setSince] = useState("");
   const [reason, setReason] = useState("");
+  const nav = useNavigate();
 
   useEffect(() => {
     void call<{ items: Study[] }>("listStudies", { query: { limit: 100 } })
@@ -110,10 +112,23 @@ export function AssignForm({ staff, onDone, preset }: {
                   (s.gcpDaysLeft !== null && s.gcpDaysLeft < 0
                     ? ` · GCP 已过期 ${-s.gcpDaysLeft} 天` : "")
               }))}
-            /* 字符串属性写成两行的话，JSX 会把换行和缩进原样留在值里 ——
+            /* ── 空的时候说什么，是这个下拉框存在的理由 ──────────────
+               这一栏空着的第一天就有人撞上了，而当时它只说「没有可选的」。
+               真正的原因是**账号建好了不等于名册上有他**：
+               「组织与权限」写的是 `account`（谁能登录、看得到什么），
+               而这个下拉是从 `staff`（他是什么工种、几级）出的。
+               两张表，两件事，而建号一直只写第一张。
+
+               所以这里把原因和去路一起说出来 —— 一句「没有可选的」
+               会让人回去建第二个账号，而第二个也一样进不来。
+
+               字符串属性写成两行的话，JSX 会把换行和缩进原样留在值里，
                页面上就是一句中间夹着七个空格的话。用表达式拼。 */
-            empty={"名册里没有在职的 CRA / CRC —— 派工只对这两个工种成立，" +
-              "先去「人才梯队」把人建起来。"} />
+            empty={"名册里没有在职的 CRA / CRC —— 账号建好了不等于名册上有他。" +
+              "「组织与权限」建的是账号（谁能登录），而派工是从员工名册出的" +
+              "（他是什么工种、几级）。去账号台账，给他点「登记名册」：" +
+              "缺名册的那几行标着「未登记 · 派不了工」。"}
+            action={{ label: "去组织与权限", on: () => nav("/org") }} />
         )}
         <Pick label="项目" v={studyId} on={setStudyId} testid="assign-study"
           options={(studies ?? []).map(s => ({

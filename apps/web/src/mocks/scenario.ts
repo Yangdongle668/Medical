@@ -504,7 +504,19 @@ const gcp = (daysLeft: number | null) => daysLeft === null
       gcpDaysLeft: daysLeft
     };
 
-export const STAFF_LIST = [
+/** 员工名册的一行。**显式定型** —— 不写的话 TS 从四条种子数据里推出一个
+ *  联合类型（successorName 那一栏一会儿是 string 一会儿是 null），
+ *  于是建号时往里 push 一行新的会报一串看不懂的赋值错误。 */
+export interface MockStaff {
+  accountId: string; login: string; displayName: string;
+  roleKind: string; level: string; city: string;
+  gcpExpiresOn: string | null; gcpDaysLeft: number | null;
+  mentorName: string | null; successorName: string | null;
+  siteCount: number; successionGap: boolean;
+  active: boolean; disabledReason: string | null;
+}
+
+export const STAFF_LIST: MockStaff[] = [
   { accountId: "a-wutong",  login: "wutong",  displayName: "吴桐", roleKind: "CRC",
     level: "P4", city: "北京", ...gcp(410),
     mentorName: null, successorName: "唐延", siteCount: 2, successionGap: false,
@@ -522,6 +534,21 @@ export const STAFF_LIST = [
     mentorName: null, successorName: null, siteCount: 0, successionGap: false,
     active: false, disabledReason: "离职 —— 转甲方 CRA" }
 ];
+
+/** 造一行名册。**建号与补登共用** —— 两处各拼一份对象，
+ *  加一栏那天必然只改一处。 */
+export const mkStaff = (accountId: string, login: string, displayName: string,
+  roleKind: string, level: string, city: string,
+  gcpExpiresOn: string | null): MockStaff => ({
+  accountId, login, displayName, roleKind, level, city,
+  gcpExpiresOn,
+  gcpDaysLeft: gcpExpiresOn
+    ? Math.round((new Date(gcpExpiresOn + "T00:00:00").getTime()
+        - new Date(TODAY.toISOString().slice(0, 10) + "T00:00:00").getTime()) / 86_400_000)
+    : null,
+  mentorName: null, successorName: null, siteCount: 0, successionGap: false,
+  active: true, disabledReason: null
+});
 
 /** 备案名册（`/v1/site-staff`）。**不是 STAFF_LIST 的一个投影** ——
  *  它的中心列表按行范围重算，而 STAFF_LIST 的 siteCount 数的是全部派工。
