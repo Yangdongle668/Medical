@@ -141,15 +141,22 @@ describe("动作维度：看得到不等于能操作", () => {
     expect(r.body.code).toBe("forbidden-action");
   });
 
+  /* 这两条原来用的是 wutong（CRC）。迁移 0046 把 `advance` 给了一线
+     （CRA / CRC）—— 递交材料与推进阶段本来就是现场那个人的活，
+     于是 CRC 不再是"没有 advance 的那个角色"。
+
+     换成 weilan（QA）：质量保证看全部、查全部，但**不推进中心阶段** ——
+     它是旁观者，不是当事人。换一个还站在门外的人来验这道门，
+     比把这两条删掉强：要验的不是"CRC 不行"，是"没有这个动作的人不行"。 */
   it("非 advance 角色调用推进阶段 → 403", async () => {
-    const site = (await C.wutong!.get("/v1/study-sites?limit=1")).body.items[0];
-    const r = await C.wutong!.post(`/v1/study-sites/${site.id}:advance`,
+    const site = (await C.weilan!.get("/v1/study-sites?limit=1")).body.items[0];
+    const r = await C.weilan!.post(`/v1/study-sites/${site.id}:advance`,
       { to: "closed" }, { "Idempotency-Key": crypto.randomUUID() });
     expect(r.status).toBe(403);
   });
 
   it("动作权限先于行范围判定 —— 越权动作不会顺带泄漏「这个 id 存不存在」", async () => {
-    const r = await C.wutong!.post(
+    const r = await C.weilan!.post(
       `/v1/study-sites/00000000-0000-0000-0000-0000000000zz:advance`.replace("zz", "01"),
       { to: "closed" }, { "Idempotency-Key": crypto.randomUUID() });
     expect(r.status).toBe(403);
