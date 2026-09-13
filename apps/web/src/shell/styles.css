@@ -177,6 +177,10 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
   /* 过滤框是给"一列二十四项、要滚"的侧栏用的。手机上导航已经是
      一条横向滚动条，再摆一个搜索框只是在首屏上占掉六十像素。 */
   .rail-find { display: none; }
+  /* 「这个角色默认没有开通任何页面」那一段（见 Rail.tsx）。
+     手机上导航是横着的一条 `overflow-x: auto`，一段不折行的话会把
+     横向滚动条拉得很长 —— 给个上限让它在原地折行。 */
+  .nav-none { max-width: 62vw; white-space: normal; }
   .main { padding: 22px 16px 72px; }
   .page-head h2 { font-size: 22px; }
 }

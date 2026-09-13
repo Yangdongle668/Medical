@@ -70,6 +70,25 @@ test("390px 上表格自己横向滚，而不是把整页撑开 —— 那是刻
   expect(scroll).toBeLessThanOrEqual(client);
 });
 
+/* 上面那张 ROUTES 清单跑的都是默认身份（CRC），而它永远有 14 个模块 ——
+   **「侧栏一项都没有」那个状态从来没被量过**。迁移 0051 之后它是一个真的
+   会出现的状态（机构办与研究者默认不开），而顶替那些链接的是一段话：
+   手机上导航是横着的一条 `overflow-x: auto`，一段不折行的文字
+   正好是最容易把整页顶出去的那种东西。 */
+for (const who of ["inst", "pi"] as const) {
+  test(`390px · ${who} 的空侧栏那段话不把页面顶出去`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto(`/${who}?as=${who}`);
+    await page.waitForLoadState("networkidle");
+    await expect(page.getByTestId("rail-empty")).toBeVisible();
+
+    const { scroll, client } = await overflow(page);
+    const bad = scroll > client ? await culprits(page, client) : [];
+    expect(scroll, `溢出 ${scroll - client}px，元凶：\n  ${bad.join("\n  ")}`)
+      .toBeLessThanOrEqual(client);
+  });
+}
+
 /* ════════════════════════════════════════════════════════════════════
    展开的表单，提交按钮要够得着。
 

@@ -12,6 +12,19 @@ import { test, expect } from "@playwright/test";
    四页存在的全部理由是**行范围比内部窄**。所以每一页都有一条
    "内部身份看得到、外部身份看不到"的对照 —— 只测"页面画得出来"，
    把行范围写漏了照样全绿。
+
+   ── 这四页现在是「默认不开」的 ────────────────────────────────────
+   迁移 0051 把 `inst` 与 `pi` 两个角色的模块清单清空了：这套系统是对内的，
+   院方的机构办与研究者不必登录，他们经手的事由院内的人登记进来
+   （立项受理见 0048，PI 确认见 0050）。
+
+   所以下面这些用例走的**一律是直接地址**，而不是点侧栏 ——
+   那不是绕开什么，那正是真实情形：模块只收敛导航、不是安全边界
+   （shell/modules.ts 自己写着这句），页面与端点一个字没动，
+   哪天某家医院真要用，管理员在权限矩阵上把模块勾回来就行。
+
+   「导航」那一组因此翻了个面：从"侧栏上有哪几项"改成
+   **"侧栏上一项都没有，而且说得出为什么"**。
    ════════════════════════════════════════════════════════════════════ */
 
 test.describe("研究者工作台", () => {
@@ -191,31 +204,33 @@ test.describe("人员备案与准入", () => {
   });
 });
 
-test.describe("导航", () => {
-  test("机构办的侧栏只有机构办公室那一组", async ({ page }) => {
-    await page.goto("/inst?as=inst");
-    const nav = page.locator("nav");
-    await expect(nav.getByRole("link", { name: "机构工作台" })).toBeVisible();
-    await expect(nav.getByRole("link", { name: "人员备案与准入" })).toBeVisible();
-    /* 内部那些模块一个都不该在 —— 侧栏跟着 role_module 走 */
-    await expect(nav.getByRole("link", { name: "经营驾驶舱" })).toHaveCount(0);
-    await expect(nav.getByRole("link", { name: "成本与毛利" })).toHaveCount(0);
-  });
+test.describe("导航：默认不开", () => {
+  /* 这一组原来钉的是「机构办的侧栏只有机构办公室那一组」「研究者的侧栏
+     只有两项」—— 也就是**默认开着**。迁移 0051 之后默认反过来了，
+     所以这三条也跟着翻面，钉的仍然是同一件事：
+     **侧栏与 role_module 严格一致**，库里给几项就出几项，一项不多一项不少。 */
 
-  test("研究者的侧栏只有两项", async ({ page }) => {
-    await page.goto("/pi?as=pi");
-    const nav = page.locator("nav");
-    await expect(nav.getByRole("link", { name: "研究者工作台" })).toBeVisible();
-    await expect(nav.getByRole("link", { name: "质量事件与 CAPA" })).toBeVisible();
-    await expect(nav.getByRole("link")).toHaveCount(2);
-  });
+  for (const who of ["inst", "pi"] as const) {
+    test(`${who}：侧栏一项都没有，而且说得出为什么`, async ({ page }) => {
+      await page.goto(`/${who}?as=${who}`);
+      const nav = page.locator(".rail nav");
+      await expect(nav.getByRole("link")).toHaveCount(0);
 
-  test("立项受理点进去是真页面 —— 机构办四个模块全部建好了", async ({ page }) => {
-    /* 这条原来盯的是「还没建：点进去说清它将来长什么样」。
-       立项受理交付之后它照旧要在 —— 守的还是同一条：
-       机构办侧栏里的入口都落到真页面，只是断言从说明页翻成了真内容。 */
-    await page.goto("/inst?as=inst");
-    await page.getByRole("link", { name: "立项受理" }).click();
+      /* **空白说不出自己是哪一种空白。** 没有这句话，登进来的人
+         只会以为权限被收走了、或者系统坏了 —— 而正确答案
+         （"这个角色默认就不开"）一个字都不在屏幕上。 */
+      const why = page.getByTestId("rail-empty");
+      await expect(why).toContainText("默认没有开通任何页面");
+      await expect(why).toContainText("组织与权限");
+    });
+  }
+
+  test("页面本身照旧打得开 —— 收掉的是入口，不是能力", async ({ page }) => {
+    /* 这条原来盯的是「点侧栏的立项受理进去是真页面」。入口没了，
+       但**那四页一个字没改**：模块只收敛导航，不是安全边界。
+       所以直接敲地址照样是真页面、真数据 —— 哪天把模块勾回来，
+       不用改一行代码就能用。这一条正是那句承诺的凭证。 */
+    await page.goto("/inst/intake?as=inst");
     await expect(page.getByTestId("coming-soon")).toHaveCount(0);
     await expect(page.getByTestId("ac-summary")).toBeVisible();
     await expect(page.getByTestId("ac-row").first()).toBeVisible();

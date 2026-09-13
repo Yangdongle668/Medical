@@ -152,16 +152,23 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     isExternal: true, orgRef: "北京协和医院",
     rowRule: "hospital", fields: ["subject"],
     actions: ["accept", "closeQA"],
-    modules: ["inst", "instac", "instqc", "instreg"]
+    /* **模块清单是空的 —— 默认不开**（迁移 0051）。动作、行范围、字段
+       一个字没动：把模块勾回来，这个身份立刻照旧能用。
+       所以侧栏上没有入口，而那四页**照旧打得开** ——
+       模块从来只收敛导航，不是安全边界（见 shell/modules.ts）。
+       e2e 里那二十多条走的正是直接地址，一条都不靠侧栏。 */
+    modules: []
   },
   /* PI：也是一个动作（确认访视）。他有 subjRead，
-     所以看得到筛选号 —— 那是他自己中心的受试者。 */
+     所以看得到筛选号 —— 那是他自己中心的受试者。
+     同样默认不开：迁移 0050 之后 PI 确认改由一线登记，
+     他登不登录这套系统，那条流程都转得动。 */
   pi: {
     id: "a-chenguod", login: "chenguod", name: "陈国栋",
     role: { id: "r-pi", code: "pi", name: "研究者 PI（外部）" },
     isExternal: true, orgRef: "北京协和医院",
     rowRule: "pi", fields: ["subject"],
     actions: ["piConfirm", "subjRead"],
-    modules: ["pi", "qa"]
+    modules: []
   }
 };

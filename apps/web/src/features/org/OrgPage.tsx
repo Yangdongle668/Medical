@@ -1230,7 +1230,23 @@ function PermTab({ roles, run }: { roles: Role[]; run: Run }) {
                 const r = view(r0);
                 return (
                 <tr key={r.id} data-testid="role-row">
-                  <td><div>{r.name}</div><div className="muted mono">{r.code}{r.isExternal && " · 外部"}</div></td>
+                  <td>
+                    <div>
+                      {r.name}
+                      {/* ── 「未启用」不是「坏了」 ──────────────────────
+                          迁移 0051 之后，机构办与研究者两个外部角色的模块
+                          清单是空的 —— 那一行上就只剩一个「0 个模块」，
+                          而 0 在这张表上看起来像**遗漏**：谁都会以为
+                          是有人不小心把它清了，然后好心勾回去。
+
+                          所以要把"这是一个决定"写在行上。 */}
+                      {r.isExternal && r.modules.length === 0 && (
+                        <span className="chip flat" data-testid={`role-off-${r.code}`}
+                          style={{ marginLeft: 6 }}>未启用 · 对外协作</span>
+                      )}
+                    </div>
+                    <div className="muted mono">{r.code}{r.isExternal && " · 外部"}</div>
+                  </td>
                   <td>
                     <select value={r.rowRule} data-testid={`rowrule-${r.code}`}
                       disabled={locked(r0)}
@@ -1336,6 +1352,22 @@ function PermTab({ roles, run }: { roles: Role[]; run: Run }) {
         <b>外部角色默认拒绝</b>：机构办与研究者的字段权限初始全关，靠白名单一项项加回来 ——
         而不是"先给全部再关掉敏感的"。两种做法在正常情况下结果一样，
         在<b>新增一个字段</b>时结果完全相反：前者新字段默认不可见，后者新字段默认泄漏。
+      </div>
+
+      {/* ── 为什么那两行是 0 个模块 ──────────────────────────────────
+          这段话回答的是一个一定会被问的问题：机构办和研究者那两行
+          怎么一个模块都没有？**答案不能只在迁移的注释里。**
+          看这张表的人是管理员，他手上正好有一个把它们勾回来的按钮。 */}
+      <div className="derive" data-testid="external-off-note">
+        <b>机构办与研究者默认不开通 —— 那是一个决定，不是漏配。</b><br />
+        这套系统是<b>对内</b>的：它管的是自家 CRC、CRA、PM 的活。
+        院方的机构办、伦理委员会、研究者不是它的用户，
+        他们经手的事<b>由院内的人登记进来</b> ——
+        立项受理登记那两个日期加一份意见函，PI 签的字由一线带着日期登记。
+        两条流程都不等院方在系统里点任何一下。<br />
+        <b>开通意味着什么：</b>要给那家医院的人开本系统的账号、发登录链接、
+        之后一直为这个账号的行为负责。四个外部页面的代码一直留着，
+        真要开，在上面那一行点「0 个模块」勾回来即可，<b>不用改代码</b>。
       </div>
     </>
   );
