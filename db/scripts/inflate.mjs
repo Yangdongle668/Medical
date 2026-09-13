@@ -156,6 +156,7 @@ await c.query(`
 await c.query(`
   INSERT INTO quality_event (code, study_site_id, kind, severity, state,
                              title, detail, auto_generated, raised_by, raised_on,
+                             form, field_name,
                              closed_at, closed_by, resolution)
   SELECT 'PERF-Q-' || s.code || '-' || g, s.id,
          (ARRAY['deviation','query','other'])[1 + (g % 3)],
@@ -163,6 +164,18 @@ await c.query(`
          CASE WHEN g % 4 = 0 THEN 'closed' ELSE 'open' END,
          'PERF 质量事件', 'PERF 夹具', false, 'cra',
          current_date - ((g % 300) || ' days')::interval,
+         /* **夹具第七次被约束拦下**（迁移 0032 的 quality_query_needs_field /
+            quality_query_only）：kind = 'query' 的事件必须说得出
+            「哪张表、哪一栏」—— 一条不指到具体字段的质疑，中心没法回答；
+            而其余 kind 这两栏必须为空 —— 偏离不走质疑那条回复流程，
+            给它填一个表单名，读的人会以为它走。
+
+            这条一路红到现在：约束是 09-02 跟着数据质疑那一版进来的，
+            而这个夹具上一次改是 08-27。**也就是说 perf:plans 从那天起
+            就跑不起来了，十一天没人发现** —— 一个跑不起来的性能守卫
+            和没有守卫是一回事，区别只是前者还占着一行 npm script。 */
+         CASE WHEN g % 3 = 1 THEN 'PERF-CRF' END,
+         CASE WHEN g % 3 = 1 THEN 'PERF 字段' END,
          /* 关闭必须同时有时间、人与整改说明（quality_closed_needs_resolution）——
             夹具第六次被约束拦下。**这仍然是好消息**：这套 schema 的
             不变量强到连造假数据都绕不过去，于是量出来的性能
