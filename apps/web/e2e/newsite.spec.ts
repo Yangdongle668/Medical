@@ -184,10 +184,15 @@ test("新建的中心：伦理递交被闸门拦下，就地递交材料后放�
      两条同时在屏幕上，按 testid 取单条会撞上 strict mode。 */
   await expect(page.getByTestId("toasts")).toContainText("山东大学齐鲁医院");
 
-  /* 递交之后闸门换了一句话：球到了医院那边 ——
-     材料一律未勾，所以缺的是八项。 */
-  await expect(page.getByTestId("unmet")).toContainText("缺 8 项材料");
-  /* 递过了就不再给递交表 —— 这一条已经不是受托方能办的了 */
+  /* 递交之后闸门换了一句话，而**换成了什么很要紧**。
+     上一版这里断言的是「缺 8 项材料」，配的话是"球到了医院那边" ——
+     那正是要拆掉的那个假定：材料清单是机构办在本系统里逐项勾的，
+     而多数医院的机构办不在这个系统里。清单从必填改成可省略（迁移 0048）
+     之后，这条受理**一项都没列**，于是缺的不是材料，是那张纸。
+
+     新的那句指向站在这里的人自己办得掉的事：拿到受理意见函，登记日期。 */
+  await expect(page.getByTestId("unmet")).toContainText("还没登记《立项受理意见函》");
+  /* 递过了就不再给递交表 —— 同一个 (项目, 医院) 上只有一条受理。 */
   await expect(page.getByTestId("gate-submit-acceptance")).toHaveCount(0);
 });
 

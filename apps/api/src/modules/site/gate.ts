@@ -151,8 +151,17 @@ const irbNeedsAcceptance: Checker = async (client, siteId) => {
       WHERE s.id = $1
       GROUP BY a.state, a.code, a.origin`, [siteId]);
   const a = rows[0];
+  /* **这一条单独一个 code**，不和下面两支共用 `site-acceptance`。
+     区别是实打实的：这里连一条受理都没有，界面上该当场给一张递交表；
+     下面两支是受理已经建出来了、还差材料或者还差那张纸，
+     再给一张递交表只会撞上 (项目, 医院) 的唯一约束。
+
+     中心详情页原来是按**文案里有没有「还没」**来分这两种的 —— 而这一版
+     把「材料已齐，等机构办出具受理通知」改成了「还没登记《立项受理意见函》」，
+     于是那个 `includes("还没")` 突然同时命中两支：递交完之后闸门上又冒出
+     一张递交表，点下去 422「已经递过了」。按 code 分才是按事实分。 */
   if (!a)
-    return { code: "site-acceptance", module: "instac", status: "unmet",
+    return { code: "acceptance-not-submitted", module: "instac", status: "unmet",
              message: "还没登记立项材料递交 —— 受理是医院承接项目的第一道闸门" };
   if (a.state === "accepted")
     return { code: "site-acceptance", status: "ok",

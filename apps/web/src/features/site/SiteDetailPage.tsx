@@ -181,13 +181,20 @@ export function SiteDetailPage() {
                       <Link to={`/sites/${id}/startup`} className="btn go"
                         data-testid="go-startup">去处理</Link>
                     )}
-                    {/* 「还没递交立项材料」是这张清单上**唯一一条受托方
-                        自己就能办掉的** —— 其余几条要么是本方的活
-                        （启动清单），要么球在医院那边（等受理通知）。
+                    {/* 「还没登记立项材料递交」是这张清单上**唯一一条当场
+                        就能办完的** —— 其余几条要么是本方别处的活
+                        （启动清单），要么还差一张纸（受理意见函，去受理台账登记）。
                         所以这一条给的不是「去处理」的链接，是当场就能填的表：
-                        项目与医院都来自这个中心自己，不用再挑一遍。 */}
-                    {u.code === "site-acceptance" && canSubmitAcceptance
-                      && u.message.includes("还没") && (
+                        项目与医院都来自这个中心自己，不用再挑一遍。
+
+                        **判据是 code，不是文案。** 原来写的是
+                        `code === "site-acceptance" && message.includes("还没")`——
+                        那三支（没递 / 缺材料 / 缺意见函）共用一个 code，只好
+                        靠字面区分；而闸门文案一改成「还没登记《立项受理意见函》」，
+                        这个 `includes` 就同时命中两支：递交完之后闸门上又冒出
+                        一张递交表，点下去 422「已经递过了」。
+                        现在「一条受理都没有」是它自己的 code。 */}
+                    {u.code === "acceptance-not-submitted" && canSubmitAcceptance && (
                       <span data-testid="gate-submit-acceptance">
                         <SubmitAcceptanceForm
                           fixed={{

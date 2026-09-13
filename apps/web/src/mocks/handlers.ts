@@ -3628,8 +3628,11 @@ function gateFor(siteId: string) {
       ? scenario.acceptances.find(
           x => x.studyId === dto.study.id && x.hospital === site.hospital)
       : undefined;
+    /* 「一条受理都没有」与「受理在了、还差东西」是两个 code，不是一个 ——
+       前者界面上该当场给一张递交表，后者再给一张只会撞唯一约束。
+       理由见 apps/api/src/modules/site/gate.ts 里那段长注释。 */
     if (!a) return { from, to, satisfied: false, unmet: [{
-      code: "site-acceptance", module: "instac",
+      code: "acceptance-not-submitted", module: "instac",
       message: "还没登记立项材料递交 —— 受理是医院承接项目的第一道闸门"
     }] };
     if (a.state === "accepted") return { from, to, satisfied: true, unmet: [] };

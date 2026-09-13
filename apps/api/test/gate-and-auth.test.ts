@@ -97,8 +97,11 @@ describe("闸门：推进不是给字段赋值，是断言一组事实成立", (
     const blocked = await advance(s.id, "irb_submit", "先递了再说");
     expect(blocked.status).toBe(422);
     expect(blocked.body.code).toBe("gate-not-satisfied");
+    /* **自己一个 code。** 界面上只有这一支该当场给一张递交表 ——
+       下面「还差材料」「还差意见函」那两支受理已经建出来了，
+       再给一张只会撞 (项目, 医院) 的唯一约束。 */
     expect(blocked.body.unmet[0]).toMatchObject(
-      { code: "site-acceptance", module: "instac" });
+      { code: "acceptance-not-submitted", module: "instac" });
     expect(blocked.body.unmet[0].message).toContain("还没登记立项材料递交");
 
     /* 递了但没受理，照样不放行 —— 而且它说得出还缺哪几份 */
