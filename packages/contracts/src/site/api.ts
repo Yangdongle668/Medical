@@ -6,7 +6,7 @@ import { commandResult, WithReason } from "../kernel/command.js";
 import { Study, StudySite, SiteState, SiteGate,
   SiteAcceptance, AcceptanceState, SubmitAcceptance,
   IsfBoard, IsfCategory, CreateStudySiteBody, SetStudyTeamBody,
-  SetStudySitePiBody } from "./model.js";
+  SetStudySitePiBody, RecordAcceptanceLetterBody } from "./model.js";
 
 const CTX = "site";
 const ById = z.object({ id: Uuid });
@@ -523,6 +523,45 @@ define({
   params: ById, body: z.object({}),
   response: commandResult(SiteAcceptance),
   errors: ["invariant-violated", "idempotency-key-reused"]
+});
+
+/* ── 一线的那两个日期 ────────────────────────────────────────────────
+   `submitSiteAcceptance` 与这一条合起来，就是 CRC 在这条流程上全部的活：
+   **哪天递交的、哪天拿到受理意向函的**，外加那张纸。
+
+   材料清单、逐项勾选、补正通知那一套（下面三条）一行没动 —— 它们是
+   **机构办在本系统里办受理**时走的路。多数医院的机构办不在这个系统里，
+   那条路就空着；空着不等于错，但不该是一线的必经之路。 */
+define({
+  id: "recordAcceptanceLetter", method: "post",
+  path: "/v1/site-acceptances/{id}:record-letter",
+  layer: "L2", context: CTX,
+  summary: "登记拿到立项受理意向函", action: "advance",
+  description:
+    "一线报给项目管理员的**第二个日期**，也是这条流程真正的终点。\n\n" +
+    "在此之前「拿到受理意向函」在系统里唯一的痕迹是一个日期，" +
+    "而核查要看的是那张纸 —— 所以这里连 PDF 一起收（≤ 10 MB，只收 PDF）。\n\n" +
+    "**文件可以不传**：纸还没拿到手、先把日期登记上，是常事；补传一次覆盖前一份。\n" +
+    "**受理人不必填** —— 医院那边是谁受理的，由那份意向函回答；" +
+    "填一个下拉框里挑出来的名字是编的（见迁移 0048）。" +
+    "谁在系统里登记的这一条，进审计轨迹。",
+  params: ById,
+  body: RecordAcceptanceLetterBody,
+  response: commandResult(SiteAcceptance),
+  errors: ["invariant-violated", "validation-failed", "idempotency-key-reused"]
+});
+
+define({
+  id: "getAcceptanceLetter", method: "get",
+  path: "/v1/site-acceptances/{id}/letter",
+  layer: "L1", context: CTX,
+  summary: "取立项受理意向函原件",
+  description:
+    "返回 PDF 本身（`application/pdf`），不是 JSON。\n" +
+    "行范围跟着那条受理走 —— 看不见那条受理的人取不到这份文件。",
+  params: ById,
+  response: z.string().describe("PDF 字节流"),
+  errors: ["not-found"]
 });
 
 define({

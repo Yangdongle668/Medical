@@ -33,6 +33,10 @@ interface AcRow {
   state: string; origin: string; amend_note: string | null;
   accepted_on: Date | null; accepted_by_name: string | null;
   docs: { seq: number; name: string; present: boolean }[];
+  /** 意向函的元信息。**永远不带 bytes** —— 台账是逐页翻的，
+   *  而那份 PDF 只在有人点开时才要（内容走 getLetter 那条端点）。 */
+  letter: { filename: string; contentType: string; sizeBytes: number;
+            uploadedAt: string; uploadedByName: string } | null;
 }
 
 /* **一个 join 都不内联到 study / client 上。**
@@ -53,7 +57,18 @@ const AC_COLS = `
   COALESCE((
     SELECT json_agg(json_build_object('seq', d.seq, 'name', d.name, 'present', d.present)
              ORDER BY d.seq)
-      FROM acceptance_doc d WHERE d.acceptance_id = a.id), '[]'::json) AS docs`;
+      FROM acceptance_doc d WHERE d.acceptance_id = a.id), '[]'::json) AS docs,
+  /* 意向函**只取元信息**：filename / 大小 / 谁传的。
+     bytes 那一列一个字节都不进这条查询 —— 受理台账一页二十行，
+     每行捎上几百 KB 的 PDF，那一次请求就废了。
+     （注释里不写反引号 —— 它会把这个模板字符串就地截断。） */
+  (SELECT json_build_object(
+            'filename', l.filename, 'contentType', l.content_type,
+            'sizeBytes', l.size_bytes, 'uploadedAt', l.uploaded_at,
+            'uploadedByName', COALESCE(ub.display_name, '（本方）'))
+     FROM acceptance_letter l
+     LEFT JOIN account ub ON ub.id = l.uploaded_by
+    WHERE l.acceptance_id = a.id) AS letter`;
 const AC_FROM = `
   FROM site_acceptance a
   LEFT JOIN account sb ON sb.id = a.submitted_by
@@ -83,6 +98,21 @@ export class AcceptanceService {
     throw new ProblemException("invariant-violated", { detail, invariant: name });
   }
 
+  /** 「今天」**问库要**，不在 JS 里从 UTC 的此刻切。
+   *
+   *  `new Date().toISOString().slice(0,10)` 给的是 UTC 那一天，而落库用的是
+   *  `CURRENT_DATE`（库会话的时区）。两者在东八区每天早上差着八个小时 ——
+   *  七点上工的 CRC 填今天的日期递交，会被判成「在将来」而拒掉，
+   *  而报错说的是一件他看着明明没做错的事。
+   *
+   *  前端那一侧有一条守卫盯着同一件事（apps/web/test/dates.test.ts），
+   *  服务端这一侧靠的是"跟落库用的是同一个源"。 */
+  private async today(): Promise<string> {
+    const { rows } = await ctx().client.query<{ d: string }>(
+      "SELECT CURRENT_DATE::text AS d");
+    return rows[0]!.d;
+  }
+
   private acDto(r: AcRow) {
     const docs = r.docs.map(d => ({ seq: d.seq, name: d.name, present: d.present }));
     return {
@@ -95,6 +125,7 @@ export class AcceptanceService {
       state: r.state, origin: r.origin, amendNote: r.amend_note,
       acceptedOn: day(r.accepted_on), acceptedByName: r.accepted_by_name,
       docs,
+      letter: r.letter,
       presentDocs: docs.filter(d => d.present).length,
       /* **缺的是哪几份 —— 名字，不是数目。** 补正通知要写的正是这几个名字。 */
       missingDocs: docs.filter(d => !d.present).map(d => d.name)
@@ -146,12 +177,25 @@ export class AcceptanceService {
    *
    *  清单由请求带来。各医院要审的东西不一样（原型那两条就差着一项），
    *  写死在服务端等于替所有医院决定它们该查什么。 */
-  async submit(b: { studyId: string; hospital: string; docs: string[] }) {
+  async submit(b: {
+    studyId: string; hospital: string; docs?: string[]; submittedOn?: string;
+  }) {
     const c = ctx();
     const p = principal();
+    const docs = b.docs ?? [];
+
+    /* 递交日期收得下**过去**，收不下将来。一线常常是过两天才回系统里补登，
+       默认成今天的话「递交日期」这一栏就成了「登记日期」——
+       而那几天差额恰恰是伦理排期要算的。 */
+    const today = await this.today();
+    if (b.submittedOn && b.submittedOn > today)
+      throw new ProblemException("validation-failed", {
+        detail: `递交日期 ${b.submittedOn} 在将来 —— 这一栏记的是「哪天递出去的」，` +
+          "还没递的不用先登记"
+      });
 
     /* 同名两遍的清单，勾了一个另一个还缺着 —— 而它俩看起来一模一样。 */
-    const dup = b.docs.find((d, i) => b.docs.indexOf(d) !== i);
+    const dup = docs.find((d, i) => docs.indexOf(d) !== i);
     if (dup)
       this.invariant("acceptance-docs-duplicate",
         `材料清单里「${dup}」出现了两次 —— 勾了一个另一个还缺着，而它俩看起来一样`);
@@ -184,16 +228,17 @@ export class AcceptanceService {
        顺带修掉它剩下的那半个问题：那句 max 是在 RLS 下数的。 */
     const { rows } = await c.client.query<{ id: string }>(
       `INSERT INTO site_acceptance (code, study_id, study_code, drug, sponsor_name,
-                                    phase, hospital, submitted_by, origin)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'in_system')
+                                    phase, hospital, submitted_by, origin, submitted_on)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'in_system', COALESCE($9::date, CURRENT_DATE))
        RETURNING id`,
       [await nextCode("acceptance"), b.studyId, study.code, study.short_name,
-       study.sponsor_name, study.phase, b.hospital, p.accountId]);
+       study.sponsor_name, study.phase, b.hospital, p.accountId,
+       b.submittedOn ?? null]);
     const id = rows[0]!.id;
 
     /* **递进去一律未勾** —— 勾是机构办形式审查的动作，
        递交方自己勾完再递，形式审查就没有意义了。 */
-    for (const [seq, name] of b.docs.entries())
+    for (const [seq, name] of docs.entries())
       await c.client.query(
         `INSERT INTO acceptance_doc (acceptance_id, seq, name, present)
          VALUES ($1, $2, $3, false)`, [id, seq, name]);
@@ -201,9 +246,128 @@ export class AcceptanceService {
     const dto = await this.reloadAcceptance(id);
     await this.audit.write({
       action: "递交立项材料", targetType: "site_acceptance", targetId: dto.code,
-      after: { hospital: b.hospital, docs: b.docs.length },
-      reason: `向 ${b.hospital} 机构办递交 ${b.docs.length} 项立项材料` });
+      after: { hospital: b.hospital, docs: docs.length,
+               submittedOn: b.submittedOn ?? today },
+      /* 清单为空是正常的 —— 多数医院的机构办不在本系统里，
+         那张清单没有第二个人来勾（见迁移 0048）。审计里照实说。 */
+      reason: docs.length
+        ? `向 ${b.hospital} 机构办递交 ${docs.length} 项立项材料`
+        : `向 ${b.hospital} 机构办递交立项材料（未列清单）` });
     return dto;
+  }
+
+  /* ── 一线的第二个日期：拿到立项受理意向函 ────────────────────────
+     `acceptSite` 是**机构办在本系统里点下「予以受理」**那条路。
+     多数医院的机构办不在这个系统里（迁移 0038 自己写着这句话），
+     于是那条路空着，而一线手里已经拿着那张纸了。
+
+     这一条就是那张纸落库的地方：一个日期 + 一份 PDF。
+     **受理人不必填** —— 医院那边是谁受理的，由那份意向函回答；
+     填一个下拉框里挑出来的名字是编的（迁移 0048 为此放松了约束）。
+     谁在系统里登记的，进审计轨迹 —— 那两件事本来就不该混。 */
+
+  /** PDF 的上限。契约里也写着，这里是第二道 —— 两处都在，
+   *  才防得住"有人绕过前端直接打接口"。库里还有第三道（CHECK）。 */
+  private static readonly LETTER_MAX = 10 * 1024 * 1024;
+
+  async recordLetter(id: string, b: {
+    receivedOn: string;
+    file?: { filename: string; contentBase64: string };
+  }) {
+    const c = ctx();
+    const p = principal();
+    const a = await this.oneAcceptance(id);
+    this.refuseRegistered(a, "登记受理意向函");
+
+    const today = await this.today();
+    if (b.receivedOn > today)
+      throw new ProblemException("validation-failed", {
+        detail: `收到日期 ${b.receivedOn} 在将来 —— 这一栏记的是「哪天拿到的」，` +
+          "还没拿到的不用先登记"
+      });
+    if (b.receivedOn < day(a.submitted_on)!)
+      this.invariant("acceptance-letter-before-submit",
+        `收到日期 ${b.receivedOn} 早于递交日期 ${day(a.submitted_on)} —— ` +
+        "受理意向函不会比材料先到");
+
+    let bytes: Buffer | null = null;
+    if (b.file) {
+      /* base64 解出来才知道真实大小。**按解出来的判**，不按字符串长度 ——
+         base64 比原文大三分之一，拿字符串长度当大小会把一份 7.5 MB 的
+         PDF 报成"超过 10 MB"，而报错里那个数字对不上人看到的文件大小。 */
+      bytes = Buffer.from(b.file.contentBase64, "base64");
+      if (!bytes.length)
+        throw new ProblemException("validation-failed", {
+          detail: "文件内容是空的 —— base64 解出来一个字节都没有" });
+      if (bytes.length > AcceptanceService.LETTER_MAX)
+        throw new ProblemException("validation-failed", {
+          detail: `文件 ${(bytes.length / 1048576).toFixed(1)} MB，超过 10 MB 上限 —— ` +
+            "受理意向函是一页扫描件，这么大通常是扫描分辨率调得太高"
+        });
+      /* **认一下它是不是真的 PDF。** 只看扩展名或 contentType 的话，
+         传上来的可能是任何东西，而下载的人拿到一个打不开的文件时，
+         第一反应是"系统坏了"。PDF 的前五个字节是 %PDF-。 */
+      if (bytes.subarray(0, 5).toString("latin1") !== "%PDF-")
+        throw new ProblemException("validation-failed", {
+          detail: "这不是一个 PDF 文件（开头不是 %PDF-）—— " +
+            "受理意向函请传扫描件的 PDF；改个扩展名不会让它变成 PDF"
+        });
+    }
+
+    const before = { acceptedOn: day(a.accepted_on), hasLetter: !!a.letter };
+
+    await c.client.query(
+      `UPDATE site_acceptance
+          SET state = 'accepted', accepted_on = $2::date
+        WHERE id = $1`, [id, b.receivedOn]);
+
+    if (bytes)
+      await c.client.query(
+        `INSERT INTO acceptance_letter
+           (acceptance_id, filename, bytes, size_bytes, uploaded_by)
+         VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (acceptance_id) DO UPDATE
+           SET filename = EXCLUDED.filename, bytes = EXCLUDED.bytes,
+               size_bytes = EXCLUDED.size_bytes,
+               uploaded_by = EXCLUDED.uploaded_by, uploaded_at = now()`,
+        [id, b.file!.filename.trim(), bytes, bytes.length, p.accountId]);
+
+    await this.audit.write({
+      action: "登记受理意向函", targetType: "site_acceptance", targetId: a.code,
+      before, after: { acceptedOn: b.receivedOn, hasLetter: !!bytes || before.hasLetter },
+      studySiteId: a.study_site_id ?? undefined,
+      /* 记的是**谁登记的**，不是谁受理的 —— 后者在那张纸上。 */
+      reason: `${a.hospital} 的受理意向函，${b.receivedOn} 收到` +
+        (bytes ? `，已上传扫描件（${(bytes.length / 1024).toFixed(0)} KB）` : "（扫描件待补）") });
+
+    const dto = await this.reloadAcceptance(id);
+    return {
+      data: dto,
+      sideEffects: [{
+        type: "SiteAccepted" as const,
+        summary: `${a.code} 已受理（${b.receivedOn} 收到意向函）` +
+          (bytes ? "" : " —— **扫描件还没传**，核查要看的是那张纸，别忘了补上") +
+          (a.study_site_id
+            ? "；该中心现在可以推进到「伦理递交」"
+            : "；这个中心还没建档 —— 建档之后这条受理会自动挂上去"),
+        ref: a.id,
+        ...(a.study_site_id ? { studySiteId: a.study_site_id } : {})
+      }]
+    };
+  }
+
+  /** 取意向函原件。**这一条单独走**，因为它返回的是 PDF 字节而不是 JSON ——
+   *  而台账那条查询一个字节都不带它。 */
+  async letter(id: string) {
+    /* 先过一次受理本身：行策略在那条上（acceptance_letter 的策略跟着父行走），
+       而**范围外与不存在返回同一个 404** —— 区分开就是在确认「它存在」。 */
+    await this.oneAcceptance(id);
+    const { rows } = await ctx().client.query<{
+      filename: string; content_type: string; bytes: Buffer;
+    }>(`SELECT filename, content_type, bytes FROM acceptance_letter
+         WHERE acceptance_id = $1`, [id]);
+    if (!rows[0]) throw notFound("受理意向函");
+    return rows[0];
   }
 
   /** 系统外登记的受理**不是一条待办**，是一条既成事实的存根。

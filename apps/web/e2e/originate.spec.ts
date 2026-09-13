@@ -65,29 +65,73 @@ test.describe("提交立项申请", () => {
 });
 
 test.describe("递交立项材料", () => {
-  test("递进去的清单一律未勾 —— 勾是形式审查的动作", async ({ page }) => {
+  /* 这张表瘦过一次。第一版要求先编一张八项清单才递得出去，而那套模型
+     假定医院的机构办是本系统的用户 —— 迁移 0038 自己写着相反的事实。
+     于是那张清单由递交方自己填、自己不勾、也没有第二个人来勾。
+     现在默认只问项目、医院、递交日期三栏，清单折进一个按钮后面。 */
+  test("默认只问三栏，不逼人先编一张清单", async ({ page }) => {
     await page.goto("/inst/intake?as=boss");
     await expect(page.getByTestId("ac-row").first()).toBeVisible();
     const before = await page.getByTestId("ac-row").count();
 
     await page.getByTestId("submit-acceptance").click();
+    /* 清单默认**不展开**，也不预填 —— 预填一个默认折叠的区域，
+       等于替人做了"要列清单"这个决定。 */
+    await expect(page.getByTestId("sa-docs-items")).toHaveCount(0);
+
     await page.getByTestId("sa-study").selectOption({ index: 1 });
     await page.getByTestId("sa-hospital").fill("四川大学华西医院");
-
-    /* 预填的是 ACCEPTANCE_DOC_TEMPLATE 那八份 —— 默认值，不是规则。 */
-    await expect(page.getByTestId("sa-docs-items").locator("li")).toHaveCount(8);
-    await page.getByTestId("sa-docs-draft").fill("本院伦理受理回执");
-    await page.getByTestId("sa-docs-add").click();
-    await expect(page.getByTestId("sa-docs-items").locator("li")).toHaveCount(9);
-
     await page.getByTestId("submit-acceptance-submit").click();
     await expect(page.getByTestId("toast")).toContainText("四川大学华西医院");
 
     await expect(page.getByTestId("ac-row")).toHaveCount(before + 1);
     const row = page.getByTestId("ac-row").filter({ hasText: "四川大学华西医院" });
     await expect(row).toContainText("形式审查中");
-    /* 九项全未勾：0/9，缺九项。递交方自己勾完再递，形式审查就没意义了。 */
+    /* **空清单不是「齐备」。** 0/0 在界面上长得像"全齐了"，
+       所以那一行照实说：没列。 */
+    await expect(row.getByTestId("ac-no-docs")).toContainText("没有列材料清单");
+  });
+
+  test("要列的照样列得出来 —— 收回的是「必经」，不是「能力」", async ({ page }) => {
+    await page.goto("/inst/intake?as=boss");
+    await page.getByTestId("submit-acceptance").click();
+    await page.getByTestId("sa-study").selectOption({ index: 1 });
+    await page.getByTestId("sa-hospital").fill("中南大学湘雅医院");
+
+    /* 展开之后才预填 ACCEPTANCE_DOC_TEMPLATE 那八份 —— 默认值，不是规则。 */
+    await page.getByTestId("sa-docs-open").click();
+    await expect(page.getByTestId("sa-docs-items").locator("li")).toHaveCount(8);
+    await page.getByTestId("sa-docs-draft").fill("本院伦理受理回执");
+    await page.getByTestId("sa-docs-add").click();
+    await expect(page.getByTestId("sa-docs-items").locator("li")).toHaveCount(9);
+
+    await page.getByTestId("submit-acceptance-submit").click();
+    await expect(page.getByTestId("toast")).toContainText("中南大学湘雅医院");
+
+    const row = page.getByTestId("ac-row").filter({ hasText: "中南大学湘雅医院" });
+    /* 九项全未勾：0/9。递交方自己勾完再递，形式审查就没意义了。 */
     await expect(row).toContainText("0/9");
+  });
+
+  /* 一线在这条流程上的第二件事，也是最后一件：那张纸。 */
+  test("登记受理意向函：一个日期 + 一份 PDF", async ({ page }) => {
+    await page.goto("/inst/intake?as=boss");
+    await page.getByTestId("submit-acceptance").click();
+    await page.getByTestId("sa-study").selectOption({ index: 1 });
+    await page.getByTestId("sa-hospital").fill("郑州大学第一附属医院");
+    await page.getByTestId("submit-acceptance-submit").click();
+
+    const row = page.getByTestId("ac-row").filter({ hasText: "郑州大学第一附属医院" });
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "登记受理意向函" }).click();
+    await expect(page.getByTestId("record-letter")).toBeVisible();
+
+    /* 文件可以后补 —— 纸还没到手、先把日期登记上是常事。 */
+    await page.getByTestId("rl-go").click();
+    await expect(page.getByTestId("toast")).toContainText("已受理");
+
+    /* 而**没传纸这件事要显眼**：核查看的是那张纸，不是台账上的一个日期。 */
+    await expect(row.getByTestId("ac-letter-missing")).toContainText("还没传");
   });
 
   test("同一个项目对同一家医院不能递两次", async ({ page }) => {

@@ -1347,6 +1347,10 @@ export interface MockAcceptance {
   state: string; origin: string; amendNote: string | null;
   acceptedOn: string | null; acceptedByName: string | null;
   docs: MockAcceptanceDoc[];
+  /** 受理意向函。**mock 里也要可变** —— 这一组端点存在的理由就是
+   *  "登记完那一行上就有那张纸了"，一份只读的假数据演不出这件事。 */
+  letter?: { filename: string; contentType: string; sizeBytes: number;
+             uploadedAt: string; uploadedByName: string } | null;
 }
 
 /** 立项受理。四条各站一个岗：
