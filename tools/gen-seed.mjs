@@ -245,7 +245,21 @@ for (const st of STUDIES) {
       ` offset_days, window_days, compensation_cents) VALUES (` +
       `'${uuid5("study:"+st.id)}', ${i}, ${q(code === "SCR" ? "SCR" : code + "-" + i)}, ` +
       `${q(so.label(i))}, ${q(i === 0 ? "icf" : "enroll")}, ` +
-      `${i === 0 ? -14 : (i - 1) * so.cycle}, ${so.win}, ${COMP(st.id, i)});`);
+      /* ── 筛选期访视的 offset 是 0，不是 -14 ────────────────────────
+         原来这里写的是 -14，意思是"锚点（知情签署日）往前 14 天" ——
+         于是 `signIcf` 排出来的筛选期访视**一生下来就已经超窗 10 天**：
+         签知情那天排出的目标日在两周前，窗口早就关了。
+         实测：ICF 2026-09-14 → target 2026-08-31，窗口 08-28 ~ 09-04，
+         outOfWindow = true、daysLeft = -10。
+         而超窗完成必须生成方案偏离（I4）—— 也就是说，**每登记一个新受试者，
+         系统都会给他记一次方案偏离**，而没有任何地方会说这是排期排错了。
+
+         这个 -14 不是原型定的：原型的 SOA 只给了 cycle / win / last /
+         label / tasks，一个 offset 都没有（见 prototype/index.html）。
+         而它 seq 0 的任务清单第一项就是「知情同意签署」——
+         筛选期访视本来就发生在签知情那一天前后，不是它之前两周。
+         所以 0：目标日 = 知情签署日，前后各留 win 天。 */
+      `${i === 0 ? 0 : (i - 1) * so.cycle}, ${so.win}, ${COMP(st.id, i)});`);
     so.tasks(i).forEach((t, k) =>
       P(`INSERT INTO visit_template_task (study_id, visit_seq, seq, task) VALUES (` +
         `'${uuid5("study:"+st.id)}', ${i}, ${k}, ${q(t)});`));
@@ -265,6 +279,10 @@ const dayBefore = (base, n) =>
 const TODAY = "2026-08-24";
 
 let subjRows = 0;
+/* 访视行数在这里声明，不在下面那段 —— 在筛的人也要铺一条筛选期访视，
+   而那是在这个循环里。声明留在下面的话，这上面的 `visitRows++` 撞的是
+   TDZ，整个生成器起不来。 */
+let visitRows = 0;
 for (const ss of SITES) {
   const f = FUNNEL[ss.id] || { pre: 0, icf: 0, sf: 0, sfr: [0,0,0,0,0,0] };
   const sid = uuid5("site:" + ss.id);
@@ -331,9 +349,32 @@ for (const ss of SITES) {
   const inScr = Math.max(0, f.icf - ss.enrolled - f.sf - named.filter(x => x.st === "筛选中").length);
   for (let i = 0; i < inScr; i++) {
     const no = nextNo();
-    P(`INSERT INTO subject (study_site_id, screening_no, state, icf_signed_on, crc_account_id)` +
-      ` VALUES ('${sid}', ${q(no)}, 'screening', ${d(dayBefore(TODAY, 10 + i * 3))}, ${crc});`);
+    const icf = dayBefore(TODAY, 10 + i * 3);
+    /* **id 显式给**：下面那条筛选期访视要挂在它上面。
+       让库自己发 id 的话，这里就拿不到，访视也就铺不出来 —— 而那正是
+       这一版之前的样子。 */
+    const uid = uuid5("scr:" + ss.id + ":" + no);
+    P(`INSERT INTO subject (id, study_site_id, screening_no, state, icf_signed_on,` +
+      ` crc_account_id) VALUES ('${uid}', '${sid}', ${q(no)}, 'screening', ` +
+      `${d(icf)}, ${crc});`);
     subjRows++;
+    /* ── 在筛的人必须有筛选期访视 ────────────────────────────────────
+       真实流程里 `signIcf` 一定会连它一起排出来（scheduleVisit seq 0）。
+       种子原来只插受试者、不插访视，于是演示库里有一批**进得去出不来**
+       的人：入组要求筛选期访视已登记 PI 确认，而他们连访视都没有；
+       受试者访视窗口上那一行只有「登记脱落」一个按钮。
+       现场报来的原话：「页面没有可以操作的按钮，只有一个脱落」。
+
+       target = 知情签署日（offset 0，见上面那段），窗口前后各 win 天。 */
+    const so0 = soaOf(ss.sid);
+    const vid0 = uuid5("scrvisit:" + ss.id + ":" + no);
+    P(`INSERT INTO subject_visit (id, subject_id, study_site_id, seq, visit_code,` +
+      ` visit_label, target_date, window_days, status) VALUES ('${vid0}', '${uid}', ` +
+      `'${sid}', 0, 'SCR', ${q(so0.label(0))}, ${d(icf)}, ${so0.win}, 'planned');`);
+    so0.tasks(0).forEach((t, k) =>
+      P(`INSERT INTO subject_visit_task (visit_id, seq, task) VALUES (` +
+        `'${vid0}', ${k}, ${q(t)});`));
+    visitRows++;
   }
   /* 预筛：还没签知情 */
   const pre = Math.max(0, f.pre - f.icf);
@@ -348,7 +389,6 @@ P(``);
 
 /* ── 具名受试者的当前访视：原型里的 due / win / tasks ── */
 P(`-- ── 访视：窗口用 daterange 生成列，超窗查询走 GiST 索引 ────────`);
-let visitRows = 0;
 for (const x of SUBJ) {
   const ss = site(x.ss); if (!ss) continue;
   const so = soaOf(ss.sid);

@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { allEndpoints, SITE_STATES, DEFAULT_HANDOVER_ITEMS,
-  CHANGE_KIND_LABEL } from "@sitedesk/contracts";
+  CHANGE_KIND_LABEL, screeningGateWording } from "@sitedesk/contracts";
 
 /** 变更类型的键。中文名从契约来，**不在 mock 里另抄一份** ——
  *  抄一份的后果不是不一致告警，是两份都对不上而没人知道哪份是真的。 */
@@ -38,7 +38,7 @@ import type { MockAccount, MockSoaVisit,
   MockAcceptance, MockIsf } from "./scenario.js";
 import { CLIENTS } from "./scenario.js";
 import { makeScenario, SITES_LIST, STAFF_LIST, SITE_STAFF, FUNNELS, AUDIT_ENTRIES,
-  ASSIGNMENTS, newAssignmentId, mkStaff, mkTimesheet, WORK_TYPE_META,
+  ASSIGNMENTS, newAssignmentId, mkStaff, mkTimesheet, WORK_TYPE_META, nextOf,
   type MockSubject, type MockPayment,
   type Scenario, type MockVisit, type MockHandover, type MockRateCard,
   type MockTimesheet } from "./scenario.js";
@@ -3060,8 +3060,48 @@ export const scenarioHandlers = [
         "知情签署日不能晚于今天"), { status: 422 });
     s.icfSignedOn = b.signedOn; s.state = "screening";
     s.visitsPlanned = 8; s.visitsDone = 0;
+
+    /* ── 筛选期访视要**真的排出来** ──────────────────────────────────
+       这里原来只把计数改成 `visitsPlanned = 8`，一条访视都不建 ——
+       于是 mock 上每一个刚签完知情的人，都是一个**进得去出不来**的人：
+       入组闸门要求筛选期访视已登记 PI 确认，而他连访视都没有；
+       受试者访视窗口上那一行只有「登记脱落」。
+       现场报来的原话：「页面没有可以操作的按钮，只有一个脱落」。
+
+       服务端的 `signIcf` 一直是连访视一起排的（scheduleVisit seq 0）。
+       两边不一样的时候，演示走得通而真库走不通 —— 或者反过来，
+       而后者正是这次：真库走得通的"下一步"，在演示上根本不存在。
+
+       目标日 = 知情签署日（SOA 的 seq 0 是 `anchor='icf', offsetDays=0`）。 */
+    const t0 = (scenario.soa["st1"] ?? Object.values(scenario.soa)[0])
+      ?.visits.find(v => v.seq === 0);
+    const win = t0?.windowDays ?? 7;
+    const windowTo = addDays(b.signedOn, win);
+    /* 窗口关得早于今天就是超窗 —— 晚补登的知情（`signedOn` 填的是几周前
+       那一天）排出来的访视本来就是逾期的。写死 `false` 的话，
+       那一行在列表上不红，而它正是最该先办的一条。 */
+    const daysLeft = daysBetween(todayStr(), windowTo);
+    const vid = `v-${s.id}-0`;
+    const v0: MockVisit = {
+      id: vid, subjectId: s.id, screeningNo: s.screeningNo,
+      studySiteId: s.studySiteId, siteCode: s.siteCode, seq: 0,
+      visitCode: t0?.visitCode ?? "SCR", visitLabel: t0?.visitLabel ?? "筛选期访视",
+      targetDate: b.signedOn,
+      windowDays: win,
+      windowFrom: addDays(b.signedOn, -win), windowTo,
+      actualDate: null, status: "planned", edcStatus: "pending",
+      edcDaysLate: null, outOfWindow: daysLeft < 0, daysLeft,
+      piConfirmedAt: null, piConfirmedByName: null,
+      tasks: (t0?.tasks ?? ["知情同意签署", "入排标准核查", "基线实验室检查"])
+        .map((task, i) => ({ seq: i, task, doneAt: null }))
+    };
+    scenario.visits.push(v0);
+    s.nextVisit = nextOf(v0);
+
     return HttpResponse.json({ data: maskSubject(s), sideEffects: [
-      { type: "ScreeningVisitsScheduled", summary: "已按 SOA 生成筛选期访视窗口" }
+      { type: "NextVisitScheduled", ref: vid,
+        summary: `已排下一次访视：${t0?.visitLabel ?? "筛选期访视"}，` +
+          `目标日 ${b.signedOn}，窗口 ±${win} 天` }
     ] }, { status: 201 });
   }),
 
@@ -3082,22 +3122,15 @@ export const scenarioHandlers = [
        每一句都说得出下一步在谁手上，而且都是一线自己办得掉的。 */
     const scr = scenario.visits.find(v => v.subjectId === s.id && v.seq === 0);
     if (!scr || scr.status !== "locked") {
-      const 没这条访视 = !scr;
-      const 做完了没登记 = scr?.status === "done_pending_pi";
+      /* 措辞从契约来，**不在这儿抄一份** —— 原来是抄的，注释上写着
+         "与服务端逐字同源"，而那是靠人记着的：上一版改状态措辞时这里只
+         跟上了 `detail`，`message` 落下了，而界面照出去的偏偏是后者。
+         抄一份的后果不是不一致告警，是两份都对不上而没人知道哪份是真的。 */
+      const w = screeningGateWording(scr ? scr.status : null);
       return HttpResponse.json({
-        ...problem("gate-not-satisfied", 422, 没这条访视
-          ? "这一例没有筛选期访视 —— 入组的前提是筛选期访视已完成并登记 PI 确认"
-          : 做完了没登记
-            ? "筛选期访视做完了，但还没登记 PI 确认 —— 去访视详情页把 PI 签字的日期登记上"
-            : `筛选期访视当前是「${scr!.status}」，还没做完，不能入组`),
+        ...problem("gate-not-satisfied", 422, w.detail),
         unmet: [{
-          code: "screening-visit-not-locked", module: "subj",
-          message: 没这条访视
-            ? "这一例没有筛选期访视 —— 正常情况下签署知情同意时会连它一起排出来。" +
-              "去受试者访视窗口看看这一例的访视排了没有"
-            : 做完了没登记
-              ? "筛选期访视还差一步：登记 PI 确认（在访视详情页填 PI 签字那天的日期）"
-              : `筛选期访视当前是「${scr!.status}」—— 先把它做完，再登记 PI 确认`
+          code: "screening-visit-not-locked", module: "subj", message: w.message
         }]
       }, { status: 422 });
     }
@@ -3841,9 +3874,14 @@ const handoverDto = (h: MockHandover) => ({
   totalCount: h.items.length
 });
 
+/** 某个日期往后 n 天。**转交给 UTC 那一版** —— 原来这里是
+ *  `x.setDate(x.getDate() + n)`：`new Date('2026-09-14')` 读成 UTC 零点，
+ *  `getDate()/setDate()` 却按本地时区算，再用 `toISOString()` 切回日期。
+ *  东八区看不出问题，负时区那个 Date 落在**前一天**下午，加完差一天。
+ *  服务端的 `scheduleVisit` 与 packages/calc 的 `workdaysBetween`
+ *  犯过同一个错，修法一样。 */
 function addDays(d: string, n: number): string {
-  const x = new Date(d); x.setDate(x.getDate() + n);
-  return x.toISOString().slice(0, 10);
+  return shiftStr(d, n);
 }
 
 function problem(code: string, status: number, detail: string) {

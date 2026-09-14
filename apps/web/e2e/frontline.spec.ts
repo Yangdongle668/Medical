@@ -51,6 +51,22 @@ test.describe("CRC", () => {
     await expect(page.getByTestId("pre-said")).toContainText("筛选期访视");
     await expect(page.getByTestId("pre-row").filter({ hasText: "SS-01-P0500" }))
       .toContainText("筛选中");
+
+    /* **那句话说"已生成"，就得真的生成了。**
+       在此之前这一步只把计数改成 `visitsPlanned = 8`，一条访视都不建 ——
+       提示照样说"筛选期访视已按 SOA 生成"，而受试者访视窗口上那一行
+       没有任何可以操作的按钮，只有「登记脱落」。
+       现场报来的原话就是这一句。所以这条断言看的是**那一页**，
+       不是提示文案：提示是我们自己写的，访视是不是真排出来了不由它说了算。
+
+       从侧栏点过去，**不用 page.goto** —— mock 的状态活在页面模块里，
+       整页重载会把它重建成初始种子，刚登记的这一位就不见了，
+       而那时这条断言测到的是"P0500 根本不在表上"，不是访视排没排。 */
+    await page.getByRole("link", { name: "受试者访视窗口" }).click();
+    const born = page.getByTestId("subject-row").filter({ hasText: "SS-01-P0500" });
+    await expect(born).toBeVisible();
+    await expect(born.getByRole("link", { name: "打开" })).toBeVisible();
+    await expect(born).not.toContainText("访视没排出来");
   });
 
   test("预筛登记：筛选中的人两个下一步都在，筛败要选受控原因", async ({ page }) => {
@@ -156,7 +172,7 @@ test("经营层看得到补偿金额，看不到是给谁的", async ({ page }) 
 test.describe("被拦下来要给得出去处", () => {
   test("入组被拦：说得出还差什么，**并且给一个跳转链接**", async ({ page }) => {
     await page.goto("/prescreen?as=crc");
-    /* SS-01-P102 签了知情、在筛选中，而它的筛选期访视还没登记 PI 确认。 */
+    /* SS-01-P102 签了知情、在筛选中，筛选期访视已排出来、还没做。 */
     const row = page.getByTestId("pre-row").filter({ hasText: "SS-01-P102" });
     await expect(row).toBeVisible();
     await row.getByRole("button", { name: "入组" }).click();
@@ -165,17 +181,30 @@ test.describe("被拦下来要给得出去处", () => {
 
     const unmet = page.getByTestId("prescreen-unmet");
     await expect(unmet).toBeVisible();
-    /* ① 文字要说得出下一步。SS-01-P102 这一例走的是"连访视都没有"那一支 ——
+    /* ① 文字要说得出下一步。SS-01-P102 的筛选期访视已经排出来了、还没做，
+       走的是"先把它做完"那一支。
        **不许写「先去登记 ICF」**：他已经签过了（不然进不了筛选中），
        叫他再签一次是把一句办不到的事写成了下一步。
-       也不许出现"等 PI"那种说法：PI 多数时候没有本系统的账号，等就是永远。 */
-    await expect(unmet).toContainText("没有筛选期访视");
+       也不许出现"等 PI"那种说法：PI 多数时候没有本系统的账号，等就是永远。
+       **也不许把 `planned` 这种键摆给人看** —— 键是给程序看的。 */
+    await expect(unmet).toContainText("已排期");
+    await expect(unmet).not.toContainText("planned");
     await expect(unmet).not.toContainText("登记 ICF");
     await expect(unmet).not.toContainText("需 PI 确认");
     /* ② 链接 —— 这一条才是现场要的那一半。 */
     await expect(unmet.getByTestId("go-subj")).toBeVisible();
     await unmet.getByTestId("go-subj").click();
     await expect(page).toHaveURL(/\/subjects/);
+
+    /* ③ **跟过去之后那一页上得有事可做。** 现场报的第二句正是这个：
+         「但是页面没有可以操作的按钮，只有一个脱落」——
+         链接给到了，落地页却是个死角，等于没给。
+         那一行必须有「打开」（进访视详情去做这次访视），
+         而不是只剩「登记脱落」。 */
+    const row2 = page.getByTestId("subject-row").filter({ hasText: "SS-01-P102" });
+    await expect(row2).toBeVisible();
+    await expect(row2.getByRole("link", { name: "打开" })).toBeVisible();
+    await expect(row2.getByTestId("no-visit-u-102")).toHaveCount(0);
   });
 
   test("角标写的是模块中文名，不是 `subj` 这种键", async ({ page }) => {
