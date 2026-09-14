@@ -375,9 +375,14 @@ export function makeScenario(): Scenario {
          **做完了、但还没签字。** 六条 planned 的访视演不出这一页：
          PI 的整个工作面就是这个队列，队列空着，页面上
          "等了多久""超过 7 天"两条分支都不会出现。
-         一条等了 12 天（该红），一条昨天做完的（正常）。 */
+         一条等了 25 天（该红），一条昨天做完的（正常）。
+
+         **25 天不是 12 天**：一线履职那张表把「挂了 14 天以上」单独标红
+         （calc 的 `DUTY_STALE_DAYS`）—— 那是"已经不是来不及，是忘了"的线。
+         原来这里是 -12，于是那条分支在演示上永远画不出来，
+         而它正是那张表最要紧的一格。 */
       done(mkVisit("v7", SITES[0]!, "S-0331", "u1", 5, "C5D1 第 5 周期给药",
-        -12, 3, TASKS_ONCO), -12),
+        -25, 3, TASKS_ONCO), -25),
       done(mkVisit("v8", SITES[0]!, "S-0203", "u2", 9, "C9D1 第 9 周期给药",
         -1, 3, TASKS_ONCO), -1),
       /* 已经签过字的那条 —— 队列里**不该**出现它。
@@ -550,7 +555,19 @@ export const STAFF_LIST: MockStaff[] = [
   { accountId: "a-zhouqi",  login: "zhouqi", displayName: "周琦", roleKind: "CRA",
     level: "P4", city: "广州", ...gcp(120),
     mentorName: null, successorName: null, siteCount: 0, successionGap: false,
-    active: false, disabledReason: "离职 —— 转甲方 CRA" }
+    active: false, disabledReason: "离职 —— 转甲方 CRA" },
+  /* **廖萌此前只有账号、没有名册行。** 他在 mock 里是一个正经的 CRC：
+     有账号（`a-liaomeng`，分组 G-02）、名下有受试者、还担着一条 CAPA，
+     唯独 STAFF_LIST 上没有他 —— 而真库里 liaomeng 是有 staff 行的。
+
+     这不只是少一行演示数据：`/v1/staff` 与「一线履职」都是从名册出的，
+     所以他名下欠着的事**一个都不会出现在那张表上**，而那张表的全部作用
+     就是让欠着的事浮出来。这正是「建号只写了 account」那个坑的下一层
+     （见迁移 0045 那一版的说明），只是这回是 mock 自己踩的。 */
+  { accountId: "a-liaomeng", login: "liaomeng", displayName: "廖萌", roleKind: "CRC",
+    level: "P4", city: "杭州", ...gcp(341),
+    mentorName: null, successorName: null, siteCount: 1, successionGap: false,
+    active: true, disabledReason: null }
 ];
 
 /** 造一行名册。**建号与补登共用** —— 两处各拼一份对象，

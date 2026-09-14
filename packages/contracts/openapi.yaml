@@ -9056,6 +9056,135 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/registration-duties:
+    get:
+      operationId: listRegistrationDuties
+      tags:
+        - site
+      summary: 一线履职：该登记的登记了没有
+      description: >-
+        **按人排，不按中心、也不按问题类型。**
+
+
+        团队工作台按中心排（「SS-07 怎么样了」），经营驾驶舱按问题类型排，两者都答不出「这个 CRC 这周该登记的几件事登记了没有」—— 而立项受理与 PI 确认改成登记制之后（迁移 0048 /
+        0050），卡住的东西从「别人不点」变成了「自己人没登记」：
+
+        前者看得见，因为它明晃晃地卡着；后者看不见，因为它只是没有发生。
+
+
+        四类都是这个人**现在就办得掉**的事。等中心回复的质疑、等排期的监查、要别人审批的工时一律不收 —— 把「在等别人」混进「你欠着」，这张表会立刻失去说服力。
+
+
+        行范围原样生效：PM 数的是本组的，经营层数的是全部，外部方一行都没有。
+      x-layer: L1
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 512
+        - name: limit
+          in: query
+          required: false
+          schema:
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
+        - name: owingOnly
+          in: query
+          required: false
+          description: 布尔查询参数：true/1/yes 或 false/0/no
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - '1'
+                  - 'true'
+                  - 'yes'
+                  - 'on'
+              - type: string
+                enum:
+                  - '0'
+                  - 'false'
+                  - 'no'
+                  - 'off'
+      responses:
+        '200':
+          description: 一线履职：该登记的登记了没有
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListRegistrationDutiesResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/regulatory-submissions/{id}:decide:
     post:
       operationId: decideRegulatorySubmission
@@ -16848,6 +16977,58 @@ components:
         - disabledReason
       additionalProperties: false
       description: account 回答「谁能登录、看得到什么」；staff 回答「他是什么工种、带谁、谁接他」。
+    RegistrationDuty:
+      type: object
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        login:
+          type: string
+        displayName:
+          type: string
+        roleKind:
+          $ref: '#/components/schemas/RoleKind'
+        pendingPiConfirm:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        edcOverdue:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        outOfWindow:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        acceptanceNoLetter:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        total:
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+        oldestDays:
+          nullable: true
+          type: integer
+          minimum: -9007199254740991
+          maximum: 9007199254740991
+      required:
+        - accountId
+        - login
+        - displayName
+        - roleKind
+        - pendingPiConfirm
+        - edcOverdue
+        - outOfWindow
+        - acceptanceNoLetter
+        - total
+        - oldestDays
+      additionalProperties: false
+      description: '**只收这个人现在就办得掉的事。** 等中心回复的质疑、等排期的监查、要别人审批的工时一律不收 —— 把「在等别人」混进「你欠着」，这张表会立刻失去说服力，而一张会冤枉人的清单，人只会学会忽略它。'
     SiteStaff:
       type: object
       properties:
@@ -23480,6 +23661,23 @@ components:
       required:
         - data
         - sideEffects
+      additionalProperties: false
+    ListRegistrationDutiesResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegistrationDuty'
+        nextCursor:
+          nullable: true
+          description: null 表示已到末页
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+        - items
+        - nextCursor
       additionalProperties: false
     DecideRegulatorySubmissionRequest:
       type: object

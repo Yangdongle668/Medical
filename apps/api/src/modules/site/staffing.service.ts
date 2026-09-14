@@ -1,5 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { DEFAULT_HANDOVER_ITEMS } from "@sitedesk/contracts";
+/* EDC 及时线与访视详情页共用同一个函数 —— 两处各写一份 5 个工作日，
+   两个页面会对同一条访视给出不同的结论，而没有任何地方是红的。 */
+import { edcDaysLate, dutyTotal } from "@sitedesk/calc";
 import { ctx, principal } from "../../infra/ctx.js";
 import { siteScopeSql } from "@sitedesk/policy";
 import { ProblemException, notFound } from "../../infra/problem.js";
@@ -376,6 +379,122 @@ export class StaffingService {
       studyId: r.study_id, studyCode: r.study_code, studyShortName: r.study_short,
       since: day(r.since)!, until: day(r.until), active: r.active
     }));
+  }
+
+  /* ── 一线履职：该登记的登记了没有 ──────────────────────────────────
+     四类各算一个数，按人归。**全部走调用者自己的行范围** ——
+     这几张表的 RLS 策略原样生效，所以 PM 数的是本组的、经营层数的是全部、
+     外部方一行都没有（`staff_scope` 对他们整表关闭）。
+     也正因如此它不需要一个新动作、不需要一张新表：它只是把已有的行按人归了一次。
+
+     ── 归属是按「谁的受试者」，不是按「谁被派到这个中心」 ──────────────
+     一个中心上同时有 CRA 和 CRC（演示库里每个中心都是 2 个人）。
+     按派工归的话，同一条待登记访视会同时记在两个人头上 ——
+     而两个人都看到"有人欠着"，多半谁都不会去办。
+     `subject.crc_account_id` 是这条受试者的负责人，598/598 都有值，
+     那才是"这一条归谁"的答案。受理那一类同理，归 `submitted_by`。
+
+     ── 为什么在 SQL 里算工作日会错 ────────────────────────────────────
+     EDC 那一类的判据是「完成后 5 个**工作日**」。这里先把
+     `actual_date` 取回来，在 JS 里用 calc 的 `edcDaysLate` 判 ——
+     和访视详情页那句「已超出 N 天」是同一个函数。
+     在 SQL 里另写一版 `- interval '7 days'` 之类的近似，
+     两处就会对同一条访视给出不同的结论，而没有任何地方是红的。
+
+     ── 一个要说清的依赖：名单出自 `staff`，不是 `account` ──────────────
+     所以**一个只有账号、没有名册行的 CRC 不在这张表上**，
+     连带他名下欠着的事也不在。那不是这里漏了判断，是"半个人"那个坑的
+     又一层：他同样填不了工时（费率按 `staff.level` 挑）、
+     派工的下拉里也没有他。
+     「组织与权限」的账号台账已经把缺名册的账号标出来了（`staffRoleKind`
+     那一列），补登一次这三处一起好 —— 在这里凭空补一行假名册，
+     换来的是一个职级是猜的人，而那会让他往后每一张工时单都算错钱。 */
+  async listRegistrationDuties(q: { limit: number; cursor?: string; owingOnly?: boolean }) {
+    const c = ctx();
+    const params: unknown[] = [];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
+    const cursor = q.cursor ? `AND a.login > ${add(q.cursor)}` : "";
+
+    const { rows } = await c.client.query<{
+      account_id: string; login: string; display_name: string; role_kind: string;
+      pending_pi: string; out_of_window: string; acceptance_no_letter: string;
+      oldest_days: string | null; today: string;
+      /* EDC 那一类不在 SQL 里定结论：只把候选行的完成日取回来。 */
+      edc_dates: string[] | null;
+    }>(`
+      WITH me AS (
+        SELECT st.account_id, a.login, a.display_name, st.role_kind
+          FROM staff st JOIN account a ON a.id = st.account_id
+         WHERE a.status = 'active' AND st.role_kind IN ('CRC', 'CRA') ${cursor}
+      ),
+      v AS (
+        SELECT su.crc_account_id AS account_id, sv.status, sv.actual_date,
+               sv.edc_status, sv.target_date, sv.window_days
+          FROM subject_visit sv JOIN subject su ON su.id = sv.subject_id
+         WHERE su.crc_account_id IS NOT NULL
+      ),
+      ac AS (
+        SELECT submitted_by AS account_id, submitted_on
+          FROM site_acceptance
+         WHERE state <> 'accepted' AND origin = 'in_system' AND submitted_by IS NOT NULL
+      )
+      SELECT me.account_id, me.login, me.display_name, me.role_kind,
+             /* 「今天」取**库的** CURRENT_DATE，不取进程的 new Date()。
+                这条查询里别处已经在用 CURRENT_DATE 比日期了，
+                再从 JS 拿一个 UTC 切出来的今天，两者在东八区早上八点前
+                差一天 —— 而差一天的错误在访视窗口上就是一次方案偏离。 */
+             CURRENT_DATE::text AS today,
+             (SELECT count(*) FROM v WHERE v.account_id = me.account_id
+               AND v.status = 'done_pending_pi')                       AS pending_pi,
+             (SELECT count(*) FROM v WHERE v.account_id = me.account_id
+               AND v.status = 'planned'
+               AND v.target_date + v.window_days < CURRENT_DATE)       AS out_of_window,
+             (SELECT count(*) FROM ac WHERE ac.account_id = me.account_id)
+                                                                       AS acceptance_no_letter,
+             (SELECT array_agg(v.actual_date::text) FROM v
+               WHERE v.account_id = me.account_id
+                 AND v.actual_date IS NOT NULL AND v.edc_status = 'pending')
+                                                                       AS edc_dates,
+             /* 最久的那一件挂了多少天 —— 三类各取自己的起算日：
+                待登记确认与待录 EDC 从**访视完成日**起算（那天起就欠着了），
+                超窗从**窗口关闭日**起算，受理从**递交日**起算。 */
+             GREATEST(
+               (SELECT max(CURRENT_DATE - v.actual_date) FROM v
+                 WHERE v.account_id = me.account_id AND v.actual_date IS NOT NULL
+                   AND (v.status = 'done_pending_pi' OR v.edc_status = 'pending')),
+               (SELECT max(CURRENT_DATE - (v.target_date + v.window_days)) FROM v
+                 WHERE v.account_id = me.account_id AND v.status = 'planned'
+                   AND v.target_date + v.window_days < CURRENT_DATE),
+               (SELECT max(CURRENT_DATE - ac.submitted_on) FROM ac
+                 WHERE ac.account_id = me.account_id)
+             )                                                         AS oldest_days
+        FROM me ORDER BY me.login LIMIT ${add(q.limit + 1)}`, params);
+
+    let items = rows.slice(0, q.limit).map(r => {
+      const today = r.today;
+      /* 候选行里真正超时的才算。**null 是"不欠"，0 是"今天正好到期"** ——
+         `edcDaysLate` 对未超时的返回 null，所以这里数的是非 null 的那些。 */
+      const edcOverdue = (r.edc_dates ?? [])
+        .filter(d => edcDaysLate(d, false, today) !== null).length;
+      const d = {
+        pendingPiConfirm: Number(r.pending_pi),
+        edcOverdue,
+        outOfWindow: Number(r.out_of_window),
+        acceptanceNoLetter: Number(r.acceptance_no_letter)
+      };
+      return {
+        accountId: r.account_id, login: r.login, displayName: r.display_name,
+        roleKind: r.role_kind, ...d, total: dutyTotal(d),
+        /* 一件都不欠时不报"最久 N 天" —— 那个数会来自一条已经办完的行。 */
+        oldestDays: dutyTotal(d) === 0 || r.oldest_days === null
+          ? null : Number(r.oldest_days)
+      };
+    });
+    if (q.owingOnly) items = items.filter(i => i.total > 0);
+    return {
+      items,
+      nextCursor: rows.length > q.limit ? rows[q.limit - 1]?.login ?? null : null
+    };
   }
 
   async listAssignments(q: {

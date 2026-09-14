@@ -26,9 +26,12 @@ import { IDENTITIES, type MockRole } from "./roles.js";
    `createdAt` 这类瞬间用 UTC 是对的），但**日期比较不能各算各的**：
    界面默认填 today()，mock 用 UTC 切，东八区早上八点前
    界面刚填好的日期会被 mock 判成「在将来」。 */
-import { today } from "../shell/dates.js";
+import { today as today_ } from "../shell/dates.js";
 /* 角色代号 → 名册工种的映射**用契约里那一份** —— 服务端读的是同一张表。 */
 import { STAFF_ROLE_KIND } from "@sitedesk/contracts";
+/* EDC 及时线与 total 的口径**用 calc 那一份** —— mock 另算一遍的话，
+   演示上的数和真接口的数会在某一天悄悄分叉。 */
+import { edcDaysLate, dutyTotal } from "@sitedesk/calc";
 import type { MockAccount, MockSoaVisit,
   MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
   MockMonitorVisit, MockAudit, MockIntake,
@@ -776,8 +779,8 @@ export const scenarioHandlers = [
 
     const b = await request.json().catch(() => ({})) as { confirmedOn?: string };
     /* 省略即访视当天 —— 默认成"今天"会让一份上周的访视挂上今天的确认日期。 */
-    const confirmedOn = b.confirmedOn ?? v.actualDate ?? today();
-    if (confirmedOn > today()) return HttpResponse.json(
+    const confirmedOn = b.confirmedOn ?? v.actualDate ?? today_();
+    if (confirmedOn > today_()) return HttpResponse.json(
       problem("validation-failed", 422,
         `签字日期 ${confirmedOn} 在将来 —— 这一栏记的是「PI 哪天签的字」`), { status: 422 });
     if (v.actualDate && confirmedOn < v.actualDate) return HttpResponse.json({
@@ -3187,6 +3190,70 @@ export const scenarioHandlers = [
       (SITES_LIST.find(s => s.id === a.studySiteId)?.studyId ?? scenario.studies[0]!.id)
         === study);
     return HttpResponse.json({ items: items.map(assignmentDto), nextCursor: null });
+  }),
+
+  /* 一线履职：该登记的登记了没有。**按人排。**
+     这几个数必须跟着场景变 —— 演示里登记掉一条待确认的访视，
+     这里的数要当场降一。一份写死的假数据演不出这件事，
+     而"登记完了数字没动"会让看的人以为按钮坏了。
+
+     归属按**这条受试者归谁**（`crcName`），不按"谁被派到这个中心"：
+     一个中心上同时有 CRA 和 CRC，按派工归的话同一条会同时记在两个人
+     头上 —— 两个人都看到"有人欠着"，多半谁都不会去办。
+     真接口那边是 `subject.crc_account_id`，同一个判据。 */
+  http.get(pathToRegExp("/v1/registration-duties"), ({ request }) => {
+    /* 「读不到」在这一块上是一条独立的画法（读失败画成空表，说出来的是
+       「都登记完了」—— 一句假话，而且恰好出现在最不该让人放心的时候）。
+       **而 `failStatus` 是每个处理器自己接的**，不是全局拦截 ——
+       在这一版之前全仓库只有 `getSiteGate` 接了它。
+       不接的话那条分支在 mock 上永远走不到，而走不到的分支等于没写过。 */
+    const fail = failStatus("listRegistrationDuties");
+    if (fail) return HttpResponse.json(
+      problem("internal", fail, "履职数据读取失败"), { status: fail });
+
+    const q = new URL(request.url).searchParams;
+    const ids = visibleSiteIds();
+    const today = today_();
+    const vis = inScope(scenario.visits);
+    const items = STAFF_LIST
+      .filter(p => p.active && (p.roleKind === "CRC" || p.roleKind === "CRA"))
+      .map(p => {
+        const 他的 = vis.filter(v =>
+          scenario.subjects.find(s => s.id === v.subjectId)?.crcName === p.displayName);
+        const ac = scenario.acceptances.filter(a =>
+          a.state !== "accepted" && a.origin === "in_system"
+          && a.submittedByName === p.displayName
+          && (!a.studySiteId || ids.has(a.studySiteId)));
+
+        const pendingPiConfirm = 他的.filter(v => v.status === "done_pending_pi").length;
+        const edcOverdue = 他的.filter(v =>
+          v.actualDate && v.edcStatus === "pending"
+          && edcDaysLate(v.actualDate, false, today) !== null).length;
+        const outOfWindow = 他的.filter(v =>
+          v.status === "planned" && v.outOfWindow).length;
+        const d = { pendingPiConfirm, edcOverdue, outOfWindow,
+          acceptanceNoLetter: ac.length };
+
+        /* 最久的那一件挂了多少天 —— 三类各取自己的起算日，与服务端同口径。 */
+        const ages = [
+          ...他的.filter(v => v.actualDate
+              && (v.status === "done_pending_pi" || v.edcStatus === "pending"))
+            .map(v => daysBetween(v.actualDate!, today)),
+          ...他的.filter(v => v.status === "planned" && v.outOfWindow)
+            .map(v => daysBetween(v.windowTo, today)),
+          ...ac.map(a => daysBetween(a.submittedOn, today))
+        ].filter(n => n > 0);
+
+        return {
+          accountId: p.accountId, login: p.login, displayName: p.displayName,
+          roleKind: p.roleKind, ...d, total: dutyTotal(d),
+          oldestDays: dutyTotal(d) === 0 || ages.length === 0 ? null : Math.max(...ages)
+        };
+      });
+    return HttpResponse.json({
+      items: q.get("owingOnly") === "true" ? items.filter(i => i.total > 0) : items,
+      nextCursor: null
+    });
   }),
 
   http.post(pathToRegExp("/v1/staff/{id}:assign-sites"), async ({ request }) => {

@@ -155,7 +155,8 @@ define({
    启动清单 · 人员 · 交接
    ════════════════════════════════════════════════════════════════════ */
 import { StartupChecklist, StartupSummary, StartupItem, Staff, SiteStaff, SiteAssignment,
-  Handover, RoleKind, HandoverStatus, StartupTemplate, StartupTemplateItem }
+  Handover, RoleKind, HandoverStatus, StartupTemplate, StartupTemplateItem,
+  RegistrationDuty }
   from "./staffing.js";
 
 define({
@@ -293,6 +294,32 @@ define({
     "「这个中心去年三月归谁」只有它答得出来。",
   query: ListSiteAssignmentsQuery,
   response: page(SiteAssignment)
+});
+
+/** `listRegistrationDuties` 的请求参数 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ListRegistrationDutiesQuery = PageQuery.extend({
+    /** 只看还欠着的。**默认不筛** —— 一张只列欠债的表说不出分母，
+     *  而"十个人里两个欠着"和"两个人里两个欠着"是两件完全不同的事。 */
+    owingOnly: QueryBool.optional()
+  });
+
+define({
+  id: "listRegistrationDuties", method: "get", path: "/v1/registration-duties",
+  layer: "L1", context: CTX,
+  summary: "一线履职：该登记的登记了没有",
+  description:
+    "**按人排，不按中心、也不按问题类型。**\n\n" +
+    "团队工作台按中心排（「SS-07 怎么样了」），经营驾驶舱按问题类型排，" +
+    "两者都答不出「这个 CRC 这周该登记的几件事登记了没有」—— " +
+    "而立项受理与 PI 确认改成登记制之后（迁移 0048 / 0050），" +
+    "卡住的东西从「别人不点」变成了「自己人没登记」：\n" +
+    "前者看得见，因为它明晃晃地卡着；后者看不见，因为它只是没有发生。\n\n" +
+    "四类都是这个人**现在就办得掉**的事。等中心回复的质疑、等排期的监查、" +
+    "要别人审批的工时一律不收 —— 把「在等别人」混进「你欠着」，" +
+    "这张表会立刻失去说服力。\n\n" +
+    "行范围原样生效：PM 数的是本组的，经营层数的是全部，外部方一行都没有。",
+  query: ListRegistrationDutiesQuery,
+  response: page(RegistrationDuty)
 });
 
 /** `assignSiteStaff` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */

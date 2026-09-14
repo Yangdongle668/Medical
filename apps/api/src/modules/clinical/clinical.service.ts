@@ -6,8 +6,12 @@ import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { pendingSubscribers } from "./visit-completed.js";
 import { VISIT_TIMESHEET_PORT, type VisitTimesheetPort } from "./ports.js";
-import { saeReportHours, saeTimeliness, saeStatus, SAE_REPORT_DEADLINE_HOURS, CALC_VERSION }
-  from "@sitedesk/calc";
+/* `edcDaysLate` 原来是这个文件里的两个私有物（`workdaysBetween` 与
+   `EDC_SLA_WORKDAYS = 5`）。搬进 calc 是因为**它有第二个读者了**：
+   履职那张表要数「几件超时未录」。两处各写一份 5 的后果不是不一致告警，
+   是两个页面对同一条访视给出不同的结论，而没有任何地方是红的。 */
+import { saeReportHours, saeTimeliness, saeStatus, SAE_REPORT_DEADLINE_HOURS,
+  CALC_VERSION, edcDaysLate } from "@sitedesk/calc";
 import { nextCode } from "../../infra/code.js";
 
 /* ════════════════════════════════════════════════════════════════════
@@ -106,23 +110,9 @@ const VISIT_FROM = `
   JOIN study_site s ON s.id = v.study_site_id
   LEFT JOIN account p ON p.id = v.pi_confirmed_by`;
 
-/** EDC 录入及时线：访视完成后 5 个工作日。周末不算 —— 现实里没人周末录 EDC。 */
-function workdaysBetween(from: string, to: string): number {
-  let n = 0;
-  const a = new Date(from), b = new Date(to);
-  for (const dte = new Date(a); dte < b; dte.setDate(dte.getDate() + 1)) {
-    const w = dte.getDay();
-    if (w !== 0 && w !== 6) n++;
-  }
-  return n;
-}
-const EDC_SLA_WORKDAYS = 5;
-
 function toVisit(r: VisitRow) {
   const today = todayStr();
   const done = r.actual_date !== null;
-  const lag = r.edc_status === "entered" || !done ? null
-    : workdaysBetween(day(r.actual_date)!, today);
   return {
     id: r.id, subjectId: r.subject_id, screeningNo: r.screening_no,
     studySiteId: r.study_site_id, siteCode: r.site_code, seq: r.seq,
@@ -130,7 +120,7 @@ function toVisit(r: VisitRow) {
     targetDate: day(r.target_date)!, windowDays: r.window_days,
     windowFrom: day(r.win_from)!, windowTo: day(r.win_to)!,
     actualDate: day(r.actual_date), status: r.status, edcStatus: r.edc_status,
-    edcDaysLate: lag !== null && lag > EDC_SLA_WORKDAYS ? lag - EDC_SLA_WORKDAYS : null,
+    edcDaysLate: edcDaysLate(day(r.actual_date), r.edc_status === "entered", today),
     /* 未完成而窗口已关闭，同样是超窗 —— 只看 out_of_window 会漏掉「还没做」的那一类 */
     outOfWindow: r.out_of_window || (!done && between(today, day(r.win_to)!) < 0),
     daysLeft: done ? null : between(today, day(r.win_to)!),

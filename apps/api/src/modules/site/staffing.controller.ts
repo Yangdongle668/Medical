@@ -1,5 +1,5 @@
 import { ListStartupChecklistsQuery, ListStaffQuery, ListSiteStaffQuery,
-  ListSiteAssignmentsQuery, AssignSiteStaffBody, EndSiteAssignmentBody,
+  ListSiteAssignmentsQuery, ListRegistrationDutiesQuery, AssignSiteStaffBody, EndSiteAssignmentBody,
   ListHandoversQuery, CreateHandoverBody } from "@sitedesk/contracts";
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query } from "@nestjs/common";
 import { z } from "zod";
@@ -56,6 +56,12 @@ export class StaffingController {
   @Get("/site-assignments") @Operation("listSiteAssignments")
   assignments(@Query(new ZodPipe(ListSiteAssignmentsQuery)) q: z.infer<typeof ListSiteAssignmentsQuery>) {
     return this.svc.listAssignments(q);
+  }
+
+  @Get("/registration-duties") @Operation("listRegistrationDuties")
+  duties(@Query(new ZodPipe(ListRegistrationDutiesQuery))
+    q: z.infer<typeof ListRegistrationDutiesQuery>) {
+    return this.svc.listRegistrationDuties(q);
   }
 
   /* 派工的两端。**幂等键必需**（command 而不是 idempotent）——
