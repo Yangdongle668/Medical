@@ -15,6 +15,7 @@ import {
   type Account, type Role, type Team, type Study
 } from "./api.js";
 import { Pick, Field } from "../../shell/CreateForm.js";
+import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
 
 /* ════════════════════════════════════════════════════════════════════
    组织与权限 —— 管理员的主界面（原型 26-org.html）。
@@ -125,9 +126,7 @@ export function OrgPage() {
           {/* 闸门不满足时后端会逐条列出还差什么 —— 原样铺开，
               把它压成一句"操作失败"，人就得自己去猜差哪一项。 */}
           {Array.isArray(problem.unmet) && (
-            <ul className="unmet">
-              {(problem.unmet as { message: string }[]).map((u, i) => <li key={i}>{u.message}</li>)}
-            </ul>
+            <UnmetList items={problem.unmet as UnmetItem[]} testid="org-unmet" />
           )}
         </div>
       )}

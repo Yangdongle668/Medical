@@ -5,6 +5,7 @@ import { loadMe } from "../login/me.js";
 import { usePending } from "../../api/pending.js";
 import { today } from "../../shell/dates.js";
 import { Pick } from "../../shell/CreateForm.js";
+import { UnmetList } from "../../shell/Unmet.js";
 
 /* ════════════════════════════════════════════════════════════════════
    交接。
@@ -109,9 +110,7 @@ export function HandoverPage() {
             <div>{problem.detail}</div>
             {problem.unmet && (
               /* 未确认项逐条摊开 —— 后端已经把话说全了，前端别再概括一遍 */
-              <ul data-testid="handover-unmet">
-                {problem.unmet.map((u, i) => <li key={i}>{u.message}</li>)}
-              </ul>
+              <UnmetList items={problem.unmet} testid="handover-unmet" />
             )}
           </div>
         )}

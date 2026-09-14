@@ -5,7 +5,7 @@ import { loadMe } from "../login/me.js";
 import { SITE_STATE_LABEL, SITE_ORDER } from "./states.js";
 import { SubmitAcceptanceForm } from "../instac/SubmitAcceptanceForm.js";
 import { SiteCrew } from "./SiteCrew.js";
-import { moduleOf } from "../../shell/modules.js";
+import { UnmetList } from "../../shell/Unmet.js";
 
 /* ════════════════════════════════════════════════════════════════════
    中心详情 = 状态机 + 闸门。
@@ -173,61 +173,33 @@ export function SiteDetailPage() {
 
             {!g.satisfied && (
               /* 不是一个变灰的按钮，而是一张「还差什么、去哪儿处理」的清单 */
-              <ul className="unmet" data-testid="unmet">
-                {g.unmet.map(u => (
-                  <li key={u.code}>
-                    {u.module && <span className="chip flat">{u.module}</span>}
-                    <span>{u.message}</span>
-                    {/* ── 「去处理」按模块出，不按写死的那一个 ──────────
-                        这里原来只认 `startup` 一条。于是闸门上那句
-                        「还没登记《立项受理意见函》—— 拿到之后在受理台账上
-                        登记收到日期」**指向一个没有链接的地方**，
-                        而 CRC 的侧栏上当时也没有受理台账那一页
-                        （迁移 0052 把它给进来了）。
+              <UnmetList
+                items={g.unmet} testid="unmet"
+                /* 启动清单那一条要带上这个中心的 id —— 其余按模块出。 */
+                hrefFor={u => u.module === "startup" ? `/sites/${id}/startup` : undefined}
+                /* 「还没登记立项材料递交」是这张清单上**唯一一条当场就能办完的**
+                   —— 其余几条要么是本方别处的活（启动清单），要么还差一张纸
+                   （受理意见函，去受理台账登记）。所以这一条给的不是链接，
+                   是当场就能填的表：项目与医院都来自这个中心自己，不用再挑一遍。
 
-                        现场报来的原话是「CRC 在受理台账找不到对应的入口」——
-                        一句指向不存在的入口的提示，比不给提示更糟：
-                        他会以为是自己没找到。
-
-                        模块 → 路径的对应表就在 shell/modules.ts 里，
-                        用它出链接，往后任何一条带 module 的未满足项
-                        自动有去处 —— 不需要有人记得回来加一个 `=== "xxx"`。
-                        `startup` 仍然单独给：它要带上这个中心的 id。 */}
-                    {u.module === "startup" ? (
-                      <Link to={`/sites/${id}/startup`} className="btn go"
-                        data-testid="go-startup">去处理</Link>
-                    ) : u.module && moduleOf(u.module) && (
-                      <Link to={moduleOf(u.module)!.path} className="btn go"
-                        data-testid={`go-${u.module}`}>
-                        去{moduleOf(u.module)!.title}
-                      </Link>
-                    )}
-                    {/* 「还没登记立项材料递交」是这张清单上**唯一一条当场
-                        就能办完的** —— 其余几条要么是本方别处的活
-                        （启动清单），要么还差一张纸（受理意见函，去受理台账登记）。
-                        所以这一条给的不是「去处理」的链接，是当场就能填的表：
-                        项目与医院都来自这个中心自己，不用再挑一遍。
-
-                        **判据是 code，不是文案。** 原来写的是
-                        `code === "site-acceptance" && message.includes("还没")`——
-                        那三支（没递 / 缺材料 / 缺意见函）共用一个 code，只好
-                        靠字面区分；而闸门文案一改成「还没登记《立项受理意见函》」，
-                        这个 `includes` 就同时命中两支：递交完之后闸门上又冒出
-                        一张递交表，点下去 422「已经递过了」。
-                        现在「一条受理都没有」是它自己的 code。 */}
-                    {u.code === "acceptance-not-submitted" && canSubmitAcceptance && (
-                      <span data-testid="gate-submit-acceptance">
-                        <SubmitAcceptanceForm
-                          fixed={{
-                            studyId: site.study.id, hospital: site.hospital,
-                            label: `${site.study.code} · ${site.study.shortName}`
-                          }}
-                          onCreated={() => void load()} />
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                   **判据是 code，不是文案。** 原来写的是
+                   `code === "site-acceptance" && message.includes("还没")`——
+                   那三支（没递 / 缺材料 / 缺意见函）共用一个 code，只好靠字面
+                   区分；而闸门文案一改成「还没登记《立项受理意见函》」，
+                   这个 `includes` 就同时命中两支：递交完之后闸门上又冒出一张
+                   递交表，点下去 422「已经递过了」。
+                   现在「一条受理都没有」是它自己的 code。 */
+                renderExtra={u =>
+                  u.code === "acceptance-not-submitted" && canSubmitAcceptance ? (
+                    <span data-testid="gate-submit-acceptance">
+                      <SubmitAcceptanceForm
+                        fixed={{
+                          studyId: site.study.id, hospital: site.hospital,
+                          label: `${site.study.code} · ${site.study.shortName}`
+                        }}
+                        onCreated={() => void load()} />
+                    </span>
+                  ) : null} />
             )}
 
             {/* ② 与 ① 分开说：没权限不等于没做完，做完了也不等于轮到你按 */}

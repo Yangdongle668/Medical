@@ -830,7 +830,10 @@ export const scenarioHandlers = [
       return HttpResponse.json({
         ...problem("gate-not-satisfied", 422, `本次访视还有 ${open.length} 项任务未完成`),
         unmet: open.slice(0, 5).map(t => ({
-          code: "visit-task-open", module: "clinical", message: t.task }))
+          /* **不带 module**，与服务端一致：它列的是本次访视里没勾的任务，
+             而人就在这一页上，给一个指回本页的链接是噪声。
+             原来写的 `clinical` 既不是真模块键，也从来没画出过链接。 */
+          code: "visit-task-open", message: t.task }))
       }, { status: 422 });
 
     const outOfWindow = b.actualDate < v.windowFrom || b.actualDate > v.windowTo;
@@ -3066,6 +3069,39 @@ export const scenarioHandlers = [
     const s = subjectFrom(request, /\/subjects\/([^/:]+):enroll/);
     if (!s) return notFoundSubject();
     const b = await request.json() as { randomizationNo: string; enrolledOn: string };
+
+    /* ── I3 的入组闸门。**mock 里原来一条都没有** ──────────────────────
+       这个处理器直接把人改成 enrolled 了 —— 于是「筛选期访视没登记
+       PI 确认就不能入组」这条不变量在演示上**根本走不到**，
+       连带它那句提示、以及提示上那个跳转链接，一次都没被看见过。
+
+       现场报的正是那一句：「我找不到这个对应的入口」。
+       走不到的分支等于没写过。
+
+       三种情况三句话，与服务端逐字同源（clinical.service.ts 的 enroll）：
+       每一句都说得出下一步在谁手上，而且都是一线自己办得掉的。 */
+    const scr = scenario.visits.find(v => v.subjectId === s.id && v.seq === 0);
+    if (!scr || scr.status !== "locked") {
+      const 没这条访视 = !scr;
+      const 做完了没登记 = scr?.status === "done_pending_pi";
+      return HttpResponse.json({
+        ...problem("gate-not-satisfied", 422, 没这条访视
+          ? "这一例没有筛选期访视 —— 入组的前提是筛选期访视已完成并登记 PI 确认"
+          : 做完了没登记
+            ? "筛选期访视做完了，但还没登记 PI 确认 —— 去访视详情页把 PI 签字的日期登记上"
+            : `筛选期访视当前是「${scr!.status}」，还没做完，不能入组`),
+        unmet: [{
+          code: "screening-visit-not-locked", module: "subj",
+          message: 没这条访视
+            ? "这一例没有筛选期访视 —— 正常情况下签署知情同意时会连它一起排出来。" +
+              "去受试者访视窗口看看这一例的访视排了没有"
+            : 做完了没登记
+              ? "筛选期访视还差一步：登记 PI 确认（在访视详情页填 PI 签字那天的日期）"
+              : `筛选期访视当前是「${scr!.status}」—— 先把它做完，再登记 PI 确认`
+        }]
+      }, { status: 422 });
+    }
+
     s.state = "enrolled"; s.randomized = true;
     s.randomizationNo = b.randomizationNo; s.enrolledOn = b.enrolledOn;
     return HttpResponse.json({ data: maskSubject(s), sideEffects: [
