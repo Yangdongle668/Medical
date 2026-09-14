@@ -109,6 +109,22 @@ export const VisitStatus = z.enum(VISIT_STATUSES).meta({
  *  两条在界面上长得一模一样。定成这个类型之后，那行编译不过。 */
 export type VisitStatus = (typeof VISIT_STATUSES)[number];
 
+/** 访视状态的中文名 —— **闸门提示里要说人话**。
+ *
+ *  入组被拦下时那句话原来是 `筛选期访视当前是「${status}」，还没做完`，
+ *  而 `status` 是 `planned` / `missed` 这种键。键是给程序看的 ——
+ *  和侧栏角标一度直接画 `subj` 是同一个毛病，现场看到的是一串英文。
+ *
+ *  写成 `Record<VisitStatus, string>`：`VISIT_STATUSES` 加一个取值而
+ *  这里没跟上，**编译就过不去** —— 不必另写一条守卫盯着它。
+ *  服务端与 mock 共用这一份，两边的措辞不会各走各的。 */
+export const VISIT_STATUS_LABEL: Record<VisitStatus, string> = {
+  planned: "已排期，还没做",
+  done_pending_pi: "已完成，待登记 PI 确认",
+  locked: "已锁定",
+  missed: "漏访"
+};
+
 export const EDC_STATUSES = ["pending", "entered", "queried"] as const;
 export const EdcStatus = z.enum(EDC_STATUSES).meta({ id: "EdcStatus" });
 

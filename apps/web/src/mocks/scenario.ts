@@ -343,6 +343,42 @@ const mkAccounts = (roles: MockRole[], teams: MockTeam[]): MockAccount[] => {
   ];
 };
 
+/* ── 在筛那一位的筛选期访视 ──────────────────────────────────────────
+   `u-102` 是 `screening`，受试者上的 `nextVisit` 写着 `v-102`，
+   **而访视清单里没有这一条** —— 于是受试者访视窗口翻到他那一行，
+   没有任何可以操作的按钮，只有「登记脱落」。
+   现场报来的原话就是这一句：「页面没有可以操作的按钮，只有一个脱落」。
+
+   入组闸门那三句话里，"这一例没有筛选期访视"是唯一走得到的那一句；
+   另外两句（做完了没登记 / 还没做完）在演示上一次都出不来 ——
+   而它们正是一线真正会撞上的两句。补上这一条，那两句才有得演，
+   这一位也才有出路。
+
+   目标日按 SOA 的 seq 0 排：`anchor='icf', offsetDays=0`（见 makeSoa）——
+   知情签在 9 天前，窗口 ±7 天，所以它现在**逾期 2 天**。
+   逾期但办得下去（完成 → 登记 PI 确认 → 入组），比一堵墙强。
+
+   **一处定义，两处使用**：访视清单里那一行，和受试者上的 `nextVisit`
+   摘要。各写一份的话，两页显示的目标日会不一样，而那种不一致只有
+   来回翻页才看得出来 —— 原来 `mkNext("v-102", "筛选期评估", 5)` 与
+   这里差了 7 天，还差一个标签。 */
+function scrVisit102(): MockVisit {
+  return { ...mkVisit("v-102", SITES[0]!, "SS-01-P102", "u-102", 0, "筛选期访视",
+    -9, 7, ["知情同意签署", "入排标准核查", "基线实验室检查"], 1),
+    /* seq 0 的访视号是 SCR，不是 mkVisit 默认的 `V-0` —— 与服务端
+       （visit_template 的 seq 0）和 makeSoa 对齐。 */
+    visitCode: "SCR" };
+}
+
+/** 受试者上那条 `nextVisit` 摘要 —— 从访视本身算出来，不另写一遍。 */
+export function nextOf(v: MockVisit): MockSubject["nextVisit"] {
+  return {
+    id: v.id, seq: v.seq, visitCode: v.visitCode, visitLabel: v.visitLabel,
+    targetDate: v.targetDate, windowFrom: v.windowFrom, windowTo: v.windowTo,
+    daysLeft: v.daysLeft ?? 0, outOfWindow: v.outOfWindow
+  };
+}
+
 export function makeScenario(): Scenario {
   const roles = mkRoles();
   const teams = mkTeams();
@@ -393,7 +429,8 @@ export function makeScenario(): Scenario {
           -20, 3, TASKS_ONCO), -20),
         status: "locked",
         piConfirmedAt: new Date(TODAY.getTime() - 18 * 86_400_000).toISOString(),
-        piConfirmedByName: "陈国栋" }
+        piConfirmedByName: "陈国栋" },
+      scrVisit102()
     ],
     /* 演示数据里**故意各摆一条**：一条按时上报、一条超时未报。
        只摆按时的那种，界面上那两个"最坏的一条""还在计时"永远画不出来，
@@ -1650,7 +1687,9 @@ export const mkSubjects = (): MockSubject[] => [
     randomized: false, randomizationNo: null, state: "screening",
     icfSignedOn: day(-9), enrolledOn: null, exitedOn: null,
     screenFailReason: null, withdrawReason: null, crcName: "吴桐",
-    visitsDone: 1, visitsPlanned: 8, nextVisit: mkNext("v-102", "筛选期评估", 5) },
+    /* `0/8`，不是 `1/8` —— 他唯一那次访视（筛选期）还是 planned。
+       写 1 的话，这一行说"做完一次了"，而闸门同时说"筛选期访视还没做完"。 */
+    visitsDone: 0, visitsPlanned: 8, nextVisit: nextOf(scrVisit102()) },
   { id: "u1", studySiteId: "s1", siteCode: "SS-01", screeningNo: "S-0203",
     randomized: true, randomizationNo: "R-0203", state: "enrolled",
     icfSignedOn: day(-120), enrolledOn: day(-110), exitedOn: null,

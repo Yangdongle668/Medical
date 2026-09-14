@@ -13,6 +13,9 @@ import { VISIT_TIMESHEET_PORT, type VisitTimesheetPort } from "./ports.js";
 import { saeReportHours, saeTimeliness, saeStatus, SAE_REPORT_DEADLINE_HOURS,
   CALC_VERSION, edcDaysLate } from "@sitedesk/calc";
 import { nextCode } from "../../infra/code.js";
+/* 访视状态的中文名 —— 闸门提示要说人话。与 mock 共用一份，
+   两边的措辞不会各走各的（见 contracts 里那段注释）。 */
+import { VISIT_STATUS_LABEL, type VisitStatus } from "@sitedesk/contracts";
 
 /* ════════════════════════════════════════════════════════════════════
    ClinicalOps —— 受试者与访视。
@@ -420,6 +423,29 @@ export class ClinicalService {
       this.invariant("icf-after-irb",
         `知情签署日 ${b.signedOn} 早于该中心的伦理批件日 ${irb}`);
 
+    /* ── 没有 SOA 就别把人推进筛选中 ──────────────────────────────────
+       `scheduleVisit` 在项目没配 SOA 时**安静地返回 null**：状态照样改成
+       `screening`，访视一条都没有，而界面上什么也不说。
+
+       那个状态是个**死角**：入组要筛选期访视已登记 PI 确认，而这一例
+       连访视都没有；受试者访视窗口上那一行只有「登记脱落」一个按钮 ——
+       现场报来的原话就是「页面没有可以操作的按钮，只有一个脱落」。
+       也就是说，这一例除了作废，没有任何出路。
+
+       所以这一条改成 fail-closed：**先配 SOA，再签知情**。
+       知情是一张纸上的事实，日期由 `signedOn` 带进来，晚登记一会儿
+       一个字都不会丢；而一个推进去就出不来的受试者，是要靠改库才收拾得了的。 */
+    const soa = await c.client.query<{ n: string }>(
+      `SELECT count(*) AS n FROM visit_template WHERE study_id = $1 AND seq = 0`,
+      [su.study_id]);
+    if (Number(soa.rows[0]?.n ?? 0) === 0)
+      throw new ProblemException("gate-not-satisfied", {
+        detail: "这个项目还没有配访视计划（SOA）—— 签了知情也排不出筛选期访视，" +
+          "而没有筛选期访视的受试者入不了组，只能作废",
+        unmet: [{ code: "study-has-no-soa", module: "intake",
+          message: "先在「立项与建档」里把这个项目的 SOA 配好（至少要有筛选期那一行），" +
+            "再回来登记知情 —— 知情签署日照填那天的，晚登记不丢任何东西" }] });
+
     await c.client.query(
       `UPDATE subject SET state = 'screening', icf_signed_on = $2 WHERE id = $1`,
       [id, b.signedOn]);
@@ -465,7 +491,10 @@ export class ClinicalService {
           ? "这一例没有筛选期访视 —— 入组的前提是筛选期访视已完成并登记 PI 确认"
           : 做完了没登记
             ? "筛选期访视做完了，但还没登记 PI 确认 —— 去访视详情页把 PI 签字的日期登记上"
-            : `筛选期访视当前是「${v0.status}」，还没做完，不能入组`,
+            /* 状态给中文名，不给 `planned` 这种键 —— 键是给程序看的。
+               这一支现在是演示里最常撞上的那一支（签完知情就排出访视了），
+               而它原来把一串英文摆在现场面前。 */
+            : `筛选期访视${VISIT_STATUS_LABEL[v0.status as VisitStatus]}，不能入组`,
         /* `subj`（受试者访视窗口）是真模块键 —— 原来这里写的是
            `clinical`，而**模块表里根本没有这个键**：界面据它出跳转链接，
            认不出来就只画文字。现场报的正是「我找不到这个对应的入口」。
@@ -483,7 +512,9 @@ export class ClinicalService {
               /* 「待 PI 确认」→「待**登记** PI 确认」：一个字，但它决定
                  人会不会去等。PI 多数时候没有本系统的账号，等就是永远。 */
               ? "筛选期访视还差一步：**登记 PI 确认**（在访视详情页填 PI 签字那天的日期）"
-              : `筛选期访视当前是「${v0.status}」—— 先把它做完，再登记 PI 确认` }] });
+              : `筛选期访视${VISIT_STATUS_LABEL[v0.status as VisitStatus]} —— ` +
+                "去受试者访视窗口打开这一例的筛选期访视，逐项勾完任务、提交完成，" +
+                "再登记 PI 签字那天的日期" }] });
     }
 
     await c.client.query(
@@ -589,8 +620,13 @@ export class ClinicalService {
       `SELECT id FROM subject_visit WHERE subject_id = $1 AND seq = $2`, [subjectId, seq]);
     if (exists.rows[0]) return null;
 
+    /* 日子只加日子：`anchorDate` 是 'YYYY-MM-DD'，`new Date` 把它读成 UTC 零点，
+       下面又用 `toISOString()` 切回日期 —— 中间的加减也必须走 UTC。
+       用 `getDate()/setDate()`（本地）的话，在东八区看不出问题，在负时区
+       那个 Date 落在**前一天**的下午，加完再切回来就差一天。
+       packages/calc 的 `workdaysBetween` 犯过同一个错，修法一样。 */
     const target = new Date(anchorDate);
-    target.setDate(target.getDate() + tpl.offset_days);
+    target.setUTCDate(target.getUTCDate() + tpl.offset_days);
     const targetStr = target.toISOString().slice(0, 10);
 
     const { rows } = await c.client.query<{ id: string }>(
@@ -715,7 +751,7 @@ export class ClinicalService {
     const amount = Number(comp.rows[0]?.compensation_cents ?? 0);
     if (amount > 0) {
       const due = new Date(b.actualDate);
-      due.setDate(due.getDate() + 30);
+      due.setUTCDate(due.getUTCDate() + 30);   // 同上：UTC 进、UTC 出
       const pay = await c.client.query<{ id: string }>(
         `INSERT INTO subject_payment (study_site_id, subject_id, visit_id, amount_cents, due_on)
          VALUES ($1,$2,$3,$4,$5) ON CONFLICT (visit_id) DO NOTHING RETURNING id`,

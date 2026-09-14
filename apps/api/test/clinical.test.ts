@@ -38,6 +38,18 @@ const today = () => new Date().toISOString().slice(0, 10);
 const shift = (base: string, n: number) =>
   new Date(new Date(base).getTime() + n * 864e5).toISOString().slice(0, 10);
 
+/** 「迟到」那几条用例的知情签署日 —— 一个月前。
+ *
+ *  筛选期访视的目标日**就是**知情签署日（SOA 的 seq 0 offset 是 0，
+ *  见迁移 0053），窗口前后各 win 天。所以拿今天签知情的话，
+ *  "窗口关闭之后再过几天"落在**未来**，撞上的是 `visit-not-future`，
+ *  测不到超窗那条。
+ *
+ *  这几条用例原先都吃着 offset `-14` 那个 bug 过日子：目标日落在签知情
+ *  之前两周，"超窗"顺手就是过去的日期。offset 改对之后它们一齐变红 ——
+ *  **红得对**：它们要证明的是"迟到要记偏离"，不是"排期排错了"。 */
+const lateIcf = () => shift(today(), -30);
+
 let seq = 0;
 
 /** 取某受试者当前那次访视（按 subjectId 过滤，不去全量列表里捞 —— 捞不到会静默失败） */
@@ -168,6 +180,94 @@ describe("受试者生命周期", () => {
     expect(v.items[0].seq).toBe(0);
     /* 任务清单一起生成 —— 「这次要做哪几项」不靠 CRC 记忆 */
     expect(v.items[0].tasks.length).toBeGreaterThan(0);
+  });
+
+  it("**筛选期访视排在签知情那一天，而且一生下来在窗口里**", async () => {
+    /* 这一条钉的是迁移 0053 修掉的那个数：SOA 的 seq 0 原来是
+       `anchor='icf', offset_days=-14` —— 目标日落在签知情之前两周，
+       于是每一例新受试者的筛选期访视**生出来就已经超窗十天**。
+       而超窗完成必须生成方案偏离（I4），也就是说系统会给每个新登记的人
+       凭空记一条偏离，还没有任何地方说这是排期排错了。
+
+       断言写成"目标日 == 知情签署日"，不是"daysLeft >= 0" ——
+       后者在 offset 写成 -1、-2 时照样绿。 */
+    const s = await siteByCode(crc, "SS-01");
+    const icfOn = today();
+    const { id } = await freshSubject(crc, s.id, icfOn);
+    const v = (await crc.get(`/v1/subject-visits?subjectId=${id}`)).body.items[0];
+    expect(v.targetDate).toBe(icfOn);
+    expect(v.outOfWindow).toBe(false);
+    expect(v.daysLeft).toBeGreaterThanOrEqual(0);
+  });
+
+  it("**项目没配 SOA 就不让签知情** —— 否则造出来的是一个出不去的受试者", async () => {
+    /* 现场报来的原话：「页面没有可以操作的按钮，只有一个脱落」。
+       `scheduleVisit` 在项目没有 seq 0 的 `visit_template` 时**返回 null**，
+       而 signIcf 原来只是 `if (v) effects.push(v)` —— 状态照样改成
+       `screening`，访视一条都没有，界面上什么也不说。
+
+       那个状态是死角：入组要求筛选期访视已登记 PI 确认，而它连访视都没有；
+       知情已经签过，不会再签第二次。除了作废，没有出路。
+
+       所以改成 fail-closed。知情是一张纸上的事实，日期由 `signedOn` 带进来，
+       先去配 SOA 再回来登记，一个字都不会丢。 */
+    /* 造一个**从来没配过 SOA** 的项目 + 一个已启动的中心，而不是拆现成的：
+       删 SS-01 的 seq 0 会被触发器 `visit_template_no_orphan` 拦下
+       （「已经排给 30 个受试者的定义不许删」），而那条触发器是对的 ——
+       删了，那些访视就指向一个不存在的定义。
+
+       这条状态接口造不出来（没有建项目 SOA 的端点，立项那条流程里也
+       没有"跳过 SOA"这一步），所以只能绕到库里去 —— 同上面那条
+       「没有筛选期访视」的做法。造的是新行，不动任何现成数据。 */
+    const db = new pg.Client({ connectionString: process.env["TEST_DATABASE_URL"] });
+    await db.connect();
+    try {
+      const st = await db.query<{ id: string }>(
+        `INSERT INTO study (code, short_name, phase, indication, planned_subjects,
+           contract_amount_cents, client_id, planned_sites)
+         VALUES ('ZZ-NO-SOA', '没配 SOA 的项目', 'II', '仅用于这条测试', 10,
+                 0, (SELECT id FROM client LIMIT 1), 1) RETURNING id`);
+      const site = await db.query<{ id: string }>(
+        `INSERT INTO study_site (study_id, code, hospital, dept, city, pi_name, state,
+           contracted, unit_price_cents, irb_approved_on, siv_on)
+         VALUES ($1, 'ZZ-99', '测试医院', '测试科', '测试市', '测试 PI', 'enrolling',
+                 10, 100000, CURRENT_DATE - 60, CURRENT_DATE - 30) RETURNING id`,
+        [st.rows[0]!.id]);
+      const siteId = site.rows[0]!.id;
+      /* `visit_template` 一行都不插 —— 这正是要测的状态。
+         CRC 的行范围是 `assigned`，得有一条在期的派工才看得见这个中心；
+         少了它下面会是 404，而 404 证明不了这条闸门。 */
+      await db.query(
+        `INSERT INTO site_assignment (account_id, study_site_id, role_kind)
+         SELECT id, $1, 'CRC' FROM account WHERE login = 'wutong'`, [siteId]);
+
+      const r = await crc.post("/v1/subjects",
+        { studySiteId: siteId, screeningNo: `N-${Date.now() % 100000}-${++seq}` }, K());
+      expect(r.status).toBe(201);
+
+      const bad = await crc.post(`/v1/subjects/${r.body.id}:sign-icf`,
+        { signedOn: today() }, K());
+      expect(bad.status).toBe(422);
+      expect(bad.body.unmet[0].code).toBe("study-has-no-soa");
+      /* 这一条也要带得出去处 —— 界面据 module 出跳转链接。 */
+      expect(bad.body.unmet[0].module).toBe("intake");
+
+      /* 而且**状态没被改掉**：失败的登记不能留下半个 screening ——
+         那正是这条 fail-closed 要避免的死角。 */
+      const su = (await crc.get(`/v1/subjects/${r.body.id}`)).body;
+      expect(su.state).toBe("prescreen");
+      expect(su.icfSignedOn).toBeFalsy();
+    } finally {
+      /* 造的行自己收掉 —— `study_site.study_id` 没有 ON DELETE CASCADE，
+         所以按 受试者 → 中心 → 项目 的顺序删。留着的话后面按项目聚合的
+         用例会多出一个 0 例的项目，而那种污染只在别的文件里冒出来。 */
+      await db.query(
+        `DELETE FROM subject WHERE study_site_id IN
+           (SELECT id FROM study_site WHERE code = 'ZZ-99')`);
+      await db.query(`DELETE FROM study_site WHERE code = 'ZZ-99'`);
+      await db.query(`DELETE FROM study WHERE code = 'ZZ-NO-SOA'`);
+      await db.end();
+    }
   });
 
   it("知情签署日早于该中心的伦理批件日会被拒", async () => {
@@ -372,7 +472,9 @@ describe("I3：没有 PI 确认，访视不锁定，受试者不能入组", () =
 describe("I4：超窗必须生成方案偏离，且在同一个事务里", () => {
   async function readyVisit() {
     const s = await siteByCode(crc, "SS-01");
-    const { id } = await freshSubject(crc, s.id);
+    /* 知情签在一个月前 —— 这一组要的是"访视迟到"，而迟到的日期得是过去的。
+       理由见 lateIcf 上面那段。 */
+    const { id } = await freshSubject(crc, s.id, lateIcf());
     const v = (await crc.get(`/v1/subject-visits?subjectId=${id}`)).body.items[0];
     for (const t of v.tasks)
       await crc.post(`/v1/subject-visits/${v.id}/tasks/${t.seq}:done`, {}, K());
@@ -573,7 +675,8 @@ describe("完成访视：一次调用，一串后果", () => {
 
   it("重放同一个幂等键返回首次结果，不会重复生成偏离与补偿", async () => {
     const s = await siteByCode(crc, "SS-01");
-    const { id } = await freshSubject(crc, s.id);
+    /* 这一条也要超窗（偏离是它检查"不重复生成"的那件事）—— 同 lateIcf。 */
+    const { id } = await freshSubject(crc, s.id, lateIcf());
     const v = (await crc.get(`/v1/subject-visits?subjectId=${id}`)).body.items[0];
     for (const t of v.tasks)
       await crc.post(`/v1/subject-visits/${v.id}/tasks/${t.seq}:done`, {}, K());

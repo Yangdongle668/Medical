@@ -139,7 +139,26 @@ export function SubjectsPage() {
                   <td className="num">
                     {s.visitsDone}/{s.visitsPlanned}
                   </td>
-                  <td>{s.nextVisit?.visitLabel ?? <span className="muted">—</span>}</td>
+                  {/* 下一次访视。**排不出来的时候要说话** ——
+                      现场报来的原话：「页面没有可以操作的按钮，只有一个脱落」。
+                      那一行是筛选中、`0/0`、这一格一个「—」，右边只剩登记脱落：
+                      看的人不知道是"还没排"还是"这一页坏了"，也不知道找谁。
+                      一个静默的「—」把一条数据毛病显示成了"无事可做"。 */}
+                  {/* **只对「筛选中」说这句。** 预筛还没签知情，本来就没有访视；
+                      已入组而没有下一次，多半是 SOA 走到头了 —— 那是正常收尾，
+                      对它喊"没排出来"是一句假警报，而假警报会让真的那句也没人看。
+                      筛选中不一样：签知情那一下一定会排出筛选期访视，
+                      没有就是出了事。 */}
+                  <td>{s.nextVisit?.visitLabel ?? (
+                    s.state === "screening"
+                      ? <span className="chip warn" data-testid={`no-visit-${s.id}`}
+                          title={"签署知情同意时会连筛选期访视一起排出来。这一例没有，" +
+                            "多半是这个项目的访视计划（SOA）没配 —— 去「立项与建档」补上，" +
+                            "再找管理员把这一例的访视补排出来"}>
+                          访视没排出来
+                        </span>
+                      : <span className="muted">—</span>
+                  )}</td>
                   <td>{windowChip(s)}</td>
                   <td className="muted">{s.crcName ?? "—"}</td>
                   <td>
