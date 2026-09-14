@@ -440,16 +440,41 @@ export class ClinicalService {
     if (su.state !== "screening")
       this.invariant("subject-state", `受试者当前是「${su.state}」，只有筛选中可以入组`);
 
-    /* I3 的直接后果：入排标准还没有 PI 签字就随机化，是核查必查的一条 */
-    const scr = await c.client.query<{ status: string }>(
-      `SELECT status FROM subject_visit WHERE subject_id = $1 AND seq = 0`, [id]);
-    if (!scr.rows[0] || scr.rows[0].status !== "locked")
+    /* I3 的直接后果：入排标准还没有 PI 签字就随机化，是核查必查的一条。
+       **规矩没变，措辞变了**（迁移 0050）：PI 签的字仍然是放行条件，
+       只是那件事由一线带着日期登记进来 —— 不等 PI 登录这套系统。
+
+       ── 原来这两句是互相打架的 ──────────────────────────────────────
+         detail：「筛选期访视尚未由 PI 确认锁定，不能入组」
+         unmet ：「尚未登记筛选期访视」
+
+       一个说等 PI，一个说压根没这条访视 —— 而**这两种情况该做的事完全不同**：
+       前者去访视页登记那一下，后者要先把访视做完。
+       现场同时看到这两句，只能猜哪句是真的。
+
+       所以 detail 跟着分支走，而且每一句都说得出**下一步在谁手上**：
+       两种都是一线自己办得掉的，没有一句指向院外的人。 */
+    const scr = await c.client.query<{ id: string; status: string }>(
+      `SELECT id, status FROM subject_visit WHERE subject_id = $1 AND seq = 0`, [id]);
+    const v0 = scr.rows[0];
+    if (!v0 || v0.status !== "locked") {
+      const 没这条访视 = !v0;
+      const 做完了没登记 = v0?.status === "done_pending_pi";
       throw new ProblemException("gate-not-satisfied", {
-        detail: "筛选期访视尚未由 PI 确认锁定，不能入组",
+        detail: 没这条访视
+          ? "这一例还没有筛选期访视 —— 入组的前提是筛选期访视已完成并登记 PI 确认"
+          : 做完了没登记
+            ? "筛选期访视做完了，但还没登记 PI 确认 —— 去访视详情页把 PI 签字的日期登记上"
+            : `筛选期访视当前是「${v0.status}」，还没做完，不能入组`,
         unmet: [{ code: "screening-visit-not-locked", module: "clinical",
-          message: scr.rows[0]
-            ? `筛选期访视当前是「${scr.rows[0].status}」，需 PI 确认后才能入组`
-            : "尚未登记筛选期访视" }] });
+          message: 没这条访视
+            ? "还没有筛选期访视。签署知情同意时会自动排出它 —— 先去受试者页面登记 ICF"
+            : 做完了没登记
+              /* 「待 PI 确认」→「待**登记** PI 确认」：一个字，但它决定
+                 人会不会去等。PI 多数时候没有本系统的账号，等就是永远。 */
+              ? "筛选期访视还差一步：**登记 PI 确认**（在访视详情页填 PI 签字那天的日期）"
+              : `筛选期访视当前是「${v0.status}」—— 先把它做完，再登记 PI 确认` }] });
+    }
 
     await c.client.query(
       `UPDATE subject SET state = 'enrolled', randomization_no = $2, enrolled_on = $3
