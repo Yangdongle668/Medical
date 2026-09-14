@@ -58,13 +58,27 @@ test.describe("立项申请", () => {
 });
 
 test.describe("审批", () => {
-  test("**提交人不能批准自己的申请**", async ({ page }) => {
-    /* 韩雪提交的那两条，换成韩雪自己去批 */
-    await page.goto("/intake?as=pm");
-    await page.getByTestId("intake-row").first()
-      .getByRole("button", { name: "批准立项" }).click();
-    await page.getByTestId("intake-submit").click();
-    await expect(page.getByTestId("intake-problem")).toContainText("不能自己批自己");
+  test("**提交人不能批准自己的申请** —— 而且按钮压根不给", async ({ page }) => {
+    /* ── 这条测试原来钉的是坏行为 ────────────────────────────────
+       上一版是：点「批准立项」→ 填确认 → 断言弹出「不能自己批自己」。
+       也就是说它**要求那个按钮在**，而那正是现场报来的问题：
+
+         「超级管理员和经营层都可以自己批自己的项目」
+
+       服务端一直拦着（422 `intake-self-approval`），坏的是界面 ——
+       这一页只看 `approve` 动作，于是两样动作都有的人在自己的申请上
+       照样看得到按钮。**一个能点、点了必错的按钮，比没有按钮糟得多**：
+       他看到按钮在那儿，就以为这条规矩不存在。
+
+       所以断言翻面：按钮不该在，而该在的是一句说得清的话。 */
+    await page.goto("/intake?as=pm");      // 韩雪提交的那两条
+    const row = page.getByTestId("intake-row").first();
+    await expect(row).toBeVisible();
+    await expect(row.getByRole("button", { name: "批准立项" })).toHaveCount(0);
+    await expect(row.getByRole("button", { name: "退回重谈" })).toHaveCount(0);
+    /* 一句"没有权限"会让人去要权限，而他要多少权限都批不了自己这一条。 */
+    await expect(row.getByText("是你自己提交的")).toBeVisible();
+    await expect(row.getByText("要两个人")).toBeVisible();
   });
 
   test("**退回必须写理由，短了点不动**", async ({ page }) => {

@@ -241,6 +241,45 @@ describe("I3：没有 PI 确认，访视不锁定，受试者不能入组", () =
     expect(e.status).toBe(422);
     expect(e.body.code).toBe("gate-not-satisfied");
     expect(e.body.unmet[0].code).toBe("screening-visit-not-locked");
+
+    /* ── 拦下来之后那句话要说对是哪一种 ────────────────────────────
+       原来 detail 与 unmet 是**互相打架**的：
+
+         detail：「筛选期访视尚未由 PI 确认锁定，不能入组」
+         unmet ：「尚未登记筛选期访视」
+
+       一个说等 PI，一个说压根没这条访视 —— 而这两种情况该做的事完全不同。
+       这里访视是做完了的（`doVisit` 刚跑完），所以两句都该指向
+       **登记 PI 确认**，而且一个字都不该出现"等 PI"。 */
+    expect(e.body.detail).toContain("还没登记 PI 确认");
+    expect(e.body.unmet[0].message).toContain("登记 PI 确认");
+    /* 「需 PI 确认」那种说法会让人去等一个没有账号的人。 */
+    expect(`${e.body.detail}${e.body.unmet[0].message}`)
+      .not.toMatch(/需 PI 确认|由 PI 确认锁定|等 PI/);
+  });
+
+  it("**连筛选期访视都没有**时，说的是另一句 —— 两种情况两条路", async () => {
+    /* 这一条是从现场报障里长出来的：同一次拦截同时显示
+       「尚未由 PI 确认锁定」与「尚未登记筛选期访视」，
+       而看的人只能猜哪句是真的。 */
+    const s = await siteByCode(crc, "SS-01");
+    const { id } = await freshSubject(crc, s.id);
+    /* freshSubject 签了 ICF，所以筛选期访视是有的 —— 直接删掉它，
+       造出"这一例没有筛选期访视"那种状态。 */
+    const v = await currentVisit(crc, id);
+    /* 以 owner 身份直删 —— 这一步造的是一个**接口造不出来的**状态
+       （没有端点能删访视，那是对的），所以只能绕到库里去。 */
+    const db = new pg.Client({ connectionString: process.env["TEST_DATABASE_URL"] });
+    await db.connect();
+    try { await db.query("DELETE FROM subject_visit WHERE id = $1", [v.id]); }
+    finally { await db.end(); }
+
+    const e = await crc.post(`/v1/subjects/${id}:enroll`,
+      { randomizationNo: `R-${++seq}`, enrolledOn: today() }, K());
+    expect(e.status).toBe(422);
+    expect(e.body.detail).toContain("还没有筛选期访视");
+    /* 而且要说得出下一步：先登记 ICF，访视会自己排出来。 */
+    expect(e.body.unmet[0].message).toContain("ICF");
   });
 
   it("没有 piConfirm 的角色确认不了 —— 仍然是动作维度的事", async () => {

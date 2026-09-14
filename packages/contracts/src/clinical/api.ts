@@ -248,8 +248,11 @@ define({
   layer: "L2", context: CTX,
   summary: "入组（随机化）",
   description:
-    "筛选期访视必须已由 PI 确认锁定才能入组 —— " +
-    "入排标准还没人签字就随机化，是核查必查的一条。",
+    "筛选期访视必须**已登记 PI 确认**（状态 locked）才能入组 —— " +
+    "入排标准还没人签字就随机化，是核查必查的一条。\n\n" +
+    "**签字是放行条件，等 PI 登录不是。** 那一下由一线带着日期登记进来" +
+    "（`confirmSubjectVisit`，见迁移 0050）—— PI 多数时候没有本系统的账号，" +
+    "把闸门架在「他来点一下」上，等于把这一例永远卡住。",
   action: "subjWrite",
   params: ById,
   body: EnrollSubjectBody,
