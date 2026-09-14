@@ -3,11 +3,18 @@ import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { useToast } from "@sitedesk/ui/react";
 import { loadMe } from "../login/me.js";
 import { AssignForm } from "./AssignForm.js";
+import { DutyBoard } from "./DutyBoard.js";
 
 /* ════════════════════════════════════════════════════════════════════
    派工与产能。
 
-   这一页盯两件会出事的事，而它们都不是"谁比较忙"：
+   ── 这一页现在回答两个问题，不是一个 ────────────────────────────
+   最上面那一块（DutyBoard）问的是**这周**的事：该登记的登记了没有。
+   下面这张表问的是**这个人在我方是什么情况**：职级、证书、带谁、谁接他，
+   半年才变一次。两者共用"一行一个人"这个形状，但不是同一张表的几列 ——
+   契约那边同理，`RegistrationDuty` 不是 `Staff` 的子集。
+
+   下面这张表盯两件会出事的事，而它们都不是"谁比较忙"：
 
    ① **GCP 证书过期。** 过期即不得开展工作 —— 不是提醒，是资质失效。
       一个证书上周过期的 CRA 还在中心干活，那是稽查发现项。
@@ -88,8 +95,16 @@ export function StaffPage() {
     <>
       <div className="page-head">
         <h2>派工与产能</h2>
-        <p>谁在哪几个中心、资质还有多久、走了谁来接。</p>
+        <p>
+          该登记的登记了没有、谁在哪几个中心、资质还有多久、走了谁来接。
+        </p>
       </div>
+
+      {/* **这一块排在最前。** 证书过期与无继任者是"要出事"，
+          而没登记是"已经在出事"：未登记的访视不计入「已完成」统计，
+          所以在它被补上之前，这个中心的入组进度、完成率、成本归集
+          全是偏低的 —— 而没有任何地方会报错。 */}
+      <DutyBoard />
 
       <div className="stats" style={{ marginBottom: 14 }}>
         <Stat label="在职" v={staff.filter(s => s.active).length} note="人" />

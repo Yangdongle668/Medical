@@ -128,7 +128,11 @@ test.describe("递交立项材料", () => {
 
     /* 文件可以后补 —— 纸还没到手、先把日期登记上是常事。 */
     await page.getByTestId("rl-go").click();
-    await expect(page.getByTestId("toast")).toContainText("已受理");
+    /* 断言的是**吐司区**而不是某一条吐司：上面递交那一条还没消失
+       （寿命 4.2 秒），两条同时在屏幕上，按 testid 取单条会撞上
+       strict mode —— 报的是「resolved to 2 elements」，
+       而那句话跟"已受理了没有"毫无关系。newsite.spec.ts 里同样写着这句。 */
+    await expect(page.getByTestId("toasts")).toContainText("已受理");
 
     /* 而**没传纸这件事要显眼**：核查看的是那张纸，不是台账上的一个日期。 */
     await expect(row.getByTestId("ac-letter-missing")).toContainText("还没传");

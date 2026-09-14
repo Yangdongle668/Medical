@@ -97,26 +97,32 @@ describe("闸门：推进不是给字段赋值，是断言一组事实成立", (
     const blocked = await advance(s.id, "irb_submit", "先递了再说");
     expect(blocked.status).toBe(422);
     expect(blocked.body.code).toBe("gate-not-satisfied");
+    /* **自己一个 code。** 界面上只有这一支该当场给一张递交表 ——
+       下面「还差材料」「还差意见函」那两支受理已经建出来了，
+       再给一张只会撞 (项目, 医院) 的唯一约束。 */
     expect(blocked.body.unmet[0]).toMatchObject(
-      { code: "site-acceptance", module: "instac" });
-    expect(blocked.body.unmet[0].message).toContain("还没向机构办递交");
+      { code: "acceptance-not-submitted", module: "instac" });
+    expect(blocked.body.unmet[0].message).toContain("还没登记立项材料递交");
 
     /* 递了但没受理，照样不放行 —— 而且它说得出还缺哪几份 */
     const ac = await pm.post("/v1/site-acceptances",
       { studyId: s.studyId, hospital: s.hospital, docs: ["立项申请表", "保险单"] });
     expect(ac.status, JSON.stringify(ac.body)).toBe(201);
     const half = await boss.get(`/v1/study-sites/${s.id}/gate?to=irb_submit`);
-    expect(half.body.unmet[0].message).toContain("缺 2 项材料");
+    expect(half.body.unmet[0].message).toContain("还差 2 项材料");
     expect(half.body.unmet[0].message).toContain("保险单");
 
     for (const d of ac.body.docs)
       expect((await admin.post(
         `/v1/site-acceptances/${ac.body.id}/docs/${d.seq}:set`, { present: true },
         { "Idempotency-Key": randomUUID() })).status).toBe(201);
-    /* 材料齐了还不够 —— 齐备不等于受理，出具受理通知是机构的一次决定 */
+    /* 材料齐了还不够 —— **齐备不等于已受理**。这一条没变。
+       变的是那句话指向谁：原来是「等机构办出具受理通知」，
+       而院方的机构办不是这套系统的用户，那句话把闸门指向了一个不会来的人。
+       现在它说的是一线自己能办的那件事：登记《立项受理意见函》。 */
     const ready = await boss.get(`/v1/study-sites/${s.id}/gate?to=irb_submit`);
     expect(ready.body.satisfied).toBe(false);
-    expect(ready.body.unmet[0].message).toContain("材料已齐，等机构办出具受理通知");
+    expect(ready.body.unmet[0].message).toContain("还没登记《立项受理意见函》");
 
     expect((await admin.post(`/v1/site-acceptances/${ac.body.id}:accept`, {},
       { "Idempotency-Key": randomUUID() })).status).toBe(201);

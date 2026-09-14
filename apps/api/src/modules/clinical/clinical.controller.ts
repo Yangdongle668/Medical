@@ -134,9 +134,9 @@ export class ClinicalController {
   @Post("/subject-visits/:id\\:confirm") @Operation("confirmSubjectVisit")
   confirmVisit(
     @Param("id", new ZodPipe(Uuid)) id: string,
-    @Body(new ZodPipe(ConfirmSubjectVisitBody)) b: unknown,
+    @Body(new ZodPipe(ConfirmSubjectVisitBody)) b: z.infer<typeof ConfirmSubjectVisitBody>,
     @Headers("idempotency-key") key?: string
-  ) { return command(this.idem, key, { id }, () => this.svc.confirmVisit(id)); }
+  ) { return command(this.idem, key, { id, ...b }, () => this.svc.confirmVisit(id, b)); }
 
   @Post("/subject-visits/:id\\:edc-entered") @Operation("enterVisitToEdc")
   edcEntered(

@@ -94,11 +94,20 @@ export const VISIT_STATUSES = [
 export const VisitStatus = z.enum(VISIT_STATUSES).meta({
   id: "VisitStatus",
   description:
-    "planned 已排期 → done_pending_pi CRC 已完成待 PI 确认 → locked 已锁定；" +
+    "planned 已排期 → done_pending_pi CRC 已完成、**待登记 PI 确认** → locked 已锁定；" +
     "missed 未按窗完成。\n" +
     "**done_pending_pi 不计入「已完成」统计**（I3）—— " +
     "CRC 说做完了和 PI 确认做完了，在核查时是两回事。"
 });
+/** 访视状态的**类型**。
+ *
+ *  导出它是为了让 mock 用得上：`apps/web/src/mocks/scenario.ts` 的
+ *  `MockVisit.status` 原来是 `string`，于是种子里写着 `status: "done"` ——
+ *  一个这个枚举里根本不存在的值 —— 而**没有任何地方会报错**：
+ *  mock 的 `:complete` 写 `done_pending_pi`、`:confirm` 判 `!== "done"`，
+ *  结果种子里的访视确认得了、刚做完的那条确认不了（422），
+ *  两条在界面上长得一模一样。定成这个类型之后，那行编译不过。 */
+export type VisitStatus = (typeof VISIT_STATUSES)[number];
 
 export const EDC_STATUSES = ["pending", "entered", "queried"] as const;
 export const EdcStatus = z.enum(EDC_STATUSES).meta({ id: "EdcStatus" });

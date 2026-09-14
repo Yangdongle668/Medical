@@ -18,8 +18,15 @@ test.describe("导航与页面一一对应", () => {
      现在没有待建页了，于是它翻过来：**侧栏里的每一个入口都得落到真页面**。
      守的还是同一条不变量 —— 「库里给了这个模块」与「界面上有这个入口」
      必须一致 —— 只是从"待建的那一页在"变成了"一页都不待建"。
-     往后再加模块，忘了在 main.tsx 登记路由，这条立刻会红。 */
-  for (const [role, count] of [["crc", 14], ["inst", 4], ["boss", 19]] as const) {
+     往后再加模块，忘了在 main.tsx 登记路由，这条立刻会红。
+
+     ── 为什么这里换掉了 inst ──────────────────────────────────────
+     原来第二个跑的是 `["inst", 4]`。迁移 0051 之后机构办的模块清单是
+     **空的**（外部角色默认不开），那条循环会一次都不进 ——
+     **一条永远为真的断言比没有断言更糟**：它照旧绿着，看起来这四页
+     还有人盯。换成 PM：内部角色、模块数相当，而且跨了另外几个分组。
+     「机构办那四页还打不打得开」由 external.spec.ts 的直接地址那条盯。 */
+  for (const [role, count] of [["crc", 14], ["pm", 14], ["boss", 19]] as const) {
     test(`${role} 的每一个入口都点得进真页面`, async ({ page }) => {
       /* **点链接，不是逐个 page.goto。** 整页重载会把 MSW 的 service worker
          连同 mock 场景一起重来一遍，十九次就是三十秒 —— 第一版正是这么写的，
@@ -131,6 +138,32 @@ test.describe("经营层：组织与权限", () => {
     const picker = page.getByTestId("module-picker");
     await expect(picker).toContainText("只收敛导航，不是安全边界");
     await expect(page.getByTestId("mod-dm-trail")).toBeChecked();
+  });
+
+  /* ── 「0 个模块」必须说得出自己是一个决定 ────────────────────────
+     迁移 0051 之后，机构办与研究者那两行的模块数是 0。**而 0 在这张表上
+     看起来像遗漏** —— 谁都会以为是有人不小心清了，然后好心勾回去。
+     那一勾的代价是要给院方开账号、发登录链接、之后一直为它负责。
+     所以这一条钉的是：那两行有标记，页面下面有一段话说清开通意味着什么。 */
+  test("**外部角色那两行说得出「未启用」是有意的**", async ({ page }) => {
+    await page.getByRole("link", { name: "组织与权限" }).click();
+    await expect(page.getByTestId("account-row").first()).toBeVisible();
+    await page.getByTestId("tab-perm").click();
+    await expect(page.getByTestId("role-row").first()).toBeVisible();
+
+    for (const code of ["inst", "pi"]) {
+      await expect(page.getByTestId(`role-off-${code}`)).toContainText("未启用 · 对外协作");
+    }
+    /* 内部角色一个都不该挂这个标记 —— 挂上去就成了噪声。 */
+    for (const code of ["crc", "cra", "pm", "boss", "admin", "dm", "qa"]) {
+      await expect(page.getByTestId(`role-off-${code}`)).toHaveCount(0);
+    }
+
+    const note = page.getByTestId("external-off-note");
+    await expect(note).toContainText("那是一个决定，不是漏配");
+    /* **开通的代价要写出来。** 只说"默认不开"，人会以为勾回去是免费的。 */
+    await expect(note).toContainText("开本系统的账号");
+    await expect(note).toContainText("不用改代码");
   });
 
   test("分组页说得出未分组的人是谁", async ({ page }) => {

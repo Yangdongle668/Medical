@@ -21,8 +21,17 @@ import { fieldGates } from "@sitedesk/contracts";
 import { maskFields } from "@sitedesk/policy";
 import examples from "@sitedesk/contracts/mocks/examples.json";
 import { IDENTITIES, type MockRole } from "./roles.js";
+/* 「今天」取**本地**日历日，和界面用的是同一个函数。
+   mock 目录在 dates.test.ts 那条守卫的扫描之外（它演的是服务端，
+   `createdAt` 这类瞬间用 UTC 是对的），但**日期比较不能各算各的**：
+   界面默认填 today()，mock 用 UTC 切，东八区早上八点前
+   界面刚填好的日期会被 mock 判成「在将来」。 */
+import { today as today_ } from "../shell/dates.js";
 /* 角色代号 → 名册工种的映射**用契约里那一份** —— 服务端读的是同一张表。 */
 import { STAFF_ROLE_KIND } from "@sitedesk/contracts";
+/* EDC 及时线与 total 的口径**用 calc 那一份** —— mock 另算一遍的话，
+   演示上的数和真接口的数会在某一天悄悄分叉。 */
+import { edcDaysLate, dutyTotal } from "@sitedesk/calc";
 import type { MockAccount, MockSoaVisit,
   MockFeas, MockBid, MockChange, MockMilestone, MockQuery,
   MockMonitorVisit, MockAudit, MockIntake,
@@ -716,11 +725,11 @@ export const scenarioHandlers = [
     if (q.get("outOfWindow") === "true") items = items.filter(v => v.outOfWindow);
     const status = q.getAll("status");
     if (status.length) items = items.filter(v => status.includes(v.status));
-    /* 待 PI 确认 = 已完成、但还没签字。**在服务端筛** ——
+    /* 待登记 PI 确认 = 已完成、但还没签字。**在服务端筛** ——
        前端取一页回来自己挑，访视上了几百条之后第一页全是历史，
        研究者工作台就永远是空的。 */
     if (q.get("pendingPi") === "true")
-      items = items.filter(v => v.status === "done" && !v.piConfirmedAt);
+      items = items.filter(v => v.status === "done_pending_pi" && !v.piConfirmedAt);
     items.sort(byWindow);
     return HttpResponse.json({ items, nextCursor: null });
   }),
@@ -747,21 +756,54 @@ export const scenarioHandlers = [
     return HttpResponse.json({ data: withDaysLeft(v), sideEffects: [] }, { status: 201 });
   }),
 
-  /* PI 确认。**只有该中心的 PI 本人能按** —— 服务端那条 I3 在这里
-     演成两半：别的角色没有 piConfirm 动作（按钮画不出来），
-     范围外的访视 404（连行都看不到）。 */
-  http.post(pathToRegExp("/v1/subject-visits/{id}:confirm"), ({ request }) => {
+  /* 登记 PI 确认。**语义变了**（迁移 0050）：原来是"PI 本人登录来点"，
+     现在是"一线带着日期把 PI 签的那一下登记进来"。
+     I3 的实质不动 —— 签字仍然是放行条件，未确认的访视不计入「已完成」。
+
+     mock 要把这三件事演对：
+     ① 没有 piConfirm 动作 → 403（DM、QA、机构办按不动）；
+     ② 范围外的访视 → 404（连行都看不到，不给 403：那等于承认它存在）；
+     ③ `piConfirmedByName` **只在本人是该中心 PI 时才填** ——
+        一线登记的留空，那正是界面上「由一线登记（PI 签在纸上）」那一行
+        唯一的依据。填成登记人自己的话，那句话永远画不出来。 */
+  http.post(pathToRegExp("/v1/subject-visits/{id}:confirm"), async ({ request }) => {
     const id = seg(request.url, /\/subject-visits\/([^/:]+):confirm/);
     const v = scenario.visits.find(x => x.id === id);
     if (!v || !siteInScope(v.studySiteId)) return HttpResponse.json(
       problem("not-found", 404, "访视不存在"), { status: 404 });
     if (!identity().actions.includes("piConfirm")) return HttpResponse.json(
-      problem("forbidden", 403, "只有该中心的研究者可以确认访视"), { status: 403 });
-    if (v.status !== "done") return HttpResponse.json(
-      problem("invariant-violated", 422, "访视尚未完成，没有可确认的内容"), { status: 422 });
-    v.piConfirmedAt = new Date().toISOString();
-    v.piConfirmedByName = identity().name;
-    return HttpResponse.json({ data: withDaysLeft(v), sideEffects: [] }, { status: 201 });
+      problem("forbidden-action", 403, "需要「登记 PI 确认访视」权限"), { status: 403 });
+    if (v.status !== "done_pending_pi") return HttpResponse.json(
+      problem("invariant-violated", 422,
+        `访视当前是「${v.status}」，只有待确认的可以确认`), { status: 422 });
+
+    const b = await request.json().catch(() => ({})) as { confirmedOn?: string };
+    /* 省略即访视当天 —— 默认成"今天"会让一份上周的访视挂上今天的确认日期。 */
+    const confirmedOn = b.confirmedOn ?? v.actualDate ?? today_();
+    if (confirmedOn > today_()) return HttpResponse.json(
+      problem("validation-failed", 422,
+        `签字日期 ${confirmedOn} 在将来 —— 这一栏记的是「PI 哪天签的字」`), { status: 422 });
+    if (v.actualDate && confirmedOn < v.actualDate) return HttpResponse.json({
+      ...problem("invariant-violated", 422,
+        `签字日期 ${confirmedOn} 早于访视日 ${v.actualDate} —— PI 不会在访视发生前确认它`),
+      invariant: "pi-confirm-before-visit"
+    }, { status: 422 });
+
+    const site = SITES_LIST.find(s => s.id === v.studySiteId);
+    const 是本人 = !!site && site.piAccountId === identity().id;
+    v.status = "locked";
+    v.piConfirmedAt = `${confirmedOn}T18:00:00.000Z`;
+    v.piConfirmedByName = 是本人 ? identity().name : null;
+    /* 筛选期访视（seq 0）锁定 → 这一例可以入组了。
+       服务端在这里下发 SubjectEnrolled，mock 也得下发，
+       否则"确认完还差什么"这条链在演示上是断的。 */
+    return HttpResponse.json({
+      data: withDaysLeft(v),
+      sideEffects: v.seq === 0
+        ? [{ type: "SubjectEnrolled",
+             summary: "筛选期访视已锁定，该受试者现在可以入组随机化" }]
+        : []
+    }, { status: 201 });
   }),
 
   http.post(pathToRegExp("/v1/subject-visits/{id}:edc-entered"), ({ request }) => {
@@ -1500,6 +1542,7 @@ export const scenarioHandlers = [
   http.post(pathToRegExp("/v1/site-acceptances"), async ({ request }) => {
     const b = await request.json() as {
       studyId: string; hospital: string; docs?: string[]; submittedOn?: string;
+      acceptedOn?: string; letter?: { filename: string; contentBase64: string };
     };
     if (!identity().actions.includes("advance")) return HttpResponse.json(
       problem("forbidden", 403, "你的角色不能递交立项材料"), { status: 403 });
@@ -1516,12 +1559,18 @@ export const scenarioHandlers = [
       drug: "艾瑞替尼", sponsorName: "恒瑞医药", phase: "III 期",
       hospital: b.hospital, studySiteId: null, siteCode: null,
       submittedByName: me.name, submittedOn: b.submittedOn ?? TODAY_STR,
-      state: "review", origin: "in_system", amendNote: null,
-      acceptedOn: null, acceptedByName: null,
+      /* 一步填完：给了受理日期，这条受理**建出来就是已受理的** ——
+         不经过「形式审查中」，也不等机构办点任何东西。 */
+      state: b.acceptedOn ? "accepted" : "review", origin: "in_system", amendNote: null,
+      acceptedOn: b.acceptedOn ?? null, acceptedByName: null,
       /* **一律未勾** —— 勾是机构办形式审查的动作。 */
       /* 清单可以是空的 —— 多数医院的机构办不在本系统里（迁移 0048）。 */
       docs: (b.docs ?? []).map((name, seq) => ({ seq, name, present: false })),
-      letter: null
+      letter: b.letter && b.acceptedOn ? {
+        filename: b.letter.filename, contentType: "application/pdf",
+        sizeBytes: Math.max(1, Math.floor(b.letter.contentBase64.length * 3 / 4)),
+        uploadedAt: new Date().toISOString(), uploadedByName: me.name
+      } : null
     };
     scenario.acceptances.unshift(row);
     return HttpResponse.json(acceptanceDto(row), { status: 201 });
@@ -3143,6 +3192,70 @@ export const scenarioHandlers = [
     return HttpResponse.json({ items: items.map(assignmentDto), nextCursor: null });
   }),
 
+  /* 一线履职：该登记的登记了没有。**按人排。**
+     这几个数必须跟着场景变 —— 演示里登记掉一条待确认的访视，
+     这里的数要当场降一。一份写死的假数据演不出这件事，
+     而"登记完了数字没动"会让看的人以为按钮坏了。
+
+     归属按**这条受试者归谁**（`crcName`），不按"谁被派到这个中心"：
+     一个中心上同时有 CRA 和 CRC，按派工归的话同一条会同时记在两个人
+     头上 —— 两个人都看到"有人欠着"，多半谁都不会去办。
+     真接口那边是 `subject.crc_account_id`，同一个判据。 */
+  http.get(pathToRegExp("/v1/registration-duties"), ({ request }) => {
+    /* 「读不到」在这一块上是一条独立的画法（读失败画成空表，说出来的是
+       「都登记完了」—— 一句假话，而且恰好出现在最不该让人放心的时候）。
+       **而 `failStatus` 是每个处理器自己接的**，不是全局拦截 ——
+       在这一版之前全仓库只有 `getSiteGate` 接了它。
+       不接的话那条分支在 mock 上永远走不到，而走不到的分支等于没写过。 */
+    const fail = failStatus("listRegistrationDuties");
+    if (fail) return HttpResponse.json(
+      problem("internal", fail, "履职数据读取失败"), { status: fail });
+
+    const q = new URL(request.url).searchParams;
+    const ids = visibleSiteIds();
+    const today = today_();
+    const vis = inScope(scenario.visits);
+    const items = STAFF_LIST
+      .filter(p => p.active && (p.roleKind === "CRC" || p.roleKind === "CRA"))
+      .map(p => {
+        const 他的 = vis.filter(v =>
+          scenario.subjects.find(s => s.id === v.subjectId)?.crcName === p.displayName);
+        const ac = scenario.acceptances.filter(a =>
+          a.state !== "accepted" && a.origin === "in_system"
+          && a.submittedByName === p.displayName
+          && (!a.studySiteId || ids.has(a.studySiteId)));
+
+        const pendingPiConfirm = 他的.filter(v => v.status === "done_pending_pi").length;
+        const edcOverdue = 他的.filter(v =>
+          v.actualDate && v.edcStatus === "pending"
+          && edcDaysLate(v.actualDate, false, today) !== null).length;
+        const outOfWindow = 他的.filter(v =>
+          v.status === "planned" && v.outOfWindow).length;
+        const d = { pendingPiConfirm, edcOverdue, outOfWindow,
+          acceptanceNoLetter: ac.length };
+
+        /* 最久的那一件挂了多少天 —— 三类各取自己的起算日，与服务端同口径。 */
+        const ages = [
+          ...他的.filter(v => v.actualDate
+              && (v.status === "done_pending_pi" || v.edcStatus === "pending"))
+            .map(v => daysBetween(v.actualDate!, today)),
+          ...他的.filter(v => v.status === "planned" && v.outOfWindow)
+            .map(v => daysBetween(v.windowTo, today)),
+          ...ac.map(a => daysBetween(a.submittedOn, today))
+        ].filter(n => n > 0);
+
+        return {
+          accountId: p.accountId, login: p.login, displayName: p.displayName,
+          roleKind: p.roleKind, ...d, total: dutyTotal(d),
+          oldestDays: dutyTotal(d) === 0 || ages.length === 0 ? null : Math.max(...ages)
+        };
+      });
+    return HttpResponse.json({
+      items: q.get("owingOnly") === "true" ? items.filter(i => i.total > 0) : items,
+      nextCursor: null
+    });
+  }),
+
   http.post(pathToRegExp("/v1/staff/{id}:assign-sites"), async ({ request }) => {
     const who = seg(request.url, /\/staff\/([^/:]+):assign-sites/);
     const b = await request.json() as
@@ -3582,17 +3695,20 @@ function gateFor(siteId: string) {
       ? scenario.acceptances.find(
           x => x.studyId === dto.study.id && x.hospital === site.hospital)
       : undefined;
+    /* 「一条受理都没有」与「受理在了、还差东西」是两个 code，不是一个 ——
+       前者界面上该当场给一张递交表，后者再给一张只会撞唯一约束。
+       理由见 apps/api/src/modules/site/gate.ts 里那段长注释。 */
     if (!a) return { from, to, satisfied: false, unmet: [{
-      code: "site-acceptance", module: "instac",
-      message: "还没向机构办递交立项材料 —— 受理是医院承接项目的第一道闸门"
+      code: "acceptance-not-submitted", module: "instac",
+      message: "还没登记立项材料递交 —— 受理是医院承接项目的第一道闸门"
     }] };
     if (a.state === "accepted") return { from, to, satisfied: true, unmet: [] };
     const missing = a.docs.filter(d => !d.present).map(d => d.name);
     return { from, to, satisfied: false, unmet: [{
       code: "site-acceptance", module: "instac",
       message: missing.length
-        ? `${a.code} 尚未受理，缺 ${missing.length} 项材料：${missing.join("、")}`
-        : `${a.code} 材料已齐，等机构办出具受理通知`
+        ? `${a.code} 还差 ${missing.length} 项材料：${missing.join("、")}`
+        : `${a.code} 还没登记《立项受理意见函》—— 拿到之后在受理台账上登记收到日期`
     }] };
   }
 

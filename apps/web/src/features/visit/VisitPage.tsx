@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import type { Visit } from "../today/TodayPage.js";
 import { usePending } from "../../api/pending.js";
+import { loadMe, type Me } from "../login/me.js";
 import { today } from "../../shell/dates.js";
 
 /* 完成一次访视 —— 系统里最重要的一个动作。
@@ -22,9 +23,12 @@ interface CompleteResult {
 export function VisitPage() {
   const { id = "" } = useParams();
   const [visit, setVisit] = useState<Visit | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [actualDate, setActualDate] = useState(today());
   const [hours, setHours] = useState("3.5");
   const [reason, setReason] = useState("");
+  /** PI 哪天签的字。载入访视之后默认成访视当天 —— 见下面那一段。 */
+  const [confirmedOn, setConfirmedOn] = useState("");
   const [result, setResult] = useState<CompleteResult | null>(null);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   /** 404：不存在，或者不在行范围里 —— 两者对外是同一件事。 */
@@ -42,12 +46,23 @@ export function VisitPage() {
      Network 里那个请求还是 200。这是最难报障的一种坏法。 */
   const load = () =>
     call<Visit>("getSubjectVisit", { params: { id } })
-      .then(v => { setVisit(v); setGone(false); })
+      .then(v => {
+        setVisit(v); setGone(false);
+        /* 签字日期默认成**访视当天**，不是今天。
+           PI 绝大多数情况下就是在访视现场签的；默认成今天的话，
+           一份上周做完的访视会挂上今天的确认日期 ——
+           而那种"确认日比访视日晚八天"的记录，核查时是要被问的。
+           已经登记过的（补登、改期）保留原值。 */
+        setConfirmedOn(c => c || v.piConfirmedAt?.slice(0, 10) || v.actualDate || today());
+      })
       .catch(e => {
         if (e instanceof ApiError && e.problem.status === 404) { setVisit(null); setGone(true); return; }
         throw e;
       });
-  useEffect(() => { void load(); }, [id]);
+  /* 换一条访视要先把签字日期清掉 —— 不清的话，上一条的日期会跟过来，
+     而它看起来完全像是"这一条的默认值"。 */
+  useEffect(() => { setConfirmedOn(""); void load(); }, [id]);
+  useEffect(() => { void loadMe().then(setMe); }, []);
 
   /* 三种状态要分得开：拿到了 / 还在拿 / 拿不到。
      把后两种合成一个「加载中…」，正是上面那个 bug 能藏这么久的原因。 */
@@ -88,6 +103,17 @@ export function VisitPage() {
     setBusy(true); setProblem(null);
     try {
       await call("enterVisitToEdc", { params: { id }, body: {} });
+      await load();
+    } catch (e) {
+      if (e instanceof ApiError) setProblem(e.problem); else throw e;
+    } finally { setBusy(false); }
+  }
+
+  /** 登记「PI 已于某日签字确认」。与勾任务、完成访视同一条路，断网进发件箱。 */
+  async function registerPiConfirm() {
+    setBusy(true); setProblem(null);
+    try {
+      await call("confirmSubjectVisit", { params: { id }, body: { confirmedOn } });
       await load();
     } catch (e) {
       if (e instanceof ApiError) setProblem(e.problem); else throw e;
@@ -193,6 +219,90 @@ export function VisitPage() {
               {outOfWindow && <span className="chip crit">超窗提交</span>}
             </div>
           </section>
+        )}
+
+        {/* ── 登记 PI 确认 ────────────────────────────────────────────
+            **这一块此前不存在**，而它是全系统最大的一处卡死。
+
+            原来只有外部的 `pi` 角色能确认，服务层还要求
+            `study_site.pi_account_id = 当前账号` —— 也就是说，
+            只有**绑了本系统账号的 PI 本人**点得动。
+            实测 15 个中心只有 1 个绑了：另外 14 个中心的访视
+            做完之后永远停在 `done_pending_pi`（189 条），
+            而那个状态**不计入「已完成」统计**（I3）——
+            入组进度、完成率、成本归集全都系统性偏低，没有任何地方报错。
+
+            I3 的实质保留：**PI 签的字仍然是放行条件。**
+            变的是形式 —— 那件事由一线带着日期登记进来，
+            与「登记伦理批复」「登记立项材料递交」同一个形状。
+            真绑了账号的 PI 照样自己点（研究者工作台那一页），
+            那时 `piConfirmedByName` 记的是他本人；
+            一线登记的留空 —— 填登记人自己进去是冒充，而谁登记的审计轨迹里有。 */}
+        {visit.status === "done_pending_pi" && (
+          <section className="card stack" data-testid="pi-confirm-block">
+            <div className="card-h">
+              <h3>登记 PI 确认</h3>
+              <span className="sub">签在纸上的那一下，登记进来</span>
+            </div>
+            <div className="card-b stack">
+              {me && !me.permissions.actions.includes("piConfirm") ? (
+                <p className="note" style={{ margin: 0 }} data-testid="pi-confirm-denied">
+                  这一步你点不了 —— 需要<b>登记 PI 确认访视</b>的权限。
+                  找管理员在「组织与权限」里给，或者交给这个中心的 CRC / CRA。
+                </p>
+              ) : (
+                <>
+                  <label className="field" style={{ maxWidth: 220 }}>
+                    <span>PI 哪天签的字</span>
+                    <input type="date" value={confirmedOn} data-testid="pi-confirm-date"
+                      max={today()} min={visit.actualDate ?? undefined}
+                      onChange={e => setConfirmedOn(e.target.value)} />
+                  </label>
+                  {visit.actualDate && confirmedOn && confirmedOn < visit.actualDate && (
+                    <span className="t-crit" data-testid="pi-confirm-early"
+                      style={{ fontSize: 12 }}>
+                      早于访视日（{visit.actualDate}）—— PI 不会在访视发生前确认它。
+                    </span>
+                  )}
+                  {confirmedOn > today() && (
+                    <span className="t-crit" data-testid="pi-confirm-future"
+                      style={{ fontSize: 12 }}>
+                      这个日期在将来 —— 这一栏记的是「哪天签的」，还没签的不用先登记。
+                    </span>
+                  )}
+                  <div className="row">
+                    <button className="btn btn-p" data-testid="pi-confirm-go"
+                      disabled={busy || !confirmedOn || confirmedOn > today()
+                        || (!!visit.actualDate && confirmedOn < visit.actualDate)
+                        || !!pending("confirmSubjectVisit", { id })}
+                      onClick={() => void registerPiConfirm()}>
+                      {pending("confirmSubjectVisit", { id }) ? "已排进发件箱"
+                        : busy ? "提交中…" : "登记 PI 已确认"}
+                    </button>
+                    {pending("confirmSubjectVisit", { id }) &&
+                      <span className="chip flat" data-testid="pi-queued">待发</span>}
+                    <span className="note">
+                      登记后这次访视锁定，<b>开始计入「已完成」统计</b>。
+                    </span>
+                  </div>
+                </>
+              )}
+              <div className="derive">
+                <b>确认人这一栏不填，是有意的。</b>
+                PI 多数时候没有本系统的账号 —— 从一个下拉框里挑一个名字填进去，
+                填的是编的。<b>谁在系统里登记了这一条</b>进审计轨迹，那是另一件事。
+              </div>
+            </div>
+          </section>
+        )}
+        {visit.status === "locked" && visit.piConfirmedAt && (
+          <p className="muted" data-testid="pi-confirmed">
+            <span className="chip good">PI 已确认</span>{" "}
+            <span className="mono">{visit.piConfirmedAt.slice(0, 10)}</span>
+            {visit.piConfirmedByName
+              ? <> · 由 {visit.piConfirmedByName} 在本系统确认</>
+              : <> · <span className="muted">由一线登记（PI 签在纸上）</span></>}
+          </p>
         )}
 
         {/* ── 录入 EDC ────────────────────────────────────────────────

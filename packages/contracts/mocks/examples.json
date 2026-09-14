@@ -4903,18 +4903,52 @@
       ]
     }
   },
+  "listRegistrationDuties": {
+    "method": "GET",
+    "path": "/v1/registration-duties",
+    "status": 200,
+    "body": {
+      "items": [
+        {
+          "accountId": "e348543a-67c0-4129-f3c0-59ff6ead1839",
+          "login": "linmin",
+          "displayName": "廖梦然",
+          "roleKind": "CRA",
+          "pendingPiConfirm": 12,
+          "edcOverdue": 23,
+          "outOfWindow": 25,
+          "acceptanceNoLetter": 29,
+          "total": 23,
+          "oldestDays": 36
+        },
+        {
+          "accountId": "7660d333-e1b4-38c9-05cd-3d9045c9b5e7",
+          "login": "hanxue",
+          "displayName": "韩雪",
+          "roleKind": "CRA",
+          "pendingPiConfirm": 25,
+          "edcOverdue": 6,
+          "outOfWindow": 28,
+          "acceptanceNoLetter": 1,
+          "total": 7,
+          "oldestDays": 27
+        }
+      ],
+      "nextCursor": null
+    }
+  },
   "decideRegulatorySubmission": {
     "method": "POST",
     "path": "/v1/regulatory-submissions/{id}:decide",
     "status": 200,
     "body": {
       "data": {
-        "id": "e348543a-67c0-4129-f3c0-59ff6ead1839",
-        "studySiteId": "4b499b8e-7660-d333-e1b4-38c905cd3d90",
+        "id": "337a0760-8b1d-5a97-4e0a-4b85215c2f5d",
+        "studySiteId": "8f144ea4-279c-8344-5444-3996b2685ff7",
         "kind": "initial",
-        "submittedOn": "2026-08-15",
+        "submittedOn": "2026-08-13",
         "decision": "pending",
-        "decidedOn": "2026-08-23",
+        "decidedOn": "2026-08-22",
         "refNo": "示例",
         "note": "示例"
       },
@@ -4922,16 +4956,15 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "e7ed92b0-2a27-097f-2158-9409837935d0",
-          "amountCents": 1200000,
-          "studySiteId": "5b9625df-6a49-a547-3bed-55eb39ae35ce"
+          "ref": "18eaf3af-e778-234f-b1d3-feef01decc52",
+          "amountCents": 4750000,
+          "studySiteId": "edccaa72-1181-088e-cbeb-a42b76ee019d"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "280c14be-8d90-843a-62ae-ac30420b1a6e",
-          "amountCents": 8090000,
-          "studySiteId": "c930aecc-a137-50ab-634a-58ad8b4475f7"
+          "ref": "101da48f-cb80-7d0e-fdb7-df3849134940",
+          "amountCents": 4890000
         }
       ]
     }
@@ -4943,7 +4976,7 @@
     "body": {
       "items": [
         {
-          "id": "337a0760-8b1d-5a97-4e0a-4b85215c2f5d",
+          "id": "7346f5c6-19fc-159c-8f50-e10070f5be66",
           "code": "SS-08",
           "name": "韩雪",
           "isExternal": false,
@@ -4962,10 +4995,10 @@
           ]
         },
         {
-          "id": "44ea4279-c834-4544-4399-6b2685ff735a",
-          "code": "SS-06",
+          "id": "b07a9319-4b3c-b050-de7c-2c1822d559c8",
+          "code": "SS-04",
           "name": "廖梦然",
-          "isExternal": true,
+          "isExternal": false,
           "rowRule": "all",
           "visibleFields": [
             "cost",
@@ -4988,9 +5021,9 @@
     "path": "/v1/roles/{id}",
     "status": 200,
     "body": {
-      "id": "7346f5c6-19fc-159c-8f50-e10070f5be66",
-      "code": "SS-08",
-      "name": "韩雪",
+      "id": "c491bade-2963-137c-f212-21c85f362626",
+      "code": "SS-02",
+      "name": "吴桐",
       "isExternal": false,
       "rowRule": "all",
       "visibleFields": [
@@ -5014,74 +5047,31 @@
     "body": {
       "items": [
         {
-          "id": "c491bade-2963-137c-f212-21c85f362626",
-          "code": "SS-02",
-          "studyId": "15ce42e1-74bf-22a2-d40c-d06e7080666f",
+          "id": "150b2bf3-4c6a-31d7-f178-7e2806870092",
+          "code": "SS-08",
+          "studyId": "353d059e-a145-0ba7-7370-3cf58035fc73",
           "studyCode": "示例",
           "drug": "示例",
           "sponsorName": "华拓生物",
           "phase": "III期",
           "hospital": "北京协和医院",
-          "studySiteId": "7b6e9f36-b857-19c1-667f-5e3f3371cb9e",
-          "siteCode": null,
+          "studySiteId": "d6884ac1-6915-eed7-cfd9-96807380439c",
+          "siteCode": "示例",
           "submittedByName": "示例",
-          "submittedOn": "2026-08-15",
+          "submittedOn": "2026-08-26",
           "state": "review",
           "origin": "in_system",
           "amendNote": "示例",
-          "acceptedOn": "2026-08-25",
+          "acceptedOn": null,
           "acceptedByName": "示例",
           "docs": [
             {
-              "seq": 15,
-              "name": "廖梦然",
-              "present": false
-            },
-            {
-              "seq": 11,
-              "name": "吴桐",
-              "present": true
-            }
-          ],
-          "presentDocs": 33,
-          "missingDocs": [
-            "示例",
-            "示例"
-          ],
-          "letter": {
-            "filename": "示例",
-            "contentType": "示例",
-            "sizeBytes": 24,
-            "uploadedAt": "示例",
-            "uploadedByName": "示例"
-          }
-        },
-        {
-          "id": "898a4272-0bc5-070b-5c31-3dedff366613",
-          "code": "SS-03",
-          "studyId": "98183a6d-a8d9-775d-dc49-84bf12ef35a1",
-          "studyCode": "示例",
-          "drug": "示例",
-          "sponsorName": "华拓生物",
-          "phase": "III期",
-          "hospital": "北京协和医院",
-          "studySiteId": "85c38991-2add-855b-3323-97cb6eda650d",
-          "siteCode": null,
-          "submittedByName": "示例",
-          "submittedOn": "2026-08-18",
-          "state": "review",
-          "origin": "in_system",
-          "amendNote": null,
-          "acceptedOn": null,
-          "acceptedByName": null,
-          "docs": [
-            {
-              "seq": 2,
-              "name": "廖梦然",
+              "seq": 5,
+              "name": "韩雪",
               "present": true
             },
             {
-              "seq": 4,
+              "seq": 5,
               "name": "吴桐",
               "present": true
             }
@@ -5094,7 +5084,50 @@
           "letter": {
             "filename": "示例",
             "contentType": "示例",
-            "sizeBytes": 26,
+            "sizeBytes": 12,
+            "uploadedAt": "示例",
+            "uploadedByName": "示例"
+          }
+        },
+        {
+          "id": "a80779e5-bb74-f765-5925-eec368af85fa",
+          "code": "SS-10",
+          "studyId": "56528297-6d5b-8a01-deca-8953516935bf",
+          "studyCode": "示例",
+          "drug": "示例",
+          "sponsorName": "华拓生物",
+          "phase": "III期",
+          "hospital": "天津医科大学肿瘤医院",
+          "studySiteId": null,
+          "siteCode": "示例",
+          "submittedByName": "示例",
+          "submittedOn": "2026-08-24",
+          "state": "review",
+          "origin": "in_system",
+          "amendNote": "示例",
+          "acceptedOn": "2026-08-14",
+          "acceptedByName": "示例",
+          "docs": [
+            {
+              "seq": 34,
+              "name": "林敏",
+              "present": false
+            },
+            {
+              "seq": 28,
+              "name": "韩雪",
+              "present": true
+            }
+          ],
+          "presentDocs": 31,
+          "missingDocs": [
+            "示例",
+            "示例"
+          ],
+          "letter": {
+            "filename": "示例",
+            "contentType": "示例",
+            "sizeBytes": 8,
             "uploadedAt": "示例",
             "uploadedByName": "示例"
           }
@@ -5108,36 +5141,36 @@
     "path": "/v1/site-acceptances",
     "status": 201,
     "body": {
-      "id": "150b2bf3-4c6a-31d7-f178-7e2806870092",
-      "code": "SS-08",
-      "studyId": "353d059e-a145-0ba7-7370-3cf58035fc73",
+      "id": "55c8086c-8f68-95f1-dde8-bab819dcb900",
+      "code": "SS-15",
+      "studyId": "a299e6fa-b85f-cdc0-e0cd-71def8504e1e",
       "studyCode": "示例",
       "drug": "示例",
       "sponsorName": "华拓生物",
       "phase": "III期",
-      "hospital": "北京协和医院",
-      "studySiteId": "d6884ac1-6915-eed7-cfd9-96807380439c",
+      "hospital": "天津医科大学肿瘤医院",
+      "studySiteId": "6a0d6477-9c53-b707-13f6-038bf5e86e77",
       "siteCode": "示例",
       "submittedByName": "示例",
-      "submittedOn": "2026-08-26",
+      "submittedOn": "2026-08-18",
       "state": "review",
       "origin": "in_system",
       "amendNote": "示例",
-      "acceptedOn": null,
+      "acceptedOn": "2026-08-25",
       "acceptedByName": "示例",
       "docs": [
         {
-          "seq": 5,
+          "seq": 38,
           "name": "韩雪",
-          "present": true
+          "present": false
         },
         {
-          "seq": 5,
-          "name": "吴桐",
+          "seq": 32,
+          "name": "廖梦然",
           "present": true
         }
       ],
-      "presentDocs": 39,
+      "presentDocs": 14,
       "missingDocs": [
         "示例",
         "示例"
@@ -5145,7 +5178,7 @@
       "letter": {
         "filename": "示例",
         "contentType": "示例",
-        "sizeBytes": 12,
+        "sizeBytes": 11,
         "uploadedAt": "示例",
         "uploadedByName": "示例"
       }
@@ -5154,71 +5187,6 @@
   "acceptSite": {
     "method": "POST",
     "path": "/v1/site-acceptances/{id}:accept",
-    "status": 200,
-    "body": {
-      "data": {
-        "id": "55c8086c-8f68-95f1-dde8-bab819dcb900",
-        "code": "SS-15",
-        "studyId": "a299e6fa-b85f-cdc0-e0cd-71def8504e1e",
-        "studyCode": "示例",
-        "drug": "示例",
-        "sponsorName": "华拓生物",
-        "phase": "III期",
-        "hospital": "天津医科大学肿瘤医院",
-        "studySiteId": "6a0d6477-9c53-b707-13f6-038bf5e86e77",
-        "siteCode": "示例",
-        "submittedByName": "示例",
-        "submittedOn": "2026-08-18",
-        "state": "review",
-        "origin": "in_system",
-        "amendNote": "示例",
-        "acceptedOn": "2026-08-25",
-        "acceptedByName": "示例",
-        "docs": [
-          {
-            "seq": 38,
-            "name": "韩雪",
-            "present": false
-          },
-          {
-            "seq": 32,
-            "name": "廖梦然",
-            "present": true
-          }
-        ],
-        "presentDocs": 14,
-        "missingDocs": [
-          "示例",
-          "示例"
-        ],
-        "letter": {
-          "filename": "示例",
-          "contentType": "示例",
-          "sizeBytes": 11,
-          "uploadedAt": "示例",
-          "uploadedByName": "示例"
-        }
-      },
-      "sideEffects": [
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "amountCents": 7690000,
-          "studySiteId": "dde4356d-ed5f-4ae8-14bd-aee61a6794e5"
-        },
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "20d3e3c6-33bd-b29d-cae5-c548f53a2f55",
-          "amountCents": 3410000,
-          "studySiteId": "1b8de96c-5b55-0fe2-85cd-bf2721bba73a"
-        }
-      ]
-    }
-  },
-  "requestAcceptanceAmend": {
-    "method": "POST",
-    "path": "/v1/site-acceptances/{id}:amend",
     "status": 200,
     "body": {
       "data": {
@@ -5281,9 +5249,9 @@
       ]
     }
   },
-  "recordAcceptanceLetter": {
+  "requestAcceptanceAmend": {
     "method": "POST",
-    "path": "/v1/site-acceptances/{id}:record-letter",
+    "path": "/v1/site-acceptances/{id}:amend",
     "status": 200,
     "body": {
       "data": {
@@ -5346,9 +5314,9 @@
       ]
     }
   },
-  "setAcceptanceDoc": {
+  "recordAcceptanceLetter": {
     "method": "POST",
-    "path": "/v1/site-acceptances/{id}/docs/{seq}:set",
+    "path": "/v1/site-acceptances/{id}:record-letter",
     "status": 200,
     "body": {
       "data": {
@@ -5412,6 +5380,71 @@
       ]
     }
   },
+  "setAcceptanceDoc": {
+    "method": "POST",
+    "path": "/v1/site-acceptances/{id}/docs/{seq}:set",
+    "status": 200,
+    "body": {
+      "data": {
+        "id": "87ecf528-4a0a-5481-e3e5-fca10c6cdbb3",
+        "code": "SS-03",
+        "studyId": "04988381-41b4-d891-b2d8-36f8eadb2abe",
+        "studyCode": "示例",
+        "drug": "示例",
+        "sponsorName": "华拓生物",
+        "phase": "III期",
+        "hospital": "复旦大学附属中山医院",
+        "studySiteId": null,
+        "siteCode": "示例",
+        "submittedByName": "示例",
+        "submittedOn": "2026-08-18",
+        "state": "review",
+        "origin": "in_system",
+        "amendNote": null,
+        "acceptedOn": "2026-08-14",
+        "acceptedByName": "示例",
+        "docs": [
+          {
+            "seq": 17,
+            "name": "廖梦然",
+            "present": true
+          },
+          {
+            "seq": 9,
+            "name": "林敏",
+            "present": true
+          }
+        ],
+        "presentDocs": 3,
+        "missingDocs": [
+          "示例",
+          "示例"
+        ],
+        "letter": {
+          "filename": "示例",
+          "contentType": "示例",
+          "sizeBytes": 5,
+          "uploadedAt": "示例",
+          "uploadedByName": "示例"
+        }
+      },
+      "sideEffects": [
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "eebb844a-2e23-de27-5ee0-22980a560a84",
+          "studySiteId": "64b20359-ae97-c551-4e71-171698af0af0"
+        },
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "5890f662-f71c-543f-e9d8-fdd643f0431b",
+          "amountCents": 9560000,
+          "studySiteId": "7800f0de-8274-f222-f63d-ba435cdfd152"
+        }
+      ]
+    }
+  },
   "getAcceptanceLetter": {
     "method": "GET",
     "path": "/v1/site-acceptances/{id}/letter",
@@ -5425,33 +5458,33 @@
     "body": {
       "items": [
         {
-          "id": "d7906fce-5adc-4fad-345c-5cd02db98ad0",
-          "accountId": "2955e85c-aeeb-dd39-6f0c-65dfae518c3d",
-          "displayName": "廖梦然",
+          "id": "182774bf-de02-74a3-d946-92ee98c95b78",
+          "accountId": "62ce7826-7757-e69c-df18-32148b24f607",
+          "displayName": "吴桐",
           "roleKind": "CRA",
-          "studySiteId": "a3a8ea75-de2b-d8cb-c656-f217e74b7b55",
+          "studySiteId": "845871e9-7450-ea5e-659a-c6926f8a909b",
           "siteCode": "示例",
-          "hospital": "复旦大学附属中山医院",
-          "studyId": "1963a0ce-a369-91fe-f87e-9cfa0b989a28",
+          "hospital": "天津医科大学肿瘤医院",
+          "studyId": "fbb313e3-fc42-ebfe-ee1b-c4417ab77eea",
           "studyCode": "示例",
           "studyShortName": "示例",
-          "since": "2026-08-22",
-          "until": "2026-08-26",
+          "since": "2026-08-24",
+          "until": null,
           "active": false
         },
         {
-          "id": "cc05bc0d-5cd0-e920-9ac2-07659e1c2dae",
-          "accountId": "600afb44-7af8-1c72-1cc0-6a673d0a9c88",
+          "id": "afbba29c-fe90-dfec-d843-4c43f4da19a0",
+          "accountId": "d050ef81-15f1-06a4-62c8-97e6388a2823",
           "displayName": "林敏",
           "roleKind": "CRA",
-          "studySiteId": "6ae8180e-cecb-2fe9-9aaf-851ad2d26e87",
+          "studySiteId": "7311bab9-2934-6c52-f26f-182e98f2061d",
           "siteCode": "示例",
           "hospital": "北京协和医院",
-          "studyId": "5be7d751-178e-2107-e69b-afe231c0c26b",
+          "studyId": "4abcd793-dfdb-b101-6268-3decbcb5ca7e",
           "studyCode": "示例",
           "studyShortName": "示例",
-          "since": "2026-08-18",
-          "until": "2026-08-27",
+          "since": "2026-08-27",
+          "until": "2026-08-21",
           "active": false
         }
       ],
@@ -5465,50 +5498,50 @@
     "body": {
       "items": [
         {
-          "accountId": "182774bf-de02-74a3-d946-92ee98c95b78",
-          "displayName": "林敏",
+          "accountId": "69c7cd65-d5ff-4637-f004-cb9c94564233",
+          "displayName": "韩雪",
           "roleKind": "CRA",
-          "gcpExpiresOn": null,
-          "gcpDaysLeft": 31,
-          "active": true,
+          "gcpExpiresOn": "2026-08-11",
+          "gcpDaysLeft": 17,
+          "active": false,
           "sites": [
             {
-              "id": "78267757-e69c-df18-3214-8b24f6072845",
-              "code": "SS-09",
-              "hospital": "复旦大学附属中山医院",
+              "id": "a79c8008-ee7d-e8b3-74a5-064179e48f67",
+              "code": "SS-04",
+              "hospital": "北京协和医院",
               "studyShortName": "示例",
-              "since": "2026-08-11"
+              "since": "2026-08-12"
             },
             {
-              "id": "e97450ea-5e65-9ac6-926f-8a909befbb31",
-              "code": "SS-04",
-              "hospital": "天津医科大学肿瘤医院",
+              "id": "61269434-91ef-3932-4fa4-7214cdc30adf",
+              "code": "SS-05",
+              "hospital": "复旦大学附属中山医院",
               "studyShortName": "示例",
-              "since": "2026-08-13"
+              "since": "2026-08-16"
             }
           ]
         },
         {
-          "accountId": "fc42ebfe-ee1b-c441-7ab7-7eeac13afbba",
-          "displayName": "吴桐",
+          "accountId": "ce16ee98-2949-e258-fdcd-22b9847366d2",
+          "displayName": "廖梦然",
           "roleKind": "CRA",
-          "gcpExpiresOn": "2026-08-23",
-          "gcpDaysLeft": 40,
-          "active": true,
+          "gcpExpiresOn": "2026-08-21",
+          "gcpDaysLeft": 21,
+          "active": false,
           "sites": [
             {
-              "id": "90dfecd8-434c-43f4-da19-a0d050ef8115",
-              "code": "SS-15",
-              "hospital": "北京协和医院",
-              "studyShortName": "示例",
-              "since": "2026-08-10"
-            },
-            {
-              "id": "6a462c89-7e63-88a2-8234-7311bab92934",
-              "code": "SS-07",
+              "id": "0339dc2b-47f7-b059-4178-04ba646d990d",
+              "code": "SS-14",
               "hospital": "天津医科大学肿瘤医院",
               "studyShortName": "示例",
               "since": "2026-08-15"
+            },
+            {
+              "id": "c8081b78-ad30-b6cc-5235-6caddcb77e99",
+              "code": "SS-08",
+              "hospital": "复旦大学附属中山医院",
+              "studyShortName": "示例",
+              "since": "2026-08-12"
             }
           ]
         }
@@ -5522,31 +5555,30 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "69c7cd65-d5ff-4637-f004-cb9c94564233",
-        "studySiteId": "ef160a79-c800-8ee7-de8b-374a5064179e",
+        "id": "b910d629-66af-08a8-080b-abc0311efa87",
+        "studySiteId": "16495157-dedf-3b09-26c1-96f8bd996fcb",
         "subjectRef": "示例",
         "kind": "示例",
-        "collectedOn": "2026-08-14",
+        "collectedOn": "2026-08-23",
         "shippedOn": "2026-08-27",
-        "receivedOn": "2026-08-18",
-        "discardedOn": null,
-        "trackingNo": null,
-        "closed": false
+        "receivedOn": "2026-08-23",
+        "discardedOn": "2026-08-18",
+        "trackingNo": "示例",
+        "closed": true
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "12694349-1ef3-9324-fa47-214cdc30adf4",
-          "amountCents": 4170000,
-          "studySiteId": "e16ee982-949e-258f-dcd2-2b9847366d28"
+          "ref": "f7480a8e-bc3d-ab64-044e-06ac82c64a56",
+          "amountCents": 1870000,
+          "studySiteId": "e453f216-9b96-103c-da4c-2455fb28fa2a"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "9820339d-c2b4-7f7b-0594-17804ba646d9",
-          "amountCents": 1420000,
-          "studySiteId": "ec4c8081-b78a-d30b-6cc5-2356caddcb77"
+          "amountCents": 3630000,
+          "studySiteId": "aebbbdc5-1f85-1407-b77e-8b52433e7c49"
         }
       ]
     }
@@ -5558,99 +5590,44 @@
     "body": {
       "items": [
         {
-          "accountId": "b910d629-66af-08a8-080b-abc0311efa87",
-          "login": "wutong",
+          "accountId": "fa592927-73f6-de09-8d02-3686e8cc6062",
+          "login": "hanxue",
           "displayName": "林敏",
           "roleKind": "CRA",
           "level": "示例",
-          "city": "上海",
-          "gcpExpiresOn": "2026-08-15",
-          "gcpDaysLeft": 4,
+          "city": "北京",
+          "gcpExpiresOn": "2026-08-20",
+          "gcpDaysLeft": 29,
           "mentorName": "示例",
           "successorName": "示例",
-          "siteCount": 35,
+          "siteCount": 8,
           "successionGap": true,
-          "active": true,
+          "active": false,
           "disabledReason": "示例文本（由契约生成，非真实数据）"
         },
         {
-          "accountId": "3b0926c1-96f8-bd99-6fcb-bcf9cb79a4f7",
-          "login": "linmin",
+          "accountId": "d2a5bb92-320f-862c-8fb6-453ebeeed793",
+          "login": "wutong",
           "displayName": "廖梦然",
           "roleKind": "CRA",
           "level": "示例",
-          "city": "北京",
-          "gcpExpiresOn": "2026-08-19",
-          "gcpDaysLeft": 37,
+          "city": "天津",
+          "gcpExpiresOn": "2026-08-24",
+          "gcpDaysLeft": 8,
           "mentorName": "示例",
-          "successorName": "示例",
-          "siteCount": 9,
-          "successionGap": true,
+          "successorName": null,
+          "siteCount": 10,
+          "successionGap": false,
           "active": true,
           "disabledReason": "示例文本（由契约生成，非真实数据）"
         }
       ],
-      "nextCursor": "示例"
+      "nextCursor": null
     }
   },
   "assignSiteStaff": {
     "method": "POST",
     "path": "/v1/staff/{id}:assign-sites",
-    "status": 200,
-    "body": {
-      "data": [
-        {
-          "id": "fa592927-73f6-de09-8d02-3686e8cc6062",
-          "accountId": "f63d8bfd-2c6d-d2a5-bb92-320f862c8fb6",
-          "displayName": "林敏",
-          "roleKind": "CRA",
-          "studySiteId": "53ebeeed-7933-a9fc-2d23-49e2fabfb14d",
-          "siteCode": "示例",
-          "hospital": "天津医科大学肿瘤医院",
-          "studyId": "ed6b0f73-d3cd-3a9c-202b-7c0b5c34c3cd",
-          "studyCode": "示例",
-          "studyShortName": "示例",
-          "since": "2026-08-17",
-          "until": "2026-08-12",
-          "active": true
-        },
-        {
-          "id": "50f211d0-b86f-57ed-d47b-b989294253ae",
-          "accountId": "ab7609be-1aae-f940-8455-b2c245836366",
-          "displayName": "林敏",
-          "roleKind": "CRA",
-          "studySiteId": "73a07176-6824-2242-cf01-fd573a7cab7e",
-          "siteCode": "示例",
-          "hospital": "天津医科大学肿瘤医院",
-          "studyId": "48c8cea1-d2ca-5696-33e8-787d404e2e29",
-          "studyCode": "示例",
-          "studyShortName": "示例",
-          "since": "2026-08-10",
-          "until": "2026-08-23",
-          "active": false
-        }
-      ],
-      "sideEffects": [
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "3d6620d2-b39e-1e37-b489-84786e324f13",
-          "amountCents": 4340000,
-          "studySiteId": "7deba541-c38f-1560-963e-43f40af62b7b"
-        },
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "7851794e-6697-a9f7-7ab9-9dff7a70d579",
-          "amountCents": 8850000,
-          "studySiteId": "c5ab68de-e1dc-7242-3b66-6211a6b3755d"
-        }
-      ]
-    }
-  },
-  "endSiteAssignment": {
-    "method": "POST",
-    "path": "/v1/staff/{id}:end-assignments",
     "status": 200,
     "body": {
       "data": [
@@ -5701,6 +5678,60 @@
       ]
     }
   },
+  "endSiteAssignment": {
+    "method": "POST",
+    "path": "/v1/staff/{id}:end-assignments",
+    "status": 200,
+    "body": {
+      "data": [
+        {
+          "id": "9bebbb18-8b5b-84df-7031-97cad039bdab",
+          "accountId": "5c406266-3afc-bc7b-c70f-3542a7cc5e38",
+          "displayName": "吴桐",
+          "roleKind": "CRA",
+          "studySiteId": "10574fa9-62b8-01bb-c0f2-51303c4444de",
+          "siteCode": "示例",
+          "hospital": "北京协和医院",
+          "studyId": "b740fb99-6bf2-a340-c5e4-3322213063b0",
+          "studyCode": "示例",
+          "studyShortName": "示例",
+          "since": "2026-08-25",
+          "until": null,
+          "active": false
+        },
+        {
+          "id": "9a8af175-d96b-763d-43f8-466651923360",
+          "accountId": "2e4dfb5d-ba5e-d923-42a5-2f3c671c9365",
+          "displayName": "廖梦然",
+          "roleKind": "CRA",
+          "studySiteId": "c2892382-7a09-46f1-1b7e-3f2d5ee904db",
+          "siteCode": "示例",
+          "hospital": "复旦大学附属中山医院",
+          "studyId": "226f8501-0518-ec28-357b-c0e9300fd1ea",
+          "studyCode": "示例",
+          "studyShortName": "示例",
+          "since": "2026-08-16",
+          "until": "2026-08-18",
+          "active": true
+        }
+      ],
+      "sideEffects": [
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "ce727ac7-346b-841e-416b-bc39b7076173",
+          "amountCents": 8860000
+        },
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "90910918-51eb-3af1-bd17-a0e20b5728a7",
+          "amountCents": 3240000,
+          "studySiteId": "d0b5d282-edfc-473b-84f7-0c0d4cd1d56e"
+        }
+      ]
+    }
+  },
   "listStartupChecklists": {
     "method": "GET",
     "path": "/v1/startup-checklists",
@@ -5708,72 +5739,36 @@
     "body": {
       "items": [
         {
-          "studySiteId": "9bebbb18-8b5b-84df-7031-97cad039bdab",
-          "siteCode": "示例",
-          "hospital": "北京协和医院",
-          "state": "示例",
-          "sivPlannedOn": "2026-08-15",
-          "daysToSiv": 1,
-          "total": 16,
-          "done": 7,
-          "blockingOpen": 17,
-          "overdue": 16
-        },
-        {
-          "studySiteId": "3afcbc7b-c70f-3542-a7cc-5e38010574fa",
+          "studySiteId": "db34c76a-d4c1-9a2f-e015-f3551b003ade",
           "siteCode": "示例",
           "hospital": "复旦大学附属中山医院",
           "state": "示例",
-          "sivPlannedOn": "2026-08-13",
-          "daysToSiv": 30,
-          "total": 23,
-          "done": 1,
-          "blockingOpen": 4,
-          "overdue": 28
+          "sivPlannedOn": "2026-08-15",
+          "daysToSiv": 19,
+          "total": 39,
+          "done": 35,
+          "blockingOpen": 34,
+          "overdue": 37
+        },
+        {
+          "studySiteId": "39a182a2-8358-2df0-0c3e-51aa5a388347",
+          "siteCode": "示例",
+          "hospital": "北京协和医院",
+          "state": "示例",
+          "sivPlannedOn": "2026-08-17",
+          "daysToSiv": 31,
+          "total": 30,
+          "done": 30,
+          "blockingOpen": 8,
+          "overdue": 13
         }
       ],
-      "nextCursor": "示例"
+      "nextCursor": null
     }
   },
   "completeStartupItem": {
     "method": "POST",
     "path": "/v1/startup-items/{id}:complete",
-    "status": 200,
-    "body": {
-      "data": {
-        "id": "db34c76a-d4c1-9a2f-e015-f3551b003ade",
-        "studySiteId": "7c57fdde-39a1-82a2-8358-2df00c3e51aa",
-        "category": "ethics",
-        "categoryLabel": "示例文本（由契约生成，非真实数据）",
-        "item": "示例",
-        "ownerAccountId": "a3883470-b6cb-b253-b2ca-f25c312c8ce8",
-        "ownerName": "示例",
-        "dueOn": null,
-        "isBlocking": false,
-        "doneAt": "2026-08-22T09:15:00+08:00",
-        "doneByName": "示例",
-        "overdueDays": 28
-      },
-      "sideEffects": [
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "ebbfd593-e926-4f63-e53c-a5ba8f04e45d",
-          "amountCents": 6730000,
-          "studySiteId": "a8244654-1314-193f-51cf-90a759da040d"
-        },
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "8691d0a7-2862-f4c4-7a0a-c268b8e324a1",
-          "studySiteId": "271ffdcb-f3a0-b9f0-19fa-b4aa528e94c6"
-        }
-      ]
-    }
-  },
-  "reopenStartupItem": {
-    "method": "POST",
-    "path": "/v1/startup-items/{id}:reopen",
     "status": 200,
     "body": {
       "data": {
@@ -5806,31 +5801,68 @@
       ]
     }
   },
+  "reopenStartupItem": {
+    "method": "POST",
+    "path": "/v1/startup-items/{id}:reopen",
+    "status": 200,
+    "body": {
+      "data": {
+        "id": "7c0865c6-2128-080e-659e-2be928683678",
+        "studySiteId": "fbb684f1-b72a-ee37-13a4-14401c50aaa1",
+        "category": "ethics",
+        "categoryLabel": "示例文本（由契约生成，非真实数据）",
+        "item": "示例",
+        "ownerAccountId": null,
+        "ownerName": "示例",
+        "dueOn": "2026-08-11",
+        "isBlocking": true,
+        "doneAt": "2026-08-22T09:15:00+08:00",
+        "doneByName": null,
+        "overdueDays": 33
+      },
+      "sideEffects": [
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "bc1fcd4f-b5ac-4936-9c5c-09fc46715533",
+          "amountCents": 9880000,
+          "studySiteId": "91090d66-3df6-7c89-690e-8fc56f655b16"
+        },
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "a4130018-1144-c215-6207-96d86212d7d9",
+          "amountCents": 9550000,
+          "studySiteId": "a0c55ff2-96ba-bca6-b590-a07f6b75a231"
+        }
+      ]
+    }
+  },
   "getStartupTemplate": {
     "method": "GET",
     "path": "/v1/startup-template",
     "status": 200,
     "body": {
-      "version": 18,
+      "version": 30,
       "items": [
         {
-          "sortOrder": 31,
+          "sortOrder": 33,
           "category": "ethics",
           "item": "示例",
           "isBlocking": false,
-          "dueOffset": 23
+          "dueOffset": 40
         },
         {
-          "sortOrder": 18,
+          "sortOrder": 23,
           "category": "ethics",
           "item": "示例",
-          "isBlocking": false,
-          "dueOffset": 31
+          "isBlocking": true,
+          "dueOffset": 38
         }
       ],
       "updatedAt": "2026-08-22T09:15:00+08:00",
-      "updatedByName": null,
-      "reason": null
+      "updatedByName": "示例",
+      "reason": "示例文本（由契约生成，非真实数据）"
     }
   },
   "replaceStartupTemplate": {
@@ -5839,40 +5871,38 @@
     "status": 200,
     "body": {
       "data": {
-        "version": 30,
+        "version": 2,
         "items": [
           {
-            "sortOrder": 33,
-            "category": "ethics",
-            "item": "示例",
-            "isBlocking": false,
-            "dueOffset": 40
-          },
-          {
-            "sortOrder": 23,
+            "sortOrder": 35,
             "category": "ethics",
             "item": "示例",
             "isBlocking": true,
-            "dueOffset": 38
+            "dueOffset": 6
+          },
+          {
+            "sortOrder": 31,
+            "category": "ethics",
+            "item": "示例",
+            "isBlocking": true,
+            "dueOffset": 27
           }
         ],
         "updatedAt": "2026-08-22T09:15:00+08:00",
-        "updatedByName": "示例",
-        "reason": "示例文本（由契约生成，非真实数据）"
+        "updatedByName": null,
+        "reason": null
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "9f633924-1b6e-b256-7429-3403109305a3",
-          "amountCents": 2970000,
-          "studySiteId": "06d51173-ff92-0f80-8a9f-11dfb786ff14"
+          "ref": "45e4eefd-f021-1cbc-dbb1-5201b96af4f8"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "0433a0e3-d3fa-7e53-47b0-259c28cfa318",
-          "amountCents": 4940000
+          "ref": "a92c53e7-895e-64af-b408-1023fc5620dd",
+          "studySiteId": "37caa6c0-c5da-dc5a-7099-a1310b8392d8"
         }
       ]
     }
@@ -5884,72 +5914,72 @@
     "body": {
       "items": [
         {
-          "id": "0df2c9a8-00a4-5e4e-efdf-0211cbcdbb15",
-          "code": "SS-03",
-          "shortName": "艾瑞替尼 III",
+          "id": "5e36ebcd-7dd0-9d7e-9e79-7d3eeacef41c",
+          "code": "SS-14",
+          "shortName": "HT-118 II",
           "sponsorName": "华拓生物",
           "phase": "III期",
           "indication": "肝细胞癌",
-          "plannedSubjects": 3,
-          "contractAmountCents": 7360000,
-          "startedOn": "2026-08-16",
-          "endsOn": "2026-08-26",
+          "plannedSubjects": 30,
+          "contractAmountCents": 5370000,
+          "startedOn": "2026-08-22",
+          "endsOn": "2026-08-20",
           "team": {
-            "id": "4f8123a9-2c53-e789-5e64-afb4081023fc",
+            "id": "e9489adc-d6e8-2199-34f8-923677c92edd",
             "code": "G-01",
             "name": "华东华南组"
           }
         },
         {
-          "id": "5620dd0d-37ca-a6c0-c5da-dc5a7099a131",
-          "code": "SS-01",
-          "shortName": "恒糖宁 III",
+          "id": "5c44351b-bcbe-830c-05ca-42fc55394741",
+          "code": "SS-11",
+          "shortName": "CoroFlex 器械",
           "sponsorName": "华拓生物",
           "phase": "III期",
           "indication": "肝细胞癌",
-          "plannedSubjects": 22,
-          "contractAmountCents": 3100000,
-          "startedOn": "2026-08-12",
-          "endsOn": "2026-08-19",
+          "plannedSubjects": 40,
+          "contractAmountCents": 4760000,
+          "startedOn": "2026-08-16",
+          "endsOn": "2026-08-14",
           "team": {
-            "id": "5cc481b0-bbd7-3545-18b8-09aa3bbe865b",
+            "id": "c06d5fec-98f9-a16c-aa09-5fd62841d1bf",
             "code": "G-01",
             "name": "华东华南组"
           }
         }
       ],
-      "nextCursor": "示例"
+      "nextCursor": null
     },
     "bodyWithoutFieldPermission": {
       "items": [
         {
-          "id": "0df2c9a8-00a4-5e4e-efdf-0211cbcdbb15",
-          "code": "SS-03",
-          "shortName": "艾瑞替尼 III",
+          "id": "5e36ebcd-7dd0-9d7e-9e79-7d3eeacef41c",
+          "code": "SS-14",
+          "shortName": "HT-118 II",
           "sponsorName": "华拓生物",
           "phase": "III期",
           "indication": "肝细胞癌",
-          "plannedSubjects": 3,
-          "startedOn": "2026-08-20",
-          "endsOn": "2026-08-22",
+          "plannedSubjects": 30,
+          "startedOn": "2026-08-23",
+          "endsOn": "2026-08-21",
           "team": {
-            "id": "f4f8123a-92c5-3e78-95e6-4afb4081023f",
+            "id": "9e9489ad-cd6e-8219-934f-8923677c92ed",
             "code": "G-01",
             "name": "华东华南组"
           }
         },
         {
-          "id": "c5620dd0-d37c-aa6c-0c5d-adc5a7099a13",
+          "id": "d5c44351-bbcb-e830-c05c-a42fc5539474",
           "code": "SS-02",
-          "shortName": "艾瑞替尼 III",
+          "shortName": "恒糖宁 III",
           "sponsorName": "华拓生物",
           "phase": "III期",
           "indication": "肝细胞癌",
-          "plannedSubjects": 30,
-          "startedOn": "2026-08-14",
-          "endsOn": "2026-08-12",
+          "plannedSubjects": 33,
+          "startedOn": "2026-08-17",
+          "endsOn": "2026-08-16",
           "team": {
-            "id": "d85cc481-b0bb-d735-4518-b809aa3bbe86",
+            "id": "e4c06d5f-ec98-f9a1-6caa-095fd62841d1",
             "code": "G-01",
             "name": "华东华南组"
           }
@@ -5964,18 +5994,18 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "5e36ebcd-7dd0-9d7e-9e79-7d3eeacef41c",
+        "id": "9efa70f4-8716-01a3-e74e-4a710883f612",
         "code": "SS-14",
         "shortName": "HT-118 II",
         "sponsorName": "华拓生物",
         "phase": "III期",
         "indication": "肝细胞癌",
-        "plannedSubjects": 30,
-        "contractAmountCents": 5370000,
-        "startedOn": "2026-08-22",
-        "endsOn": "2026-08-20",
+        "plannedSubjects": 9,
+        "contractAmountCents": 2670000,
+        "startedOn": null,
+        "endsOn": "2026-08-27",
         "team": {
-          "id": "e9489adc-d6e8-2199-34f8-923677c92edd",
+          "id": "1f4ccff8-a2f3-4c5d-bd3d-6c0601c38f41",
           "code": "G-01",
           "name": "华东华南组"
         }
@@ -5984,32 +6014,29 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "c44351bb-cbe8-30c0-5ca4-2fc55394741a",
-          "amountCents": 9840000,
-          "studySiteId": "85e4c06d-5fec-98f9-a16c-aa095fd62841"
+          "amountCents": 1080000
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "1bf176b8-5c8f-06e5-fe34-48050fd956a9",
-          "amountCents": 6100000,
-          "studySiteId": "e4f97d36-6334-b047-e905-6852dc6b72d0"
+          "ref": "fbce01e6-140d-c32e-bc44-d450e9e92cae",
+          "amountCents": 7750000
         }
       ]
     },
     "bodyWithoutFieldPermission": {
       "data": {
-        "id": "5e36ebcd-7dd0-9d7e-9e79-7d3eeacef41c",
+        "id": "9efa70f4-8716-01a3-e74e-4a710883f612",
         "code": "SS-14",
         "shortName": "HT-118 II",
         "sponsorName": "华拓生物",
         "phase": "III期",
         "indication": "肝细胞癌",
-        "plannedSubjects": 30,
-        "startedOn": "2026-08-23",
-        "endsOn": "2026-08-21",
+        "plannedSubjects": 9,
+        "startedOn": null,
+        "endsOn": null,
         "team": {
-          "id": "9e9489ad-cd6e-8219-934f-8923677c92ed",
+          "id": "ff1f4ccf-f8a2-f34c-5dbd-3d6c0601c38f",
           "code": "G-01",
           "name": "华东华南组"
         }
@@ -6018,15 +6045,15 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "5c44351b-bcbe-830c-05ca-42fc55394741",
-          "amountCents": 8220000,
-          "studySiteId": "685e4c06-d5fe-c98f-9a16-caa095fd6284"
+          "ref": "12b005fb-ce01-e614-0dc3-2ebc44d450e9",
+          "amountCents": 6210000,
+          "studySiteId": "cae4c0cf-2f79-f39a-321c-62bdbea00c0f"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "amountCents": 1850000,
-          "studySiteId": "f176b85c-8f06-e5fe-3448-050fd956a9d9"
+          "amountCents": 6740000,
+          "studySiteId": "e4d195be-db17-aacd-a8ce-2f2e6f0de3a1"
         }
       ]
     }
@@ -6036,40 +6063,40 @@
     "path": "/v1/studies/{id}/visit-template",
     "status": 200,
     "body": {
-      "studyId": "9efa70f4-8716-01a3-e74e-4a710883f612",
+      "studyId": "ee34a56d-3443-934f-e6e2-8b66e9f77678",
       "visits": [
         {
-          "seq": 36,
+          "seq": 29,
+          "visitCode": "示例",
+          "visitLabel": "示例文本（由契约生成，非真实数据）",
+          "anchor": "icf",
+          "offsetDays": 26,
+          "windowDays": 30,
+          "compensationCents": 4670000,
+          "tasks": [
+            "示例",
+            "示例"
+          ],
+          "scheduledCount": 19
+        },
+        {
+          "seq": 10,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
           "anchor": "icf",
           "offsetDays": 12,
-          "windowDays": 9,
-          "compensationCents": 2670000,
+          "windowDays": 36,
+          "compensationCents": 7250000,
           "tasks": [
             "示例",
             "示例"
           ],
-          "scheduledCount": 2
-        },
-        {
-          "seq": 40,
-          "visitCode": "示例",
-          "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "anchor": "icf",
-          "offsetDays": 39,
-          "windowDays": 5,
-          "compensationCents": 9980000,
-          "tasks": [
-            "示例",
-            "示例"
-          ],
-          "scheduledCount": 11
+          "scheduledCount": 12
         }
       ],
-      "lastChangedAt": "2026-08-22T09:15:00+08:00",
+      "lastChangedAt": null,
       "lastChangedByName": "示例",
-      "lastReason": "示例文本（由契约生成，非真实数据）"
+      "lastReason": null
     }
   },
   "replaceSoa": {
@@ -6078,54 +6105,53 @@
     "status": 200,
     "body": {
       "data": {
-        "studyId": "ee34a56d-3443-934f-e6e2-8b66e9f77678",
+        "studyId": "3f3ac739-1178-b1e0-a94f-aeb5e3cf1fb7",
         "visits": [
           {
-            "seq": 29,
+            "seq": 11,
             "visitCode": "示例",
             "visitLabel": "示例文本（由契约生成，非真实数据）",
             "anchor": "icf",
-            "offsetDays": 26,
-            "windowDays": 30,
-            "compensationCents": 4670000,
+            "offsetDays": 40,
+            "windowDays": 15,
+            "compensationCents": 5010000,
+            "tasks": [
+              "示例",
+              "示例"
+            ],
+            "scheduledCount": 4
+          },
+          {
+            "seq": 9,
+            "visitCode": "示例",
+            "visitLabel": "示例文本（由契约生成，非真实数据）",
+            "anchor": "icf",
+            "offsetDays": 11,
+            "windowDays": 17,
+            "compensationCents": 8920000,
             "tasks": [
               "示例",
               "示例"
             ],
             "scheduledCount": 19
-          },
-          {
-            "seq": 10,
-            "visitCode": "示例",
-            "visitLabel": "示例文本（由契约生成，非真实数据）",
-            "anchor": "icf",
-            "offsetDays": 12,
-            "windowDays": 36,
-            "compensationCents": 7250000,
-            "tasks": [
-              "示例",
-              "示例"
-            ],
-            "scheduledCount": 12
           }
         ],
-        "lastChangedAt": null,
+        "lastChangedAt": "2026-08-22T09:15:00+08:00",
         "lastChangedByName": "示例",
-        "lastReason": null
+        "lastReason": "示例文本（由契约生成，非真实数据）"
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "4b24574c-ca0c-1752-eadc-fa70b8cd6296",
-          "amountCents": 8990000,
-          "studySiteId": "ea3852dc-742e-1237-2980-6136c7ef5ea6"
+          "ref": "fe2d0b9b-9c9a-cd7f-0b3a-f1bb3e8b3762",
+          "amountCents": 9190000
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "amountCents": 3930000,
-          "studySiteId": "9c7e9424-f022-76c5-750f-7e65ca7d4c8a"
+          "ref": "33d309d1-7310-0a98-6a5f-ceb38c1e7a64",
+          "amountCents": 2900000
         }
       ]
     }
@@ -6137,52 +6163,52 @@
     "body": {
       "items": [
         {
-          "id": "3f3ac739-1178-b1e0-a94f-aeb5e3cf1fb7",
-          "code": "SS-04",
+          "id": "7f414568-99c8-1d60-5ae8-b90f47f6c97e",
+          "code": "SS-09",
           "study": {
-            "id": "f571346e-7cf4-4fe2-d0b9-b9c9acd7f0b3",
-            "code": "HJ-2024-017",
-            "shortName": "恒糖宁 III"
-          },
-          "hospital": "天津医科大学肿瘤医院",
-          "dept": "肝胆外科",
-          "city": "天津",
-          "piName": "廖梦然",
-          "piAccountId": null,
-          "state": "intake",
-          "contracted": 37,
-          "unitPriceCents": 5930000,
-          "startupFeeCents": 7480000,
-          "irbApprovedOn": null,
-          "sivOn": "2026-08-17",
-          "sivPlannedOn": null,
-          "fpiOn": "2026-08-26",
-          "startupInvalidated": false,
-          "startupTemplateVersion": 30
-        },
-        {
-          "id": "33d309d1-7310-0a98-6a5f-ceb38c1e7a64",
-          "code": "SS-15",
-          "study": {
-            "id": "30483058-8cfd-8967-5d05-3b3a752bdc68",
+            "id": "16e70b95-ca6c-363d-a343-890bff08b181",
             "code": "HJ-2024-017",
             "shortName": "艾瑞替尼 III"
           },
-          "hospital": "北京协和医院",
+          "hospital": "复旦大学附属中山医院",
+          "dept": "肝胆外科",
+          "city": "北京",
+          "piName": "吴桐",
+          "piAccountId": "77391dd9-84f0-ca00-e456-368b59cdd78b",
+          "state": "intake",
+          "contracted": 14,
+          "unitPriceCents": 8070000,
+          "startupFeeCents": 4200000,
+          "irbApprovedOn": "2026-08-25",
+          "sivOn": "2026-08-15",
+          "sivPlannedOn": "2026-08-10",
+          "fpiOn": "2026-08-10",
+          "startupInvalidated": true,
+          "startupTemplateVersion": 13
+        },
+        {
+          "id": "f0b35e74-c554-6626-1b4a-c6bd426611a7",
+          "code": "SS-15",
+          "study": {
+            "id": "87353b38-e3a0-869b-5b55-5628e1b3afae",
+            "code": "HJ-2024-017",
+            "shortName": "恒糖宁 III"
+          },
+          "hospital": "复旦大学附属中山医院",
           "dept": "肝胆外科",
           "city": "广州",
-          "piName": "韩雪",
-          "piAccountId": "58abc46e-8cdd-d112-ebba-16c0d591498f",
+          "piName": "廖梦然",
+          "piAccountId": null,
           "state": "intake",
-          "contracted": 12,
-          "unitPriceCents": 2130000,
-          "startupFeeCents": 2970000,
-          "irbApprovedOn": "2026-08-10",
-          "sivOn": "2026-08-17",
-          "sivPlannedOn": null,
-          "fpiOn": "2026-08-21",
-          "startupInvalidated": false,
-          "startupTemplateVersion": 25
+          "contracted": 22,
+          "unitPriceCents": 2350000,
+          "startupFeeCents": 1130000,
+          "irbApprovedOn": "2026-08-12",
+          "sivOn": "2026-08-11",
+          "sivPlannedOn": "2026-08-20",
+          "fpiOn": "2026-08-24",
+          "startupInvalidated": true,
+          "startupTemplateVersion": 13
         }
       ],
       "nextCursor": "示例"
@@ -6190,108 +6216,57 @@
     "bodyWithoutFieldPermission": {
       "items": [
         {
-          "id": "3f3ac739-1178-b1e0-a94f-aeb5e3cf1fb7",
-          "code": "SS-04",
+          "id": "7f414568-99c8-1d60-5ae8-b90f47f6c97e",
+          "code": "SS-09",
           "study": {
-            "id": "f571346e-7cf4-4fe2-d0b9-b9c9acd7f0b3",
+            "id": "16e70b95-ca6c-363d-a343-890bff08b181",
+            "code": "HJ-2024-017",
+            "shortName": "艾瑞替尼 III"
+          },
+          "hospital": "复旦大学附属中山医院",
+          "dept": "肝胆外科",
+          "city": "北京",
+          "piName": "吴桐",
+          "piAccountId": "77391dd9-84f0-ca00-e456-368b59cdd78b",
+          "state": "intake",
+          "contracted": 14,
+          "irbApprovedOn": "2026-08-16",
+          "sivOn": "2026-08-25",
+          "sivPlannedOn": "2026-08-15",
+          "fpiOn": "2026-08-10",
+          "startupInvalidated": true,
+          "startupTemplateVersion": 3
+        },
+        {
+          "id": "f4f0b35e-74c5-5466-261b-4ac6bd426611",
+          "code": "SS-10",
+          "study": {
+            "id": "7f87353b-38e3-a086-9b5b-555628e1b3af",
             "code": "HJ-2024-017",
             "shortName": "恒糖宁 III"
           },
           "hospital": "天津医科大学肿瘤医院",
-          "dept": "肝胆外科",
+          "dept": "内分泌科",
           "city": "天津",
-          "piName": "廖梦然",
-          "piAccountId": null,
-          "state": "intake",
-          "contracted": 37,
-          "irbApprovedOn": "2026-08-22",
-          "sivOn": null,
-          "sivPlannedOn": "2026-08-17",
-          "fpiOn": null,
-          "startupInvalidated": true,
-          "startupTemplateVersion": 37
-        },
-        {
-          "id": "2b33d309-d173-100a-986a-5fceb38c1e7a",
-          "code": "SS-07",
-          "study": {
-            "id": "4f304830-588c-fd89-675d-053b3a752bdc",
-            "code": "HJ-2024-017",
-            "shortName": "HT-118 II"
-          },
-          "hospital": "复旦大学附属中山医院",
-          "dept": "肝胆外科",
-          "city": "上海",
           "piName": "吴桐",
-          "piAccountId": "ff58abc4-6e8c-ddd1-12eb-ba16c0d59149",
+          "piAccountId": "91820e18-0e99-db59-d67e-acf9b661e6e6",
           "state": "intake",
-          "contracted": 22,
-          "irbApprovedOn": "2026-08-15",
-          "sivOn": null,
-          "sivPlannedOn": null,
-          "fpiOn": "2026-08-10",
+          "contracted": 20,
+          "irbApprovedOn": "2026-08-13",
+          "sivOn": "2026-08-24",
+          "sivPlannedOn": "2026-08-13",
+          "fpiOn": null,
           "startupInvalidated": false,
-          "startupTemplateVersion": 17
+          "startupTemplateVersion": 13
         }
       ],
-      "nextCursor": null
+      "nextCursor": "示例"
     }
   },
   "createStudySite": {
     "method": "POST",
     "path": "/v1/study-sites",
     "status": 201,
-    "body": {
-      "id": "7f414568-99c8-1d60-5ae8-b90f47f6c97e",
-      "code": "SS-09",
-      "study": {
-        "id": "16e70b95-ca6c-363d-a343-890bff08b181",
-        "code": "HJ-2024-017",
-        "shortName": "艾瑞替尼 III"
-      },
-      "hospital": "复旦大学附属中山医院",
-      "dept": "肝胆外科",
-      "city": "北京",
-      "piName": "吴桐",
-      "piAccountId": "77391dd9-84f0-ca00-e456-368b59cdd78b",
-      "state": "intake",
-      "contracted": 14,
-      "unitPriceCents": 8070000,
-      "startupFeeCents": 4200000,
-      "irbApprovedOn": "2026-08-25",
-      "sivOn": "2026-08-15",
-      "sivPlannedOn": "2026-08-10",
-      "fpiOn": "2026-08-10",
-      "startupInvalidated": true,
-      "startupTemplateVersion": 13
-    },
-    "bodyWithoutFieldPermission": {
-      "id": "7f414568-99c8-1d60-5ae8-b90f47f6c97e",
-      "code": "SS-09",
-      "study": {
-        "id": "16e70b95-ca6c-363d-a343-890bff08b181",
-        "code": "HJ-2024-017",
-        "shortName": "艾瑞替尼 III"
-      },
-      "hospital": "复旦大学附属中山医院",
-      "dept": "肝胆外科",
-      "city": "北京",
-      "piName": "吴桐",
-      "piAccountId": "77391dd9-84f0-ca00-e456-368b59cdd78b",
-      "state": "intake",
-      "contracted": 14,
-      "irbApprovedOn": "2026-08-16",
-      "sivOn": "2026-08-25",
-      "sivPlannedOn": "2026-08-15",
-      "fpiOn": "2026-08-10",
-      "startupInvalidated": true,
-      "startupTemplateVersion": 3
-    }
-  },
-  "getStudySite": {
-    "method": "GET",
-    "path": "/v1/study-sites/{id}",
-    "status": 200,
     "body": {
       "id": "c01b9e00-2276-a712-cd22-e1dd4a3210cf",
       "code": "SS-08",
@@ -6339,95 +6314,60 @@
       "startupTemplateVersion": 27
     }
   },
+  "getStudySite": {
+    "method": "GET",
+    "path": "/v1/study-sites/{id}",
+    "status": 200,
+    "body": {
+      "id": "10204a5a-c786-d87d-b82e-f69f47a7de9d",
+      "code": "SS-09",
+      "study": {
+        "id": "9aac7860-01af-5c0a-f019-993134e5a95e",
+        "code": "HJ-2024-017",
+        "shortName": "CoroFlex 器械"
+      },
+      "hospital": "北京协和医院",
+      "dept": "肿瘤内科",
+      "city": "上海",
+      "piName": "韩雪",
+      "piAccountId": "be41a50e-6c8d-5dde-f498-e1571b39cd56",
+      "state": "intake",
+      "contracted": 32,
+      "unitPriceCents": 4870000,
+      "startupFeeCents": 7670000,
+      "irbApprovedOn": "2026-08-20",
+      "sivOn": "2026-08-16",
+      "sivPlannedOn": "2026-08-15",
+      "fpiOn": "2026-08-15",
+      "startupInvalidated": true,
+      "startupTemplateVersion": 36
+    },
+    "bodyWithoutFieldPermission": {
+      "id": "10204a5a-c786-d87d-b82e-f69f47a7de9d",
+      "code": "SS-09",
+      "study": {
+        "id": "9aac7860-01af-5c0a-f019-993134e5a95e",
+        "code": "HJ-2024-017",
+        "shortName": "CoroFlex 器械"
+      },
+      "hospital": "北京协和医院",
+      "dept": "肿瘤内科",
+      "city": "上海",
+      "piName": "韩雪",
+      "piAccountId": "be41a50e-6c8d-5dde-f498-e1571b39cd56",
+      "state": "intake",
+      "contracted": 32,
+      "irbApprovedOn": "2026-08-23",
+      "sivOn": "2026-08-20",
+      "sivPlannedOn": "2026-08-16",
+      "fpiOn": "2026-08-15",
+      "startupInvalidated": true,
+      "startupTemplateVersion": 13
+    }
+  },
   "advanceStudySite": {
     "method": "POST",
     "path": "/v1/study-sites/{id}:advance",
-    "status": 200,
-    "body": {
-      "data": {
-        "id": "10204a5a-c786-d87d-b82e-f69f47a7de9d",
-        "code": "SS-09",
-        "study": {
-          "id": "9aac7860-01af-5c0a-f019-993134e5a95e",
-          "code": "HJ-2024-017",
-          "shortName": "CoroFlex 器械"
-        },
-        "hospital": "北京协和医院",
-        "dept": "肿瘤内科",
-        "city": "上海",
-        "piName": "韩雪",
-        "piAccountId": "be41a50e-6c8d-5dde-f498-e1571b39cd56",
-        "state": "intake",
-        "contracted": 32,
-        "unitPriceCents": 4870000,
-        "startupFeeCents": 7670000,
-        "irbApprovedOn": "2026-08-20",
-        "sivOn": "2026-08-16",
-        "sivPlannedOn": "2026-08-15",
-        "fpiOn": "2026-08-15",
-        "startupInvalidated": true,
-        "startupTemplateVersion": 36
-      },
-      "sideEffects": [
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "613b2283-6acc-4909-7c5a-3b6ff29f58cb",
-          "amountCents": 6420000,
-          "studySiteId": "4332fab3-b83b-71a9-fb6d-819633c2d61a"
-        },
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "85d411ce-1642-ddbd-6b26-4093a9ee6762",
-          "amountCents": 3640000,
-          "studySiteId": "bf3705c1-d6c2-b36d-e862-82f45ae8d505"
-        }
-      ]
-    },
-    "bodyWithoutFieldPermission": {
-      "data": {
-        "id": "10204a5a-c786-d87d-b82e-f69f47a7de9d",
-        "code": "SS-09",
-        "study": {
-          "id": "9aac7860-01af-5c0a-f019-993134e5a95e",
-          "code": "HJ-2024-017",
-          "shortName": "CoroFlex 器械"
-        },
-        "hospital": "北京协和医院",
-        "dept": "肿瘤内科",
-        "city": "上海",
-        "piName": "韩雪",
-        "piAccountId": "be41a50e-6c8d-5dde-f498-e1571b39cd56",
-        "state": "intake",
-        "contracted": 32,
-        "irbApprovedOn": "2026-08-23",
-        "sivOn": "2026-08-20",
-        "sivPlannedOn": "2026-08-16",
-        "fpiOn": "2026-08-15",
-        "startupInvalidated": true,
-        "startupTemplateVersion": 13
-      },
-      "sideEffects": [
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "e4613b22-836a-cc49-097c-5a3b6ff29f58",
-          "amountCents": 7420000,
-          "studySiteId": "9d4332fa-b3b8-3b71-a9fb-6d819633c2d6"
-        },
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "amountCents": 5460000,
-          "studySiteId": "5d411ce1-642d-dbd6-b264-093a9ee6762a"
-        }
-      ]
-    }
-  },
-  "setStudySitePi": {
-    "method": "POST",
-    "path": "/v1/study-sites/{id}:set-pi",
     "status": 200,
     "body": {
       "data": {
@@ -6512,47 +6452,132 @@
       ]
     }
   },
+  "setStudySitePi": {
+    "method": "POST",
+    "path": "/v1/study-sites/{id}:set-pi",
+    "status": 200,
+    "body": {
+      "data": {
+        "id": "a28d5ee3-64e8-c7ee-06f2-066a33e6fa6c",
+        "code": "SS-12",
+        "study": {
+          "id": "7d18763e-a9b4-5c2c-70d7-8acfa89742c2",
+          "code": "HJ-2024-017",
+          "shortName": "CoroFlex 器械"
+        },
+        "hospital": "北京协和医院",
+        "dept": "内分泌科",
+        "city": "上海",
+        "piName": "吴桐",
+        "piAccountId": "31ee2fdc-5447-d3d2-3da0-2080a6de236a",
+        "state": "intake",
+        "contracted": 35,
+        "unitPriceCents": 5540000,
+        "startupFeeCents": 9810000,
+        "irbApprovedOn": "2026-08-21",
+        "sivOn": null,
+        "sivPlannedOn": "2026-08-25",
+        "fpiOn": null,
+        "startupInvalidated": true,
+        "startupTemplateVersion": 31
+      },
+      "sideEffects": [
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "amountCents": 4150000,
+          "studySiteId": "acebd805-acbc-35d5-7155-0064139865f3"
+        },
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "amountCents": 4070000,
+          "studySiteId": "e4a90268-4ecc-710a-b714-a29d95b7e11b"
+        }
+      ]
+    },
+    "bodyWithoutFieldPermission": {
+      "data": {
+        "id": "a28d5ee3-64e8-c7ee-06f2-066a33e6fa6c",
+        "code": "SS-12",
+        "study": {
+          "id": "7d18763e-a9b4-5c2c-70d7-8acfa89742c2",
+          "code": "HJ-2024-017",
+          "shortName": "CoroFlex 器械"
+        },
+        "hospital": "北京协和医院",
+        "dept": "内分泌科",
+        "city": "上海",
+        "piName": "吴桐",
+        "piAccountId": "31ee2fdc-5447-d3d2-3da0-2080a6de236a",
+        "state": "intake",
+        "contracted": 35,
+        "irbApprovedOn": "2026-08-27",
+        "sivOn": "2026-08-21",
+        "sivPlannedOn": null,
+        "fpiOn": "2026-08-25",
+        "startupInvalidated": false,
+        "startupTemplateVersion": 24
+      },
+      "sideEffects": [
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "175daceb-d805-acbc-35d5-715500641398",
+          "amountCents": 4270000,
+          "studySiteId": "3195be4a-9026-84ec-c710-ab714a29d95b"
+        },
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "e11bbe5e-b1a2-06f0-1928-661cd7a46b97",
+          "amountCents": 4620000,
+          "studySiteId": "9d58a173-86cc-b4ec-1adc-6b8a6f46dbb2"
+        }
+      ]
+    }
+  },
   "getSiteFunnel": {
     "method": "GET",
     "path": "/v1/study-sites/{id}/funnel",
     "status": 200,
     "body": {
-      "studySiteId": "a28d5ee3-64e8-c7ee-06f2-066a33e6fa6c",
+      "studySiteId": "f241c879-5d38-857e-a2ea-ace0554b1424",
       "siteCode": "示例",
       "hospital": "天津医科大学肿瘤医院",
-      "contracted": 20,
-      "prescreened": 35,
-      "icfSigned": 4,
-      "inScreening": 23,
-      "enrolled": 18,
-      "screenFailed": 18,
-      "withdrawn": 9,
-      "completed": 37,
-      "screenFailRate": 0.67,
-      "icfRate": 0.62,
-      "yieldRate": 0.7,
-      "retentionRate": 0.26,
+      "contracted": 38,
+      "prescreened": 37,
+      "icfSigned": 33,
+      "inScreening": 34,
+      "enrolled": 7,
+      "screenFailed": 10,
+      "withdrawn": 19,
+      "completed": 19,
+      "screenFailRate": 0.93,
+      "icfRate": 0.17,
+      "yieldRate": 0.52,
+      "retentionRate": 0.37,
       "screenFailBreakdown": [
         {
           "reason": "lab",
-          "count": 15
+          "count": 19
         },
         {
           "reason": "lab",
-          "count": 32
+          "count": 39
         }
       ],
       "withdrawBreakdown": [
         {
           "reason": "withdrew_icf",
-          "count": 7
+          "count": 2
         },
         {
           "reason": "withdrew_icf",
-          "count": 32
+          "count": 29
         }
       ],
-      "attainment": 0.45
+      "attainment": 0.98
     }
   },
   "getSiteGate": {
@@ -6562,7 +6587,7 @@
     "body": {
       "from": "intake",
       "to": "intake",
-      "satisfied": true,
+      "satisfied": false,
       "unmet": [
         {
           "code": "SS-03",
@@ -6570,7 +6595,7 @@
           "module": "示例标识"
         },
         {
-          "code": "SS-02",
+          "code": "SS-10",
           "message": "示例文本（由契约生成，非真实数据）",
           "module": "示例标识"
         }
@@ -6584,29 +6609,29 @@
     "body": {
       "items": [
         {
-          "id": "323a7c18-43e4-a576-22fc-efc42ade1881",
-          "studySiteId": "903a9a0a-d453-610b-79b6-e8efdd382656",
-          "movedOn": "2026-08-15",
+          "id": "83682607-9b09-0305-2980-033865dd5763",
+          "studySiteId": "78a88f1e-2101-ec4d-e1f1-53ed0061dd9d",
+          "movedOn": "2026-08-16",
           "kind": "receipt",
-          "quantity": 32,
-          "subjectRef": null,
+          "quantity": 7,
+          "subjectRef": "示例",
           "refNo": "示例",
           "note": null
         },
         {
-          "id": "e96cf773-b423-a97b-db41-f3d0fbc9f567",
-          "studySiteId": "8619ef10-b755-5aff-61e4-37830fcb089c",
-          "movedOn": "2026-08-26",
+          "id": "5ff1cae5-1184-4425-6430-3f91e50f11ad",
+          "studySiteId": "b2b07ef0-4f39-16c6-9198-59a2e3e233bd",
+          "movedOn": "2026-08-24",
           "kind": "receipt",
-          "quantity": 14,
+          "quantity": 4,
           "subjectRef": "示例",
-          "refNo": null,
-          "note": null
+          "refNo": "示例",
+          "note": "示例"
         }
       ],
       "nextCursor": "示例",
-      "balance": 8,
-      "blocksClose": true
+      "balance": 14,
+      "blocksClose": false
     }
   },
   "recordIpMovement": {
@@ -6614,14 +6639,14 @@
     "path": "/v1/study-sites/{id}/ip-movements",
     "status": 201,
     "body": {
-      "id": "83682607-9b09-0305-2980-033865dd5763",
-      "studySiteId": "78a88f1e-2101-ec4d-e1f1-53ed0061dd9d",
-      "movedOn": "2026-08-16",
+      "id": "d31c586f-9a00-9c42-2610-1000654253f9",
+      "studySiteId": "909d100a-ac96-8562-f02b-06e477da7bfe",
+      "movedOn": "2026-08-23",
       "kind": "receipt",
-      "quantity": 7,
+      "quantity": 22,
       "subjectRef": "示例",
       "refNo": "示例",
-      "note": null
+      "note": "示例"
     }
   },
   "getSitePnl": {
@@ -6629,44 +6654,44 @@
     "path": "/v1/study-sites/{id}/pnl",
     "status": 200,
     "body": {
-      "studySiteId": "d31c586f-9a00-9c42-2610-1000654253f9",
+      "studySiteId": "144e44c2-e9b3-d162-7ca8-337e57bb9ee4",
       "siteCode": "示例",
       "hospital": "复旦大学附属中山医院",
       "state": "示例",
-      "enrolled": 2,
-      "screenFailed": 24,
-      "withdrawn": 35,
+      "enrolled": 22,
+      "screenFailed": 17,
+      "withdrawn": 6,
       "contracted": 4,
       "revenue": {
-        "startupCents": 1530000,
-        "enrollmentCents": 1120000,
-        "dropoutDeductionCents": 6950000,
-        "screenFailFeeCents": 6930000,
-        "revenueCents": 7750000
+        "startupCents": 2420000,
+        "enrollmentCents": 1970000,
+        "dropoutDeductionCents": 7050000,
+        "screenFailFeeCents": 3600000,
+        "revenueCents": 5800000
       },
       "cost": {
-        "directCostCents": 6070000,
-        "billableCostCents": 4570000,
-        "nonBillableCostCents": 5700000,
-        "overheadCents": 3850000,
-        "totalCostCents": 4870000,
-        "unapprovedCostCents": 2530000,
-        "personDays": 0.99,
-        "nonBillableShare": 0.03,
-        "costPerEnrolledCents": 2660000
+        "directCostCents": 7920000,
+        "billableCostCents": 3290000,
+        "nonBillableCostCents": 7220000,
+        "overheadCents": 7030000,
+        "totalCostCents": 3920000,
+        "unapprovedCostCents": 1280000,
+        "personDays": 0.91,
+        "nonBillableShare": 0.27,
+        "costPerEnrolledCents": 5740000
       },
-      "grossProfitCents": 7300000,
-      "grossMargin": 0.01,
+      "grossProfitCents": 4970000,
+      "grossMargin": 0.9,
       "calcVersion": "示例"
     },
     "bodyWithoutFieldPermission": {
-      "studySiteId": "d31c586f-9a00-9c42-2610-1000654253f9",
+      "studySiteId": "144e44c2-e9b3-d162-7ca8-337e57bb9ee4",
       "siteCode": "示例",
       "hospital": "复旦大学附属中山医院",
       "state": "示例",
-      "enrolled": 2,
-      "screenFailed": 24,
-      "withdrawn": 35,
+      "enrolled": 22,
+      "screenFailed": 17,
+      "withdrawn": 6,
       "contracted": 4,
       "revenue": {},
       "cost": {},
@@ -6678,49 +6703,49 @@
     "path": "/v1/study-sites/{id}/pnl/monthly",
     "status": 200,
     "body": {
-      "studySiteId": "144e44c2-e9b3-d162-7ca8-337e57bb9ee4",
+      "studySiteId": "647a3469-2050-ab16-337e-82853690e197",
       "siteCode": "示例",
-      "hospital": "复旦大学附属中山医院",
+      "hospital": "天津医科大学肿瘤医院",
       "months": [
         {
           "month": "示例",
-          "enrolled": 22,
-          "screenFailed": 17,
-          "withdrawn": 6,
-          "revenueCents": 1700000,
-          "costCents": 2420000,
-          "personDays": 0.11,
-          "grossProfitCents": 7050000
+          "enrolled": 28,
+          "screenFailed": 13,
+          "withdrawn": 12,
+          "revenueCents": 4710000,
+          "costCents": 3500000,
+          "personDays": 0.43,
+          "grossProfitCents": 5590000
         },
         {
           "month": "示例",
-          "enrolled": 12,
-          "screenFailed": 22,
-          "withdrawn": 31,
-          "revenueCents": 3290000,
-          "costCents": 7220000,
-          "personDays": 0.67,
-          "grossProfitCents": 3920000
+          "enrolled": 4,
+          "screenFailed": 38,
+          "withdrawn": 21,
+          "revenueCents": 1590000,
+          "costCents": 1590000,
+          "personDays": 0.62,
+          "grossProfitCents": 9580000
         }
       ],
       "calcVersion": "示例"
     },
     "bodyWithoutFieldPermission": {
-      "studySiteId": "144e44c2-e9b3-d162-7ca8-337e57bb9ee4",
+      "studySiteId": "647a3469-2050-ab16-337e-82853690e197",
       "siteCode": "示例",
-      "hospital": "复旦大学附属中山医院",
+      "hospital": "天津医科大学肿瘤医院",
       "months": [
         {
           "month": "示例",
-          "enrolled": 22,
-          "screenFailed": 17,
-          "withdrawn": 6
+          "enrolled": 28,
+          "screenFailed": 13,
+          "withdrawn": 12
         },
         {
           "month": "示例",
-          "enrolled": 4,
-          "screenFailed": 7,
-          "withdrawn": 5
+          "enrolled": 17,
+          "screenFailed": 12,
+          "withdrawn": 18
         }
       ],
       "calcVersion": "示例"
@@ -6733,27 +6758,27 @@
     "body": {
       "items": [
         {
-          "id": "647a3469-2050-ab16-337e-82853690e197",
-          "studySiteId": "da546468-1f81-19f5-98e4-c5b263d5f7e9",
+          "id": "b59ea406-5465-550a-13fe-21472a8befcb",
+          "studySiteId": "b6c410b5-ccf2-3c33-e8ac-0fdfff585093",
           "kind": "initial",
-          "submittedOn": "2026-08-26",
+          "submittedOn": "2026-08-20",
           "decision": "pending",
-          "decidedOn": "2026-08-13",
+          "decidedOn": "2026-08-25",
           "refNo": "示例",
           "note": "示例"
         },
         {
-          "id": "9fea2338-13f8-0340-def7-1d0afb3e5ae5",
-          "studySiteId": "1dd62d09-e615-f3fb-43b6-97101d4d2ff0",
+          "id": "05b4c1e4-af35-dbef-2425-ed2f73ba4546",
+          "studySiteId": "05b5cfe5-032d-1533-4adf-7b57fb0abc2b",
           "kind": "initial",
-          "submittedOn": "2026-08-17",
+          "submittedOn": "2026-08-24",
           "decision": "pending",
-          "decidedOn": null,
-          "refNo": "示例",
+          "decidedOn": "2026-08-27",
+          "refNo": null,
           "note": "示例"
         }
       ],
-      "nextCursor": null
+      "nextCursor": "示例"
     }
   },
   "recordRegulatorySubmission": {
@@ -6761,14 +6786,14 @@
     "path": "/v1/study-sites/{id}/regulatory-submissions",
     "status": 201,
     "body": {
-      "id": "b59ea406-5465-550a-13fe-21472a8befcb",
-      "studySiteId": "b6c410b5-ccf2-3c33-e8ac-0fdfff585093",
+      "id": "f66bdbb7-461a-e1ba-cedb-ad06c3185ec7",
+      "studySiteId": "09c4923b-ffed-112b-c844-46e90f90a7bf",
       "kind": "initial",
-      "submittedOn": "2026-08-20",
+      "submittedOn": "2026-08-26",
       "decision": "pending",
-      "decidedOn": "2026-08-25",
+      "decidedOn": "2026-08-27",
       "refNo": "示例",
-      "note": "示例"
+      "note": null
     }
   },
   "listSaeEvents": {
@@ -6778,13 +6803,13 @@
     "body": {
       "items": [
         {
-          "id": "f66bdbb7-461a-e1ba-cedb-ad06c3185ec7",
-          "code": "SS-01",
-          "studySiteId": "9c4923bf-fed1-12bc-8444-6e90f90a7bfe",
+          "id": "469b4592-03f3-bce8-eae2-10125b518977",
+          "code": "SS-04",
+          "studySiteId": "01f0d9ae-f60b-3979-62e7-3c1ac69226b2",
           "siteCode": "示例",
-          "subjectId": "fd0fbf58-e6b0-2619-fc15-9c8f50e10070",
+          "subjectId": "f3e7fb0f-ee2d-d4ca-d159-335ec4569955",
           "screeningNo": "示例",
-          "visitId": "5be667d1-b07a-9319-4b3c-b050de7c2c18",
+          "visitId": "bb039a45-8ea6-21c4-eb21-068fb15db6fe",
           "kind": "deviation",
           "severity": "minor",
           "state": "open",
@@ -6792,29 +6817,29 @@
           "detail": "示例文本（由契约生成，非真实数据）",
           "autoGenerated": false,
           "raisedBy": "system",
-          "raisedOn": "2026-08-12",
+          "raisedOn": "2026-08-21",
           "closedAt": "2026-08-22T09:15:00+08:00",
-          "ageDays": 15,
+          "ageDays": 20,
           "occurredAt": "2026-08-22T09:15:00+08:00",
           "reportedAt": "2026-08-22T09:15:00+08:00",
-          "reportHours": 0.8,
-          "sourceEventId": "396c0f32-1a3f-658f-1df6-74854b46773f",
+          "reportHours": 0.32,
+          "sourceEventId": "eb2bbd92-eb34-6036-27b6-d6fac6f5e544",
           "category": "示例",
           "capaPlan": "示例",
-          "capaOwnerAccountId": null,
+          "capaOwnerAccountId": "d2e699e2-fc29-65da-0f47-2eb6af5282e4",
           "capaOwnerName": null,
-          "capaDueOn": null,
-          "capaOverdueDays": 34,
-          "owesCapaPlan": false
+          "capaDueOn": "2026-08-21",
+          "capaOverdueDays": 7,
+          "owesCapaPlan": true
         },
         {
-          "id": "2139e6d0-f709-bcde-d6ed-2e85c91f1e0d",
-          "code": "SS-12",
-          "studySiteId": "7b7ba290-751c-c2ee-d58d-987aabb7bf08",
+          "id": "f733a92e-b799-ddc2-9f64-b7f7219b3124",
+          "code": "SS-06",
+          "studySiteId": "6507a436-1720-42c2-d88c-78ef2e73385a",
           "siteCode": "示例",
-          "subjectId": "3436572e-953e-41c6-79f4-98f5ec3f08c4",
+          "subjectId": null,
           "screeningNo": "示例",
-          "visitId": "a64f3a3c-7b96-ea46-290e-05ed48f7ca6d",
+          "visitId": null,
           "kind": "deviation",
           "severity": "minor",
           "state": "open",
@@ -6824,40 +6849,40 @@
           "raisedBy": "system",
           "raisedOn": "2026-08-18",
           "closedAt": "2026-08-22T09:15:00+08:00",
-          "ageDays": 33,
+          "ageDays": 18,
           "occurredAt": "2026-08-22T09:15:00+08:00",
           "reportedAt": "2026-08-22T09:15:00+08:00",
-          "reportHours": 0.06,
-          "sourceEventId": "eba2714f-dbdc-f4c6-4293-c77d6743162e",
-          "category": null,
+          "reportHours": 0.9,
+          "sourceEventId": null,
+          "category": "示例",
           "capaPlan": "示例",
-          "capaOwnerAccountId": "ecdea2f7-d604-7381-8fcf-dec295b59aa3",
+          "capaOwnerAccountId": "ad15bf24-8b1b-1b3b-43f1-5bf768384809",
           "capaOwnerName": "示例",
-          "capaDueOn": "2026-08-23",
-          "capaOverdueDays": 21,
+          "capaDueOn": "2026-08-17",
+          "capaOverdueDays": 14,
           "owesCapaPlan": false
         }
       ],
-      "nextCursor": null,
+      "nextCursor": "示例",
       "timeliness": {
-        "total": 15,
-        "onTime": 37,
-        "late": 4,
-        "pending": 15,
-        "rate": 0.74,
-        "worstLateHours": 0.51,
+        "total": 5,
+        "onTime": 19,
+        "late": 3,
+        "pending": 29,
+        "rate": 0.68,
+        "worstLateHours": 0.16,
         "calcVersion": "示例"
       }
     },
     "bodyWithoutFieldPermission": {
       "items": [
         {
-          "id": "f66bdbb7-461a-e1ba-cedb-ad06c3185ec7",
-          "code": "SS-01",
-          "studySiteId": "9c4923bf-fed1-12bc-8444-6e90f90a7bfe",
+          "id": "469b4592-03f3-bce8-eae2-10125b518977",
+          "code": "SS-04",
+          "studySiteId": "01f0d9ae-f60b-3979-62e7-3c1ac69226b2",
           "siteCode": "示例",
-          "subjectId": "fd0fbf58-e6b0-2619-fc15-9c8f50e10070",
-          "visitId": "5be667d1-b07a-9319-4b3c-b050de7c2c18",
+          "subjectId": "f3e7fb0f-ee2d-d4ca-d159-335ec4569955",
+          "visitId": "bb039a45-8ea6-21c4-eb21-068fb15db6fe",
           "kind": "deviation",
           "severity": "minor",
           "state": "open",
@@ -6865,28 +6890,28 @@
           "detail": "示例文本（由契约生成，非真实数据）",
           "autoGenerated": false,
           "raisedBy": "system",
-          "raisedOn": "2026-08-12",
+          "raisedOn": "2026-08-21",
           "closedAt": "2026-08-22T09:15:00+08:00",
-          "ageDays": 15,
+          "ageDays": 20,
           "occurredAt": "2026-08-22T09:15:00+08:00",
           "reportedAt": "2026-08-22T09:15:00+08:00",
-          "reportHours": 0.8,
-          "sourceEventId": "396c0f32-1a3f-658f-1df6-74854b46773f",
+          "reportHours": 0.32,
+          "sourceEventId": "eb2bbd92-eb34-6036-27b6-d6fac6f5e544",
           "category": "示例",
           "capaPlan": "示例",
-          "capaOwnerAccountId": null,
+          "capaOwnerAccountId": "d2e699e2-fc29-65da-0f47-2eb6af5282e4",
           "capaOwnerName": null,
-          "capaDueOn": null,
-          "capaOverdueDays": 34,
-          "owesCapaPlan": false
+          "capaDueOn": "2026-08-21",
+          "capaOverdueDays": 7,
+          "owesCapaPlan": true
         },
         {
-          "id": "2139e6d0-f709-bcde-d6ed-2e85c91f1e0d",
-          "code": "SS-12",
-          "studySiteId": "7b7ba290-751c-c2ee-d58d-987aabb7bf08",
+          "id": "f733a92e-b799-ddc2-9f64-b7f7219b3124",
+          "code": "SS-06",
+          "studySiteId": "6507a436-1720-42c2-d88c-78ef2e73385a",
           "siteCode": "示例",
-          "subjectId": "3436572e-953e-41c6-79f4-98f5ec3f08c4",
-          "visitId": "a64f3a3c-7b96-ea46-290e-05ed48f7ca6d",
+          "subjectId": null,
+          "visitId": null,
           "kind": "deviation",
           "severity": "minor",
           "state": "open",
@@ -6896,28 +6921,28 @@
           "raisedBy": "system",
           "raisedOn": "2026-08-18",
           "closedAt": "2026-08-22T09:15:00+08:00",
-          "ageDays": 33,
+          "ageDays": 18,
           "occurredAt": "2026-08-22T09:15:00+08:00",
           "reportedAt": "2026-08-22T09:15:00+08:00",
-          "reportHours": 0.06,
-          "sourceEventId": "eba2714f-dbdc-f4c6-4293-c77d6743162e",
-          "category": null,
+          "reportHours": 0.9,
+          "sourceEventId": null,
+          "category": "示例",
           "capaPlan": "示例",
-          "capaOwnerAccountId": "ecdea2f7-d604-7381-8fcf-dec295b59aa3",
+          "capaOwnerAccountId": "ad15bf24-8b1b-1b3b-43f1-5bf768384809",
           "capaOwnerName": "示例",
-          "capaDueOn": "2026-08-23",
-          "capaOverdueDays": 21,
+          "capaDueOn": "2026-08-17",
+          "capaOverdueDays": 14,
           "owesCapaPlan": false
         }
       ],
-      "nextCursor": null,
+      "nextCursor": "示例",
       "timeliness": {
-        "total": 15,
-        "onTime": 37,
-        "late": 4,
-        "pending": 15,
-        "rate": 0.74,
-        "worstLateHours": 0.51,
+        "total": 5,
+        "onTime": 19,
+        "late": 3,
+        "pending": 29,
+        "rate": 0.68,
+        "worstLateHours": 0.16,
         "calcVersion": "示例"
       }
     }
@@ -6927,63 +6952,63 @@
     "path": "/v1/study-sites/{id}/sae",
     "status": 201,
     "body": {
-      "id": "469b4592-03f3-bce8-eae2-10125b518977",
-      "code": "SS-04",
-      "studySiteId": "01f0d9ae-f60b-3979-62e7-3c1ac69226b2",
+      "id": "96697c43-ddca-ebb7-9fe9-43b9b9be1840",
+      "code": "SS-03",
+      "studySiteId": "d2df320e-5722-a5db-b11c-fc57cd2fceec",
       "siteCode": "示例",
-      "subjectId": "f3e7fb0f-ee2d-d4ca-d159-335ec4569955",
+      "subjectId": "483b20b8-28d4-2f52-fdc2-9dc27b603dd6",
       "screeningNo": "示例",
-      "visitId": "bb039a45-8ea6-21c4-eb21-068fb15db6fe",
+      "visitId": "05ccb3b8-8a75-31f7-a896-a130b3f58f04",
       "kind": "deviation",
       "severity": "minor",
       "state": "open",
       "title": "示例文本（由契约生成，非真实数据）",
       "detail": "示例文本（由契约生成，非真实数据）",
-      "autoGenerated": false,
+      "autoGenerated": true,
       "raisedBy": "system",
-      "raisedOn": "2026-08-21",
+      "raisedOn": "2026-08-22",
       "closedAt": "2026-08-22T09:15:00+08:00",
-      "ageDays": 20,
-      "occurredAt": "2026-08-22T09:15:00+08:00",
-      "reportedAt": "2026-08-22T09:15:00+08:00",
-      "reportHours": 0.32,
-      "sourceEventId": "eb2bbd92-eb34-6036-27b6-d6fac6f5e544",
-      "category": "示例",
-      "capaPlan": "示例",
-      "capaOwnerAccountId": "d2e699e2-fc29-65da-0f47-2eb6af5282e4",
-      "capaOwnerName": null,
-      "capaDueOn": "2026-08-21",
-      "capaOverdueDays": 7,
-      "owesCapaPlan": true
+      "ageDays": 21,
+      "occurredAt": null,
+      "reportedAt": null,
+      "reportHours": 0.1,
+      "sourceEventId": "3e2d5b02-7d30-1d86-4d10-a15136fa721d",
+      "category": null,
+      "capaPlan": null,
+      "capaOwnerAccountId": "12e7e8e6-6708-ae54-1065-e995da572608",
+      "capaOwnerName": "示例",
+      "capaDueOn": null,
+      "capaOverdueDays": 37,
+      "owesCapaPlan": false
     },
     "bodyWithoutFieldPermission": {
-      "id": "469b4592-03f3-bce8-eae2-10125b518977",
-      "code": "SS-04",
-      "studySiteId": "01f0d9ae-f60b-3979-62e7-3c1ac69226b2",
+      "id": "96697c43-ddca-ebb7-9fe9-43b9b9be1840",
+      "code": "SS-03",
+      "studySiteId": "d2df320e-5722-a5db-b11c-fc57cd2fceec",
       "siteCode": "示例",
-      "subjectId": "f3e7fb0f-ee2d-d4ca-d159-335ec4569955",
-      "visitId": "bb039a45-8ea6-21c4-eb21-068fb15db6fe",
+      "subjectId": "483b20b8-28d4-2f52-fdc2-9dc27b603dd6",
+      "visitId": "05ccb3b8-8a75-31f7-a896-a130b3f58f04",
       "kind": "deviation",
       "severity": "minor",
       "state": "open",
       "title": "示例文本（由契约生成，非真实数据）",
       "detail": "示例文本（由契约生成，非真实数据）",
-      "autoGenerated": false,
+      "autoGenerated": true,
       "raisedBy": "system",
-      "raisedOn": "2026-08-21",
+      "raisedOn": "2026-08-22",
       "closedAt": "2026-08-22T09:15:00+08:00",
-      "ageDays": 20,
-      "occurredAt": "2026-08-22T09:15:00+08:00",
-      "reportedAt": "2026-08-22T09:15:00+08:00",
-      "reportHours": 0.32,
-      "sourceEventId": "eb2bbd92-eb34-6036-27b6-d6fac6f5e544",
-      "category": "示例",
-      "capaPlan": "示例",
-      "capaOwnerAccountId": "d2e699e2-fc29-65da-0f47-2eb6af5282e4",
-      "capaOwnerName": null,
-      "capaDueOn": "2026-08-21",
-      "capaOverdueDays": 7,
-      "owesCapaPlan": true
+      "ageDays": 21,
+      "occurredAt": null,
+      "reportedAt": null,
+      "reportHours": 0.1,
+      "sourceEventId": "3e2d5b02-7d30-1d86-4d10-a15136fa721d",
+      "category": null,
+      "capaPlan": null,
+      "capaOwnerAccountId": "12e7e8e6-6708-ae54-1065-e995da572608",
+      "capaOwnerName": "示例",
+      "capaDueOn": null,
+      "capaOverdueDays": 37,
+      "owesCapaPlan": false
     }
   },
   "listSpecimens": {
@@ -6993,31 +7018,31 @@
     "body": {
       "items": [
         {
-          "id": "96697c43-ddca-ebb7-9fe9-43b9b9be1840",
-          "studySiteId": "3d2df320-e572-2a5d-bb11-cfc57cd2fcee",
+          "id": "d7b2a024-ba5a-a143-4c6b-5a1dabecb551",
+          "studySiteId": "8e7a2785-7c85-0fc0-969a-98fe5c821260",
           "subjectRef": "示例",
           "kind": "示例",
-          "collectedOn": "2026-08-23",
-          "shippedOn": "2026-08-14",
-          "receivedOn": "2026-08-13",
-          "discardedOn": "2026-08-12",
+          "collectedOn": "2026-08-10",
+          "shippedOn": "2026-08-11",
+          "receivedOn": "2026-08-26",
+          "discardedOn": null,
           "trackingNo": null,
-          "closed": true
+          "closed": false
         },
         {
-          "id": "828d42f5-2fdc-29dc-27b6-03dd6e05ccb3",
-          "studySiteId": "b88a7531-f7a8-96a1-30b3-f58f04bb7823",
+          "id": "96e6d77b-7669-a9fa-3e7e-5c5b539a3317",
+          "studySiteId": "daf7b435-cd9c-80c2-842b-88ade493a032",
           "subjectRef": "示例",
           "kind": "示例",
-          "collectedOn": "2026-08-11",
-          "shippedOn": "2026-08-13",
-          "receivedOn": "2026-08-13",
-          "discardedOn": "2026-08-15",
+          "collectedOn": "2026-08-16",
+          "shippedOn": "2026-08-19",
+          "receivedOn": null,
+          "discardedOn": "2026-08-18",
           "trackingNo": "示例",
-          "closed": false
+          "closed": true
         }
       ],
-      "nextCursor": null
+      "nextCursor": "示例"
     }
   },
   "recordSpecimen": {
@@ -7025,15 +7050,15 @@
     "path": "/v1/study-sites/{id}/specimens",
     "status": 201,
     "body": {
-      "id": "d7b2a024-ba5a-a143-4c6b-5a1dabecb551",
-      "studySiteId": "8e7a2785-7c85-0fc0-969a-98fe5c821260",
+      "id": "27760db6-536e-f781-e83a-9c0f106365fa",
+      "studySiteId": "843770e7-d75a-8404-9953-d0dfa83d7fa4",
       "subjectRef": "示例",
       "kind": "示例",
-      "collectedOn": "2026-08-10",
-      "shippedOn": "2026-08-11",
-      "receivedOn": "2026-08-26",
-      "discardedOn": null,
-      "trackingNo": null,
+      "collectedOn": "2026-08-21",
+      "shippedOn": "2026-08-12",
+      "receivedOn": "2026-08-13",
+      "discardedOn": "2026-08-14",
+      "trackingNo": "示例",
       "closed": false
     }
   },
@@ -7042,44 +7067,44 @@
     "path": "/v1/study-sites/{id}/startup-items",
     "status": 200,
     "body": {
-      "studySiteId": "27760db6-536e-f781-e83a-9c0f106365fa",
+      "studySiteId": "778d1bc0-102a-f09e-ff35-ca6db61a93f4",
       "siteCode": "示例",
       "hospital": "复旦大学附属中山医院",
       "state": "示例",
       "sivPlannedOn": "2026-08-14",
-      "daysToSiv": 19,
-      "total": 20,
-      "done": 1,
-      "blockingOpen": 38,
-      "overdue": 19,
+      "daysToSiv": 30,
+      "total": 10,
+      "done": 24,
+      "blockingOpen": 22,
+      "overdue": 16,
       "items": [
         {
-          "id": "d75a8404-9953-d0df-a83d-7fa4a824344e",
-          "studySiteId": "32c19387-294b-f1ca-9803-6879e1072c23",
+          "id": "3a252139-4713-93ff-5edf-9641b43ea141",
+          "studySiteId": "aa206438-6ac7-d5c2-b933-419ef39245ea",
           "category": "ethics",
           "categoryLabel": "示例文本（由契约生成，非真实数据）",
           "item": "示例",
-          "ownerAccountId": null,
+          "ownerAccountId": "50c48eb5-23a0-4935-f594-ccf2ec10d648",
           "ownerName": "示例",
-          "dueOn": "2026-08-17",
+          "dueOn": "2026-08-13",
           "isBlocking": true,
           "doneAt": "2026-08-22T09:15:00+08:00",
           "doneByName": "示例",
-          "overdueDays": 29
+          "overdueDays": 31
         },
         {
-          "id": "b4581cb3-b63f-6868-2b30-38051dc770f0",
-          "studySiteId": "d325a4d4-2b6c-b75f-6286-46a5d4f4b5f4",
+          "id": "b01572b7-d0c2-9083-b85a-dd671d5256af",
+          "studySiteId": "c9e04521-77a2-1c65-7f20-382ee4fee8e0",
           "category": "ethics",
           "categoryLabel": "示例文本（由契约生成，非真实数据）",
           "item": "示例",
-          "ownerAccountId": null,
-          "ownerName": null,
-          "dueOn": "2026-08-18",
+          "ownerAccountId": "d85b4973-f056-be83-bb2d-ba27b86c0122",
+          "ownerName": "示例",
+          "dueOn": "2026-08-19",
           "isBlocking": true,
-          "doneAt": "2026-08-22T09:15:00+08:00",
+          "doneAt": null,
           "doneByName": "示例",
-          "overdueDays": 8
+          "overdueDays": 25
         }
       ]
     }
@@ -7091,66 +7116,66 @@
     "body": {
       "items": [
         {
-          "id": "778d1bc0-102a-f09e-ff35-ca6db61a93f4",
-          "studySiteId": "7a3b3986-3a25-2139-4713-93ff5edf9641",
+          "id": "b89d69f6-aeda-999f-9d98-cb92c05b1866",
+          "studySiteId": "18ccf742-499e-1770-abfd-7ed04accd47b",
           "siteCode": "示例",
-          "subjectId": "b43ea141-aa20-6438-6ac7-d5c2b933419e",
-          "screeningNo": "示例",
-          "visitId": "39245ea6-50c4-8eb5-23a0-4935f594ccf2",
-          "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "amountCents": 8230000,
-          "dueOn": "2026-08-11",
-          "paidOn": null,
-          "receiptRef": "示例",
-          "ageDays": 16
-        },
-        {
-          "id": "48bf29f8-cb01-572b-7d0c-29083b85add6",
-          "studySiteId": "71d5256a-fc9e-0452-177a-21c657f20382",
-          "siteCode": "示例",
-          "subjectId": "ee4fee8e-0fd8-5b49-73f0-56be83bb2dba",
+          "subjectId": "9106f756-b812-2007-1c21-847c9e331b5c",
           "screeningNo": "示例",
           "visitId": null,
+          "visitLabel": null,
+          "amountCents": 5430000,
+          "dueOn": "2026-08-15",
+          "paidOn": "2026-08-24",
+          "receiptRef": "示例",
+          "ageDays": 19
+        },
+        {
+          "id": "350ef488-52af-710c-e216-07a5680ac71c",
+          "studySiteId": "386836be-8701-5da4-7e8d-6f1028b3c450",
+          "siteCode": "示例",
+          "subjectId": "7e2aa8c5-d3ed-6023-e2dc-754884d28002",
+          "screeningNo": "示例",
+          "visitId": "b569eba6-2bbc-dc57-144a-a23ea4e41539",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "amountCents": 7220000,
-          "dueOn": "2026-08-19",
-          "paidOn": "2026-08-23",
-          "receiptRef": null,
-          "ageDays": 4
+          "amountCents": 1430000,
+          "dueOn": "2026-08-18",
+          "paidOn": null,
+          "receiptRef": "示例",
+          "ageDays": 31
         }
       ],
-      "nextCursor": null
+      "nextCursor": "示例"
     },
     "bodyWithoutFieldPermission": {
       "items": [
         {
-          "id": "778d1bc0-102a-f09e-ff35-ca6db61a93f4",
-          "studySiteId": "7a3b3986-3a25-2139-4713-93ff5edf9641",
+          "id": "b89d69f6-aeda-999f-9d98-cb92c05b1866",
+          "studySiteId": "18ccf742-499e-1770-abfd-7ed04accd47b",
           "siteCode": "示例",
-          "subjectId": "b43ea141-aa20-6438-6ac7-d5c2b933419e",
-          "visitId": "39245ea6-50c4-8eb5-23a0-4935f594ccf2",
-          "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "amountCents": 8230000,
-          "dueOn": "2026-08-11",
-          "paidOn": null,
+          "subjectId": "9106f756-b812-2007-1c21-847c9e331b5c",
+          "visitId": null,
+          "visitLabel": null,
+          "amountCents": 5430000,
+          "dueOn": "2026-08-15",
+          "paidOn": "2026-08-24",
           "receiptRef": "示例",
-          "ageDays": 16
+          "ageDays": 19
         },
         {
-          "id": "48bf29f8-cb01-572b-7d0c-29083b85add6",
-          "studySiteId": "71d5256a-fc9e-0452-177a-21c657f20382",
+          "id": "350ef488-52af-710c-e216-07a5680ac71c",
+          "studySiteId": "386836be-8701-5da4-7e8d-6f1028b3c450",
           "siteCode": "示例",
-          "subjectId": "ee4fee8e-0fd8-5b49-73f0-56be83bb2dba",
-          "visitId": null,
+          "subjectId": "7e2aa8c5-d3ed-6023-e2dc-754884d28002",
+          "visitId": "b569eba6-2bbc-dc57-144a-a23ea4e41539",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "amountCents": 7220000,
-          "dueOn": "2026-08-19",
-          "paidOn": "2026-08-23",
-          "receiptRef": null,
-          "ageDays": 4
+          "amountCents": 1430000,
+          "dueOn": "2026-08-18",
+          "paidOn": null,
+          "receiptRef": "示例",
+          "ageDays": 31
         }
       ],
-      "nextCursor": null
+      "nextCursor": "示例"
     }
   },
   "paySubjectPayment": {
@@ -7159,64 +7184,64 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "b89d69f6-aeda-999f-9d98-cb92c05b1866",
-        "studySiteId": "18ccf742-499e-1770-abfd-7ed04accd47b",
+        "id": "095981e3-73b5-1a96-1431-bb73a00761b8",
+        "studySiteId": "2af9318d-8c75-97c6-844e-40b186cb7822",
         "siteCode": "示例",
-        "subjectId": "9106f756-b812-2007-1c21-847c9e331b5c",
+        "subjectId": "6720223d-a14d-fc17-cb94-209c391045b0",
         "screeningNo": "示例",
-        "visitId": null,
-        "visitLabel": null,
-        "amountCents": 5430000,
-        "dueOn": "2026-08-15",
-        "paidOn": "2026-08-24",
+        "visitId": "a8e57483-e969-d7bb-2543-5b1e5041770e",
+        "visitLabel": "示例文本（由契约生成，非真实数据）",
+        "amountCents": 4650000,
+        "dueOn": "2026-08-24",
+        "paidOn": "2026-08-14",
         "receiptRef": "示例",
-        "ageDays": 19
+        "ageDays": 38
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "50ef4885-2af7-10ce-2160-7a5680ac71c3",
-          "amountCents": 4810000,
-          "studySiteId": "36be8701-5da4-7e8d-6f10-28b3c4507e2a"
+          "ref": "14e2b567-8e78-0e8a-db37-05cebc6257cd",
+          "amountCents": 2940000,
+          "studySiteId": "664054aa-35fe-da48-7ad4-63b64915b549"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "8c5d3ed6-023e-2dc7-5488-4d28002fb569",
-          "amountCents": 7720000,
-          "studySiteId": "62bbcdc5-7144-aa23-ea4e-4153940708c6"
+          "ref": "09015a6d-021b-b10a-881c-ae2e7d1d143d",
+          "amountCents": 8400000,
+          "studySiteId": "ad84b80f-a43d-f6cd-c173-2c0f3cf27f87"
         }
       ]
     },
     "bodyWithoutFieldPermission": {
       "data": {
-        "id": "b89d69f6-aeda-999f-9d98-cb92c05b1866",
-        "studySiteId": "18ccf742-499e-1770-abfd-7ed04accd47b",
+        "id": "095981e3-73b5-1a96-1431-bb73a00761b8",
+        "studySiteId": "2af9318d-8c75-97c6-844e-40b186cb7822",
         "siteCode": "示例",
-        "subjectId": "9106f756-b812-2007-1c21-847c9e331b5c",
-        "visitId": null,
-        "visitLabel": null,
-        "amountCents": 5430000,
-        "dueOn": "2026-08-15",
-        "paidOn": "2026-08-24",
+        "subjectId": "6720223d-a14d-fc17-cb94-209c391045b0",
+        "visitId": "a8e57483-e969-d7bb-2543-5b1e5041770e",
+        "visitLabel": "示例文本（由契约生成，非真实数据）",
+        "amountCents": 4650000,
+        "dueOn": "2026-08-24",
+        "paidOn": "2026-08-14",
         "receiptRef": "示例",
-        "ageDays": 19
+        "ageDays": 38
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "50ef4885-2af7-10ce-2160-7a5680ac71c3",
-          "amountCents": 4810000,
-          "studySiteId": "36be8701-5da4-7e8d-6f10-28b3c4507e2a"
+          "ref": "14e2b567-8e78-0e8a-db37-05cebc6257cd",
+          "amountCents": 2940000,
+          "studySiteId": "664054aa-35fe-da48-7ad4-63b64915b549"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "8c5d3ed6-023e-2dc7-5488-4d28002fb569",
-          "amountCents": 7720000,
-          "studySiteId": "62bbcdc5-7144-aa23-ea4e-4153940708c6"
+          "ref": "09015a6d-021b-b10a-881c-ae2e7d1d143d",
+          "amountCents": 8400000,
+          "studySiteId": "ad84b80f-a43d-f6cd-c173-2c0f3cf27f87"
         }
       ]
     }
@@ -7228,146 +7253,146 @@
     "body": {
       "items": [
         {
-          "id": "095981e3-73b5-1a96-1431-bb73a00761b8",
-          "subjectId": "2af9318d-8c75-97c6-844e-40b186cb7822",
+          "id": "5af6ed79-8be5-3c63-9628-b4fe2100436e",
+          "subjectId": "e67c17b4-698f-ca91-66d0-aade1ab1fa11",
           "screeningNo": "示例",
-          "studySiteId": "6720223d-a14d-fc17-cb94-209c391045b0",
+          "studySiteId": "b02cfec6-1023-7eff-d764-3c14b41376cc",
           "siteCode": "示例",
-          "seq": 30,
+          "seq": 8,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-21",
-          "windowDays": 23,
-          "windowFrom": "2026-08-25",
-          "windowTo": "2026-08-15",
-          "actualDate": "2026-08-15",
+          "targetDate": "2026-08-10",
+          "windowDays": 20,
+          "windowFrom": "2026-08-24",
+          "windowTo": "2026-08-17",
+          "actualDate": "2026-08-19",
           "status": "planned",
           "edcStatus": "pending",
-          "edcDaysLate": 23,
-          "outOfWindow": false,
-          "daysLeft": 36,
+          "edcDaysLate": 22,
+          "outOfWindow": true,
+          "daysLeft": 32,
           "piConfirmedAt": "2026-08-22T09:15:00+08:00",
           "piConfirmedByName": "示例",
           "tasks": [
             {
-              "seq": 25,
+              "seq": 6,
               "task": "示例",
-              "doneAt": "2026-08-22T09:15:00+08:00"
+              "doneAt": null
             },
             {
-              "seq": 19,
+              "seq": 31,
               "task": "示例",
               "doneAt": "2026-08-22T09:15:00+08:00"
             }
           ]
         },
         {
-          "id": "b25435b1-e504-1770-ef6c-a3eef14e2b56",
-          "subjectId": "78e780e8-adb3-705c-ebc6-257cdb326640",
+          "id": "69867616-6ff5-9bde-4516-1db5dd579b54",
+          "subjectId": "e022ed04-0329-7cd1-fb8e-8487b1d68950",
           "screeningNo": "示例",
-          "studySiteId": "54aa35fe-da48-7ad4-63b6-4915b549d090",
+          "studySiteId": "24f04039-c98e-c9fb-b4ae-408defdc0b86",
           "siteCode": "示例",
-          "seq": 3,
+          "seq": 29,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-16",
-          "windowDays": 28,
-          "windowFrom": "2026-08-17",
-          "windowTo": "2026-08-25",
-          "actualDate": null,
+          "targetDate": "2026-08-19",
+          "windowDays": 40,
+          "windowFrom": "2026-08-24",
+          "windowTo": "2026-08-27",
+          "actualDate": "2026-08-26",
           "status": "planned",
           "edcStatus": "pending",
-          "edcDaysLate": 6,
+          "edcDaysLate": 13,
           "outOfWindow": false,
-          "daysLeft": 30,
-          "piConfirmedAt": "2026-08-22T09:15:00+08:00",
-          "piConfirmedByName": null,
+          "daysLeft": 13,
+          "piConfirmedAt": null,
+          "piConfirmedByName": "示例",
           "tasks": [
             {
-              "seq": 1,
+              "seq": 5,
               "task": "示例",
               "doneAt": "2026-08-22T09:15:00+08:00"
             },
             {
-              "seq": 23,
+              "seq": 16,
               "task": "示例",
               "doneAt": "2026-08-22T09:15:00+08:00"
             }
           ]
         }
       ],
-      "nextCursor": null
+      "nextCursor": "示例"
     },
     "bodyWithoutFieldPermission": {
       "items": [
         {
-          "id": "095981e3-73b5-1a96-1431-bb73a00761b8",
-          "subjectId": "2af9318d-8c75-97c6-844e-40b186cb7822",
-          "studySiteId": "6720223d-a14d-fc17-cb94-209c391045b0",
+          "id": "5af6ed79-8be5-3c63-9628-b4fe2100436e",
+          "subjectId": "e67c17b4-698f-ca91-66d0-aade1ab1fa11",
+          "studySiteId": "b02cfec6-1023-7eff-d764-3c14b41376cc",
           "siteCode": "示例",
-          "seq": 30,
+          "seq": 8,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-21",
-          "windowDays": 23,
-          "windowFrom": "2026-08-25",
-          "windowTo": "2026-08-15",
-          "actualDate": "2026-08-15",
+          "targetDate": "2026-08-10",
+          "windowDays": 20,
+          "windowFrom": "2026-08-24",
+          "windowTo": "2026-08-17",
+          "actualDate": "2026-08-19",
           "status": "planned",
           "edcStatus": "pending",
-          "edcDaysLate": 23,
-          "outOfWindow": false,
-          "daysLeft": 36,
+          "edcDaysLate": 22,
+          "outOfWindow": true,
+          "daysLeft": 32,
           "piConfirmedAt": "2026-08-22T09:15:00+08:00",
           "piConfirmedByName": "示例",
           "tasks": [
             {
-              "seq": 25,
+              "seq": 6,
               "task": "示例",
-              "doneAt": "2026-08-22T09:15:00+08:00"
+              "doneAt": null
             },
             {
-              "seq": 19,
+              "seq": 31,
               "task": "示例",
               "doneAt": "2026-08-22T09:15:00+08:00"
             }
           ]
         },
         {
-          "id": "b25435b1-e504-1770-ef6c-a3eef14e2b56",
-          "subjectId": "78e780e8-adb3-705c-ebc6-257cdb326640",
-          "studySiteId": "54aa35fe-da48-7ad4-63b6-4915b549d090",
+          "id": "69867616-6ff5-9bde-4516-1db5dd579b54",
+          "subjectId": "e022ed04-0329-7cd1-fb8e-8487b1d68950",
+          "studySiteId": "24f04039-c98e-c9fb-b4ae-408defdc0b86",
           "siteCode": "示例",
-          "seq": 3,
+          "seq": 29,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-16",
-          "windowDays": 28,
-          "windowFrom": "2026-08-17",
-          "windowTo": "2026-08-25",
-          "actualDate": null,
+          "targetDate": "2026-08-19",
+          "windowDays": 40,
+          "windowFrom": "2026-08-24",
+          "windowTo": "2026-08-27",
+          "actualDate": "2026-08-26",
           "status": "planned",
           "edcStatus": "pending",
-          "edcDaysLate": 6,
+          "edcDaysLate": 13,
           "outOfWindow": false,
-          "daysLeft": 30,
-          "piConfirmedAt": "2026-08-22T09:15:00+08:00",
-          "piConfirmedByName": null,
+          "daysLeft": 13,
+          "piConfirmedAt": null,
+          "piConfirmedByName": "示例",
           "tasks": [
             {
-              "seq": 1,
+              "seq": 5,
               "task": "示例",
               "doneAt": "2026-08-22T09:15:00+08:00"
             },
             {
-              "seq": 23,
+              "seq": 16,
               "task": "示例",
               "doneAt": "2026-08-22T09:15:00+08:00"
             }
           ]
         }
       ],
-      "nextCursor": null
+      "nextCursor": "示例"
     }
   },
   "getSubjectVisit": {
@@ -7375,67 +7400,67 @@
     "path": "/v1/subject-visits/{id}",
     "status": 200,
     "body": {
-      "id": "5af6ed79-8be5-3c63-9628-b4fe2100436e",
-      "subjectId": "e67c17b4-698f-ca91-66d0-aade1ab1fa11",
+      "id": "99e430db-f302-fbb3-9cff-29c2582ce75a",
+      "subjectId": "48c47e0d-58a0-4fd5-99d5-9bbcd7533c13",
       "screeningNo": "示例",
-      "studySiteId": "b02cfec6-1023-7eff-d764-3c14b41376cc",
+      "studySiteId": "76e7c84c-f302-3e21-3a74-0728b851ac0a",
       "siteCode": "示例",
-      "seq": 8,
+      "seq": 39,
       "visitCode": "示例",
       "visitLabel": "示例文本（由契约生成，非真实数据）",
-      "targetDate": "2026-08-10",
-      "windowDays": 20,
-      "windowFrom": "2026-08-24",
-      "windowTo": "2026-08-17",
-      "actualDate": "2026-08-19",
+      "targetDate": "2026-08-12",
+      "windowDays": 24,
+      "windowFrom": "2026-08-12",
+      "windowTo": "2026-08-25",
+      "actualDate": "2026-08-18",
       "status": "planned",
       "edcStatus": "pending",
-      "edcDaysLate": 22,
+      "edcDaysLate": 39,
       "outOfWindow": true,
-      "daysLeft": 32,
-      "piConfirmedAt": "2026-08-22T09:15:00+08:00",
+      "daysLeft": 31,
+      "piConfirmedAt": null,
       "piConfirmedByName": "示例",
       "tasks": [
         {
-          "seq": 6,
+          "seq": 33,
           "task": "示例",
-          "doneAt": null
+          "doneAt": "2026-08-22T09:15:00+08:00"
         },
         {
-          "seq": 31,
+          "seq": 22,
           "task": "示例",
           "doneAt": "2026-08-22T09:15:00+08:00"
         }
       ]
     },
     "bodyWithoutFieldPermission": {
-      "id": "5af6ed79-8be5-3c63-9628-b4fe2100436e",
-      "subjectId": "e67c17b4-698f-ca91-66d0-aade1ab1fa11",
-      "studySiteId": "b02cfec6-1023-7eff-d764-3c14b41376cc",
+      "id": "99e430db-f302-fbb3-9cff-29c2582ce75a",
+      "subjectId": "48c47e0d-58a0-4fd5-99d5-9bbcd7533c13",
+      "studySiteId": "76e7c84c-f302-3e21-3a74-0728b851ac0a",
       "siteCode": "示例",
-      "seq": 8,
+      "seq": 39,
       "visitCode": "示例",
       "visitLabel": "示例文本（由契约生成，非真实数据）",
-      "targetDate": "2026-08-10",
-      "windowDays": 20,
-      "windowFrom": "2026-08-24",
-      "windowTo": "2026-08-17",
-      "actualDate": "2026-08-19",
+      "targetDate": "2026-08-12",
+      "windowDays": 24,
+      "windowFrom": "2026-08-12",
+      "windowTo": "2026-08-25",
+      "actualDate": "2026-08-18",
       "status": "planned",
       "edcStatus": "pending",
-      "edcDaysLate": 22,
+      "edcDaysLate": 39,
       "outOfWindow": true,
-      "daysLeft": 32,
-      "piConfirmedAt": "2026-08-22T09:15:00+08:00",
+      "daysLeft": 31,
+      "piConfirmedAt": null,
       "piConfirmedByName": "示例",
       "tasks": [
         {
-          "seq": 6,
+          "seq": 33,
           "task": "示例",
-          "doneAt": null
+          "doneAt": "2026-08-22T09:15:00+08:00"
         },
         {
-          "seq": 31,
+          "seq": 22,
           "task": "示例",
           "doneAt": "2026-08-22T09:15:00+08:00"
         }
@@ -7448,36 +7473,36 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "99e430db-f302-fbb3-9cff-29c2582ce75a",
-        "subjectId": "48c47e0d-58a0-4fd5-99d5-9bbcd7533c13",
+        "id": "eab15507-2233-af25-eaf1-d0cd20e81cff",
+        "subjectId": "6267507c-99fa-3c63-6cf0-529060475034",
         "screeningNo": "示例",
-        "studySiteId": "76e7c84c-f302-3e21-3a74-0728b851ac0a",
+        "studySiteId": "18df6ca9-7f2d-4346-1726-4348337dafb0",
         "siteCode": "示例",
-        "seq": 39,
+        "seq": 25,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-12",
-        "windowDays": 24,
-        "windowFrom": "2026-08-12",
-        "windowTo": "2026-08-25",
-        "actualDate": "2026-08-18",
+        "targetDate": "2026-08-20",
+        "windowDays": 26,
+        "windowFrom": "2026-08-24",
+        "windowTo": "2026-08-11",
+        "actualDate": "2026-08-24",
         "status": "planned",
         "edcStatus": "pending",
-        "edcDaysLate": 39,
+        "edcDaysLate": 14,
         "outOfWindow": true,
-        "daysLeft": 31,
-        "piConfirmedAt": null,
+        "daysLeft": 24,
+        "piConfirmedAt": "2026-08-22T09:15:00+08:00",
         "piConfirmedByName": "示例",
         "tasks": [
           {
-            "seq": 33,
+            "seq": 2,
             "task": "示例",
             "doneAt": "2026-08-22T09:15:00+08:00"
           },
           {
-            "seq": 22,
+            "seq": 10,
             "task": "示例",
-            "doneAt": "2026-08-22T09:15:00+08:00"
+            "doneAt": null
           }
         ]
       },
@@ -7485,50 +7510,49 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "13129c68-d9d6-4d30-56c8-f7a765ae6d5c",
-          "amountCents": 1080000,
-          "studySiteId": "b1d13a8a-d8fc-ed77-ddd0-6b4494f271f8"
+          "ref": "9feb3438-e14e-53a9-a2c5-81bf494e375c",
+          "amountCents": 9460000,
+          "studySiteId": "e30c2177-4686-0f1f-3d1e-82ddc8f5491f"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "1480f1fc-3f7d-5266-e9cd-326e002b9c0a",
-          "amountCents": 1360000,
-          "studySiteId": "402e1c82-55aa-b28d-51a2-ed40346297f3"
+          "ref": "2fa33bb3-49c0-e3c1-fdcb-84d059524244",
+          "amountCents": 3260000
         }
       ]
     },
     "bodyWithoutFieldPermission": {
       "data": {
-        "id": "99e430db-f302-fbb3-9cff-29c2582ce75a",
-        "subjectId": "48c47e0d-58a0-4fd5-99d5-9bbcd7533c13",
-        "studySiteId": "76e7c84c-f302-3e21-3a74-0728b851ac0a",
+        "id": "eab15507-2233-af25-eaf1-d0cd20e81cff",
+        "subjectId": "6267507c-99fa-3c63-6cf0-529060475034",
+        "studySiteId": "18df6ca9-7f2d-4346-1726-4348337dafb0",
         "siteCode": "示例",
-        "seq": 39,
+        "seq": 25,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-12",
-        "windowDays": 24,
-        "windowFrom": "2026-08-12",
-        "windowTo": "2026-08-25",
-        "actualDate": "2026-08-18",
+        "targetDate": "2026-08-20",
+        "windowDays": 26,
+        "windowFrom": "2026-08-24",
+        "windowTo": "2026-08-11",
+        "actualDate": "2026-08-24",
         "status": "planned",
         "edcStatus": "pending",
-        "edcDaysLate": 39,
+        "edcDaysLate": 14,
         "outOfWindow": true,
-        "daysLeft": 31,
-        "piConfirmedAt": null,
+        "daysLeft": 24,
+        "piConfirmedAt": "2026-08-22T09:15:00+08:00",
         "piConfirmedByName": "示例",
         "tasks": [
           {
-            "seq": 33,
+            "seq": 2,
             "task": "示例",
             "doneAt": "2026-08-22T09:15:00+08:00"
           },
           {
-            "seq": 22,
+            "seq": 10,
             "task": "示例",
-            "doneAt": "2026-08-22T09:15:00+08:00"
+            "doneAt": null
           }
         ]
       },
@@ -7536,16 +7560,15 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "13129c68-d9d6-4d30-56c8-f7a765ae6d5c",
-          "amountCents": 1080000,
-          "studySiteId": "b1d13a8a-d8fc-ed77-ddd0-6b4494f271f8"
+          "ref": "9feb3438-e14e-53a9-a2c5-81bf494e375c",
+          "amountCents": 9460000,
+          "studySiteId": "e30c2177-4686-0f1f-3d1e-82ddc8f5491f"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "1480f1fc-3f7d-5266-e9cd-326e002b9c0a",
-          "amountCents": 1360000,
-          "studySiteId": "402e1c82-55aa-b28d-51a2-ed40346297f3"
+          "ref": "2fa33bb3-49c0-e3c1-fdcb-84d059524244",
+          "amountCents": 3260000
         }
       ]
     }
@@ -7556,36 +7579,36 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "eab15507-2233-af25-eaf1-d0cd20e81cff",
-        "subjectId": "6267507c-99fa-3c63-6cf0-529060475034",
+        "id": "3bd1a313-e156-9c65-8d4c-11165f7214db",
+        "subjectId": "eae70259-e5d2-4df4-fb5d-6c8478e82d2b",
         "screeningNo": "示例",
-        "studySiteId": "18df6ca9-7f2d-4346-1726-4348337dafb0",
+        "studySiteId": "27465266-c572-e076-a6db-9abf9c34a2e6",
         "siteCode": "示例",
-        "seq": 25,
+        "seq": 13,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-20",
-        "windowDays": 26,
-        "windowFrom": "2026-08-24",
-        "windowTo": "2026-08-11",
-        "actualDate": "2026-08-24",
+        "targetDate": "2026-08-22",
+        "windowDays": 27,
+        "windowFrom": "2026-08-17",
+        "windowTo": "2026-08-17",
+        "actualDate": null,
         "status": "planned",
         "edcStatus": "pending",
-        "edcDaysLate": 14,
-        "outOfWindow": true,
-        "daysLeft": 24,
-        "piConfirmedAt": "2026-08-22T09:15:00+08:00",
+        "edcDaysLate": 11,
+        "outOfWindow": false,
+        "daysLeft": 29,
+        "piConfirmedAt": null,
         "piConfirmedByName": "示例",
         "tasks": [
           {
-            "seq": 2,
-            "task": "示例",
-            "doneAt": "2026-08-22T09:15:00+08:00"
-          },
-          {
-            "seq": 10,
+            "seq": 12,
             "task": "示例",
             "doneAt": null
+          },
+          {
+            "seq": 37,
+            "task": "示例",
+            "doneAt": "2026-08-22T09:15:00+08:00"
           }
         ]
       },
@@ -7593,49 +7616,49 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "9feb3438-e14e-53a9-a2c5-81bf494e375c",
-          "amountCents": 9460000,
-          "studySiteId": "e30c2177-4686-0f1f-3d1e-82ddc8f5491f"
+          "ref": "47be4d3a-9727-4439-8701-4025fcbac989",
+          "studySiteId": "5bad41ba-6686-62e2-12e7-59848ef76c00"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "2fa33bb3-49c0-e3c1-fdcb-84d059524244",
-          "amountCents": 3260000
+          "ref": "b72a961a-129c-af4d-3ed7-07b9dc4436ed",
+          "amountCents": 9600000,
+          "studySiteId": "e18265b0-0659-859e-f9cc-546e0da68426"
         }
       ]
     },
     "bodyWithoutFieldPermission": {
       "data": {
-        "id": "eab15507-2233-af25-eaf1-d0cd20e81cff",
-        "subjectId": "6267507c-99fa-3c63-6cf0-529060475034",
-        "studySiteId": "18df6ca9-7f2d-4346-1726-4348337dafb0",
+        "id": "3bd1a313-e156-9c65-8d4c-11165f7214db",
+        "subjectId": "eae70259-e5d2-4df4-fb5d-6c8478e82d2b",
+        "studySiteId": "27465266-c572-e076-a6db-9abf9c34a2e6",
         "siteCode": "示例",
-        "seq": 25,
+        "seq": 13,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-20",
-        "windowDays": 26,
-        "windowFrom": "2026-08-24",
-        "windowTo": "2026-08-11",
-        "actualDate": "2026-08-24",
+        "targetDate": "2026-08-22",
+        "windowDays": 27,
+        "windowFrom": "2026-08-17",
+        "windowTo": "2026-08-17",
+        "actualDate": null,
         "status": "planned",
         "edcStatus": "pending",
-        "edcDaysLate": 14,
-        "outOfWindow": true,
-        "daysLeft": 24,
-        "piConfirmedAt": "2026-08-22T09:15:00+08:00",
+        "edcDaysLate": 11,
+        "outOfWindow": false,
+        "daysLeft": 29,
+        "piConfirmedAt": null,
         "piConfirmedByName": "示例",
         "tasks": [
           {
-            "seq": 2,
-            "task": "示例",
-            "doneAt": "2026-08-22T09:15:00+08:00"
-          },
-          {
-            "seq": 10,
+            "seq": 12,
             "task": "示例",
             "doneAt": null
+          },
+          {
+            "seq": 37,
+            "task": "示例",
+            "doneAt": "2026-08-22T09:15:00+08:00"
           }
         ]
       },
@@ -7643,15 +7666,15 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "9feb3438-e14e-53a9-a2c5-81bf494e375c",
-          "amountCents": 9460000,
-          "studySiteId": "e30c2177-4686-0f1f-3d1e-82ddc8f5491f"
+          "ref": "47be4d3a-9727-4439-8701-4025fcbac989",
+          "studySiteId": "5bad41ba-6686-62e2-12e7-59848ef76c00"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "2fa33bb3-49c0-e3c1-fdcb-84d059524244",
-          "amountCents": 3260000
+          "ref": "b72a961a-129c-af4d-3ed7-07b9dc4436ed",
+          "amountCents": 9600000,
+          "studySiteId": "e18265b0-0659-859e-f9cc-546e0da68426"
         }
       ]
     }
@@ -7662,34 +7685,34 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "3bd1a313-e156-9c65-8d4c-11165f7214db",
-        "subjectId": "eae70259-e5d2-4df4-fb5d-6c8478e82d2b",
+        "id": "7bcff825-fe76-0ade-ba27-b77e0ee791ab",
+        "subjectId": "694f15df-b6e8-3006-a6d1-44b577dacb7a",
         "screeningNo": "示例",
-        "studySiteId": "27465266-c572-e076-a6db-9abf9c34a2e6",
+        "studySiteId": "8fb06cf0-6a57-a508-a645-08b0a8204b46",
         "siteCode": "示例",
-        "seq": 13,
+        "seq": 37,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-22",
-        "windowDays": 27,
-        "windowFrom": "2026-08-17",
-        "windowTo": "2026-08-17",
-        "actualDate": null,
+        "targetDate": "2026-08-26",
+        "windowDays": 2,
+        "windowFrom": "2026-08-15",
+        "windowTo": "2026-08-10",
+        "actualDate": "2026-08-20",
         "status": "planned",
         "edcStatus": "pending",
-        "edcDaysLate": 11,
-        "outOfWindow": false,
-        "daysLeft": 29,
-        "piConfirmedAt": null,
+        "edcDaysLate": 37,
+        "outOfWindow": true,
+        "daysLeft": 1,
+        "piConfirmedAt": "2026-08-22T09:15:00+08:00",
         "piConfirmedByName": "示例",
         "tasks": [
           {
-            "seq": 12,
+            "seq": 17,
             "task": "示例",
-            "doneAt": null
+            "doneAt": "2026-08-22T09:15:00+08:00"
           },
           {
-            "seq": 37,
+            "seq": 2,
             "task": "示例",
             "doneAt": "2026-08-22T09:15:00+08:00"
           }
@@ -7699,47 +7722,48 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "47be4d3a-9727-4439-8701-4025fcbac989",
-          "studySiteId": "5bad41ba-6686-62e2-12e7-59848ef76c00"
+          "ref": "49b59605-8a97-31a2-5f9b-93d2c17c1a7f",
+          "amountCents": 3130000,
+          "studySiteId": "aa5e1b01-02fc-6ff9-4934-3f234cbcaea2"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "b72a961a-129c-af4d-3ed7-07b9dc4436ed",
-          "amountCents": 9600000,
-          "studySiteId": "e18265b0-0659-859e-f9cc-546e0da68426"
+          "ref": "7f0bab9c-d657-ab84-2822-87751f6a9e05",
+          "amountCents": 6320000,
+          "studySiteId": "c164cadc-4653-e178-b523-96761c79f4c5"
         }
       ]
     },
     "bodyWithoutFieldPermission": {
       "data": {
-        "id": "3bd1a313-e156-9c65-8d4c-11165f7214db",
-        "subjectId": "eae70259-e5d2-4df4-fb5d-6c8478e82d2b",
-        "studySiteId": "27465266-c572-e076-a6db-9abf9c34a2e6",
+        "id": "7bcff825-fe76-0ade-ba27-b77e0ee791ab",
+        "subjectId": "694f15df-b6e8-3006-a6d1-44b577dacb7a",
+        "studySiteId": "8fb06cf0-6a57-a508-a645-08b0a8204b46",
         "siteCode": "示例",
-        "seq": 13,
+        "seq": 37,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-22",
-        "windowDays": 27,
-        "windowFrom": "2026-08-17",
-        "windowTo": "2026-08-17",
-        "actualDate": null,
+        "targetDate": "2026-08-26",
+        "windowDays": 2,
+        "windowFrom": "2026-08-15",
+        "windowTo": "2026-08-10",
+        "actualDate": "2026-08-20",
         "status": "planned",
         "edcStatus": "pending",
-        "edcDaysLate": 11,
-        "outOfWindow": false,
-        "daysLeft": 29,
-        "piConfirmedAt": null,
+        "edcDaysLate": 37,
+        "outOfWindow": true,
+        "daysLeft": 1,
+        "piConfirmedAt": "2026-08-22T09:15:00+08:00",
         "piConfirmedByName": "示例",
         "tasks": [
           {
-            "seq": 12,
+            "seq": 17,
             "task": "示例",
-            "doneAt": null
+            "doneAt": "2026-08-22T09:15:00+08:00"
           },
           {
-            "seq": 37,
+            "seq": 2,
             "task": "示例",
             "doneAt": "2026-08-22T09:15:00+08:00"
           }
@@ -7749,15 +7773,16 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "47be4d3a-9727-4439-8701-4025fcbac989",
-          "studySiteId": "5bad41ba-6686-62e2-12e7-59848ef76c00"
+          "ref": "49b59605-8a97-31a2-5f9b-93d2c17c1a7f",
+          "amountCents": 3130000,
+          "studySiteId": "aa5e1b01-02fc-6ff9-4934-3f234cbcaea2"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "b72a961a-129c-af4d-3ed7-07b9dc4436ed",
-          "amountCents": 9600000,
-          "studySiteId": "e18265b0-0659-859e-f9cc-546e0da68426"
+          "ref": "7f0bab9c-d657-ab84-2822-87751f6a9e05",
+          "amountCents": 6320000,
+          "studySiteId": "c164cadc-4653-e178-b523-96761c79f4c5"
         }
       ]
     }
@@ -7768,34 +7793,34 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "7bcff825-fe76-0ade-ba27-b77e0ee791ab",
-        "subjectId": "694f15df-b6e8-3006-a6d1-44b577dacb7a",
+        "id": "cb08056d-3391-1483-9098-8ffbb782e0a2",
+        "subjectId": "62f34fc4-c875-40ce-719f-f298d5165898",
         "screeningNo": "示例",
-        "studySiteId": "8fb06cf0-6a57-a508-a645-08b0a8204b46",
+        "studySiteId": "581004d4-f1a9-f02d-560d-3e385bca1d6a",
         "siteCode": "示例",
-        "seq": 37,
+        "seq": 39,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-26",
-        "windowDays": 2,
-        "windowFrom": "2026-08-15",
-        "windowTo": "2026-08-10",
-        "actualDate": "2026-08-20",
+        "targetDate": "2026-08-11",
+        "windowDays": 9,
+        "windowFrom": "2026-08-19",
+        "windowTo": "2026-08-12",
+        "actualDate": "2026-08-21",
         "status": "planned",
         "edcStatus": "pending",
-        "edcDaysLate": 37,
-        "outOfWindow": true,
+        "edcDaysLate": 16,
+        "outOfWindow": false,
         "daysLeft": 1,
         "piConfirmedAt": "2026-08-22T09:15:00+08:00",
         "piConfirmedByName": "示例",
         "tasks": [
           {
-            "seq": 17,
+            "seq": 8,
             "task": "示例",
-            "doneAt": "2026-08-22T09:15:00+08:00"
+            "doneAt": null
           },
           {
-            "seq": 2,
+            "seq": 37,
             "task": "示例",
             "doneAt": "2026-08-22T09:15:00+08:00"
           }
@@ -7805,48 +7830,47 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "49b59605-8a97-31a2-5f9b-93d2c17c1a7f",
-          "amountCents": 3130000,
-          "studySiteId": "aa5e1b01-02fc-6ff9-4934-3f234cbcaea2"
+          "ref": "f51565f3-b034-162a-e910-3bf10a00b0b5",
+          "amountCents": 5080000,
+          "studySiteId": "f131d63e-1e3a-c7d6-4e06-da10c03b99cb"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "7f0bab9c-d657-ab84-2822-87751f6a9e05",
-          "amountCents": 6320000,
-          "studySiteId": "c164cadc-4653-e178-b523-96761c79f4c5"
+          "ref": "3c912f57-7bfc-c9b5-56a4-0c122150680c",
+          "amountCents": 8120000
         }
       ]
     },
     "bodyWithoutFieldPermission": {
       "data": {
-        "id": "7bcff825-fe76-0ade-ba27-b77e0ee791ab",
-        "subjectId": "694f15df-b6e8-3006-a6d1-44b577dacb7a",
-        "studySiteId": "8fb06cf0-6a57-a508-a645-08b0a8204b46",
+        "id": "cb08056d-3391-1483-9098-8ffbb782e0a2",
+        "subjectId": "62f34fc4-c875-40ce-719f-f298d5165898",
+        "studySiteId": "581004d4-f1a9-f02d-560d-3e385bca1d6a",
         "siteCode": "示例",
-        "seq": 37,
+        "seq": 39,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-26",
-        "windowDays": 2,
-        "windowFrom": "2026-08-15",
-        "windowTo": "2026-08-10",
-        "actualDate": "2026-08-20",
+        "targetDate": "2026-08-11",
+        "windowDays": 9,
+        "windowFrom": "2026-08-19",
+        "windowTo": "2026-08-12",
+        "actualDate": "2026-08-21",
         "status": "planned",
         "edcStatus": "pending",
-        "edcDaysLate": 37,
-        "outOfWindow": true,
+        "edcDaysLate": 16,
+        "outOfWindow": false,
         "daysLeft": 1,
         "piConfirmedAt": "2026-08-22T09:15:00+08:00",
         "piConfirmedByName": "示例",
         "tasks": [
           {
-            "seq": 17,
+            "seq": 8,
             "task": "示例",
-            "doneAt": "2026-08-22T09:15:00+08:00"
+            "doneAt": null
           },
           {
-            "seq": 2,
+            "seq": 37,
             "task": "示例",
             "doneAt": "2026-08-22T09:15:00+08:00"
           }
@@ -7856,16 +7880,15 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "49b59605-8a97-31a2-5f9b-93d2c17c1a7f",
-          "amountCents": 3130000,
-          "studySiteId": "aa5e1b01-02fc-6ff9-4934-3f234cbcaea2"
+          "ref": "f51565f3-b034-162a-e910-3bf10a00b0b5",
+          "amountCents": 5080000,
+          "studySiteId": "f131d63e-1e3a-c7d6-4e06-da10c03b99cb"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "7f0bab9c-d657-ab84-2822-87751f6a9e05",
-          "amountCents": 6320000,
-          "studySiteId": "c164cadc-4653-e178-b523-96761c79f4c5"
+          "ref": "3c912f57-7bfc-c9b5-56a4-0c122150680c",
+          "amountCents": 8120000
         }
       ]
     }
@@ -7877,120 +7900,120 @@
     "body": {
       "items": [
         {
-          "id": "cb08056d-3391-1483-9098-8ffbb782e0a2",
-          "studySiteId": "62f34fc4-c875-40ce-719f-f298d5165898",
+          "id": "1ccd301b-29ac-1a2d-52b6-aac28522a269",
+          "studySiteId": "76166f5d-4c5b-6fd5-c9de-83672f0b271a",
+          "siteCode": "示例",
+          "screeningNo": "示例",
+          "randomized": true,
+          "randomizationNo": "示例",
+          "state": "prescreen",
+          "icfSignedOn": "2026-08-17",
+          "enrolledOn": "2026-08-27",
+          "exitedOn": "2026-08-13",
+          "screenFailReason": "lab",
+          "withdrawReason": "withdrew_icf",
+          "crcName": null,
+          "visitsDone": 22,
+          "visitsPlanned": 4,
+          "nextVisit": {
+            "id": "83c4d984-5c5c-0893-a627-3f17688c2c02",
+            "seq": 33,
+            "visitCode": "示例",
+            "visitLabel": "示例文本（由契约生成，非真实数据）",
+            "targetDate": "2026-08-19",
+            "windowFrom": "2026-08-16",
+            "windowTo": "2026-08-24",
+            "daysLeft": 5,
+            "outOfWindow": false
+          }
+        },
+        {
+          "id": "01ea30ae-1089-f0f4-0088-56198a8f17a7",
+          "studySiteId": "66a84b47-152a-338c-0367-aabaf93620dd",
           "siteCode": "示例",
           "screeningNo": "示例",
           "randomized": false,
           "randomizationNo": "示例",
           "state": "prescreen",
-          "icfSignedOn": "2026-08-11",
+          "icfSignedOn": null,
           "enrolledOn": null,
           "exitedOn": null,
           "screenFailReason": "lab",
           "withdrawReason": "withdrew_icf",
           "crcName": "示例",
-          "visitsDone": 33,
-          "visitsPlanned": 11,
+          "visitsDone": 2,
+          "visitsPlanned": 20,
           "nextVisit": {
-            "id": "f1a9f02d-560d-3e38-5bca-1d6af13827a6",
-            "seq": 20,
+            "id": "0f078507-f433-19a7-ceaa-b1a0b3aef7c3",
+            "seq": 36,
             "visitCode": "示例",
             "visitLabel": "示例文本（由契约生成，非真实数据）",
-            "targetDate": "2026-08-10",
-            "windowFrom": "2026-08-19",
-            "windowTo": "2026-08-20",
-            "daysLeft": 8,
-            "outOfWindow": false
-          }
-        },
-        {
-          "id": "ecff5156-5f3b-0341-62ae-9103bf10a00b",
-          "studySiteId": "0b537df1-31d6-3e1e-3ac7-d64e06da10c0",
-          "siteCode": "示例",
-          "screeningNo": "示例",
-          "randomized": false,
-          "randomizationNo": "示例",
-          "state": "prescreen",
-          "icfSignedOn": "2026-08-20",
-          "enrolledOn": "2026-08-23",
-          "exitedOn": "2026-08-13",
-          "screenFailReason": "lab",
-          "withdrawReason": "withdrew_icf",
-          "crcName": null,
-          "visitsDone": 32,
-          "visitsPlanned": 25,
-          "nextVisit": {
-            "id": "12f577bf-cc9b-556a-40c1-22150680c9c0",
-            "seq": 24,
-            "visitCode": "示例",
-            "visitLabel": "示例文本（由契约生成，非真实数据）",
-            "targetDate": "2026-08-20",
-            "windowFrom": "2026-08-21",
-            "windowTo": "2026-08-15",
-            "daysLeft": 22,
+            "targetDate": "2026-08-22",
+            "windowFrom": "2026-08-23",
+            "windowTo": "2026-08-13",
+            "daysLeft": 33,
             "outOfWindow": false
           }
         }
       ],
-      "nextCursor": "示例"
+      "nextCursor": null
     },
     "bodyWithoutFieldPermission": {
       "items": [
         {
-          "id": "cb08056d-3391-1483-9098-8ffbb782e0a2",
-          "studySiteId": "62f34fc4-c875-40ce-719f-f298d5165898",
+          "id": "1ccd301b-29ac-1a2d-52b6-aac28522a269",
+          "studySiteId": "76166f5d-4c5b-6fd5-c9de-83672f0b271a",
+          "siteCode": "示例",
+          "randomized": true,
+          "state": "prescreen",
+          "icfSignedOn": "2026-08-17",
+          "enrolledOn": "2026-08-27",
+          "exitedOn": "2026-08-13",
+          "screenFailReason": "lab",
+          "withdrawReason": "withdrew_icf",
+          "crcName": null,
+          "visitsDone": 22,
+          "visitsPlanned": 4,
+          "nextVisit": {
+            "id": "83c4d984-5c5c-0893-a627-3f17688c2c02",
+            "seq": 33,
+            "visitCode": "示例",
+            "visitLabel": "示例文本（由契约生成，非真实数据）",
+            "targetDate": "2026-08-19",
+            "windowFrom": "2026-08-16",
+            "windowTo": "2026-08-24",
+            "daysLeft": 5,
+            "outOfWindow": false
+          }
+        },
+        {
+          "id": "01ea30ae-1089-f0f4-0088-56198a8f17a7",
+          "studySiteId": "66a84b47-152a-338c-0367-aabaf93620dd",
           "siteCode": "示例",
           "randomized": false,
           "state": "prescreen",
-          "icfSignedOn": "2026-08-11",
+          "icfSignedOn": null,
           "enrolledOn": null,
           "exitedOn": null,
           "screenFailReason": "lab",
           "withdrawReason": "withdrew_icf",
           "crcName": "示例",
-          "visitsDone": 33,
-          "visitsPlanned": 11,
+          "visitsDone": 2,
+          "visitsPlanned": 20,
           "nextVisit": {
-            "id": "f1a9f02d-560d-3e38-5bca-1d6af13827a6",
-            "seq": 20,
+            "id": "0f078507-f433-19a7-ceaa-b1a0b3aef7c3",
+            "seq": 36,
             "visitCode": "示例",
             "visitLabel": "示例文本（由契约生成，非真实数据）",
-            "targetDate": "2026-08-10",
-            "windowFrom": "2026-08-19",
-            "windowTo": "2026-08-20",
-            "daysLeft": 8,
-            "outOfWindow": false
-          }
-        },
-        {
-          "id": "ecff5156-5f3b-0341-62ae-9103bf10a00b",
-          "studySiteId": "0b537df1-31d6-3e1e-3ac7-d64e06da10c0",
-          "siteCode": "示例",
-          "randomized": false,
-          "state": "prescreen",
-          "icfSignedOn": "2026-08-20",
-          "enrolledOn": "2026-08-23",
-          "exitedOn": "2026-08-13",
-          "screenFailReason": "lab",
-          "withdrawReason": "withdrew_icf",
-          "crcName": null,
-          "visitsDone": 32,
-          "visitsPlanned": 25,
-          "nextVisit": {
-            "id": "12f577bf-cc9b-556a-40c1-22150680c9c0",
-            "seq": 24,
-            "visitCode": "示例",
-            "visitLabel": "示例文本（由契约生成，非真实数据）",
-            "targetDate": "2026-08-20",
-            "windowFrom": "2026-08-21",
-            "windowTo": "2026-08-15",
-            "daysLeft": 22,
+            "targetDate": "2026-08-22",
+            "windowFrom": "2026-08-23",
+            "windowTo": "2026-08-13",
+            "daysLeft": 33,
             "outOfWindow": false
           }
         }
       ],
-      "nextCursor": "示例"
+      "nextCursor": null
     }
   },
   "createSubject": {
@@ -7998,56 +8021,56 @@
     "path": "/v1/subjects",
     "status": 201,
     "body": {
-      "id": "1ccd301b-29ac-1a2d-52b6-aac28522a269",
-      "studySiteId": "76166f5d-4c5b-6fd5-c9de-83672f0b271a",
+      "id": "5df59257-2cea-59d9-3df0-31cc020d71c2",
+      "studySiteId": "42102cd1-b619-dc7e-754f-8ed6d540d2da",
       "siteCode": "示例",
       "screeningNo": "示例",
-      "randomized": true,
+      "randomized": false,
       "randomizationNo": "示例",
       "state": "prescreen",
-      "icfSignedOn": "2026-08-17",
-      "enrolledOn": "2026-08-27",
-      "exitedOn": "2026-08-13",
+      "icfSignedOn": null,
+      "enrolledOn": "2026-08-25",
+      "exitedOn": "2026-08-25",
       "screenFailReason": "lab",
       "withdrawReason": "withdrew_icf",
-      "crcName": null,
-      "visitsDone": 22,
-      "visitsPlanned": 4,
+      "crcName": "示例",
+      "visitsDone": 18,
+      "visitsPlanned": 36,
       "nextVisit": {
-        "id": "83c4d984-5c5c-0893-a627-3f17688c2c02",
-        "seq": 33,
+        "id": "4794ce0f-3e52-736b-f326-51f2885443d1",
+        "seq": 10,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-19",
-        "windowFrom": "2026-08-16",
-        "windowTo": "2026-08-24",
-        "daysLeft": 5,
+        "targetDate": "2026-08-22",
+        "windowFrom": "2026-08-17",
+        "windowTo": "2026-08-19",
+        "daysLeft": 39,
         "outOfWindow": false
       }
     },
     "bodyWithoutFieldPermission": {
-      "id": "1ccd301b-29ac-1a2d-52b6-aac28522a269",
-      "studySiteId": "76166f5d-4c5b-6fd5-c9de-83672f0b271a",
+      "id": "5df59257-2cea-59d9-3df0-31cc020d71c2",
+      "studySiteId": "42102cd1-b619-dc7e-754f-8ed6d540d2da",
       "siteCode": "示例",
-      "randomized": true,
+      "randomized": false,
       "state": "prescreen",
-      "icfSignedOn": "2026-08-17",
-      "enrolledOn": "2026-08-27",
-      "exitedOn": "2026-08-13",
+      "icfSignedOn": null,
+      "enrolledOn": "2026-08-25",
+      "exitedOn": "2026-08-25",
       "screenFailReason": "lab",
       "withdrawReason": "withdrew_icf",
-      "crcName": null,
-      "visitsDone": 22,
-      "visitsPlanned": 4,
+      "crcName": "示例",
+      "visitsDone": 18,
+      "visitsPlanned": 36,
       "nextVisit": {
-        "id": "83c4d984-5c5c-0893-a627-3f17688c2c02",
-        "seq": 33,
+        "id": "4794ce0f-3e52-736b-f326-51f2885443d1",
+        "seq": 10,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-19",
-        "windowFrom": "2026-08-16",
-        "windowTo": "2026-08-24",
-        "daysLeft": 5,
+        "targetDate": "2026-08-22",
+        "windowFrom": "2026-08-17",
+        "windowTo": "2026-08-19",
+        "daysLeft": 39,
         "outOfWindow": false
       }
     }
@@ -8057,57 +8080,57 @@
     "path": "/v1/subjects/{id}",
     "status": 200,
     "body": {
-      "id": "5df59257-2cea-59d9-3df0-31cc020d71c2",
-      "studySiteId": "42102cd1-b619-dc7e-754f-8ed6d540d2da",
+      "id": "ae0c874e-47ba-e275-c4a8-7148cc129360",
+      "studySiteId": "344342da-a9ba-81f0-e467-ae05f256a4fb",
       "siteCode": "示例",
       "screeningNo": "示例",
       "randomized": false,
       "randomizationNo": "示例",
       "state": "prescreen",
-      "icfSignedOn": null,
-      "enrolledOn": "2026-08-25",
-      "exitedOn": "2026-08-25",
+      "icfSignedOn": "2026-08-16",
+      "enrolledOn": "2026-08-24",
+      "exitedOn": "2026-08-23",
       "screenFailReason": "lab",
       "withdrawReason": "withdrew_icf",
       "crcName": "示例",
-      "visitsDone": 18,
-      "visitsPlanned": 36,
+      "visitsDone": 30,
+      "visitsPlanned": 10,
       "nextVisit": {
-        "id": "4794ce0f-3e52-736b-f326-51f2885443d1",
-        "seq": 10,
+        "id": "c79bef7e-8b52-433e-7c49-d506caf4ffb7",
+        "seq": 4,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-22",
-        "windowFrom": "2026-08-17",
-        "windowTo": "2026-08-19",
-        "daysLeft": 39,
-        "outOfWindow": false
+        "targetDate": "2026-08-16",
+        "windowFrom": "2026-08-18",
+        "windowTo": "2026-08-25",
+        "daysLeft": 14,
+        "outOfWindow": true
       }
     },
     "bodyWithoutFieldPermission": {
-      "id": "5df59257-2cea-59d9-3df0-31cc020d71c2",
-      "studySiteId": "42102cd1-b619-dc7e-754f-8ed6d540d2da",
+      "id": "ae0c874e-47ba-e275-c4a8-7148cc129360",
+      "studySiteId": "344342da-a9ba-81f0-e467-ae05f256a4fb",
       "siteCode": "示例",
       "randomized": false,
       "state": "prescreen",
-      "icfSignedOn": null,
-      "enrolledOn": "2026-08-25",
-      "exitedOn": "2026-08-25",
+      "icfSignedOn": "2026-08-16",
+      "enrolledOn": "2026-08-24",
+      "exitedOn": "2026-08-23",
       "screenFailReason": "lab",
       "withdrawReason": "withdrew_icf",
       "crcName": "示例",
-      "visitsDone": 18,
-      "visitsPlanned": 36,
+      "visitsDone": 30,
+      "visitsPlanned": 10,
       "nextVisit": {
-        "id": "4794ce0f-3e52-736b-f326-51f2885443d1",
-        "seq": 10,
+        "id": "c79bef7e-8b52-433e-7c49-d506caf4ffb7",
+        "seq": 4,
         "visitCode": "示例",
         "visitLabel": "示例文本（由契约生成，非真实数据）",
-        "targetDate": "2026-08-22",
-        "windowFrom": "2026-08-17",
-        "windowTo": "2026-08-19",
-        "daysLeft": 39,
-        "outOfWindow": false
+        "targetDate": "2026-08-16",
+        "windowFrom": "2026-08-18",
+        "windowTo": "2026-08-25",
+        "daysLeft": 14,
+        "outOfWindow": true
       }
     }
   },
@@ -8117,30 +8140,30 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "ae0c874e-47ba-e275-c4a8-7148cc129360",
-        "studySiteId": "344342da-a9ba-81f0-e467-ae05f256a4fb",
+        "id": "fdc11ab5-4557-d77c-a953-245bdd535596",
+        "studySiteId": "57d60df4-8c51-b5e7-430c-a65c4a33447f",
         "siteCode": "示例",
         "screeningNo": "示例",
         "randomized": false,
         "randomizationNo": "示例",
         "state": "prescreen",
-        "icfSignedOn": "2026-08-16",
-        "enrolledOn": "2026-08-24",
-        "exitedOn": "2026-08-23",
+        "icfSignedOn": "2026-08-21",
+        "enrolledOn": "2026-08-13",
+        "exitedOn": "2026-08-15",
         "screenFailReason": "lab",
         "withdrawReason": "withdrew_icf",
         "crcName": "示例",
-        "visitsDone": 30,
-        "visitsPlanned": 10,
+        "visitsDone": 5,
+        "visitsPlanned": 22,
         "nextVisit": {
-          "id": "c79bef7e-8b52-433e-7c49-d506caf4ffb7",
-          "seq": 4,
+          "id": "1459995a-a230-0bac-b754-337d0ea69bdd",
+          "seq": 8,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-16",
-          "windowFrom": "2026-08-18",
-          "windowTo": "2026-08-25",
-          "daysLeft": 14,
+          "targetDate": "2026-08-18",
+          "windowFrom": "2026-08-22",
+          "windowTo": "2026-08-24",
+          "daysLeft": 5,
           "outOfWindow": true
         }
       },
@@ -8148,42 +8171,42 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "c7152e60-3ffa-7af4-e04e-c0e032d81a1c",
-          "amountCents": 7120000,
-          "studySiteId": "ac315366-ae08-0410-16e4-16e7693296d0"
+          "ref": "529caed8-0e79-3128-40d1-ab75a847f171",
+          "studySiteId": "1e9a6a8c-10c8-21b8-3356-878da2406ea7"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "amountCents": 5370000,
-          "studySiteId": "bcb731e0-dd5b-e4fc-db15-688cd853a378"
+          "ref": "5fa683fa-1b7e-3a2f-e69d-e715cc0c2ef4",
+          "amountCents": 7080000,
+          "studySiteId": "370e2ed9-df64-1f19-b562-69a1706251be"
         }
       ]
     },
     "bodyWithoutFieldPermission": {
       "data": {
-        "id": "ae0c874e-47ba-e275-c4a8-7148cc129360",
-        "studySiteId": "344342da-a9ba-81f0-e467-ae05f256a4fb",
+        "id": "fdc11ab5-4557-d77c-a953-245bdd535596",
+        "studySiteId": "57d60df4-8c51-b5e7-430c-a65c4a33447f",
         "siteCode": "示例",
         "randomized": false,
         "state": "prescreen",
-        "icfSignedOn": "2026-08-16",
-        "enrolledOn": "2026-08-24",
-        "exitedOn": "2026-08-23",
+        "icfSignedOn": "2026-08-21",
+        "enrolledOn": "2026-08-13",
+        "exitedOn": "2026-08-15",
         "screenFailReason": "lab",
         "withdrawReason": "withdrew_icf",
         "crcName": "示例",
-        "visitsDone": 30,
-        "visitsPlanned": 10,
+        "visitsDone": 5,
+        "visitsPlanned": 22,
         "nextVisit": {
-          "id": "c79bef7e-8b52-433e-7c49-d506caf4ffb7",
-          "seq": 4,
+          "id": "1459995a-a230-0bac-b754-337d0ea69bdd",
+          "seq": 8,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-16",
-          "windowFrom": "2026-08-18",
-          "windowTo": "2026-08-25",
-          "daysLeft": 14,
+          "targetDate": "2026-08-18",
+          "windowFrom": "2026-08-22",
+          "windowTo": "2026-08-24",
+          "daysLeft": 5,
           "outOfWindow": true
         }
       },
@@ -8191,15 +8214,15 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "c7152e60-3ffa-7af4-e04e-c0e032d81a1c",
-          "amountCents": 7120000,
-          "studySiteId": "ac315366-ae08-0410-16e4-16e7693296d0"
+          "ref": "529caed8-0e79-3128-40d1-ab75a847f171",
+          "studySiteId": "1e9a6a8c-10c8-21b8-3356-878da2406ea7"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "amountCents": 5370000,
-          "studySiteId": "bcb731e0-dd5b-e4fc-db15-688cd853a378"
+          "ref": "5fa683fa-1b7e-3a2f-e69d-e715cc0c2ef4",
+          "amountCents": 7080000,
+          "studySiteId": "370e2ed9-df64-1f19-b562-69a1706251be"
         }
       ]
     }
@@ -8210,89 +8233,91 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "fdc11ab5-4557-d77c-a953-245bdd535596",
-        "studySiteId": "57d60df4-8c51-b5e7-430c-a65c4a33447f",
+        "id": "3ef13ce5-a812-2cec-c350-0e25906a80ad",
+        "studySiteId": "faedd74b-8511-ade6-1ff3-bc9267163dc1",
         "siteCode": "示例",
         "screeningNo": "示例",
         "randomized": false,
         "randomizationNo": "示例",
         "state": "prescreen",
-        "icfSignedOn": "2026-08-21",
-        "enrolledOn": "2026-08-13",
-        "exitedOn": "2026-08-15",
+        "icfSignedOn": "2026-08-19",
+        "enrolledOn": "2026-08-25",
+        "exitedOn": "2026-08-23",
         "screenFailReason": "lab",
         "withdrawReason": "withdrew_icf",
-        "crcName": "示例",
-        "visitsDone": 5,
-        "visitsPlanned": 22,
+        "crcName": null,
+        "visitsDone": 34,
+        "visitsPlanned": 23,
         "nextVisit": {
-          "id": "1459995a-a230-0bac-b754-337d0ea69bdd",
-          "seq": 8,
+          "id": "8d6fe24f-2f87-35b8-3f55-dd09ac4bf9fd",
+          "seq": 16,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-18",
-          "windowFrom": "2026-08-22",
-          "windowTo": "2026-08-24",
-          "daysLeft": 5,
-          "outOfWindow": true
+          "targetDate": "2026-08-27",
+          "windowFrom": "2026-08-14",
+          "windowTo": "2026-08-10",
+          "daysLeft": 6,
+          "outOfWindow": false
         }
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "529caed8-0e79-3128-40d1-ab75a847f171",
-          "studySiteId": "1e9a6a8c-10c8-21b8-3356-878da2406ea7"
+          "ref": "595c8a2c-03f4-91d8-d197-7ddc24527bcb",
+          "amountCents": 8030000,
+          "studySiteId": "8c55a1f6-ed60-668b-d253-f9f735a83058"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "5fa683fa-1b7e-3a2f-e69d-e715cc0c2ef4",
-          "amountCents": 7080000,
-          "studySiteId": "370e2ed9-df64-1f19-b562-69a1706251be"
+          "ref": "2f2e220a-f822-d3c3-4660-e0d07e3d6a2f",
+          "amountCents": 1530000,
+          "studySiteId": "fe1d4c3e-b4bf-46d2-fec4-c20a1fa7e2e2"
         }
       ]
     },
     "bodyWithoutFieldPermission": {
       "data": {
-        "id": "fdc11ab5-4557-d77c-a953-245bdd535596",
-        "studySiteId": "57d60df4-8c51-b5e7-430c-a65c4a33447f",
+        "id": "3ef13ce5-a812-2cec-c350-0e25906a80ad",
+        "studySiteId": "faedd74b-8511-ade6-1ff3-bc9267163dc1",
         "siteCode": "示例",
         "randomized": false,
         "state": "prescreen",
-        "icfSignedOn": "2026-08-21",
-        "enrolledOn": "2026-08-13",
-        "exitedOn": "2026-08-15",
+        "icfSignedOn": "2026-08-19",
+        "enrolledOn": "2026-08-25",
+        "exitedOn": "2026-08-23",
         "screenFailReason": "lab",
         "withdrawReason": "withdrew_icf",
-        "crcName": "示例",
-        "visitsDone": 5,
-        "visitsPlanned": 22,
+        "crcName": null,
+        "visitsDone": 34,
+        "visitsPlanned": 23,
         "nextVisit": {
-          "id": "1459995a-a230-0bac-b754-337d0ea69bdd",
-          "seq": 8,
+          "id": "8d6fe24f-2f87-35b8-3f55-dd09ac4bf9fd",
+          "seq": 16,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-18",
-          "windowFrom": "2026-08-22",
-          "windowTo": "2026-08-24",
-          "daysLeft": 5,
-          "outOfWindow": true
+          "targetDate": "2026-08-27",
+          "windowFrom": "2026-08-14",
+          "windowTo": "2026-08-10",
+          "daysLeft": 6,
+          "outOfWindow": false
         }
       },
       "sideEffects": [
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "529caed8-0e79-3128-40d1-ab75a847f171",
-          "studySiteId": "1e9a6a8c-10c8-21b8-3356-878da2406ea7"
+          "ref": "595c8a2c-03f4-91d8-d197-7ddc24527bcb",
+          "amountCents": 8030000,
+          "studySiteId": "8c55a1f6-ed60-668b-d253-f9f735a83058"
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "5fa683fa-1b7e-3a2f-e69d-e715cc0c2ef4",
-          "amountCents": 7080000,
-          "studySiteId": "370e2ed9-df64-1f19-b562-69a1706251be"
+          "ref": "2f2e220a-f822-d3c3-4660-e0d07e3d6a2f",
+          "amountCents": 1530000,
+          "studySiteId": "fe1d4c3e-b4bf-46d2-fec4-c20a1fa7e2e2"
         }
       ]
     }
@@ -8303,30 +8328,30 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "3ef13ce5-a812-2cec-c350-0e25906a80ad",
-        "studySiteId": "faedd74b-8511-ade6-1ff3-bc9267163dc1",
+        "id": "8fe7689f-e7d7-73d3-d53e-6b692d672141",
+        "studySiteId": "c9483686-f6c9-634d-717d-11609f527108",
         "siteCode": "示例",
         "screeningNo": "示例",
-        "randomized": false,
+        "randomized": true,
         "randomizationNo": "示例",
         "state": "prescreen",
-        "icfSignedOn": "2026-08-19",
-        "enrolledOn": "2026-08-25",
-        "exitedOn": "2026-08-23",
+        "icfSignedOn": "2026-08-11",
+        "enrolledOn": "2026-08-16",
+        "exitedOn": "2026-08-20",
         "screenFailReason": "lab",
         "withdrawReason": "withdrew_icf",
-        "crcName": null,
-        "visitsDone": 34,
-        "visitsPlanned": 23,
+        "crcName": "示例",
+        "visitsDone": 40,
+        "visitsPlanned": 27,
         "nextVisit": {
-          "id": "8d6fe24f-2f87-35b8-3f55-dd09ac4bf9fd",
-          "seq": 16,
+          "id": "9d4c0902-bc93-040d-22c9-297be93e032a",
+          "seq": 9,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-27",
-          "windowFrom": "2026-08-14",
-          "windowTo": "2026-08-10",
-          "daysLeft": 6,
+          "targetDate": "2026-08-14",
+          "windowFrom": "2026-08-25",
+          "windowTo": "2026-08-11",
+          "daysLeft": 37,
           "outOfWindow": false
         }
       },
@@ -8334,43 +8359,42 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "595c8a2c-03f4-91d8-d197-7ddc24527bcb",
-          "amountCents": 8030000,
-          "studySiteId": "8c55a1f6-ed60-668b-d253-f9f735a83058"
+          "ref": "e4145e01-3367-ff83-3e96-411b5d6601b0",
+          "amountCents": 4880000
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "2f2e220a-f822-d3c3-4660-e0d07e3d6a2f",
-          "amountCents": 1530000,
-          "studySiteId": "fe1d4c3e-b4bf-46d2-fec4-c20a1fa7e2e2"
+          "ref": "159a64f6-84bc-4cbb-e92e-d0ab1907ae7c",
+          "amountCents": 2980000,
+          "studySiteId": "88a1b003-b68d-21d5-4c5b-951ddd4171e0"
         }
       ]
     },
     "bodyWithoutFieldPermission": {
       "data": {
-        "id": "3ef13ce5-a812-2cec-c350-0e25906a80ad",
-        "studySiteId": "faedd74b-8511-ade6-1ff3-bc9267163dc1",
+        "id": "8fe7689f-e7d7-73d3-d53e-6b692d672141",
+        "studySiteId": "c9483686-f6c9-634d-717d-11609f527108",
         "siteCode": "示例",
-        "randomized": false,
+        "randomized": true,
         "state": "prescreen",
-        "icfSignedOn": "2026-08-19",
-        "enrolledOn": "2026-08-25",
-        "exitedOn": "2026-08-23",
+        "icfSignedOn": "2026-08-11",
+        "enrolledOn": "2026-08-16",
+        "exitedOn": "2026-08-20",
         "screenFailReason": "lab",
         "withdrawReason": "withdrew_icf",
-        "crcName": null,
-        "visitsDone": 34,
-        "visitsPlanned": 23,
+        "crcName": "示例",
+        "visitsDone": 40,
+        "visitsPlanned": 27,
         "nextVisit": {
-          "id": "8d6fe24f-2f87-35b8-3f55-dd09ac4bf9fd",
-          "seq": 16,
+          "id": "9d4c0902-bc93-040d-22c9-297be93e032a",
+          "seq": 9,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-27",
-          "windowFrom": "2026-08-14",
-          "windowTo": "2026-08-10",
-          "daysLeft": 6,
+          "targetDate": "2026-08-14",
+          "windowFrom": "2026-08-25",
+          "windowTo": "2026-08-11",
+          "daysLeft": 37,
           "outOfWindow": false
         }
       },
@@ -8378,16 +8402,15 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "595c8a2c-03f4-91d8-d197-7ddc24527bcb",
-          "amountCents": 8030000,
-          "studySiteId": "8c55a1f6-ed60-668b-d253-f9f735a83058"
+          "ref": "e4145e01-3367-ff83-3e96-411b5d6601b0",
+          "amountCents": 4880000
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "2f2e220a-f822-d3c3-4660-e0d07e3d6a2f",
-          "amountCents": 1530000,
-          "studySiteId": "fe1d4c3e-b4bf-46d2-fec4-c20a1fa7e2e2"
+          "ref": "159a64f6-84bc-4cbb-e92e-d0ab1907ae7c",
+          "amountCents": 2980000,
+          "studySiteId": "88a1b003-b68d-21d5-4c5b-951ddd4171e0"
         }
       ]
     }
@@ -8398,30 +8421,30 @@
     "status": 200,
     "body": {
       "data": {
-        "id": "8fe7689f-e7d7-73d3-d53e-6b692d672141",
-        "studySiteId": "c9483686-f6c9-634d-717d-11609f527108",
+        "id": "df17ca66-783c-10fc-b53b-a7a0360971fe",
+        "studySiteId": "5c902eac-059b-dee9-7b76-23dabb865333",
         "siteCode": "示例",
         "screeningNo": "示例",
         "randomized": true,
         "randomizationNo": "示例",
         "state": "prescreen",
-        "icfSignedOn": "2026-08-11",
-        "enrolledOn": "2026-08-16",
-        "exitedOn": "2026-08-20",
+        "icfSignedOn": "2026-08-13",
+        "enrolledOn": null,
+        "exitedOn": null,
         "screenFailReason": "lab",
         "withdrawReason": "withdrew_icf",
         "crcName": "示例",
-        "visitsDone": 40,
-        "visitsPlanned": 27,
+        "visitsDone": 15,
+        "visitsPlanned": 33,
         "nextVisit": {
-          "id": "9d4c0902-bc93-040d-22c9-297be93e032a",
-          "seq": 9,
+          "id": "561f5cd6-8ea7-e982-2ccd-c87ad7c83a9a",
+          "seq": 27,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-14",
-          "windowFrom": "2026-08-25",
-          "windowTo": "2026-08-11",
-          "daysLeft": 37,
+          "targetDate": "2026-08-18",
+          "windowFrom": "2026-08-17",
+          "windowTo": "2026-08-23",
+          "daysLeft": 2,
           "outOfWindow": false
         }
       },
@@ -8429,42 +8452,41 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "e4145e01-3367-ff83-3e96-411b5d6601b0",
-          "amountCents": 4880000
+          "amountCents": 9380000
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "159a64f6-84bc-4cbb-e92e-d0ab1907ae7c",
-          "amountCents": 2980000,
-          "studySiteId": "88a1b003-b68d-21d5-4c5b-951ddd4171e0"
+          "ref": "0a27b094-3d08-73ae-0cab-27f1d1ea4142",
+          "amountCents": 3960000,
+          "studySiteId": "e020c262-eac3-5155-9dc1-d76bb65877b9"
         }
       ]
     },
     "bodyWithoutFieldPermission": {
       "data": {
-        "id": "8fe7689f-e7d7-73d3-d53e-6b692d672141",
-        "studySiteId": "c9483686-f6c9-634d-717d-11609f527108",
+        "id": "df17ca66-783c-10fc-b53b-a7a0360971fe",
+        "studySiteId": "5c902eac-059b-dee9-7b76-23dabb865333",
         "siteCode": "示例",
         "randomized": true,
         "state": "prescreen",
-        "icfSignedOn": "2026-08-11",
-        "enrolledOn": "2026-08-16",
-        "exitedOn": "2026-08-20",
+        "icfSignedOn": "2026-08-13",
+        "enrolledOn": null,
+        "exitedOn": null,
         "screenFailReason": "lab",
         "withdrawReason": "withdrew_icf",
         "crcName": "示例",
-        "visitsDone": 40,
-        "visitsPlanned": 27,
+        "visitsDone": 15,
+        "visitsPlanned": 33,
         "nextVisit": {
-          "id": "9d4c0902-bc93-040d-22c9-297be93e032a",
-          "seq": 9,
+          "id": "561f5cd6-8ea7-e982-2ccd-c87ad7c83a9a",
+          "seq": 27,
           "visitCode": "示例",
           "visitLabel": "示例文本（由契约生成，非真实数据）",
-          "targetDate": "2026-08-14",
-          "windowFrom": "2026-08-25",
-          "windowTo": "2026-08-11",
-          "daysLeft": 37,
+          "targetDate": "2026-08-18",
+          "windowFrom": "2026-08-17",
+          "windowTo": "2026-08-23",
+          "daysLeft": 2,
           "outOfWindow": false
         }
       },
@@ -8472,15 +8494,14 @@
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "e4145e01-3367-ff83-3e96-411b5d6601b0",
-          "amountCents": 4880000
+          "amountCents": 9380000
         },
         {
           "type": "TimesheetPosted",
           "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "159a64f6-84bc-4cbb-e92e-d0ab1907ae7c",
-          "amountCents": 2980000,
-          "studySiteId": "88a1b003-b68d-21d5-4c5b-951ddd4171e0"
+          "ref": "0a27b094-3d08-73ae-0cab-27f1d1ea4142",
+          "amountCents": 3960000,
+          "studySiteId": "e020c262-eac3-5155-9dc1-d76bb65877b9"
         }
       ]
     }
@@ -8492,26 +8513,26 @@
     "body": {
       "items": [
         {
-          "id": "df17ca66-783c-10fc-b53b-a7a0360971fe",
-          "code": "SS-06",
-          "name": "韩雪",
+          "id": "1fee593f-16fa-a459-068e-5879b4d8dd7d",
+          "code": "SS-14",
+          "name": "林敏",
           "lead": {
-            "id": "902eac05-9bde-e97b-7623-dabb865333b9",
-            "displayName": "吴桐"
+            "id": "5ab847df-e455-a79a-5b13-2a39707f034b",
+            "displayName": "韩雪"
           },
-          "memberCount": 6,
-          "studyCount": 5
+          "memberCount": 39,
+          "studyCount": 2
         },
         {
-          "id": "a5d561f5-cd68-ea7e-9822-ccdc87ad7c83",
-          "code": "SS-10",
+          "id": "29cc7eab-a1fb-0b4f-b8ab-79441a6c216c",
+          "code": "SS-01",
           "name": "廖梦然",
           "lead": {
-            "id": "aa76c060-3e17-0a27-b094-3d0873ae0cab",
-            "displayName": "吴桐"
+            "id": "468f8005-924e-6a07-6ace-991a6d28cfbc",
+            "displayName": "廖梦然"
           },
-          "memberCount": 20,
-          "studyCount": 39
+          "memberCount": 31,
+          "studyCount": 13
         }
       ]
     }
@@ -8521,15 +8542,15 @@
     "path": "/v1/teams",
     "status": 201,
     "body": {
-      "id": "1fee593f-16fa-a459-068e-5879b4d8dd7d",
-      "code": "SS-14",
+      "id": "603c6c36-735b-594c-fa86-4cfdd43a8bed",
+      "code": "SS-07",
       "name": "林敏",
       "lead": {
-        "id": "5ab847df-e455-a79a-5b13-2a39707f034b",
-        "displayName": "韩雪"
+        "id": "5261bf60-e0d9-7bda-3adc-401c579f1c35",
+        "displayName": "廖梦然"
       },
-      "memberCount": 39,
-      "studyCount": 2
+      "memberCount": 28,
+      "studyCount": 40
     }
   },
   "listTimesheets": {
@@ -8539,23 +8560,77 @@
     "body": {
       "items": [
         {
-          "id": "603c6c36-735b-594c-fa86-4cfdd43a8bed",
-          "studySiteId": "655261bf-60e0-d97b-da3a-dc401c579f1c",
+          "id": "b11a9b27-50a2-9d51-7f41-913a80acea7c",
+          "studySiteId": "7cfef9eb-23fc-4958-4266-70cb05333049",
           "siteCode": "示例",
-          "accountId": "35abfa7d-3e8d-9913-370a-47ccfaebe575",
+          "accountId": "4e5e791d-389f-11b3-ad50-be81e2a27629",
+          "personName": "示例",
+          "workDate": "2026-08-16",
+          "workType": "visit_support",
+          "workTypeLabel": "示例文本（由契约生成，非真实数据）",
+          "billable": false,
+          "hours": 0.97,
+          "dayCostCents": 7410000,
+          "travelCents": 2220000,
+          "costCents": 8980000,
+          "rateCardId": "b8ba42c0-2775-ba95-6695-ee96e4066ef0",
+          "subjectId": "62e4fbfc-7ae4-c9a8-1eb0-a4dbf8e313ec",
+          "visitId": "5dcbb3dd-c321-3577-15ae-204c7a91c6a9",
+          "autoGenerated": false,
+          "note": null,
+          "voidedAt": "2026-08-22T09:15:00+08:00",
+          "voidedByName": "示例",
+          "voidReason": "示例文本（由契约生成，非真实数据）",
+          "createdAt": "2026-08-22T09:15:00+08:00",
+          "approvedAt": "2026-08-22T09:15:00+08:00",
+          "approvedByName": null
+        },
+        {
+          "id": "fcc33ae6-7fa7-a88b-b440-2d7501fc9fcb",
+          "studySiteId": "dfaa2c5a-7e70-a12f-670e-7afcc63b00d6",
+          "siteCode": "示例",
+          "accountId": "da42199a-1441-214d-17e0-ba6023bda373",
           "personName": "示例",
           "workDate": "2026-08-23",
           "workType": "visit_support",
           "workTypeLabel": "示例文本（由契约生成，非真实数据）",
-          "billable": true,
-          "hours": 0.45,
-          "dayCostCents": 6570000,
-          "travelCents": 8320000,
-          "costCents": 1320000,
-          "rateCardId": "b45d6402-de31-d823-624b-712660461d9c",
-          "subjectId": "6a2edb0d-02ba-4459-0109-edf77f09c2b0",
-          "visitId": "136b51f6-cdfa-55de-a10c-547edf989a93",
+          "billable": false,
+          "hours": 0.27,
+          "dayCostCents": 3810000,
+          "travelCents": 4440000,
+          "costCents": 4800000,
+          "rateCardId": "610e18ec-313e-c5f4-15a7-77a809ecd572",
+          "subjectId": "57c76df7-66d8-eff1-9b47-2d412d20c4e3",
+          "visitId": "63636b7b-abec-5b19-470f-8cd7b90f2066",
           "autoGenerated": false,
+          "note": "示例",
+          "voidedAt": "2026-08-22T09:15:00+08:00",
+          "voidedByName": "示例",
+          "voidReason": "示例文本（由契约生成，非真实数据）",
+          "createdAt": "2026-08-22T09:15:00+08:00",
+          "approvedAt": "2026-08-22T09:15:00+08:00",
+          "approvedByName": null
+        }
+      ],
+      "nextCursor": "示例"
+    },
+    "bodyWithoutFieldPermission": {
+      "items": [
+        {
+          "id": "b11a9b27-50a2-9d51-7f41-913a80acea7c",
+          "studySiteId": "7cfef9eb-23fc-4958-4266-70cb05333049",
+          "siteCode": "示例",
+          "accountId": "4e5e791d-389f-11b3-ad50-be81e2a27629",
+          "personName": "示例",
+          "workDate": "2026-08-16",
+          "workType": "visit_support",
+          "workTypeLabel": "示例文本（由契约生成，非真实数据）",
+          "billable": false,
+          "hours": 0.97,
+          "rateCardId": "b2eb8ba4-2c02-775b-a956-695ee96e4066",
+          "subjectId": "f0662e4f-bfc7-ae4c-9a81-eb0a4dbf8e31",
+          "visitId": null,
+          "autoGenerated": true,
           "note": "示例",
           "voidedAt": "2026-08-22T09:15:00+08:00",
           "voidedByName": "示例",
@@ -8565,84 +8640,30 @@
           "approvedByName": "示例"
         },
         {
-          "id": "9f4e8b74-f078-26c1-fa77-d8d11f7357ab",
-          "studySiteId": "ba7f3961-919e-c58d-addf-44846039801b",
+          "id": "b3ddc321-3577-15ae-204c-7a91c6a95198",
+          "studySiteId": "c60fcc33-ae67-fa7a-88bb-4402d7501fc9",
           "siteCode": "示例",
-          "accountId": "75cc57ec-5734-32f7-2af7-bf9509dc4dc6",
-          "personName": "示例",
-          "workDate": "2026-08-15",
-          "workType": "visit_support",
-          "workTypeLabel": "示例文本（由契约生成，非真实数据）",
-          "billable": true,
-          "hours": 0.88,
-          "dayCostCents": 9750000,
-          "travelCents": 6190000,
-          "costCents": 6870000,
-          "rateCardId": "5c229765-1ebf-2f7c-bb40-9635eaf03140",
-          "subjectId": "e4cf8f12-fdfc-6252-f3e2-1a9c2690e8e0",
-          "visitId": null,
-          "autoGenerated": false,
-          "note": "示例",
-          "voidedAt": "2026-08-22T09:15:00+08:00",
-          "voidedByName": null,
-          "voidReason": "示例文本（由契约生成，非真实数据）",
-          "createdAt": "2026-08-22T09:15:00+08:00",
-          "approvedAt": null,
-          "approvedByName": null
-        }
-      ],
-      "nextCursor": null
-    },
-    "bodyWithoutFieldPermission": {
-      "items": [
-        {
-          "id": "603c6c36-735b-594c-fa86-4cfdd43a8bed",
-          "studySiteId": "655261bf-60e0-d97b-da3a-dc401c579f1c",
-          "siteCode": "示例",
-          "accountId": "35abfa7d-3e8d-9913-370a-47ccfaebe575",
-          "personName": "示例",
-          "workDate": "2026-08-23",
-          "workType": "visit_support",
-          "workTypeLabel": "示例文本（由契约生成，非真实数据）",
-          "billable": true,
-          "hours": 0.45,
-          "rateCardId": "9d0b45d6-402d-e31d-8236-24b712660461",
-          "subjectId": "9ca6a2ed-b0d0-2ba4-4590-109edf77f09c",
-          "visitId": null,
-          "autoGenerated": true,
-          "note": null,
-          "voidedAt": "2026-08-22T09:15:00+08:00",
-          "voidedByName": null,
-          "voidReason": null,
-          "createdAt": "2026-08-22T09:15:00+08:00",
-          "approvedAt": "2026-08-22T09:15:00+08:00",
-          "approvedByName": "示例"
-        },
-        {
-          "id": "51f6cdfa-55de-a10c-547e-df989a93299a",
-          "studySiteId": "f489f4e8-b74f-0782-6c1f-a77d8d11f735",
-          "siteCode": "示例",
-          "accountId": "7abba7f3-9619-19ec-58da-ddf448460398",
+          "accountId": "fcbdfaa2-c5a7-e70a-12f6-70e7afcc63b0",
           "personName": "示例",
           "workDate": "2026-08-10",
           "workType": "visit_support",
           "workTypeLabel": "示例文本（由契约生成，非真实数据）",
-          "billable": false,
-          "hours": 0.73,
-          "rateCardId": "75cc57ec-5734-32f7-2af7-bf9509dc4dc6",
-          "subjectId": "9ef9a5c2-2976-51eb-f2f7-cbb409635eaf",
-          "visitId": null,
+          "billable": true,
+          "hours": 0.41,
+          "rateCardId": "da42199a-1441-214d-17e0-ba6023bda373",
+          "subjectId": "04466610-e18e-c313-ec5f-415a777a809e",
+          "visitId": "d572857c-76df-766d-8eff-19b472d412d2",
           "autoGenerated": false,
-          "note": null,
+          "note": "示例",
           "voidedAt": "2026-08-22T09:15:00+08:00",
-          "voidedByName": null,
-          "voidReason": "示例文本（由契约生成，非真实数据）",
+          "voidedByName": "示例",
+          "voidReason": null,
           "createdAt": "2026-08-22T09:15:00+08:00",
           "approvedAt": "2026-08-22T09:15:00+08:00",
           "approvedByName": "示例"
         }
       ],
-      "nextCursor": "示例"
+      "nextCursor": null
     }
   },
   "createTimesheet": {
@@ -8650,50 +8671,50 @@
     "path": "/v1/timesheets",
     "status": 201,
     "body": {
-      "id": "b11a9b27-50a2-9d51-7f41-913a80acea7c",
-      "studySiteId": "7cfef9eb-23fc-4958-4266-70cb05333049",
+      "id": "f1530806-6bd6-cb45-95ea-76a553393120",
+      "studySiteId": "7c4eeb3b-8a1a-fec2-7d19-e561b9528a7c",
       "siteCode": "示例",
-      "accountId": "4e5e791d-389f-11b3-ad50-be81e2a27629",
+      "accountId": "1bfabeb4-6d02-7fc2-afbd-41da5b341582",
       "personName": "示例",
-      "workDate": "2026-08-16",
+      "workDate": "2026-08-15",
       "workType": "visit_support",
       "workTypeLabel": "示例文本（由契约生成，非真实数据）",
-      "billable": false,
-      "hours": 0.97,
-      "dayCostCents": 7410000,
-      "travelCents": 2220000,
-      "costCents": 8980000,
-      "rateCardId": "b8ba42c0-2775-ba95-6695-ee96e4066ef0",
-      "subjectId": "62e4fbfc-7ae4-c9a8-1eb0-a4dbf8e313ec",
-      "visitId": "5dcbb3dd-c321-3577-15ae-204c7a91c6a9",
-      "autoGenerated": false,
+      "billable": true,
+      "hours": 0.52,
+      "dayCostCents": 8570000,
+      "travelCents": 8450000,
+      "costCents": 8780000,
+      "rateCardId": "c0c9dca6-4bcf-07da-3e0c-d4fb723210c5",
+      "subjectId": "860e8fea-730b-4a2a-1400-0961151f4296",
+      "visitId": null,
+      "autoGenerated": true,
       "note": null,
       "voidedAt": "2026-08-22T09:15:00+08:00",
       "voidedByName": "示例",
-      "voidReason": "示例文本（由契约生成，非真实数据）",
+      "voidReason": null,
       "createdAt": "2026-08-22T09:15:00+08:00",
       "approvedAt": "2026-08-22T09:15:00+08:00",
-      "approvedByName": null
+      "approvedByName": "示例"
     },
     "bodyWithoutFieldPermission": {
-      "id": "b11a9b27-50a2-9d51-7f41-913a80acea7c",
-      "studySiteId": "7cfef9eb-23fc-4958-4266-70cb05333049",
+      "id": "f1530806-6bd6-cb45-95ea-76a553393120",
+      "studySiteId": "7c4eeb3b-8a1a-fec2-7d19-e561b9528a7c",
       "siteCode": "示例",
-      "accountId": "4e5e791d-389f-11b3-ad50-be81e2a27629",
+      "accountId": "1bfabeb4-6d02-7fc2-afbd-41da5b341582",
       "personName": "示例",
-      "workDate": "2026-08-16",
+      "workDate": "2026-08-15",
       "workType": "visit_support",
       "workTypeLabel": "示例文本（由契约生成，非真实数据）",
-      "billable": false,
-      "hours": 0.97,
-      "rateCardId": "b2eb8ba4-2c02-775b-a956-695ee96e4066",
-      "subjectId": "f0662e4f-bfc7-ae4c-9a81-eb0a4dbf8e31",
-      "visitId": null,
+      "billable": true,
+      "hours": 0.52,
+      "rateCardId": "dddc0c9d-ca64-bcf0-7da3-e0cd4fb72321",
+      "subjectId": null,
+      "visitId": "5c860e8f-ea73-0b4a-2a14-000961151f42",
       "autoGenerated": true,
       "note": "示例",
-      "voidedAt": "2026-08-22T09:15:00+08:00",
+      "voidedAt": null,
       "voidedByName": "示例",
-      "voidReason": "示例文本（由契约生成，非真实数据）",
+      "voidReason": null,
       "createdAt": "2026-08-22T09:15:00+08:00",
       "approvedAt": "2026-08-22T09:15:00+08:00",
       "approvedByName": "示例"
@@ -8702,94 +8723,6 @@
   "approveTimesheet": {
     "method": "POST",
     "path": "/v1/timesheets/{id}:approve",
-    "status": 200,
-    "body": {
-      "data": {
-        "id": "f1530806-6bd6-cb45-95ea-76a553393120",
-        "studySiteId": "7c4eeb3b-8a1a-fec2-7d19-e561b9528a7c",
-        "siteCode": "示例",
-        "accountId": "1bfabeb4-6d02-7fc2-afbd-41da5b341582",
-        "personName": "示例",
-        "workDate": "2026-08-15",
-        "workType": "visit_support",
-        "workTypeLabel": "示例文本（由契约生成，非真实数据）",
-        "billable": true,
-        "hours": 0.52,
-        "dayCostCents": 8570000,
-        "travelCents": 8450000,
-        "costCents": 8780000,
-        "rateCardId": "c0c9dca6-4bcf-07da-3e0c-d4fb723210c5",
-        "subjectId": "860e8fea-730b-4a2a-1400-0961151f4296",
-        "visitId": null,
-        "autoGenerated": true,
-        "note": null,
-        "voidedAt": "2026-08-22T09:15:00+08:00",
-        "voidedByName": "示例",
-        "voidReason": null,
-        "createdAt": "2026-08-22T09:15:00+08:00",
-        "approvedAt": "2026-08-22T09:15:00+08:00",
-        "approvedByName": "示例"
-      },
-      "sideEffects": [
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "fb9ed4f6-d8aa-4eb3-cf5a-b2d56478d52b",
-          "amountCents": 6280000,
-          "studySiteId": "5a37cdc6-e858-3370-4f9f-3986913251fe"
-        },
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "706d9f69-4116-d1f1-8da1-2ffd81a532a3",
-          "studySiteId": "105a2216-f645-f1dc-6dd8-f96a05241525"
-        }
-      ]
-    },
-    "bodyWithoutFieldPermission": {
-      "data": {
-        "id": "f1530806-6bd6-cb45-95ea-76a553393120",
-        "studySiteId": "7c4eeb3b-8a1a-fec2-7d19-e561b9528a7c",
-        "siteCode": "示例",
-        "accountId": "1bfabeb4-6d02-7fc2-afbd-41da5b341582",
-        "personName": "示例",
-        "workDate": "2026-08-15",
-        "workType": "visit_support",
-        "workTypeLabel": "示例文本（由契约生成，非真实数据）",
-        "billable": true,
-        "hours": 0.52,
-        "rateCardId": "dddc0c9d-ca64-bcf0-7da3-e0cd4fb72321",
-        "subjectId": null,
-        "visitId": "5c860e8f-ea73-0b4a-2a14-000961151f42",
-        "autoGenerated": true,
-        "note": "示例",
-        "voidedAt": null,
-        "voidedByName": "示例",
-        "voidReason": null,
-        "createdAt": "2026-08-22T09:15:00+08:00",
-        "approvedAt": "2026-08-22T09:15:00+08:00",
-        "approvedByName": "示例"
-      },
-      "sideEffects": [
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "amountCents": 3580000,
-          "studySiteId": "fb9ed4f6-d8aa-4eb3-cf5a-b2d56478d52b"
-        },
-        {
-          "type": "TimesheetPosted",
-          "summary": "示例文本（由契约生成，非真实数据）",
-          "ref": "9c5a37cd-c6e8-5833-704f-9f3986913251",
-          "amountCents": 9060000,
-          "studySiteId": "706d9f69-4116-d1f1-8da1-2ffd81a532a3"
-        }
-      ]
-    }
-  },
-  "voidTimesheet": {
-    "method": "POST",
-    "path": "/v1/timesheets/{id}:void",
     "status": 200,
     "body": {
       "data": {
@@ -8873,6 +8806,96 @@
           "ref": "628c4bbb-2e64-ac1b-44d0-c75378c72311",
           "amountCents": 9290000,
           "studySiteId": "f1d77f43-d96a-8a10-2f5a-65360f274ff8"
+        }
+      ]
+    }
+  },
+  "voidTimesheet": {
+    "method": "POST",
+    "path": "/v1/timesheets/{id}:void",
+    "status": 200,
+    "body": {
+      "data": {
+        "id": "92619a7f-95bf-c956-9021-28d3ec956b95",
+        "studySiteId": "e070e399-e858-0a8f-929a-20cff35500ef",
+        "siteCode": "示例",
+        "accountId": "e99e406d-3964-37b8-e93d-794cae8d888a",
+        "personName": "示例",
+        "workDate": "2026-08-27",
+        "workType": "visit_support",
+        "workTypeLabel": "示例文本（由契约生成，非真实数据）",
+        "billable": true,
+        "hours": 0.39,
+        "dayCostCents": 6050000,
+        "travelCents": 2840000,
+        "costCents": 9510000,
+        "rateCardId": "765c50ea-c71d-d45a-d7e3-718e5de64613",
+        "subjectId": "24aa4edc-1b3a-3876-2766-7f986633b89f",
+        "visitId": "e6ee2a32-7429-2bc5-4b3f-d16531b79431",
+        "autoGenerated": false,
+        "note": null,
+        "voidedAt": null,
+        "voidedByName": "示例",
+        "voidReason": "示例文本（由契约生成，非真实数据）",
+        "createdAt": "2026-08-22T09:15:00+08:00",
+        "approvedAt": null,
+        "approvedByName": null
+      },
+      "sideEffects": [
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "f4b0b9eb-cc25-db64-294d-3557497e3b5f",
+          "amountCents": 9160000,
+          "studySiteId": "eb3a4212-7d7f-1947-adb9-488cc4bcbdc6"
+        },
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "629567c7-9bb3-fdd7-82f1-dca1532ff87e",
+          "amountCents": 9190000,
+          "studySiteId": "b9fe5f5f-f0dd-f783-515c-501fefbb14a0"
+        }
+      ]
+    },
+    "bodyWithoutFieldPermission": {
+      "data": {
+        "id": "92619a7f-95bf-c956-9021-28d3ec956b95",
+        "studySiteId": "e070e399-e858-0a8f-929a-20cff35500ef",
+        "siteCode": "示例",
+        "accountId": "e99e406d-3964-37b8-e93d-794cae8d888a",
+        "personName": "示例",
+        "workDate": "2026-08-27",
+        "workType": "visit_support",
+        "workTypeLabel": "示例文本（由契约生成，非真实数据）",
+        "billable": true,
+        "hours": 0.39,
+        "rateCardId": "83f765c5-0eac-71dd-45ad-7e3718e5de64",
+        "subjectId": "13a24aa4-edc1-b3a3-8762-7667f986633b",
+        "visitId": "9f4e6ee2-a327-4292-bc54-b3fd16531b79",
+        "autoGenerated": false,
+        "note": null,
+        "voidedAt": null,
+        "voidedByName": "示例",
+        "voidReason": null,
+        "createdAt": "2026-08-22T09:15:00+08:00",
+        "approvedAt": null,
+        "approvedByName": "示例"
+      },
+      "sideEffects": [
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "315f4b0b-9ebc-c25d-b642-94d3557497e3",
+          "amountCents": 4200000,
+          "studySiteId": "9e7eb3a4-2127-d7f1-947a-db9488cc4bcb"
+        },
+        {
+          "type": "TimesheetPosted",
+          "summary": "示例文本（由契约生成，非真实数据）",
+          "ref": "c6d62956-7c79-bb3f-dd78-2f1dca1532ff",
+          "amountCents": 5030000,
+          "studySiteId": "5e9b9fe5-f5ff-0ddf-7835-15c501fefbb1"
         }
       ]
     }

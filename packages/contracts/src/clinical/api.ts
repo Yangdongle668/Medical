@@ -345,15 +345,26 @@ define({
 });
 
 /** `confirmSubjectVisit` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
-export const ConfirmSubjectVisitBody = z.object({});
+export const ConfirmSubjectVisitBody = z.object({
+  /** PI 哪天签的字。**省略即访视当天** —— 绝大多数情况下 PI 就是在
+   *  访视现场签的，而默认成"今天"会让一份上周的访视挂上今天的确认日期。
+   *  不收将来的日期。 */
+  confirmedOn: DateOnly.optional()
+});
 
 define({
   id: "confirmSubjectVisit", method: "post", path: "/v1/subject-visits/{id}:confirm",
   layer: "L2", context: CTX,
-  summary: "PI 确认访视",
+  summary: "登记 PI 确认访视",
   description:
-    "**只有该中心的 PI 本人可以确认**（I3）。确认前访视不计入「已完成」统计 ——" +
-    "CRC 说做完了和 PI 确认做完了，在核查时是两回事。",
+    "**PI 签的字仍然是放行条件**（I3）：确认前访视不计入「已完成」统计 ——\n" +
+    "CRC 说做完了和 PI 确认做完了，在核查时是两回事。\n\n" +
+    "变的是**谁来点这一下**。原来只有绑了账号的 PI 本人能点，而院方的研究者" +
+    "多数没有本系统的账号 —— 于是那些中心的访视永远推不动，" +
+    "统计系统性偏低而没有任何地方报错（实测：189 / 429 卡住，15 个中心只有 1 个绑了账号）。\n" +
+    "现在 CRA / CRC 也能点，语义是**登记「PI 已于某日签字确认」**；" +
+    "真绑了账号的 PI 照样自己点，那时 `piConfirmedByName` 记的是他本人。\n\n" +
+    "与「登记伦理批复」同一个形状：院外发生的事，由院内的人带着日期登记进来。",
   action: "piConfirm",
   params: ById,
   body: ConfirmSubjectVisitBody,

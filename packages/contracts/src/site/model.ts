@@ -187,6 +187,22 @@ export const ACCEPTANCE_DOC_TEMPLATE = [
   "试验用药品检验报告", "保险单", "经费预算明细"
 ] as const;
 
+/** 意向函那份 PDF。**递交表和补登表用同一个形状** ——
+ *  两处各写一份，"多大算大""认不认扩展名"迟早会有两个答案。
+ *
+ *  **刻意不给它 `.meta({ id })`。** 给了它就成为 OpenAPI 里一个具名组件，
+ *  而两处的请求体会从"内联两个属性"变成一个 `$ref` —— 线上格式一个字节
+ *  没变，破坏性变更门禁却会把它报成「删除了字段 filename / contentBase64」。
+ *  那是一次**只存在于文档结构里**的破坏：真要做（比如想让调用方的代码
+ *  生成器也复用这个类型），该单独开一次并说清楚，不该顺手夹在别的改动里。 */
+const AcceptanceLetterFile = z.object({
+  filename: z.string().trim().min(1).max(200),
+  /** PDF 的 base64。**10 MB 上限**，超了当场拒 ——
+   *  一份受理意向函是几百 KB 的扫描件，10 MB 已经宽得离谱；
+   *  不卡一道的话，一次误传的大文件会把整条请求链拖住。 */
+  contentBase64: z.string().min(1)
+});
+
 export const SubmitAcceptance = z.object({
   studyId: Uuid,
   hospital: z.string().trim().min(2).max(80),
@@ -206,24 +222,36 @@ export const SubmitAcceptance = z.object({
    *  要列的照样列得出来（机构办那条流程一行没动），收回的是"必须先编一张
    *  清单才递得出去"。空清单在 `in_system` 上要读成**「没列清单」**，
    *  不是「八项都齐」—— 界面上那一栏因此显示「未列清单」。 */
-  docs: z.array(z.string().trim().min(2).max(60)).max(20).optional()
+  docs: z.array(z.string().trim().min(2).max(60)).max(20).optional(),
+
+  /* ── 一步填完，不留一个"等别人"的中间态 ────────────────────────────
+     这两栏在的时候，这条受理**建出来就是已受理的**：不经过
+     「形式审查中」，也不等机构办在本系统里点任何东西。
+
+     为什么这样才对：这套系统是对内的，院方的机构办不是它的用户。
+     一线手里拿着的就是那张《立项受理意见函》—— 他要做的是把两个日期
+     和那张纸登记进来，而不是替一个不存在的用户演一遍审查流程。
+
+     留空也行：材料递出去了、意见函还没下来，那就是真的还没受理，
+     这条记录停在「待登记受理意见函」，拿到之后走
+     `POST /v1/site-acceptances/{id}:record-letter` 补上。 */
+  /** 哪天拿到《立项受理意见函》。给了它，这条受理直接是已受理。 */
+  acceptedOn: DateOnly.optional(),
+  /** 意见函扫描件。**只有同时给了 `acceptedOn` 才有意义** ——
+   *  没有日期的一份 PDF，台账上挂在哪一行都说不清。 */
+  letter: AcceptanceLetterFile.optional()
 }).meta({ id: "SubmitAcceptance" });
 
 /** 登记「拿到立项受理意向函」。
  *
  *  这是一线报给项目管理员的**第二个日期**，也是这条流程真正的终点：
  *  在此之前系统里唯一的痕迹是一个日期，而核查要看的是那张纸。 */
+
 export const RecordAcceptanceLetterBody = z.object({
   receivedOn: DateOnly.describe("哪天拿到的受理意向函。不收将来的日期"),
   /** 意向函扫描件。**可省略** —— 纸还没拿到手、先把日期登记上，是常事；
    *  补传一次覆盖前一份。 */
-  file: z.object({
-    filename: z.string().trim().min(1).max(200),
-    /** PDF 的 base64。**10 MB 上限**，超了当场拒 ——
-     *  一份受理意向函是几百 KB 的扫描件，10 MB 已经宽得离谱；
-     *  不卡一道的话，一次误传的大文件会把整条请求链拖住。 */
-    contentBase64: z.string().min(1)
-  }).optional()
+  file: AcceptanceLetterFile.optional()
 }).meta({ id: "RecordAcceptanceLetterRequest" });
 
 

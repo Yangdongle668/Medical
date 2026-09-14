@@ -400,22 +400,38 @@ for (const c of COHORT) {
     /* 已过去的全部锁定，未来的只铺**第一次** —— 把整条 SOA 都铺成
        planned 的话，"今天要做什么"会被几百条一年后的访视淹掉。 */
     if (!past && scheduled > 0) break;
-    /* 没有 PI 账号的中心，做完的访视只能停在 done_pending_pi。
-       全铺的话演示库里会有一千多条卡着的访视 —— 而「待 PI 确认」
-       是一个**信号**：85% 都是它的时候，它就什么也不说明了。
-       所以这些中心只留最近一次做完的，其余不铺。 */
-    if (past && !piAcc && !isLastPast(so, enrolled, today, seq)) continue;
+    /* 已过去的访视全铺。**不再按"这个中心有没有 PI 账号"分叉** ——
+       见下面 locked 那一段。 */
     const vid = uuid5("cvisit:" + c.no + ":" + seq);
     const code = (so.label(seq).match(/^([A-Za-z]+\d*[A-Za-z]*\d*)/) || [, `V${seq}`])[1];
-    /* locked 必须带 PI 的签字与时间（I3，visit_locked_needs_pi），
+    /* locked 必须带签字日期（I3，visit_locked_needs_pi），
        entered 必须带录入日（visit_edc_entered_needs_date）——
        两条约束都在库里，绕不过去。这是好事：**演示数据不能比
        真实数据更宽松**，否则界面在演示上走得通、在真库上走不通。
 
-       没有 PI 账号的中心（原型里有几个），做完的访视只能停在
-       `done_pending_pi` —— 而那恰恰是 I3 想让人看见的那个积压：
-       「访视做完了，但没有 PI 确认，所以它不算已完成」。 */
-    const locked = past && !!piAcc;
+       ── 这里原来按「这个中心有没有 PI 账号」分叉 ────────────────────
+       `const locked = past && !!piAcc` —— 没绑 PI 账号的中心，
+       做完的访视一律停在 `done_pending_pi`。当时的说法是
+       「那恰恰是 I3 想让人看见的那个积压」。
+
+       而那不是积压，是**死局**：确认只有绑了账号的 PI 本人点得动，
+       15 个中心只有 1 个绑了，另外 14 个的访视永远推不动。
+       实测演示库里 189 / 429 卡在那里，而它们不计入「已完成」统计 ——
+       演示出来的入组进度、完成率全是偏低的。
+
+       迁移 0050 之后确认改成一线登记（PI 签的字仍然是放行条件，
+       只是那件事由院内的人记进来），所以这里也不再分叉：
+       **过去的访视都已确认**，`pi_confirmed_by` 留空 ——
+       那是常态，意思是"PI 不在本系统里签的字"。
+
+       **最近七天里做完的**留在 `done_pending_pi`：待登记 PI 确认
+       是一件真的会发生、而且一线真的办得掉的事，演示里该有几条。
+       七天这个数不是随便取的 —— PI 通常一周来一次中心签一批字，
+       所以"上周做的还没签"是异常，"这周做的还没签"是常态。
+       按「每个受试者的最后一次」来定的话，600 个受试者就是 600 条待签，
+       而那又回到了"85% 都是它，它就什么也不说明了"。 */
+    const pending = past && (today - target) < 7 * 864e5;
+    const locked = past && !pending;
     const status = !past ? "planned" : locked ? "locked" : "done_pending_pi";
     P(`INSERT INTO subject_visit (id, subject_id, study_site_id, seq, visit_code, visit_label,` +
       ` target_date, window_days, status, actual_date, out_of_window, hours,` +
@@ -424,7 +440,9 @@ for (const c of COHORT) {
       `${q(code + "-" + seq)}, ${q(so.label(seq))}, ${d(targetStr)}, ${so.win}, ` +
       `${q(status)}, ${past ? d(targetStr) : "NULL"}, false, ` +
       `${past ? "3.0" : "NULL"}, ` +
-      `${locked ? `'${uuid5("account:" + piAcc.u)}'` : "NULL"}, ` +
+      /* 确认人只在**真的有 PI 账号**时记，否则留空 ——
+         填一个登记人进去，是把「登记人」冒充成「确认人」。 */
+      `${locked && piAcc ? `'${uuid5("account:" + piAcc.u)}'` : "NULL"}, ` +
       `${locked ? `'${targetStr}T18:00:00+08'::timestamptz` : "NULL"}, ` +
       `${locked ? "'entered'" : "'pending'"}, ${locked ? d(targetStr) : "NULL"});`);
     so.tasks(seq).forEach((t, k) =>

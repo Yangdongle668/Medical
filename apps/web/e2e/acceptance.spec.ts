@@ -77,7 +77,12 @@ test.describe("立项受理（机构办）", () => {
     /* 存根上没有勾选框，也没有受理按钮 —— 它记的是一件已经发生过的事。 */
     await expect(row.getByRole("checkbox")).toHaveCount(0);
     await expect(row.getByRole("button", { name: "予以受理" })).toHaveCount(0);
-    await expect(row.getByTestId("ac-done")).toContainText("系统外受理，仅登记受理号");
+    /* 「受理人这一栏为什么是空的」这句话现在由 `ac-done` 说 ——
+       上一版写的是「系统外受理，仅登记受理号」，而迁移 0048 放松
+       `acceptance_actor_shape` 之后，**空受理人不再是存根独有的**：
+       一线登记的受理意向函同样没有受理人。所以这句话改成按事实说，
+       存根的特殊之处（没有材料清单、不能改）由 `ac-stub-note` 说。 */
+    await expect(row.getByTestId("ac-done")).toContainText("受理人不在本系统");
   });
 
   test("补正通知要说清缺什么 —— 不写理由发不出去", async ({ page }) => {

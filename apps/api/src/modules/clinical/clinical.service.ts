@@ -6,8 +6,12 @@ import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { pendingSubscribers } from "./visit-completed.js";
 import { VISIT_TIMESHEET_PORT, type VisitTimesheetPort } from "./ports.js";
-import { saeReportHours, saeTimeliness, saeStatus, SAE_REPORT_DEADLINE_HOURS, CALC_VERSION }
-  from "@sitedesk/calc";
+/* `edcDaysLate` 原来是这个文件里的两个私有物（`workdaysBetween` 与
+   `EDC_SLA_WORKDAYS = 5`）。搬进 calc 是因为**它有第二个读者了**：
+   履职那张表要数「几件超时未录」。两处各写一份 5 的后果不是不一致告警，
+   是两个页面对同一条访视给出不同的结论，而没有任何地方是红的。 */
+import { saeReportHours, saeTimeliness, saeStatus, SAE_REPORT_DEADLINE_HOURS,
+  CALC_VERSION, edcDaysLate } from "@sitedesk/calc";
 import { nextCode } from "../../infra/code.js";
 
 /* ════════════════════════════════════════════════════════════════════
@@ -106,23 +110,9 @@ const VISIT_FROM = `
   JOIN study_site s ON s.id = v.study_site_id
   LEFT JOIN account p ON p.id = v.pi_confirmed_by`;
 
-/** EDC 录入及时线：访视完成后 5 个工作日。周末不算 —— 现实里没人周末录 EDC。 */
-function workdaysBetween(from: string, to: string): number {
-  let n = 0;
-  const a = new Date(from), b = new Date(to);
-  for (const dte = new Date(a); dte < b; dte.setDate(dte.getDate() + 1)) {
-    const w = dte.getDay();
-    if (w !== 0 && w !== 6) n++;
-  }
-  return n;
-}
-const EDC_SLA_WORKDAYS = 5;
-
 function toVisit(r: VisitRow) {
   const today = todayStr();
   const done = r.actual_date !== null;
-  const lag = r.edc_status === "entered" || !done ? null
-    : workdaysBetween(day(r.actual_date)!, today);
   return {
     id: r.id, subjectId: r.subject_id, screeningNo: r.screening_no,
     studySiteId: r.study_site_id, siteCode: r.site_code, seq: r.seq,
@@ -130,7 +120,7 @@ function toVisit(r: VisitRow) {
     targetDate: day(r.target_date)!, windowDays: r.window_days,
     windowFrom: day(r.win_from)!, windowTo: day(r.win_to)!,
     actualDate: day(r.actual_date), status: r.status, edcStatus: r.edc_status,
-    edcDaysLate: lag !== null && lag > EDC_SLA_WORKDAYS ? lag - EDC_SLA_WORKDAYS : null,
+    edcDaysLate: edcDaysLate(day(r.actual_date), r.edc_status === "entered", today),
     /* 未完成而窗口已关闭，同样是超窗 —— 只看 out_of_window 会漏掉「还没做」的那一类 */
     outOfWindow: r.out_of_window || (!done && between(today, day(r.win_to)!) < 0),
     daysLeft: done ? null : between(today, day(r.win_to)!),
@@ -750,25 +740,50 @@ export class ClinicalService {
     };
   }
 
-  /** I3：只有该中心的 PI 本人可以确认。 */
-  async confirmVisit(id: string) {
+  /** I3：访视要有 PI 签字确认才锁定 —— 签字由一线**带着日期登记**进来。
+   *  真绑了本系统账号的 PI 自己点时，确认人记他本人。 */
+  async confirmVisit(id: string, b?: { confirmedOn?: string }) {
     const c = ctx();
     const p = principal();
     const v = await this.visit(id);
     if (v.status !== "done_pending_pi")
       this.invariant("visit-state", `访视当前是「${v.status}」，只有待确认的可以确认`);
 
-    const site = await c.client.query<{ pi_account_id: string | null; pi_name: string }>(
-      `SELECT pi_account_id, pi_name FROM study_site WHERE id = $1`, [v.studySiteId]);
-    /* 有 piConfirm 权限不等于可以确认**这一个**中心的访视 ——
-       动作维度回答"能不能做这类事"，这一条回答"是不是你的中心"。 */
-    if (site.rows[0]?.pi_account_id !== p.accountId)
-      this.invariant("pi-must-be-site-pi",
-        `只有本中心研究者（${site.rows[0]?.pi_name ?? "未指定"}）本人可以确认该访视`);
+    const site = await c.client.query<{ pi_account_id: string | null }>(
+      `SELECT pi_account_id FROM study_site WHERE id = $1`, [v.studySiteId]);
+
+    /* ── 谁来点这一下 ────────────────────────────────────────────────
+       原来这里要求 `site.pi_account_id === 当前账号`，也就是**只有绑了
+       本系统账号的 PI 本人能点**。而院方的研究者多数没有账号：
+       实测 15 个中心只有 1 个绑了，另外 14 个中心的访视永远推不动，
+       189 条卡在待确认，而它们不计入「已完成」统计（I3）——
+       入组进度、完成率、成本归集系统性偏低，没有任何地方报错。
+
+       I3 的实质保留：**PI 签的字仍然是放行条件。**
+       变的是形式 —— 那件事由一线登记进来（与「登记伦理批复」同一个形状）。
+
+       `pi_confirmed_by` 只在**真的是 PI 本人点的**时候记他：
+       是一线登记的就留空。填登记人自己进去，是把「登记人」冒充成
+       「确认人」—— 而谁登记的，审计轨迹里有。 */
+    const 是本人 = site.rows[0]?.pi_account_id === p.accountId;
+
+    const today = (await c.client.query<{ d: string }>(
+      "SELECT CURRENT_DATE::text AS d")).rows[0]!.d;
+    /* 省略即访视当天 —— PI 绝大多数情况下就是在现场签的，
+       而默认成"今天"会让一份上周的访视挂上今天的确认日期。 */
+    const confirmedOn = b?.confirmedOn ?? day(v.actualDate ? new Date(v.actualDate) : null) ?? today;
+    if (confirmedOn > today)
+      throw new ProblemException("validation-failed", {
+        detail: `签字日期 ${confirmedOn} 在将来 —— 这一栏记的是「PI 哪天签的字」` });
+    if (v.actualDate && confirmedOn < v.actualDate)
+      this.invariant("pi-confirm-before-visit",
+        `签字日期 ${confirmedOn} 早于访视日 ${v.actualDate} —— PI 不会在访视发生前确认它`);
 
     await c.client.query(
-      `UPDATE subject_visit SET status = 'locked', pi_confirmed_by = $2, pi_confirmed_at = now()
-        WHERE id = $1`, [id, p.accountId]);
+      `UPDATE subject_visit
+          SET status = 'locked', pi_confirmed_by = $2,
+              pi_confirmed_at = $3::date + interval '18 hours'
+        WHERE id = $1`, [id, 是本人 ? p.accountId : null, confirmedOn]);
 
     const effects: Effect[] = [];
     /* 筛选期访视锁定 → 可以入组了。这是 enroll() 那道闸门的另一面。 */
@@ -778,9 +793,16 @@ export class ClinicalService {
       ref: v.subjectId, studySiteId: v.studySiteId
     });
 
+    /* 审计里要留下的是**三件事**：状态变了、PI 哪天签的、以及
+       `piConfirmedBy` 为什么是空的。最后一条尤其要紧 —— 核查时问起
+       「谁确认的」，轨迹里得答得出「某年某月某日 PI 签在纸上，
+       由某某某登记进系统」，而不是只剩一个空字段。
+       `actorLogin` 由审计层自己填，所以"谁登记的"不用在这里重复。 */
     await this.audit.write({
-      action: "PI 确认访视", targetType: "subject_visit", targetId: v.visitLabel,
-      before: { status: v.status }, after: { status: "locked" },
+      action: "登记 PI 确认访视", targetType: "subject_visit", targetId: v.visitLabel,
+      before: { status: v.status },
+      after: { status: "locked", piConfirmedOn: confirmedOn,
+        piConfirmedBy: 是本人 ? p.accountId : null },
       studySiteId: v.studySiteId });
     return { data: await this.visit(id), sideEffects: effects };
   }

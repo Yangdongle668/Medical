@@ -13,7 +13,8 @@
    ════════════════════════════════════════════════════════════════════ */
 
 import {
-  DEFAULT_STARTUP_ITEMS, DEFAULT_HANDOVER_ITEMS, STARTUP_CATEGORY_LABEL
+  DEFAULT_STARTUP_ITEMS, DEFAULT_HANDOVER_ITEMS, STARTUP_CATEGORY_LABEL,
+  type VisitStatus
 } from "@sitedesk/contracts";
 /* 角色目录由 mock 身份派生 —— 见下面 ROLE_CATALOGUE 上的说明。 */
 import { MOCK_ROLES, IDENTITIES } from "./roles.js";
@@ -62,7 +63,12 @@ export interface MockVisit {
   studySiteId: string; siteCode: string; seq: number;
   visitCode: string; visitLabel: string;
   targetDate: string; windowDays: number; windowFrom: string; windowTo: string;
-  actualDate: string | null; status: string; edcStatus: string;
+  actualDate: string | null;
+  /** **用契约的类型，不用 `string`** —— 见下面 `done()` 上那段：
+   *  这一栏是 `string` 的时候，种子里写着一个契约里根本不存在的状态值，
+   *  而**没有任何地方会报错**。定成契约的类型，那一行就编译不过，
+   *  守卫不必写成一条测试。 */
+  status: VisitStatus; edcStatus: string;
   edcDaysLate: number | null; outOfWindow: boolean; daysLeft: number | null;
   piConfirmedAt: string | null; piConfirmedByName: string | null;
   tasks: MockTask[];
@@ -138,15 +144,24 @@ function mkVisit(
   };
 }
 
-/** 把一条访视标成"已完成"。
+/** 把一条访视标成"做完了、还没登记 PI 确认"。
+ *
  *  `outOfWindow` 在完成之后判的是**实际完成日在不在窗口内**，
- *  不再是"窗口关了还没做" —— 两种判法在 planned / done 上各管一段，
+ *  不再是"窗口关了还没做" —— 两种判法在 planned / 已完成上各管一段，
  *  写成一个 `dueIn + win < 0` 通吃的话，一条按时做完的历史访视
- *  会因为窗口早就过去而被标成超窗。 */
+ *  会因为窗口早就过去而被标成超窗。
+ *
+ *  **状态原来写的是 `"done"`** —— 而契约的 VISIT_STATUSES 里根本没有
+ *  这个取值（planned / done_pending_pi / locked / missed）。真接口回的是
+ *  `done_pending_pi`，mock 的 `:complete` 处理器也写的 `done_pending_pi`；
+ *  只有这一处是 `done`。症状不会报错：确认处理器判的是 `!== "done"`，
+ *  于是**种子里的访视确认得了、刚在 mock 里做完的那条确认不了**（422），
+ *  而两者在界面上长得一模一样。`MockVisit.status` 现在是契约的类型，
+ *  再写错编译不过。 */
 function done(v: MockVisit, doneIn: number): MockVisit {
   const actualDate = shift(TODAY, doneIn);
   return {
-    ...v, actualDate, status: "done", daysLeft: null,
+    ...v, actualDate, status: "done_pending_pi", daysLeft: null,
     outOfWindow: actualDate < v.windowFrom || actualDate > v.windowTo,
     tasks: v.tasks.map(t => ({ ...t, doneAt: new Date().toISOString() }))
   };
@@ -360,15 +375,23 @@ export function makeScenario(): Scenario {
          **做完了、但还没签字。** 六条 planned 的访视演不出这一页：
          PI 的整个工作面就是这个队列，队列空着，页面上
          "等了多久""超过 7 天"两条分支都不会出现。
-         一条等了 12 天（该红），一条昨天做完的（正常）。 */
+         一条等了 25 天（该红），一条昨天做完的（正常）。
+
+         **25 天不是 12 天**：一线履职那张表把「挂了 14 天以上」单独标红
+         （calc 的 `DUTY_STALE_DAYS`）—— 那是"已经不是来不及，是忘了"的线。
+         原来这里是 -12，于是那条分支在演示上永远画不出来，
+         而它正是那张表最要紧的一格。 */
       done(mkVisit("v7", SITES[0]!, "S-0331", "u1", 5, "C5D1 第 5 周期给药",
-        -12, 3, TASKS_ONCO), -12),
+        -25, 3, TASKS_ONCO), -25),
       done(mkVisit("v8", SITES[0]!, "S-0203", "u2", 9, "C9D1 第 9 周期给药",
         -1, 3, TASKS_ONCO), -1),
       /* 已经签过字的那条 —— 队列里**不该**出现它。
-         少了这条对照，"pendingPi 到底筛没筛"在界面上看不出来。 */
+         少了这条对照，"pendingPi 到底筛没筛"在界面上看不出来。
+         它是 `locked`：确认过的访视就是锁定的，而 `done_pending_pi`
+         带着一个 piConfirmedAt 是库里的 CHECK 直接拦掉的形状。 */
       { ...done(mkVisit("v9", SITES[0]!, "S-0417", "u5", 3, "C3D1 给药",
           -20, 3, TASKS_ONCO), -20),
+        status: "locked",
         piConfirmedAt: new Date(TODAY.getTime() - 18 * 86_400_000).toISOString(),
         piConfirmedByName: "陈国栋" }
     ],
@@ -532,7 +555,19 @@ export const STAFF_LIST: MockStaff[] = [
   { accountId: "a-zhouqi",  login: "zhouqi", displayName: "周琦", roleKind: "CRA",
     level: "P4", city: "广州", ...gcp(120),
     mentorName: null, successorName: null, siteCount: 0, successionGap: false,
-    active: false, disabledReason: "离职 —— 转甲方 CRA" }
+    active: false, disabledReason: "离职 —— 转甲方 CRA" },
+  /* **廖萌此前只有账号、没有名册行。** 他在 mock 里是一个正经的 CRC：
+     有账号（`a-liaomeng`，分组 G-02）、名下有受试者、还担着一条 CAPA，
+     唯独 STAFF_LIST 上没有他 —— 而真库里 liaomeng 是有 staff 行的。
+
+     这不只是少一行演示数据：`/v1/staff` 与「一线履职」都是从名册出的，
+     所以他名下欠着的事**一个都不会出现在那张表上**，而那张表的全部作用
+     就是让欠着的事浮出来。这正是「建号只写了 account」那个坑的下一层
+     （见迁移 0045 那一版的说明），只是这回是 mock 自己踩的。 */
+  { accountId: "a-liaomeng", login: "liaomeng", displayName: "廖萌", roleKind: "CRC",
+    level: "P4", city: "杭州", ...gcp(341),
+    mentorName: null, successorName: null, siteCount: 1, successionGap: false,
+    active: true, disabledReason: null }
 ];
 
 /** 造一行名册。**建号与补登共用** —— 两处各拼一份对象，

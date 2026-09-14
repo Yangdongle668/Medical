@@ -8,16 +8,26 @@ import { call } from "../../api/client.js";
 export interface Visit {
   id: string; screeningNo?: string; siteCode: string;
   visitLabel: string; targetDate: string; windowFrom: string; windowTo: string;
+  actualDate?: string | null;
   daysLeft: number | null; outOfWindow: boolean; status: string;
   /** 录入 EDC 的状态。**完成访视和录进 EDC 是两件事** ——
    *  访视完成后 5 个工作日内录入才算及时，超时不阻断，但进及时率统计。 */
   edcStatus?: "pending" | "entered" | "queried";
   edcDaysLate?: number | null;
+  /** PI 签字确认的日期。**为空就是还没登记** —— 它是 locked 的充要条件。 */
+  piConfirmedAt?: string | null;
+  /** 在本系统里点下确认的那个人。**为空是常态**：PI 多数时候没有账号，
+   *  确认由一线登记，那时这一栏空着而审计轨迹里有登记人。见迁移 0050。 */
+  piConfirmedByName?: string | null;
   tasks: { seq: number; task: string; doneAt: string | null }[];
 }
 
 function windowChip(v: Visit) {
-  if (v.status !== "planned") return <span className="chip flat">待 PI 确认</span>;
+  /* 「待**登记** PI 确认」—— 一个字之差，但它决定人会不会去等。
+     原来写的是「待 PI 确认」，读起来像是"球在 PI 那边"，
+     于是没有人会去点它；而 PI 多数时候根本没有本系统的账号，
+     那一等就是永远（实测 189 条卡在这个状态上）。见迁移 0050。 */
+  if (v.status !== "planned") return <span className="chip flat">待登记 PI 确认</span>;
   const d = v.daysLeft ?? 0;
   if (d < 0) return <span className="chip crit">已超窗 {-d} 天</span>;
   if (d === 0) return <span className="chip crit">今天到期</span>;
