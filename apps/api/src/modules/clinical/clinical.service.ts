@@ -13,9 +13,9 @@ import { VISIT_TIMESHEET_PORT, type VisitTimesheetPort } from "./ports.js";
 import { saeReportHours, saeTimeliness, saeStatus, SAE_REPORT_DEADLINE_HOURS,
   CALC_VERSION, edcDaysLate } from "@sitedesk/calc";
 import { nextCode } from "../../infra/code.js";
-/* 访视状态的中文名 —— 闸门提示要说人话。与 mock 共用一份，
-   两边的措辞不会各走各的（见 contracts 里那段注释）。 */
-import { VISIT_STATUS_LABEL, type VisitStatus } from "@sitedesk/contracts";
+/* 入组闸门那三句话的措辞 —— 与 mock 共用一份，两边不会各走各的
+   （见 contracts 里 `screeningGateWording` 上面那段注释）。 */
+import { screeningGateWording, type VisitStatus } from "@sitedesk/contracts";
 
 /* ════════════════════════════════════════════════════════════════════
    ClinicalOps —— 受试者与访视。
@@ -484,37 +484,20 @@ export class ClinicalService {
       `SELECT id, status FROM subject_visit WHERE subject_id = $1 AND seq = 0`, [id]);
     const v0 = scr.rows[0];
     if (!v0 || v0.status !== "locked") {
-      const 没这条访视 = !v0;
-      const 做完了没登记 = v0?.status === "done_pending_pi";
+      /* 三种情况三句话，措辞在契约里（`screeningGateWording`）——
+         **不在这儿，也不在 mock 里各抄一份**。原来是各抄一份的，
+         注释上写着"与服务端逐字同源"，而这一版改状态措辞时 mock 只跟上了
+         一半：`detail` 改了，`message` 落下了，而界面照出去的偏偏是后者。 */
+      const w = screeningGateWording(v0 ? v0.status as VisitStatus : null);
       throw new ProblemException("gate-not-satisfied", {
-        detail: 没这条访视
-          ? "这一例没有筛选期访视 —— 入组的前提是筛选期访视已完成并登记 PI 确认"
-          : 做完了没登记
-            ? "筛选期访视做完了，但还没登记 PI 确认 —— 去访视详情页把 PI 签字的日期登记上"
-            /* 状态给中文名，不给 `planned` 这种键 —— 键是给程序看的。
-               这一支现在是演示里最常撞上的那一支（签完知情就排出访视了），
-               而它原来把一串英文摆在现场面前。 */
-            : `筛选期访视${VISIT_STATUS_LABEL[v0.status as VisitStatus]}，不能入组`,
+        detail: w.detail,
         /* `subj`（受试者访视窗口）是真模块键 —— 原来这里写的是
            `clinical`，而**模块表里根本没有这个键**：界面据它出跳转链接，
            认不出来就只画文字。现场报的正是「我找不到这个对应的入口」。
-           gate-module.test.ts 现在钉着"每个 module 都得是真键"。 */
+           gate-module.test.ts 现在钉着"每个 module 都得是真键"，
+           所以这个键留在服务端这一侧，不跟着措辞搬进契约。 */
         unmet: [{ code: "screening-visit-not-locked", module: "subj",
-          /* **不要写「先去登记 ICF」。** 能走到入组这一步的人已经签过知情了
-             （state 必须是 screening，而那正是 signIcf 改出来的）——
-             叫他再去签一次，是把一句办不到的事写成了下一步。
-             正常情况下 signIcf 会连访视一起排出来，所以这一支要么是
-             历史数据，要么是 SOA 没配访视；两种都得去受试者那一页看。 */
-          message: 没这条访视
-            ? "这一例没有筛选期访视 —— 正常情况下签署知情同意时会连它一起排出来。" +
-              "去受试者访视窗口看看这一例的访视排了没有"
-            : 做完了没登记
-              /* 「待 PI 确认」→「待**登记** PI 确认」：一个字，但它决定
-                 人会不会去等。PI 多数时候没有本系统的账号，等就是永远。 */
-              ? "筛选期访视还差一步：**登记 PI 确认**（在访视详情页填 PI 签字那天的日期）"
-              : `筛选期访视${VISIT_STATUS_LABEL[v0.status as VisitStatus]} —— ` +
-                "去受试者访视窗口打开这一例的筛选期访视，逐项勾完任务、提交完成，" +
-                "再登记 PI 签字那天的日期" }] });
+          message: w.message }] });
     }
 
     await c.client.query(

@@ -125,6 +125,46 @@ export const VISIT_STATUS_LABEL: Record<VisitStatus, string> = {
   missed: "漏访"
 };
 
+/** 入组闸门被拦下时说的那两句话 —— **一处定义，服务端与 mock 共用**。
+ *
+ *  ── 为什么搬到这儿来 ──────────────────────────────────────────────
+ *  这两句原来在两个文件里各抄一份（clinical.service.ts 的 `enroll` 与
+ *  mocks/handlers.ts 的 `:enroll`），注释上写着"与服务端逐字同源"——
+ *  而"逐字同源"是靠人记着的。上一版把状态从 `planned` 这种键改成中文名，
+ *  服务端两句都改了，mock 只改了 `detail`，`message` 落下了。
+ *  界面照出去的偏偏是 `message`（`detail` 在标题下面那行），
+ *  于是演示上现场看到的仍然是「当前是「planned」」。
+ *  e2e 抓到了它 —— 但抓到的是**第四份**里的不一致，而不是让它写不出来。
+ *
+ *  ── 三种情况，三句话，每一句都说得出下一步在谁手上 ────────────────
+ *  `status` 为 null 即"连这条访视都没有"。三种都是一线自己办得掉的，
+ *  没有一句指向院外的人 —— PI 多数时候没有本系统的账号，等就是永远。
+ *
+ *  **不要写「先去登记 ICF」**：能走到入组这一步的人已经签过知情了
+ *  （state 必须是 screening，而那正是 signIcf 改出来的）——
+ *  叫他再去签一次，是把一句办不到的事写成了下一步。 */
+export function screeningGateWording(status: VisitStatus | null): {
+  detail: string; message: string;
+} {
+  if (status === null) return {
+    detail: "这一例没有筛选期访视 —— 入组的前提是筛选期访视已完成并登记 PI 确认",
+    /* 正常情况下 signIcf 会连访视一起排出来，所以这一支要么是历史数据，
+       要么是这个项目的 SOA 没配筛选期那一行；两种都得去受试者那一页看。 */
+    message: "这一例没有筛选期访视 —— 正常情况下签署知情同意时会连它一起排出来。" +
+      "去受试者访视窗口看看这一例的访视排了没有"
+  };
+  if (status === "done_pending_pi") return {
+    detail: "筛选期访视做完了，但还没登记 PI 确认 —— 去访视详情页把 PI 签字的日期登记上",
+    /* 「待 PI 确认」→「待**登记** PI 确认」：一个字，但它决定人会不会去等。 */
+    message: "筛选期访视还差一步：登记 PI 确认（在访视详情页填 PI 签字那天的日期）"
+  };
+  return {
+    detail: `筛选期访视${VISIT_STATUS_LABEL[status]}，不能入组`,
+    message: `筛选期访视${VISIT_STATUS_LABEL[status]} —— ` +
+      "去受试者访视窗口把它打开，逐项勾完任务、提交完成，再登记 PI 签字那天的日期"
+  };
+}
+
 export const EDC_STATUSES = ["pending", "entered", "queried"] as const;
 export const EdcStatus = z.enum(EDC_STATUSES).meta({ id: "EdcStatus" });
 
