@@ -186,3 +186,36 @@ test.describe("中心文件与物资", () => {
     await expect(page.getByRole("button", { name: "核对" })).toHaveCount(0);
   });
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   现场报来的三件事里的两件（第三件在 originate.spec.ts）。
+
+   CRC 递交完立项材料，闸门换成这一句：
+
+     「AC-2026-004 还没登记《立项受理意见函》—— 拿到之后在受理台账上
+       登记收到日期」
+
+   然后：**「CRC 在受理台账找不到对应的入口」。**
+
+   两处都缺：受理台账那一页（模块 `instac`）只给了 admin 与外部的机构办，
+   而闸门上那句话也没有链接 —— 「去处理」原来只认 `startup` 一条。
+   一句指向不存在的入口的提示，比不给提示更糟：他会以为是自己没找到。
+   ════════════════════════════════════════════════════════════════════ */
+test.describe("闸门叫你去的地方，你得进得去", () => {
+  test("CRC 的侧栏上有「立项受理」，点进去是真页面", async ({ page }) => {
+    await page.goto("/sites?as=crc");
+    const nav = page.locator(".rail nav");
+    await expect(nav.getByRole("link", { name: "立项受理" })).toBeVisible();
+    await nav.getByRole("link", { name: "立项受理" }).click();
+    await expect(page.getByTestId("ac-summary")).toBeVisible();
+  });
+
+  test("**「予以受理」仍然不给 CRC** —— 给的是那一页，不是那个动作",
+    async ({ page }) => {
+      /* 受理是机构的一次决定，`accept` 仍然只有 admin 与机构办持有。
+         一线在这一页上办的是「登记受理意向函」那一条。 */
+      await page.goto("/inst/intake?as=crc");
+      await expect(page.getByTestId("ac-row").first()).toBeVisible();
+      await expect(page.getByRole("button", { name: "予以受理" })).toHaveCount(0);
+    });
+});

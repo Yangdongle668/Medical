@@ -1,6 +1,7 @@
 import "reflect-metadata";
 import { Test } from "@nestjs/testing";
 import type { INestApplication } from "@nestjs/common";
+import { uploadBodyLimit } from "../src/infra/upload-limit.js";
 import request from "supertest";
 import { execSync } from "node:child_process";
 import fs from "node:fs";
@@ -94,9 +95,25 @@ export function resetDb() {
   process.env.TEST_DATABASE_URL = url;
 }
 
+/* ── 测试里的应用要和 main.ts 装同一批中间件 ──────────────────────────
+   这里原来只有 `createNestApplication()` —— 于是 main.ts 装的东西
+   **一件都不在测试里**，而请求体上限正是其中之一。
+
+   代价是实打实的：`acceptance-letter.test.ts` 里那条「超过 10 MB 就拒」
+   一直是绿的，但它绿的理由是**请求体撞上了 100 KB 的默认上限**，
+   不是服务层那 10 MB。那条测试的注释自己写着"两条路都会拦"——
+   而当两条路都会拦时，它就分不出哪一条真的在拦。
+
+   于是一份 **100 KB** 的 PDF 递不进去这件事，在测试里看不见：
+   测试从来没传过一份"正常大小"的文件。现场报的是 422，
+   报文还写着「上限是 10 MB」。
+
+   所以 boot() 从此镜像 main.ts。往后 main.ts 再加中间件，
+   加在这里才算数 —— 只加在 main.ts 里的，等于测试里没有。 */
 export async function boot(): Promise<INestApplication> {
   const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = mod.createNestApplication();
+  app.use(uploadBodyLimit());
   await app.init();
   return app;
 }

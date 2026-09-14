@@ -227,6 +227,28 @@ export function IntakePage() {
 
             {x.state === "submitted"
               ? canDecide && (
+                /* ── 自己提交的，这里不给按钮 ────────────────────────
+                   服务端一直拦着（`intake-self-approval`，与工时审批同一条
+                   规矩），但这一页原来只看 `approve` 动作 —— 于是一个
+                   两样动作都有的人（系统管理员、经营层）在**自己的**申请上
+                   照样看得到「批准立项」。按下去必然 422。
+
+                   一个能点、点了必错的按钮，比没有按钮糟得多：现场报来的是
+                   「超级管理员和经营层都可以自己批自己的项目」——
+                   他看到按钮在那儿，就以为这条规矩不存在。
+
+                   所以按钮收掉，并且**说出为什么**：一句"没有权限"会让人去
+                   要权限，而他要多少权限都批不了自己这一条。 */
+                x.submittedBy === me.account.id ? (
+                  <p className="note" style={{ margin: 0, fontSize: 13 }}
+                    data-testid={`intake-self-${x.id}`}>
+                    <b>这一条是你自己提交的，你批不了。</b>
+                    立项审批要两个人 —— 提交要 <span className="mono">bid</span>，
+                    批准要 <span className="mono">approve</span>，
+                    而<b>同一个人两样都有时，仍然批不了自己那一条</b>。
+                    请另一位有审批权的同事处理。
+                  </p>
+                ) : (
                 <div className="row" style={{ flexWrap: "wrap" }}>
                   <button className="btn primary" data-testid={`intake-ok-${x.id}`}
                     onClick={() => { setDeciding({ x, ok: true }); setReason(""); setProblem(null); }}>
@@ -241,6 +263,7 @@ export function IntakePage() {
                     不存在「批准了但档案没建」这一格。
                   </span>
                 </div>
+                )
               )
               : <p className="muted" style={{ margin: 0, fontSize: 13 }}
                   data-testid="intake-decided">

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { INestApplication } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { boot, resetDb, as, type Caller } from "./harness.js";
+import { fileEndpoints } from "../src/infra/upload-limit.js";
 
 const idem = () => ({ "Idempotency-Key": randomUUID() });
 const today = () => new Date().toISOString().slice(0, 10);
@@ -299,6 +300,64 @@ describe("拦住的那几样，都要说得出为什么", () => {
     expect(r.status, JSON.stringify(r.body)).toBe(422);
     expect(r.body.code).toBe("validation-failed");
     expect(`${r.body.detail}`).toMatch(/太大|上限|11\.0 MB/);
+  });
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   **一份正常大小的扫描件必须递得进去。**
+
+   这一组是从一次现场报障里长出来的：一份 **100 KB** 的 PDF 递不进去，
+   回 422，而报文写着「受理意向函的上限是 10 MB」——
+   一条同时说着"太大了"和"上限 10 MB"的报错。
+
+   原因：express 的 JSON 解析默认上限是 100 KB，而放大上限那段中间件
+   判的是"路径里有没有 `:record-letter`"。一步填完的
+   `POST /v1/site-acceptances` 后来也收 letter 了，它的路径里没有那个词。
+
+   ── 为什么上面那一组没拦住 ────────────────────────────────────────
+   上面只测了 11 MB（必拒）和 6 字节的假 PDF（必拒），**从来没测过
+   一份正常大小的文件**。两端都测了，中间那一大段没人走过 ——
+   而真实文件全部落在中间那一段。
+
+   所以这里钉的是"正常那一档"，而且**两条收文件的端点各钉一次**：
+   这次出事的正是后加的那一条。 */
+describe("正常大小的扫描件，两条路都要收得下", () => {
+  /** 500 KB —— 一份彩色扫描件的常见大小，编码后约 683 KB，
+   *  远超 express 那 100 KB 的默认上限，也远在 10 MB 以内。 */
+  const 扫描件 = () => Buffer.concat([PDF, Buffer.alloc(500 * 1024, 0x20)]);
+
+  it("一步填完那条：递交时直接带上意见函", async () => {
+    const r = await 递交(crc, 医院(), {
+      acceptedOn: today(),
+      letter: { filename: "受理意见函.pdf", contentBase64: b64(扫描件()) }
+    });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.state).toBe("accepted");
+    expect(r.body.letter?.filename).toBe("受理意见函.pdf");
+    /* 落库的是解出来的字节数，不是 base64 的长度。 */
+    expect(r.body.letter?.sizeBytes).toBe(扫描件().length);
+  });
+
+  it("补登那条：先递交、后补传", async () => {
+    const a = (await 递交(crc, 医院())).body;
+    const r = await 登记意向函(crc, a.id, {
+      receivedOn: today(),
+      file: { filename: "后补的.pdf", contentBase64: b64(扫描件()) }
+    });
+    expect(r.status, JSON.stringify(r.body)).toBe(201);
+    expect(r.body.data.letter?.sizeBytes).toBe(扫描件().length);
+  });
+
+  it("**收文件的端点名单是从契约里取的** —— 下一条自动在册", async () => {
+    /* 这一条守的是"别再靠路径里那个词"。名单由请求体里有没有
+       `contentBase64` 决定，所以新加一条收文件的端点时，
+       它自动落在放大上限的名单里 —— 不需要有人记得回来改中间件。
+       名单变短（有人把文件字段挪走了而中间件没跟上）时这条会红。 */
+    const ids = fileEndpoints().map(e => `${e.method} ${e.path}`).sort();
+    expect(ids).toEqual([
+      "POST /v1/site-acceptances",
+      "POST /v1/site-acceptances/{id}:record-letter"
+    ]);
   });
 
   it("收到日期早于递交日期就拒 —— 意向函不会比材料先到", async () => {

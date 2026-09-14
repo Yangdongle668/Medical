@@ -5,6 +5,7 @@ import { loadMe } from "../login/me.js";
 import { SITE_STATE_LABEL, SITE_ORDER } from "./states.js";
 import { SubmitAcceptanceForm } from "../instac/SubmitAcceptanceForm.js";
 import { SiteCrew } from "./SiteCrew.js";
+import { moduleOf } from "../../shell/modules.js";
 
 /* ════════════════════════════════════════════════════════════════════
    中心详情 = 状态机 + 闸门。
@@ -177,9 +178,29 @@ export function SiteDetailPage() {
                   <li key={u.code}>
                     {u.module && <span className="chip flat">{u.module}</span>}
                     <span>{u.message}</span>
-                    {u.module === "startup" && (
+                    {/* ── 「去处理」按模块出，不按写死的那一个 ──────────
+                        这里原来只认 `startup` 一条。于是闸门上那句
+                        「还没登记《立项受理意见函》—— 拿到之后在受理台账上
+                        登记收到日期」**指向一个没有链接的地方**，
+                        而 CRC 的侧栏上当时也没有受理台账那一页
+                        （迁移 0052 把它给进来了）。
+
+                        现场报来的原话是「CRC 在受理台账找不到对应的入口」——
+                        一句指向不存在的入口的提示，比不给提示更糟：
+                        他会以为是自己没找到。
+
+                        模块 → 路径的对应表就在 shell/modules.ts 里，
+                        用它出链接，往后任何一条带 module 的未满足项
+                        自动有去处 —— 不需要有人记得回来加一个 `=== "xxx"`。
+                        `startup` 仍然单独给：它要带上这个中心的 id。 */}
+                    {u.module === "startup" ? (
                       <Link to={`/sites/${id}/startup`} className="btn go"
                         data-testid="go-startup">去处理</Link>
+                    ) : u.module && moduleOf(u.module) && (
+                      <Link to={moduleOf(u.module)!.path} className="btn go"
+                        data-testid={`go-${u.module}`}>
+                        去{moduleOf(u.module)!.title}
+                      </Link>
                     )}
                     {/* 「还没登记立项材料递交」是这张清单上**唯一一条当场
                         就能办完的** —— 其余几条要么是本方别处的活
