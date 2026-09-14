@@ -42,7 +42,36 @@ test.describe("提交立项申请", () => {
     const row = page.getByTestId("intake-row").filter({ hasText: "洛塞那单抗" });
     await expect(row).toContainText("待审批");
     await expect(row).toContainText("信达生物");
+
+    /* ── 刚提交的这一条，他自己批不了 ────────────────────────────
+       服务端一直拦着（`intake-self-approval`，与工时审批同一条规矩），
+       但这一页原来只看 `approve` 动作 —— 于是两样动作都有的人
+       （系统管理员、经营层）在**自己的**申请上照样看得到「批准立项」，
+       按下去必然 422。
+
+       现场报来的原话是「超级管理员和经营层都可以自己批自己的项目」：
+       他看到按钮在那儿，就以为这条规矩不存在。
+       **一个能点、点了必错的按钮，比没有按钮糟得多。** */
+    await expect(row.getByRole("button", { name: "批准立项" })).toHaveCount(0);
+    await expect(row.getByRole("button", { name: "退回重谈" })).toHaveCount(0);
+    /* 而且要说出为什么 —— 一句"没有权限"会让人去要权限，
+       而他要多少权限都批不了自己这一条。 */
+    await expect(row.getByText("是你自己提交的")).toBeVisible();
+    await expect(row.getByText("要两个人")).toBeVisible();
   });
+
+  test("**别人提交的照样批得了** —— 收掉的是自己那一条，不是这个动作",
+    async ({ page }) => {
+      /* 上面那条收掉按钮之后，很容易把整个审批入口一起收没了 ——
+         而那会让"没有人能批"看起来和"规矩生效了"一模一样。
+         演示数据里的待审批申请是 PM 韩雪提交的，经营层照样要批得动。 */
+      await page.goto("/intake?as=boss");
+      await expect(page.getByTestId("intake-row").first()).toBeVisible();
+      const 别人的 = page.getByTestId("intake-row")
+        .filter({ hasText: "待审批" })
+        .filter({ hasNotText: "是你自己提交的" }).first();
+      await expect(别人的.getByRole("button", { name: "批准立项" })).toBeVisible();
+    });
 
   test("低于毛利门槛的，提交前就说得出保本合同额", async ({ page }) => {
     await page.goto("/intake?as=boss");
