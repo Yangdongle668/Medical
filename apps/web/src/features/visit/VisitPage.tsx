@@ -5,6 +5,7 @@ import type { Visit } from "../today/TodayPage.js";
 import { usePending } from "../../api/pending.js";
 import { loadMe, type Me } from "../login/me.js";
 import { today } from "../../shell/dates.js";
+import { UnmetList } from "../../shell/Unmet.js";
 
 /* 完成一次访视 —— 系统里最重要的一个动作。
    界面要做对两件事：
@@ -350,7 +351,7 @@ export function VisitPage() {
             <strong>{problem.title}</strong>
             <div>{problem.detail}</div>
             {problem.unmet && (
-              <ul>{problem.unmet.map((u, i) => <li key={i}>{u.message}</li>)}</ul>
+              <UnmetList items={problem.unmet} testid="visit-unmet" />
             )}
           </div>
         )}

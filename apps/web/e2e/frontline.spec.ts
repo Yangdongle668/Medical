@@ -139,3 +139,54 @@ test("经营层看得到补偿金额，看不到是给谁的", async ({ page }) 
   /* 金额那一列照给 —— 遮的是 L3 的筛选号，不是整页 */
   await expect(page.getByTestId("pay-row").first()).toContainText("¥");
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   被拦下来，要说得出**去哪儿办** —— 现场报来的那条通则。
+
+     「我找不到这个对应的入口，我想 CRC 每一步点击如果被阻塞了，
+       除了要有文字的提示，应该还要有一个跳转的链接，
+       这样不用特地去找对应的入口和功能了。」
+
+   在这之前**五个页面各自**把未满足项渲染成一行纯文字，一个链接都没有；
+   而服务端发的 `module` 里，十条有八条是**模块表里根本没有的键**
+   （clinical / regulatory / quality）—— 就算画链接也解析不出去处。
+   两头都修了：shell/Unmet.tsx 统一渲染，apps/api/test/gate-module.test.ts
+   钉住每个键都得是真键。
+   ════════════════════════════════════════════════════════════════════ */
+test.describe("被拦下来要给得出去处", () => {
+  test("入组被拦：说得出还差什么，**并且给一个跳转链接**", async ({ page }) => {
+    await page.goto("/prescreen?as=crc");
+    /* SS-01-P102 签了知情、在筛选中，而它的筛选期访视还没登记 PI 确认。 */
+    const row = page.getByTestId("pre-row").filter({ hasText: "SS-01-P102" });
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "入组" }).click();
+    await page.getByTestId("enroll-no").fill("R-LINK-1");
+    await page.getByTestId("enroll-go").click();
+
+    const unmet = page.getByTestId("prescreen-unmet");
+    await expect(unmet).toBeVisible();
+    /* ① 文字要说得出下一步。SS-01-P102 这一例走的是"连访视都没有"那一支 ——
+       **不许写「先去登记 ICF」**：他已经签过了（不然进不了筛选中），
+       叫他再签一次是把一句办不到的事写成了下一步。
+       也不许出现"等 PI"那种说法：PI 多数时候没有本系统的账号，等就是永远。 */
+    await expect(unmet).toContainText("没有筛选期访视");
+    await expect(unmet).not.toContainText("登记 ICF");
+    await expect(unmet).not.toContainText("需 PI 确认");
+    /* ② 链接 —— 这一条才是现场要的那一半。 */
+    await expect(unmet.getByTestId("go-subj")).toBeVisible();
+    await unmet.getByTestId("go-subj").click();
+    await expect(page).toHaveURL(/\/subjects/);
+  });
+
+  test("角标写的是模块中文名，不是 `subj` 这种键", async ({ page }) => {
+    /* 键是给程序看的。这张清单是给被拦下来的那个人看的。 */
+    await page.goto("/prescreen?as=crc");
+    const row = page.getByTestId("pre-row").filter({ hasText: "SS-01-P102" });
+    await row.getByRole("button", { name: "入组" }).click();
+    await page.getByTestId("enroll-no").fill("R-LINK-2");
+    await page.getByTestId("enroll-go").click();
+    const unmet = page.getByTestId("prescreen-unmet");
+    await expect(unmet).toContainText("受试者访视窗口");
+    await expect(unmet).not.toContainText("subj");
+  });
+});

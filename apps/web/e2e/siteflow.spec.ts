@@ -39,7 +39,10 @@ test("启动一个中心：闸门拦下 → 清阻塞项 → 放行 → 推进�
   await expect(page.getByTestId("gate-blocked")).toBeVisible();
   const unmet = page.getByTestId("unmet");
   await expect(unmet).toContainText("启动清单仍有");
-  await expect(unmet).toContainText("startup");
+  /* 角标显示的是**模块的中文名**，不是 `startup` 这种键 ——
+     键是给程序看的，而这张清单是给被拦下来的那个人看的。
+     （这一条原来断言的正是那个键。） */
+  await expect(unmet).toContainText("中心启动清单");
   await expect(page.getByTestId("advance")).toBeDisabled();
 
   /* ③ 顺着"去处理"进清单 —— 这条链接才是"说得出去哪儿办"的那一半 */

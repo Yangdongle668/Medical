@@ -462,13 +462,23 @@ export class ClinicalService {
       const 做完了没登记 = v0?.status === "done_pending_pi";
       throw new ProblemException("gate-not-satisfied", {
         detail: 没这条访视
-          ? "这一例还没有筛选期访视 —— 入组的前提是筛选期访视已完成并登记 PI 确认"
+          ? "这一例没有筛选期访视 —— 入组的前提是筛选期访视已完成并登记 PI 确认"
           : 做完了没登记
             ? "筛选期访视做完了，但还没登记 PI 确认 —— 去访视详情页把 PI 签字的日期登记上"
             : `筛选期访视当前是「${v0.status}」，还没做完，不能入组`,
-        unmet: [{ code: "screening-visit-not-locked", module: "clinical",
+        /* `subj`（受试者访视窗口）是真模块键 —— 原来这里写的是
+           `clinical`，而**模块表里根本没有这个键**：界面据它出跳转链接，
+           认不出来就只画文字。现场报的正是「我找不到这个对应的入口」。
+           gate-module.test.ts 现在钉着"每个 module 都得是真键"。 */
+        unmet: [{ code: "screening-visit-not-locked", module: "subj",
+          /* **不要写「先去登记 ICF」。** 能走到入组这一步的人已经签过知情了
+             （state 必须是 screening，而那正是 signIcf 改出来的）——
+             叫他再去签一次，是把一句办不到的事写成了下一步。
+             正常情况下 signIcf 会连访视一起排出来，所以这一支要么是
+             历史数据，要么是 SOA 没配访视；两种都得去受试者那一页看。 */
           message: 没这条访视
-            ? "还没有筛选期访视。签署知情同意时会自动排出它 —— 先去受试者页面登记 ICF"
+            ? "这一例没有筛选期访视 —— 正常情况下签署知情同意时会连它一起排出来。" +
+              "去受试者访视窗口看看这一例的访视排了没有"
             : 做完了没登记
               /* 「待 PI 确认」→「待**登记** PI 确认」：一个字，但它决定
                  人会不会去等。PI 多数时候没有本系统的账号，等就是永远。 */
@@ -654,8 +664,11 @@ export class ClinicalService {
     if (open.length)
       throw new ProblemException("gate-not-satisfied", {
         detail: `本次访视还有 ${open.length} 项任务未完成`,
+        /* **这一条不带 module**，是有意的：它列的是本次访视里没勾的任务，
+           而人就在这一页上 —— 给一个指回本页的链接是噪声。
+           原来写的 `clinical` 既不是真模块键，也从来没画出过链接。 */
         unmet: open.slice(0, 5).map(t => ({
-          code: "visit-task-open", module: "clinical", message: t.task }))
+          code: "visit-task-open", message: t.task }))
       });
 
     const outOfWindow = b.actualDate < v.windowFrom || b.actualDate > v.windowTo;

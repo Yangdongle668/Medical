@@ -277,9 +277,14 @@ describe("I3：没有 PI 确认，访视不锁定，受试者不能入组", () =
     const e = await crc.post(`/v1/subjects/${id}:enroll`,
       { randomizationNo: `R-${++seq}`, enrolledOn: today() }, K());
     expect(e.status).toBe(422);
-    expect(e.body.detail).toContain("还没有筛选期访视");
-    /* 而且要说得出下一步：先登记 ICF，访视会自己排出来。 */
-    expect(e.body.unmet[0].message).toContain("ICF");
+    expect(e.body.detail).toContain("没有筛选期访视");
+    /* **不许写「先去登记 ICF」**：能走到入组这一步的人已经签过知情了
+       （state 必须是 screening，而那正是 signIcf 改出来的）——
+       叫他再签一次，是把一句办不到的事写成了下一步。 */
+    expect(e.body.unmet[0].message).not.toContain("登记 ICF");
+    expect(e.body.unmet[0].message).toContain("受试者访视窗口");
+    /* 而且这一条要带得出去处 —— 界面据 module 出跳转链接。 */
+    expect(e.body.unmet[0].module).toBe("subj");
   });
 
   it("没有 piConfirm 的角色确认不了 —— 仍然是动作维度的事", async () => {

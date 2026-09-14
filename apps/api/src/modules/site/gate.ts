@@ -60,22 +60,22 @@ const counted = (
 
 /** 推进到「中心关闭」：八项前置条件，全部是真查询。 */
 const CLOSE_CHECKS: Checker[] = [
-  counted("subjects-in-trial", "clinical", "全部受试者已出组",
+  counted("subjects-in-trial", "subj", "全部受试者已出组",
     `SELECT count(*) AS n FROM subject
       WHERE study_site_id = $1 AND state IN ('screening','enrolled')`,
     n => `仍有 ${n} 例受试者在组或在筛未出组 —— 中心一关，他们的随访就无人接续`),
 
-  counted("open-queries", "clinical", "数据质疑已全部关闭",
+  counted("open-queries", "query", "数据质疑已全部关闭",
     `SELECT count(*) AS n FROM quality_event
       WHERE study_site_id = $1 AND kind = 'query' AND state <> 'closed'`,
     n => `仍有 ${n} 条数据质疑未关闭 —— 带着质疑锁库，锁的是一份自己都不认的数据`),
 
-  counted("open-quality", "quality", "质量事件已全部关闭",
+  counted("open-quality", "qa", "质量事件已全部关闭",
     `SELECT count(*) AS n FROM quality_event
       WHERE study_site_id = $1 AND kind <> 'query' AND state <> 'closed'`,
     n => `仍有 ${n} 件质量事件（含方案偏离）未关闭`),
 
-  counted("compensation-open", "clinical", "受试者补偿已全部发放并留有签收凭证",
+  counted("compensation-open", "pay", "受试者补偿已全部发放并留有签收凭证",
     `SELECT count(*) AS n FROM subject_payment
       WHERE study_site_id = $1 AND paid_on IS NULL`,
     n => `仍有 ${n} 笔受试者补偿未发放或缺签收凭证`),
@@ -90,7 +90,7 @@ const CLOSE_CHECKS: Checker[] = [
     const n = Number(rows[0]?.n ?? 0);
     return n >= 0
       ? { code: "ip-imbalance", status: "ok", message: "药品台账平" }
-      : { code: "ip-imbalance", module: "clinical", status: "unmet",
+      : { code: "ip-imbalance", module: "material", status: "unmet",
           message: `药品台账不平：算出来是 ${n}，发出去的比收到的多 ${-n} —— ` +
             "先把流水补齐或找出差在哪，关了中心就查不清了" };
   },
@@ -102,11 +102,11 @@ const CLOSE_CHECKS: Checker[] = [
     const n = Number(rows[0]?.n ?? 0);
     return n <= 0
       ? { code: "ip-not-destroyed", status: "ok", message: "药品已清零（退回或销毁登记完毕）" }
-      : { code: "ip-not-destroyed", module: "clinical", status: "unmet",
+      : { code: "ip-not-destroyed", module: "material", status: "unmet",
           message: `中心还有 ${n} 份药品在手 —— 退回申办方或登记销毁之后才能关闭` };
   },
 
-  counted("specimen-open", "clinical", "生物样本链已闭环",
+  counted("specimen-open", "material", "生物样本链已闭环",
     `SELECT count(*) AS n FROM specimen
       WHERE study_site_id = $1 AND received_on IS NULL AND discarded_on IS NULL`,
     n => `仍有 ${n} 管样本既没被实验室确认收到、也没有销毁登记 —— ` +
@@ -122,7 +122,7 @@ const CLOSE_CHECKS: Checker[] = [
     if (d === "approved")
       return { code: "closeout-report", status: "ok", message: "结题报告已获伦理批准" };
     return {
-      code: "closeout-report", module: "regulatory", status: "unmet",
+      code: "closeout-report", module: "ethics", status: "unmet",
       message: d === null ? "尚未向伦理递交结题报告"
         : d === "pending" ? "结题报告已递交，伦理尚未批复 —— 批下来才能关"
         : "结题报告被伦理退回，需要重新递交"

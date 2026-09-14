@@ -7,6 +7,7 @@ import {
 } from "./api.js";
 import { SCREEN_FAIL_LABEL } from "../enrollment/api.js";
 import { Pick } from "../../shell/CreateForm.js";
+import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
 
 /* ════════════════════════════════════════════════════════════════════
    预筛登记。
@@ -124,10 +125,11 @@ export function PrescreenPage() {
         <div className="problem stack" data-testid="pre-problem" style={{ marginBottom: 12 }}>
           <strong>{problem.title}</strong>
           {problem.detail && <div>{problem.detail}</div>}
+          {/* **被拦下来要说得出去哪儿办。** 原来这里只画文字 ——
+              现场报的是「我找不到这个对应的入口」。链接由 UnmetList
+              按服务端给的 module 自动出（见 shell/Unmet.tsx）。 */}
           {Array.isArray(problem.unmet) && (
-            <ul className="unmet">
-              {(problem.unmet as { message: string }[]).map((u, i) => <li key={i}>{u.message}</li>)}
-            </ul>
+            <UnmetList items={problem.unmet as UnmetItem[]} testid="prescreen-unmet" />
           )}
         </div>
       )}
