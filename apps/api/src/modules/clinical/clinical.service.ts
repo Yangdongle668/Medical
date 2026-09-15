@@ -15,7 +15,11 @@ import { saeReportHours, saeTimeliness, saeStatus, SAE_REPORT_DEADLINE_HOURS,
 import { nextCode } from "../../infra/code.js";
 /* 入组闸门那三句话的措辞 —— 与 mock 共用一份，两边不会各走各的
    （见 contracts 里 `screeningGateWording` 上面那段注释）。 */
-import { screeningGateWording, type VisitStatus } from "@sitedesk/contracts";
+/* 状态的中文名 —— **提示里不摆枚举键**，键是给程序看的。
+   三份读者（服务端、mock、界面）共用契约那一份，见那边的注释。 */
+import { screeningGateWording, SUBJECT_STATE_LABEL, VISIT_STATUS_LABEL,
+  type VisitStatus, type SUBJECT_STATES } from "@sitedesk/contracts";
+type SubjectState = (typeof SUBJECT_STATES)[number];
 
 /* ════════════════════════════════════════════════════════════════════
    ClinicalOps —— 受试者与访视。
@@ -414,7 +418,7 @@ export class ClinicalService {
     const c = ctx();
     const su = await this.rawSubject(id);
     if (su.state !== "prescreen")
-      this.invariant("subject-state", `受试者当前是「${su.state}」，只有预筛状态可以登记知情签署`);
+      this.invariant("subject-state", `受试者当前是「${SUBJECT_STATE_LABEL[su.state as SubjectState]}」，只有预筛状态可以登记知情签署`);
     if (b.signedOn > todayStr())
       this.invariant("icf-not-future", "知情同意签署日不能晚于今天");
     /* 伦理批件之前签的知情，是严重违背 —— 不该由系统默默接受 */
@@ -464,7 +468,7 @@ export class ClinicalService {
     const c = ctx();
     const su = await this.rawSubject(id);
     if (su.state !== "screening")
-      this.invariant("subject-state", `受试者当前是「${su.state}」，只有筛选中可以入组`);
+      this.invariant("subject-state", `受试者当前是「${SUBJECT_STATE_LABEL[su.state as SubjectState]}」，只有筛选中可以入组`);
 
     /* I3 的直接后果：入排标准还没有 PI 签字就随机化，是核查必查的一条。
        **规矩没变，措辞变了**（迁移 0050）：PI 签的字仍然是放行条件，
@@ -520,11 +524,102 @@ export class ClinicalService {
     return { data: await this.getSubject(id), sideEffects: effects };
   }
 
+  /** 补排一次访视。
+   *
+   *  ── 这个口子补的是一个"整条流程走不下去"的格子 ──────────────────
+   *  在此之前访视只有**两个出生口**：`signIcf` 排第 0 次，`completeVisit`
+   *  排下一次。两个口都堵上的时候，界面上没有任何办法给这一例排出访视 ——
+   *  而入组要求第 0 次已登记 PI 确认，于是这一例除了筛败 / 脱落没有出路。
+   *  现场报来的原话：「页面没有可以操作的按钮，只有一个脱落」。
+   *
+   *  两个口都堵上不是假想：
+   *    ① 项目当时还没配 SOA 就签了知情（`signIcf` 现已 fail-closed，
+   *       但存量还在，而存量是靠改库收拾的）；
+   *    ② **方案修订把 SOA 加长了** —— 下一次是在「完成上一次」那一刻排的，
+   *       那时新的 seq 还不存在；而 `replaceSoa` 写明了"只影响此后才排
+   *       出来的访视"，不回头补。于是做到原最后一次的那批人全卡住。
+   *       这是临床试验里**很常见**的一件事，不是边角情况。
+   *
+   *  ── 它不是"补录"，是把 SOA 本来就规定了的那一次排出来 ──────────
+   *  目标日照锚点算、窗口照 SOA、任务清单照 SOA —— 与 `signIcf` /
+   *  `completeVisit` 排出来的一模一样，走的也是同一个 `scheduleVisit`。
+   *  所以它不需要填"原因"：没有任何一个字是人手写进记录里的。
+   */
+  async scheduleVisitFor(id: string, b: { seq?: number }) {
+    const c = ctx();
+    const su = await this.rawSubject(id);
+
+    /* 只给还在流程里的人。预筛没签知情 —— 锚点算不出来，而"签知情"
+       本来就是他的下一步；已出组的人补排一次访视只会永远刷红超窗
+       （筛败那一步专门把未做的访视作废掉，正是为了避免这个）。 */
+    if (!["screening", "enrolled"].includes(su.state))
+      this.invariant("subject-state",
+        `受试者当前是「${SUBJECT_STATE_LABEL[su.state as SubjectState]}」，只有筛选中或已入组可以补排访视` +
+        (su.state === "prescreen" ? " —— 这一例的下一步是登记知情同意签署" : ""));
+
+    /* SOA 是唯一权威：排哪一次、目标日怎么算、窗口多宽、要做哪几项，
+       全从这张表来。没有这张表就没有"该排的下一次"这个概念。 */
+    const soa = await c.client.query<{ seq: number; anchor: string; visit_label: string }>(
+      `SELECT seq, anchor, visit_label FROM visit_template
+        WHERE study_id = $1 ORDER BY seq`, [su.study_id]);
+    if (!soa.rows.length)
+      throw new ProblemException("gate-not-satisfied", {
+        detail: "这个项目还没有配访视计划（SOA）—— 没有 SOA 就没有「该排哪一次」这回事",
+        unmet: [{ code: "study-has-no-soa", module: "intake",
+          message: "先在「立项与建档」里把这个项目的 SOA 配好，再回来补排访视" }] });
+
+    const done = await c.client.query<{ seq: number }>(
+      `SELECT seq FROM subject_visit WHERE subject_id = $1`, [id]);
+    const 已排 = new Set(done.rows.map(r => r.seq));
+
+    /* 省略 seq 即"该排的下一次" = SOA 里最小的那个还没排的。
+       让界面去算这个数的话，界面就得自己有一份 SOA 的规则 —— 而那正是
+       两份规则各走各的开始。 */
+    const seq = b.seq ?? soa.rows.find(r => !已排.has(r.seq))?.seq;
+    if (seq === undefined)
+      this.invariant("visit-already-scheduled",
+        "SOA 上每一次访视都已经排过了 —— 没有可补排的");
+
+    const tpl = soa.rows.find(r => r.seq === seq);
+    if (!tpl)
+      this.invariant("visit-not-in-soa",
+        `这个项目的 SOA 上没有第 ${seq} 次访视 —— ` +
+        `现有的是第 ${soa.rows[0]!.seq} 到第 ${soa.rows[soa.rows.length - 1]!.seq} 次`);
+    if (已排.has(seq))
+      this.invariant("visit-already-scheduled",
+        `第 ${seq} 次访视（${tpl.visit_label}）已经排过了，不能排第二次`);
+
+    /* 锚点日取自受试者自己的记录，**不由请求带进来** ——
+       带进来就等于让人手填目标日，而那是在改记录。
+       seq 0 锚知情签署日，其余锚入组日（与 visit_template.anchor 一致）。 */
+    const anchor = tpl.anchor === "icf" ? su.icf_signed_on : su.enrolled_on;
+    if (!anchor)
+      this.invariant("visit-anchor-missing",
+        tpl.anchor === "icf"
+          ? "这一例还没有知情同意签署日，排不出筛选期访视 —— 先登记知情"
+          : "这一例还没有入组日，排不出入组之后的访视 —— 先登记入组");
+    const anchorStr = anchor.toISOString().slice(0, 10);
+
+    const eff = await this.scheduleVisit(id, seq, anchorStr);
+    /* `scheduleVisit` 只在"SOA 没这一行"或"已经排过"时返回 null，
+       两种上面都挡掉了 —— 走到这里还是 null 就是它变了，不该静默。 */
+    if (!eff) this.invariant("visit-schedule-failed",
+      `第 ${seq} 次访视没能排出来 —— 请把这条记下来报给管理员`);
+
+    await this.audit.write({
+      action: "补排访视", targetType: "subject", targetId: su.screening_no,
+      before: { scheduledSeqs: [...已排].sort((x, y) => x - y) },
+      after: { seq, visitLabel: tpl.visit_label, anchoredOn: anchorStr },
+      studySiteId: su.study_site_id });
+
+    return { data: await this.visit(eff.ref!), sideEffects: [eff] };
+  }
+
   async screenFail(id: string, b: { reason: string; failedOn: string; note?: string }) {
     const c = ctx();
     const su = await this.rawSubject(id);
     if (!["prescreen", "screening"].includes(su.state))
-      this.invariant("subject-state", `受试者当前是「${su.state}」，只有预筛或筛选中可以登记筛败`);
+      this.invariant("subject-state", `受试者当前是「${SUBJECT_STATE_LABEL[su.state as SubjectState]}」，只有预筛或筛选中可以登记筛败`);
     if (su.state === "prescreen")
       this.invariant("screen-fail-needs-icf",
         "尚未签署知情，谈不上筛败 —— 未签知情的退出不进筛败统计，否则筛败率会被稀释");
@@ -550,7 +645,7 @@ export class ClinicalService {
     const su = await this.rawSubject(id);
     if (su.state !== "enrolled")
       this.invariant("subject-state",
-        `受试者当前是「${su.state}」，只有已入组可以登记脱落 —— ` +
+        `受试者当前是「${SUBJECT_STATE_LABEL[su.state as SubjectState]}」，只有已入组可以登记脱落 —— ` +
         "入组前退出叫筛败，两者在收入口径上完全不同");
 
     await c.client.query(
@@ -637,7 +732,7 @@ export class ClinicalService {
     const c = ctx();
     const v = await this.visit(visitId);
     if (v.status !== "planned")
-      this.invariant("visit-state", `访视当前是「${v.status}」，不能再改任务`);
+      this.invariant("visit-state", `访视当前是「${VISIT_STATUS_LABEL[v.status as VisitStatus]}」，不能再改任务`);
     const r = await c.client.query(
       `UPDATE subject_visit_task SET done_at = now(), done_by = $3
         WHERE visit_id = $1 AND seq = $2 AND done_at IS NULL`,
@@ -674,7 +769,7 @@ export class ClinicalService {
     const c = ctx();
     const v = await this.visit(id);
     if (v.status !== "planned")
-      this.invariant("visit-state", `访视当前是「${v.status}」，不能重复完成`);
+      this.invariant("visit-state", `访视当前是「${VISIT_STATUS_LABEL[v.status as VisitStatus]}」，不能重复完成`);
     if (b.actualDate > todayStr())
       this.invariant("visit-not-future", "访视实际完成日不能晚于今天");
 
@@ -804,7 +899,7 @@ export class ClinicalService {
     const p = principal();
     const v = await this.visit(id);
     if (v.status !== "done_pending_pi")
-      this.invariant("visit-state", `访视当前是「${v.status}」，只有待确认的可以确认`);
+      this.invariant("visit-state", `访视当前是「${VISIT_STATUS_LABEL[v.status as VisitStatus]}」，只有待确认的可以确认`);
 
     const site = await c.client.query<{ pi_account_id: string | null }>(
       `SELECT pi_account_id FROM study_site WHERE id = $1`, [v.studySiteId]);
@@ -849,6 +944,48 @@ export class ClinicalService {
       summary: "筛选期访视已锁定，该受试者现在可以入组随机化",
       ref: v.subjectId, studySiteId: v.studySiteId
     });
+
+    /* ── 最后一次访视锁定 → 出组 ──────────────────────────────────────
+       **`completed` 此前是一个到不了的状态。**
+       契约里定义了它（"completed 已出组"）、`STATE_LABEL` 给了它中文名、
+       漏斗接口 `count(*) FILTER (WHERE state = 'completed')` 专门数它 ——
+       而整个代码库里**没有一行把它写进去**。于是每个中心的「已出组」
+       永远是 0，做完整条 SOA 的人一直挂在「已入组」上。
+       这和"访视排不出来"是同一种缺口：系统说得出这个状态，却到不了。
+
+       它是**后果，不是一个新动作** —— 跟"完成访视自动排下一次"、
+       "筛选期锁定就能入组"一样，不该再让人去点一下。判据是事实本身：
+       SOA 上每一次都排过了，而且没有一次还悬着。
+
+       出组日取末次访视的实际日期，不取今天 —— 今天是登记这一下的日子，
+       而出组发生在他最后一次来院那天。晚登记不该把日期挪走。 */
+    const rest = await c.client.query<{ n: string }>(
+      `SELECT count(*) AS n FROM visit_template t
+        WHERE t.study_id = (SELECT s.study_id FROM subject su
+                              JOIN study_site s ON s.id = su.study_site_id
+                             WHERE su.id = $1)
+          AND NOT EXISTS (SELECT 1 FROM subject_visit sv
+                           WHERE sv.subject_id = $1 AND sv.seq = t.seq
+                             AND sv.status IN ('locked', 'cancelled'))`,
+      [v.subjectId]);
+    if (Number(rest.rows[0]?.n ?? 1) === 0) {
+      const su = await c.client.query<{ state: string; screening_no: string }>(
+        `UPDATE subject SET state = 'completed', exited_on = $2
+          WHERE id = $1 AND state = 'enrolled'
+          RETURNING state, screening_no`, [v.subjectId, v.actualDate]);
+      if (su.rows[0]) {
+        effects.push({
+          type: "SubjectCompleted",
+          summary: `${su.rows[0].screening_no} 已做完 SOA 上的全部访视，出组日 ${v.actualDate}`,
+          ref: v.subjectId, studySiteId: v.studySiteId
+        });
+        await this.audit.write({
+          action: "受试者出组", targetType: "subject", targetId: su.rows[0].screening_no,
+          before: { state: "enrolled" },
+          after: { state: "completed", exitedOn: v.actualDate },
+          studySiteId: v.studySiteId });
+      }
+    }
 
     /* 审计里要留下的是**三件事**：状态变了、PI 哪天签的、以及
        `piConfirmedBy` 为什么是空的。最后一条尤其要紧 —— 核查时问起

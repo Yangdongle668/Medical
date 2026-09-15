@@ -260,6 +260,37 @@ define({
   errors: ["invariant-violated", "gate-not-satisfied", "idempotency-key-reused"]
 });
 
+/** `scheduleSubjectVisit` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
+export const ScheduleSubjectVisitBody = z.object({
+    /** 省略即"该排的下一次" —— 服务端按 SOA 找出最小的那个还没排的 seq。 */
+    seq: z.int().min(0).max(79).optional()
+  });
+
+define({
+  id: "scheduleSubjectVisit", method: "post", path: "/v1/subjects/{id}:schedule-visit",
+  layer: "L2", context: CTX,
+  summary: "补排一次访视",
+  description:
+    "按 SOA 给这一例补排一次访视。**省略 `seq` 即补排该排的下一次。**\n\n" +
+    "── 为什么要有这个口子 ──\n" +
+    "在此之前访视只有两个出生口：签署知情时排出第 0 次，完成一次时排出下一次。" +
+    "**两个口都堵上的时候，界面上没有任何办法给这一例排出访视来。**\n" +
+    "而这种情况是会发生的：\n" +
+    "① 项目当时还没配 SOA 就签了知情（现已 fail-closed，但存量还在）；\n" +
+    "② **方案修订把 SOA 加长了** —— 已经做到原来最后一次的那些人，" +
+    "下一次是在「完成那一次」的时刻排的，而那时新的 seq 还不存在，" +
+    "于是他们卡在没有下一次访视的状态里，`replaceSoa` 也不会回头补" +
+    "（它写明了「只影响此后才排出来的访视」）。\n\n" +
+    "这不是补录，是把 SOA 本来就规定了的那一次排出来：目标日照锚点算" +
+    "（第 0 次锚知情签署日，其余锚入组日），窗口照 SOA，任务清单照 SOA。" +
+    "已经排过的 seq 排不了第二次。",
+  action: "subjWrite",
+  params: ById,
+  body: ScheduleSubjectVisitBody,
+  response: commandResult(SubjectVisit),
+  errors: ["invariant-violated", "gate-not-satisfied", "idempotency-key-reused"]
+});
+
 /** `screenFailSubject` 的请求体 —— **路由层直接用这一个，不许再抄一份**。 */
 export const ScreenFailSubjectBody = z.object({ reason: ScreenFailReason, failedOn: DateOnly, note: z.string().max(500).optional() });
 

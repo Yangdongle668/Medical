@@ -387,6 +387,185 @@ describe("I3：没有 PI 确认，访视不锁定，受试者不能入组", () =
     expect(e.body.unmet[0].module).toBe("subj");
   });
 
+  /* ══════════════════════════════════════════════════════════════════
+     补排访视 —— **这一组钉的是"这条路走得通"本身。**
+
+     现场报来的两句原话，一句接一句：
+       「页面没有可以操作的按钮，只有一个脱落」
+       「显示访视没有排出来，但是我没有看到排访视的功能」
+
+     第二句说的是一个真缺口：在此之前访视只有两个出生口（签知情排第 0 次、
+     完成一次排下一次），两个都堵上时**整个系统里没有任何一个动作**
+     能给这一例排出访视来 —— 而入组要求第 0 次已登记 PI 确认，
+     于是这一例除了筛败 / 脱落没有出路，只能改库。
+     ══════════════════════════════════════════════════════════════════ */
+  it("**没有筛选期访视的那一例，补排一次就能接着往下走**", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const { id } = await freshSubject(crc, s.id);
+    const v = await currentVisit(crc, id);
+    /* 造出"访视没了"那种状态 —— 与上面那条同一个做法。 */
+    const db = new pg.Client({ connectionString: process.env["TEST_DATABASE_URL"] });
+    await db.connect();
+    try { await db.query("DELETE FROM subject_visit WHERE id = $1", [v.id]); }
+    finally { await db.end(); }
+    /* 先证明他确实卡住了 —— 不先证这一下，下面那一路"补排完就能入组"
+       可能只是因为他本来就没卡住。 */
+    expect((await crc.post(`/v1/subjects/${id}:enroll`,
+      { randomizationNo: `R-${++seq}`, enrolledOn: today() }, K())).status).toBe(422);
+
+    const r = await crc.post(`/v1/subjects/${id}:schedule-visit`, {}, K());
+    expect(r.status).toBe(201);
+    expect(r.body.data.seq).toBe(0);
+    /* 目标日照锚点算，不是"今天" —— 补排不是补录，它排的是 SOA 本来就
+       规定了的那一次。这一例的知情签在今天，所以目标日就是今天。 */
+    expect(r.body.data.targetDate).toBe(today());
+    expect(r.body.data.status).toBe("planned");
+    /* 任务清单一起出来 —— 一条 0/0 的访视和没有访视一样说不出下一步。 */
+    expect(r.body.data.tasks.length).toBeGreaterThan(0);
+
+    /* 而且**真的走得下去**：做完 → 登记 PI 确认 → 入组。 */
+    const done = await doVisit(crc, id);
+    expect(done.res.status).toBe(201);
+    expect((await crc.post(`/v1/subject-visits/${done.visit.id}:confirm`, {}, K())).status)
+      .toBe(201);
+    const e2 = await crc.post(`/v1/subjects/${id}:enroll`,
+      { randomizationNo: `R-${++seq}`, enrolledOn: today() }, K());
+    expect(e2.status, "补排之后这一例应当入得了组").toBe(201);
+  });
+
+  it("已经排过的那一次排不了第二次", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const { id } = await freshSubject(crc, s.id);       // 第 0 次已经有了
+    const r = await crc.post(`/v1/subjects/${id}:schedule-visit`, { seq: 0 }, K());
+    expect(r.status).toBe(422);
+    expect(r.body.invariant).toBe("visit-already-scheduled");
+  });
+
+  it("省略 seq 即「该排的下一次」 —— 第 0 次在就排第 1 次", async () => {
+    /* 这一条同时钉住另一件事：**方案修订把 SOA 加长之后**，
+       已经做到原最后一次的人得排得出新加的那几次 ——
+       `replaceSoa` 写明了"只影响此后才排出来的访视"，不回头补。 */
+    const s = await siteByCode(crc, "SS-01");
+    const { id } = await freshSubject(crc, s.id);
+    /* 第 1 次锚的是入组日，所以得先入组 —— 走完整条路，不绕。 */
+    const { visit } = await doVisit(crc, id);
+    await crc.post(`/v1/subject-visits/${visit.id}:confirm`, {}, K());
+    await crc.post(`/v1/subjects/${id}:enroll`,
+      { randomizationNo: `R-${++seq}`, enrolledOn: today() }, K());
+    /* 入组那一下已经排了第 1 次，删掉它造出"下一次不见了"那种状态。 */
+    const db = new pg.Client({ connectionString: process.env["TEST_DATABASE_URL"] });
+    await db.connect();
+    try { await db.query("DELETE FROM subject_visit WHERE subject_id = $1 AND seq = 1", [id]); }
+    finally { await db.end(); }
+
+    const r = await crc.post(`/v1/subjects/${id}:schedule-visit`, {}, K());
+    expect(r.status).toBe(201);
+    expect(r.body.data.seq).toBe(1);
+    /* 锚的是入组日，不是知情签署日 —— 两者在这条用例里是同一天，
+       所以另外断言它照 SOA 的 offset 走：第 1 次 offset 为 0。 */
+    expect(r.body.data.targetDate).toBe(today());
+  });
+
+  it("预筛的人补排不了 —— 锚点算不出来，而他的下一步是签知情", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const r = await crc.post("/v1/subjects",
+      { studySiteId: s.id, screeningNo: `SV-${Date.now() % 100000}-${++seq}` }, K());
+    const bad = await crc.post(`/v1/subjects/${r.body.id}:schedule-visit`, {}, K());
+    expect(bad.status).toBe(422);
+    expect(bad.body.invariant).toBe("subject-state");
+    /* 说得出下一步 —— 而且说的是他真办得到的那一步。 */
+    expect(bad.body.detail).toContain("知情同意签署");
+    /* 状态说中文，不说 `prescreen` —— 键是给程序看的。 */
+    expect(bad.body.detail).not.toContain("prescreen");
+  });
+
+  it("没有 subjWrite 的角色补排不了 —— 仍然是动作维度的事", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const { id } = await freshSubject(crc, s.id);
+    /* QA 的动作是 audit / capaWrite / closeQA / raiseQ —— 没有 subjWrite。 */
+    expect((await qa.post(`/v1/subjects/${id}:schedule-visit`, {}, K())).status).toBe(403);
+  });
+
+  /* ══════════════════════════════════════════════════════════════════
+     出组 —— **`completed` 此前是个到不了的状态。**
+
+     契约里定义了它（"completed 已出组"）、`STATE_LABEL` 给了中文名、
+     漏斗接口 `count(*) FILTER (WHERE state = 'completed')` 专门数它 ——
+     而整个代码库里**没有一行把它写进去**（开发库实测：0 例）。
+     于是每个中心的「已出组」永远是 0，做完整条 SOA 的人一直挂在
+     「已入组」上，而经营层看的就是这张表。
+
+     这和"访视排不出来"是同一种缺口：系统说得出这个状态，却到不了。
+     ══════════════════════════════════════════════════════════════════ */
+  it("**做完 SOA 上最后一次访视 → 出组**", async () => {
+    /* 用 SS-01。挑它不是因为 SOA 最短（它有 13 次），是因为**整条 SOA
+       跨的日子最短**：最后一次的 offset 是 231 天。
+       SS-09 那条只有 9 次，但周期 84 天、跨 588 天 —— 知情得签在两年前，
+       而那比中心的伦理批件日还早，`icf-after-irb` 当场拦下。
+       "次数少"和"走得完"是两回事。 */
+    const lm = crc;                       // 吴桐是 SS-01 的 CRC
+    const s = await siteByCode(lm, "SS-01");
+
+    /* 知情签在 300 天前：后面每一次访视的目标日都要落在**今天之前**，
+       否则完成那一下撞的是 `visit-not-future`，走不完这条路。
+       300 = 伦理批件（332 天前）之后，且 10 + 231 天之后仍在今天之前。 */
+    const icfOn = shift(today(), -300);
+    const { id } = await freshSubject(lm, s.id, icfOn);
+
+    /* seq 0：做完 → 登记 PI 确认 → 入组。 */
+    expect((await doVisit(lm, id)).res.status).toBe(201);
+    const v0 = await currentVisit(lm, id);
+    expect((await lm.post(`/v1/subject-visits/${v0.id}:confirm`, {}, K())).status).toBe(201);
+    expect((await lm.post(`/v1/subjects/${id}:enroll`,
+      { randomizationNo: `R-${++seq}`, enrolledOn: shift(icfOn, 10) }, K())).status).toBe(201);
+
+    /* 剩下的一路做完。**带上限** —— SOA 长度变了也不会把测试挂死，
+       而挂死的测试报出来的是超时，看不出是这里循环不出去。 */
+    let last: { status: number; body: { sideEffects: { type: string; summary: string }[] } }
+      | null = null;
+    for (let i = 0; i < 40; i++) {
+      const open = (await lm.get(`/v1/subject-visits?subjectId=${id}&limit=50`))
+        .body.items.filter((x: { status: string }) => x.status === "planned");
+      if (!open.length) break;
+      expect((await doVisit(lm, id)).res.status).toBe(201);
+      const v = (await lm.get(`/v1/subject-visits?subjectId=${id}&limit=50`))
+        .body.items.find((x: { status: string }) => x.status === "done_pending_pi");
+      last = await lm.post(`/v1/subject-visits/${v.id}:confirm`, {}, K());
+      expect(last!.status).toBe(201);
+    }
+
+    /* **最后那一下要说出来**：出组是后果，而后果要在响应里看得见 ——
+       否则点完确认的人不知道这一例已经结束了。 */
+    const done = last!.body.sideEffects.find(e => e.type === "SubjectCompleted");
+    expect(done, "最后一次访视锁定时应当带出「出组」这条后果").toBeTruthy();
+
+    const su = (await lm.get(`/v1/subjects/${id}`)).body;
+    expect(su.state).toBe("completed");
+    /* 出组日是**末次访视那天**，不是登记这一下的今天 ——
+       晚登记不该把日期挪走。 */
+    const visits = (await lm.get(`/v1/subject-visits?subjectId=${id}&limit=50`)).body.items;
+    const lastDate = visits.map((x: { actualDate: string }) => x.actualDate)
+      .filter(Boolean).sort().at(-1);
+    expect(su.exitedOn).toBe(lastDate);
+    expect(su.exitedOn).not.toBe(today());
+  });
+
+  it("还差一次没做完就不算出组 —— 判据是事实，不是「最后一次的序号」", async () => {
+    /* 只走到 seq 0 锁定 + 入组，后面还有 8 次没做。
+       这一条防的是把判据写成 `v.seq === 最后一个 seq` —— 那样的话
+       乱序确认（先做完后面那次再回头补前面）会提前把人判成出组。 */
+    const lm = crc;
+    const s = await siteByCode(lm, "SS-01");
+    const { id } = await freshSubject(lm, s.id, shift(today(), -300));
+    await doVisit(lm, id);
+    const v0 = await currentVisit(lm, id);
+    const r = await lm.post(`/v1/subject-visits/${v0.id}:confirm`, {}, K());
+    expect(r.status).toBe(201);
+    expect(r.body.sideEffects.some((e: { type: string }) => e.type === "SubjectCompleted"))
+      .toBe(false);
+    expect((await lm.get(`/v1/subjects/${id}`)).body.state).toBe("screening");
+  });
+
   it("没有 piConfirm 的角色确认不了 —— 仍然是动作维度的事", async () => {
     const s = await siteByCode(crc, "SS-01");
     const { id } = await freshSubject(crc, s.id);

@@ -15408,6 +15408,137 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/subjects/{id}:schedule-visit:
+    post:
+      operationId: scheduleSubjectVisit
+      tags:
+        - clinical
+      summary: 补排一次访视
+      description: >-
+        按 SOA 给这一例补排一次访视。**省略 `seq` 即补排该排的下一次。**
+
+
+        ── 为什么要有这个口子 ──
+
+        在此之前访视只有两个出生口：签署知情时排出第 0 次，完成一次时排出下一次。**两个口都堵上的时候，界面上没有任何办法给这一例排出访视来。**
+
+        而这种情况是会发生的：
+
+        ① 项目当时还没配 SOA 就签了知情（现已 fail-closed，但存量还在）；
+
+        ② **方案修订把 SOA 加长了** —— 已经做到原来最后一次的那些人，下一次是在「完成那一次」的时刻排的，而那时新的 seq 还不存在，于是他们卡在没有下一次访视的状态里，`replaceSoa`
+        也不会回头补（它写明了「只影响此后才排出来的访视」）。
+
+
+        这不是补录，是把 SOA 本来就规定了的那一次排出来：目标日照锚点算（第 0 次锚知情签署日，其余锚入组日），窗口照 SOA，任务清单照 SOA。已经排过的 seq 排不了第二次。
+      x-layer: L2
+      x-required-action: subjWrite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            pattern: >-
+              ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleSubjectVisitRequest'
+      responses:
+        '200':
+          description: 补排一次访视
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleSubjectVisitResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/subjects/{id}:screen-fail:
     post:
       operationId: screenFailSubject
@@ -16577,6 +16708,7 @@ components:
         - NextVisitScheduled
         - SoaRevised
         - SubjectEnrolled
+        - SubjectCompleted
         - SpecimenClosed
         - CloseoutApproved
         - DataQueryRaised
@@ -24660,6 +24792,28 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/Subject'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    ScheduleSubjectVisitRequest:
+      type: object
+      properties:
+        seq:
+          type: integer
+          minimum: 0
+          maximum: 79
+      additionalProperties: false
+    ScheduleSubjectVisitResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/SubjectVisit'
         sideEffects:
           type: array
           items:
