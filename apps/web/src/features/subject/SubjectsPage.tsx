@@ -5,11 +5,12 @@ import { WITHDRAW_REASONS } from "@sitedesk/contracts";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import {
-  listSubjects, STATE_LABEL, OPEN_STATES, anonymous, type Subject
+  listSubjects, scheduleVisit, STATE_LABEL, OPEN_STATES, anonymous, type Subject
 } from "./api.js";
 /* 脱落原因的中文名与筛选漏斗那一页共用一份 —— 各写一份的话，
    同一个 `adverse_event` 会在两页上叫两个名字。 */
 import { WITHDRAW_LABEL } from "../enrollment/api.js";
+import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
 
 /* ════════════════════════════════════════════════════════════════════
    受试者访视窗口。
@@ -39,6 +40,11 @@ export function SubjectsPage() {
   const [wdNote, setWdNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
+  /** 补排访视失败时说的话。**和脱落那个分开** —— `problem` 只画在
+   *  脱落表单里面（`{wdOn && …}` 里），表单没开的时候写进去等于没写：
+   *  按钮点下去、什么也不发生、控制台一条错误都没有。
+   *  一个按得动而必定失败的控件，比没有这个控件更糟。 */
+  const [schedProblem, setSchedProblem] = useState<ProblemDetails | null>(null);
   const say = useToast();
 
   const load = useCallback(() => {
@@ -71,6 +77,26 @@ export function SubjectsPage() {
     } finally { setBusy(false); }
   };
 
+  /** 补排访视。**这一格此前只有一句话，没有按钮。**
+   *
+   *  现场报来的原话：「显示访视没有排出来，但是我没有看到排访视的功能」——
+   *  说得对：在此之前访视只有两个出生口（签知情排第 0 次、完成一次排下一次），
+   *  两个都堵上时，界面上没有任何办法给这一例排出访视来。
+   *  而入组要求第 0 次已登记 PI 确认，于是这一例除了筛败 / 脱落没有出路。
+   *
+   *  **排哪一次不由这里算** —— 服务端按 SOA 找出该排的下一次。
+   *  界面自己算的话，界面就得有一份 SOA 的规则，而那正是两份各走各的开始。 */
+  const schedule = async (s: Subject) => {
+    setBusy(true); setSchedProblem(null);
+    try {
+      const r = await scheduleVisit(s.id);
+      load();
+      say(r.sideEffects[0]?.summary ?? `已补排 ${r.data.visitLabel}`);
+    } catch (e) {
+      if (e instanceof ApiError) setSchedProblem(e.problem); else throw e;
+    } finally { setBusy(false); }
+  };
+
   if (!subs) return <p className="muted">加载中…</p>;
 
   const masked = subs.length > 0 && subs.every(anonymous);
@@ -100,6 +126,20 @@ export function SubjectsPage() {
         <div className="problem" style={{ marginBottom: 14 }} role="status">
           超窗的访视每多一天都在往方案偏离上走。超窗完成时要填原因，
           它会原样进入质量台账 —— 所以<b>先做，别先补记录</b>。
+        </div>
+      )}
+
+      {/* 补排访视被拦下来的时候说得出为什么，**并且给得出去处** ——
+          最常见的一条是"这个项目还没配 SOA"，而 SOA 在「立项与建档」那一页。
+          链接由 UnmetList 按服务端给的 module 自动出（见 shell/Unmet.tsx）。 */}
+      {schedProblem && (
+        <div className="problem stack" data-testid="sched-problem"
+          style={{ marginBottom: 14 }}>
+          <strong>{schedProblem.title}</strong>
+          {schedProblem.detail && <div>{schedProblem.detail}</div>}
+          {Array.isArray(schedProblem.unmet) && (
+            <UnmetList items={schedProblem.unmet as UnmetItem[]} testid="sched-unmet" />
+          )}
         </div>
       )}
 
@@ -139,12 +179,15 @@ export function SubjectsPage() {
                   <td className="num">
                     {s.visitsDone}/{s.visitsPlanned}
                   </td>
-                  {/* 下一次访视。**排不出来的时候要说话** ——
-                      现场报来的原话：「页面没有可以操作的按钮，只有一个脱落」。
-                      那一行是筛选中、`0/0`、这一格一个「—」，右边只剩登记脱落：
-                      看的人不知道是"还没排"还是"这一页坏了"，也不知道找谁。
-                      一个静默的「—」把一条数据毛病显示成了"无事可做"。 */}
-                  {/* **只对「筛选中」说这句。** 预筛还没签知情，本来就没有访视；
+                  {/* 下一次访视。**排不出来的时候要说话，而且要给得动手** ——
+                      现场报来的两句原话，一句接一句：
+                        「页面没有可以操作的按钮，只有一个脱落」
+                        「显示访视没有排出来，但是我没有看到排访视的功能」
+                      第一句补出了这个角标，而第二句说的是：一个只报告问题、
+                      不给办法的角标，只是把"无事可做"换了个说法。
+                      按钮在最后那一格（`sched-*`）。
+
+                      **只对「筛选中」说这句。** 预筛还没签知情，本来就没有访视；
                       已入组而没有下一次，多半是 SOA 走到头了 —— 那是正常收尾，
                       对它喊"没排出来"是一句假警报，而假警报会让真的那句也没人看。
                       筛选中不一样：签知情那一下一定会排出筛选期访视，
@@ -153,8 +196,9 @@ export function SubjectsPage() {
                     s.state === "screening"
                       ? <span className="chip warn" data-testid={`no-visit-${s.id}`}
                           title={"签署知情同意时会连筛选期访视一起排出来。这一例没有，" +
-                            "多半是这个项目的访视计划（SOA）没配 —— 去「立项与建档」补上，" +
-                            "再找管理员把这一例的访视补排出来"}>
+                            "多半是当时这个项目还没配访视计划（SOA）。" +
+                            "右边「补排访视」按 SOA 把它排出来；" +
+                            "如果连 SOA 都没有，先去「立项与建档」配上那一行"}>
                           访视没排出来
                         </span>
                       : <span className="muted">—</span>
@@ -166,6 +210,17 @@ export function SubjectsPage() {
                       {s.nextVisit && (
                         <Link to={`/visits/${s.nextVisit.id}`} className="btn go"
                           style={{ marginLeft: 0 }}>打开</Link>
+                      )}
+                      {/* 补排访视 —— **没有下一次访视的那几行，这是他们的出路**。
+                          给筛选中与已入组两种：前者是"筛选期访视没排出来"，
+                          后者是"方案修订把 SOA 加长了，而下一次是在完成上一次
+                          那一刻排的，那时新的 seq 还不存在"——
+                          后一种在临床里很常见，而它此前同样没有任何入口。
+                          排哪一次由服务端按 SOA 定，这里只发"给他补排"。 */}
+                      {canWrite && !s.nextVisit
+                        && ["screening", "enrolled"].includes(s.state) && (
+                        <button className="btn primary" data-testid={`sched-${s.id}`}
+                          disabled={busy} onClick={() => void schedule(s)}>补排访视</button>
                       )}
                       {/* 登记脱落。只给还在流程里的那几个 ——
                           已经筛败或已脱落的人没有"脱落"这一步。 */}
@@ -259,16 +314,34 @@ export function SubjectsPage() {
         同一批数据两种切法，回答的是两个问题 ——
         每天干活看那一页，被问到「某某某现在什么情况」看这一页。
         <br />
-        没有下一次访视的排在最后：他们已经出组或筛败了，不需要盯。
-        <b>把他们混在中间</b>，会让"还剩几个人要跟"这个数用眼睛数不出来。
+        已经出组或筛败的排在最后：他们没有下一步，不需要盯。
+        <b>把他们混在中间</b>，会让「还剩几个人要跟」这个数用眼睛数不出来。
+        <br />
+        <b>筛选中而没有访视的排在最前</b> —— 那不是走完了，是卡住了：
+        签了知情、访视没排出来、入不了组，而筛选期每天都在过去。
+        右边「补排访视」按访视计划表把它排出来。
       </div>
     </>
   );
 }
 
-/** 排序权重：超窗 → 快到期 → 还早 → 没有下一次。 */
+/** 排序权重：**卡住的 → 超窗 → 快到期 → 还早 → 出组的**。
+ *
+ *  ── 「没有下一次访视」原来是一个档，其实是两个 ──────────────────────
+ *  原来这里一句 `if (!s.nextVisit) return 1e6`，把所有没有下一次访视的人
+ *  一律沉到最底下，理由写着"他们已经出组或筛败了，不需要盯"。
+ *
+ *  那句话对**筛败 / 脱落 / 出组**是对的，对**筛选中而没有访视**是错的：
+ *  后者不是走完了，是**卡住了** —— 签了知情、访视没排出来、入不了组，
+ *  而他每多待一天，筛选期就多过去一天。他是这张表上最该先办的一行，
+ *  却被排到了已经结束的人后面。
+ *
+ *  这条是 e2e 撞出来的：新加了一行这种状态之后，「最后一行应该是筛败那位」
+ *  当场变红 —— 红得对，它指的不是断言过时，是这个档分错了。 */
 function rank(s: Subject): number {
-  if (!s.nextVisit) return 1e6;
+  /* 卡住的排最前，比超窗还靠前 —— 超窗的至少还有一次访视可以去做，
+     这一位连能做的事都没有，得先把访视补出来。 */
+  if (!s.nextVisit) return s.state === "screening" ? -1e6 : 1e6;
   return s.nextVisit.daysLeft;
 }
 

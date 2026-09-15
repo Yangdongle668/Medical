@@ -1,6 +1,10 @@
 import { http, HttpResponse } from "msw";
 import { allEndpoints, SITE_STATES, DEFAULT_HANDOVER_ITEMS,
-  CHANGE_KIND_LABEL, screeningGateWording } from "@sitedesk/contracts";
+  CHANGE_KIND_LABEL, screeningGateWording, SUBJECT_STATE_LABEL,
+  SUBJECT_STATES } from "@sitedesk/contracts";
+
+/** 受试者状态的键 —— mock 里状态是 `string`，取中文名时要收窄。 */
+type SubjectStateKey = (typeof SUBJECT_STATES)[number];
 
 /** 变更类型的键。中文名从契约来，**不在 mock 里另抄一份** ——
  *  抄一份的后果不是不一致告警，是两份都对不上而没人知道哪份是真的。 */
@@ -3070,38 +3074,64 @@ export const scenarioHandlers = [
 
        服务端的 `signIcf` 一直是连访视一起排的（scheduleVisit seq 0）。
        两边不一样的时候，演示走得通而真库走不通 —— 或者反过来，
-       而后者正是这次：真库走得通的"下一步"，在演示上根本不存在。
-
-       目标日 = 知情签署日（SOA 的 seq 0 是 `anchor='icf', offsetDays=0`）。 */
-    const t0 = (scenario.soa["st1"] ?? Object.values(scenario.soa)[0])
-      ?.visits.find(v => v.seq === 0);
-    const win = t0?.windowDays ?? 7;
-    const windowTo = addDays(b.signedOn, win);
-    /* 窗口关得早于今天就是超窗 —— 晚补登的知情（`signedOn` 填的是几周前
-       那一天）排出来的访视本来就是逾期的。写死 `false` 的话，
-       那一行在列表上不红，而它正是最该先办的一条。 */
-    const daysLeft = daysBetween(todayStr(), windowTo);
-    const vid = `v-${s.id}-0`;
-    const v0: MockVisit = {
-      id: vid, subjectId: s.id, screeningNo: s.screeningNo,
-      studySiteId: s.studySiteId, siteCode: s.siteCode, seq: 0,
-      visitCode: t0?.visitCode ?? "SCR", visitLabel: t0?.visitLabel ?? "筛选期访视",
-      targetDate: b.signedOn,
-      windowDays: win,
-      windowFrom: addDays(b.signedOn, -win), windowTo,
-      actualDate: null, status: "planned", edcStatus: "pending",
-      edcDaysLate: null, outOfWindow: daysLeft < 0, daysLeft,
-      piConfirmedAt: null, piConfirmedByName: null,
-      tasks: (t0?.tasks ?? ["知情同意签署", "入排标准核查", "基线实验室检查"])
-        .map((task, i) => ({ seq: i, task, doneAt: null }))
-    };
+       而后者正是这次：真库走得通的"下一步"，在演示上根本不存在。 */
+    const v0 = schedVisit(s, 0, b.signedOn);
     scenario.visits.push(v0);
     s.nextVisit = nextOf(v0);
 
     return HttpResponse.json({ data: maskSubject(s), sideEffects: [
-      { type: "NextVisitScheduled", ref: vid,
-        summary: `已排下一次访视：${t0?.visitLabel ?? "筛选期访视"}，` +
-          `目标日 ${b.signedOn}，窗口 ±${win} 天` }
+      { type: "NextVisitScheduled", ref: v0.id, summary: scheduledSummary(v0) }
+    ] }, { status: 201 });
+  }),
+
+  /* ── 补排访视 ──────────────────────────────────────────────────────
+     现场报来的原话：「显示访视没有排出来，但是我没有看到排访视的功能」。
+     在此之前访视只有两个出生口（签知情排第 0 次、完成一次排下一次），
+     两个都堵上时**界面上没有任何办法**给这一例排出访视来。
+     与服务端 `scheduleVisitFor` 同一套判断，判断的先后也一样 ——
+     顺序不一样的话，同一次点击在两边会撞上不同的那句话。 */
+  http.post(pathToRegExp("/v1/subjects/{id}:schedule-visit"), async ({ request }) => {
+    const s = subjectFrom(request, /\/subjects\/([^/:]+):schedule-visit/);
+    if (!s) return notFoundSubject();
+
+    if (!["screening", "enrolled"].includes(s.state))
+      return HttpResponse.json(problem("invariant-violated", 422,
+        `受试者当前是「${SUBJECT_STATE_LABEL[s.state as SubjectStateKey] ?? s.state}」，` +
+        "只有筛选中或已入组可以补排访视" +
+        (s.state === "prescreen" ? " —— 这一例的下一步是登记知情同意签署" : "")),
+        { status: 422 });
+
+    const soa = scenario.soa["st1"] ?? Object.values(scenario.soa)[0];
+    if (!soa?.visits.length)
+      return HttpResponse.json({
+        ...problem("gate-not-satisfied", 422,
+          "这个项目还没有配访视计划（SOA）—— 没有 SOA 就没有「该排哪一次」这回事"),
+        unmet: [{ code: "study-has-no-soa", module: "intake",
+          message: "先在「立项与建档」里把这个项目的 SOA 配好，再回来补排访视" }]
+      }, { status: 422 });
+
+    const 已排 = new Set(scenario.visits.filter(v => v.subjectId === s.id).map(v => v.seq));
+    const t = soa.visits.find(v => !已排.has(v.seq));
+    if (!t)
+      return HttpResponse.json(problem("invariant-violated", 422,
+        "SOA 上每一次访视都已经排过了 —— 没有可补排的"), { status: 422 });
+
+    /* 锚点日取自受试者自己的记录，**不由请求带进来** ——
+       带进来就等于让人手填目标日，而那是在改记录。 */
+    const anchor = t.anchor === "icf" ? s.icfSignedOn : s.enrolledOn;
+    if (!anchor)
+      return HttpResponse.json(problem("invariant-violated", 422,
+        t.anchor === "icf"
+          ? "这一例还没有知情同意签署日，排不出筛选期访视 —— 先登记知情"
+          : "这一例还没有入组日，排不出入组之后的访视 —— 先登记入组"), { status: 422 });
+
+    const v = schedVisit(s, t.seq, anchor);
+    scenario.visits.push(v);
+    s.nextVisit = nextOf(v);
+    if (s.visitsPlanned < soa.visits.length) s.visitsPlanned = soa.visits.length;
+
+    return HttpResponse.json({ data: v, sideEffects: [
+      { type: "NextVisitScheduled", ref: v.id, summary: scheduledSummary(v) }
     ] }, { status: 201 });
   }),
 
@@ -3873,6 +3903,44 @@ const handoverDto = (h: MockHandover) => ({
   doneCount: h.items.filter(i => i.doneAt).length,
   totalCount: h.items.length
 });
+
+/** 按 SOA 排一次访视 —— **`:sign-icf` 与 `:schedule-visit` 共用一份**。
+ *
+ *  两处各写一份的话，"签知情排出来的"和"补排出来的"会长得不一样（窗口、
+ *  任务清单、访视号），而那种不一致只有把两条并排看才发现得了。
+ *  这个文件刚刚为同一个毛病红过一次 e2e：入组闸门那三句话抄了两份，
+ *  改的时候只改了一份。
+ *
+ *  目标日 = 锚点日 + SOA 的 offset（seq 0 锚知情签署日、offset 0；
+ *  其余锚入组日）。与服务端 `scheduleVisit` 同一个算法。 */
+function schedVisit(s: MockSubject, seq: number, anchorDate: string): MockVisit {
+  const t = (scenario.soa["st1"] ?? Object.values(scenario.soa)[0])
+    ?.visits.find(v => v.seq === seq);
+  const win = t?.windowDays ?? 7;
+  const target = addDays(anchorDate, t?.offsetDays ?? 0);
+  const windowTo = addDays(target, win);
+  /* 窗口关得早于今天就是超窗 —— 晚补登的知情（`signedOn` 填的是几周前
+     那一天）排出来的访视本来就是逾期的。写死 `false` 的话，
+     那一行在列表上不红，而它正是最该先办的一条。 */
+  const daysLeft = daysBetween(todayStr(), windowTo);
+  return {
+    id: `v-${s.id}-${seq}`, subjectId: s.id, screeningNo: s.screeningNo,
+    studySiteId: s.studySiteId, siteCode: s.siteCode, seq,
+    visitCode: t?.visitCode ?? (seq === 0 ? "SCR" : `V-${seq}`),
+    visitLabel: t?.visitLabel ?? (seq === 0 ? "筛选期访视" : `第 ${seq} 次访视`),
+    targetDate: target, windowDays: win,
+    windowFrom: addDays(target, -win), windowTo,
+    actualDate: null, status: "planned", edcStatus: "pending",
+    edcDaysLate: null, outOfWindow: daysLeft < 0, daysLeft,
+    piConfirmedAt: null, piConfirmedByName: null,
+    tasks: (t?.tasks ?? ["知情同意签署", "入排标准核查", "基线实验室检查"])
+      .map((task, i) => ({ seq: i, task, doneAt: null }))
+  };
+}
+
+/** 排完那一句 —— 与服务端 `scheduleVisit` 的 summary 逐字同源。 */
+const scheduledSummary = (v: MockVisit) =>
+  `已排下一次访视：${v.visitLabel}，目标日 ${v.targetDate}，窗口 ±${v.windowDays} 天`;
 
 /** 某个日期往后 n 天。**转交给 UTC 那一版** —— 原来这里是
  *  `x.setDate(x.getDate() + n)`：`new Date('2026-09-14')` 读成 UTC 零点，

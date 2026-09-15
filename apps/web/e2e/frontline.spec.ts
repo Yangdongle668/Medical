@@ -11,14 +11,52 @@ import { test, expect } from "@playwright/test";
    ════════════════════════════════════════════════════════════════════ */
 
 test.describe("CRC", () => {
-  test("受试者窗口：超窗的顶到最上面，出组的沉到最下面", async ({ page }) => {
+  test("受试者窗口：卡住的顶到最上面，然后才是超窗的", async ({ page }) => {
     await page.goto("/subjects");
     const rows = page.getByTestId("subject-row");
     await expect(rows.first()).toBeVisible();
-    /* S-0203 的下一次访视超窗 6 天 */
-    await expect(rows.first()).toContainText("S-0203");
-    await expect(rows.first()).toContainText("已超窗");
+    /* **最前面的是卡住的那一位**，不是超窗的那一位。
+       「筛选中而没有访视」不是走完了，是签了知情、访视没排出来、
+       入不了组 —— 超窗的至少还有一次访视可以去做，他连能做的事都没有。
+       这一档原来和已出组 / 筛败混在一起沉到最底下，理由写着
+       "他们不需要盯"，而那句话对这一位是错的。 */
+    await expect(rows.first()).toContainText("SS-01-P104");
+    await expect(rows.first()).toContainText("访视没排出来");
+    /* 紧接着才是超窗的：S-0203 的下一次访视超窗 6 天。 */
+    await expect(rows.nth(1)).toContainText("S-0203");
+    await expect(rows.nth(1)).toContainText("已超窗");
     await expect(page.getByTestId("subj-summary")).toContainText("已超窗");
+  });
+
+  /* ── 补排访视 ─────────────────────────────────────────────────────
+     现场报来的两句原话，一句接一句：
+       「页面没有可以操作的按钮，只有一个脱落」
+       「显示访视没有排出来，但是我没有看到排访视的功能」
+
+     第一句补出了那个角标，而第二句说的是：**一个只报告问题、不给办法的
+     角标，只是把"无事可做"换了个说法。** 在此之前访视只有两个出生口
+     （签知情排第 0 次、完成一次排下一次），两个都堵上时整个系统里
+     没有任何一个动作能给这一例排出访视来 —— 而入组要求第 0 次已登记
+     PI 确认，于是这一例除了筛败 / 脱落没有出路，只能改库。 */
+  test("**访视没排出来的那一行，补排一次就接着往下走**", async ({ page }) => {
+    await page.goto("/subjects");
+    const row = page.getByTestId("subject-row").filter({ hasText: "SS-01-P104" });
+    await expect(row).toBeVisible();
+    /* 先把现场那一幕钉住：说得出问题，**而且给得出办法**。 */
+    await expect(row.getByTestId("no-visit-u-104")).toBeVisible();
+    await expect(row.getByRole("link", { name: "打开" })).toHaveCount(0);
+
+    await row.getByTestId("sched-u-104").click();
+
+    /* 排完之后：角标没了，那一行有了下一次访视，也进得去。 */
+    await expect(row.getByTestId("no-visit-u-104")).toHaveCount(0);
+    await expect(row).toContainText("筛选期访视");
+    await expect(row.getByRole("link", { name: "打开" })).toBeVisible();
+    /* 而且**排完就没得再排** —— 按钮该消失，不是按下去报错。 */
+    await expect(row.getByTestId("sched-u-104")).toHaveCount(0);
+
+    await row.getByRole("link", { name: "打开" }).click();
+    await expect(page).toHaveURL(/\/visits\//);
   });
 
   test("受试者窗口：默认只看还在流程里的，去掉勾才看得到筛败的", async ({ page }) => {

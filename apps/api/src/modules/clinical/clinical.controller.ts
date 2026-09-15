@@ -6,6 +6,7 @@ import {
   PageQuery, Uuid, WithReason, CreateSubjectBody,
   ListSubjectsQuery, ListEnrollmentQuery, ListSubjectVisitsQuery, ListQualityEventsQuery,
   ListSubjectPaymentsQuery, SignIcfBody, EnrollSubjectBody, ScreenFailSubjectBody,
+  ScheduleSubjectVisitBody,
   WithdrawSubjectBody, CompleteSubjectVisitBody, ReportSaeBody, ReplaceSoaBody,
   ReportSaeSubmittedBody, SetCapaPlanBody, PaySubjectPaymentBody, CompleteVisitTaskBody,
   ConfirmSubjectVisitBody, EnterVisitToEdcBody
@@ -99,6 +100,13 @@ export class ClinicalController {
     @Body(new ZodPipe(EnrollSubjectBody)) b: z.infer<typeof EnrollSubjectBody>,
     @Headers("idempotency-key") key?: string
   ) { return command(this.idem, key, b, () => this.svc.enroll(id, b)); }
+
+  @Post("/subjects/:id\\:schedule-visit") @Operation("scheduleSubjectVisit")
+  scheduleVisit(
+    @Param("id", new ZodPipe(Uuid)) id: string,
+    @Body(new ZodPipe(ScheduleSubjectVisitBody)) b: z.infer<typeof ScheduleSubjectVisitBody>,
+    @Headers("idempotency-key") key?: string
+  ) { return command(this.idem, key, b, () => this.svc.scheduleVisitFor(id, b)); }
 
   @Post("/subjects/:id\\:screen-fail") @Operation("screenFailSubject")
   screenFail(

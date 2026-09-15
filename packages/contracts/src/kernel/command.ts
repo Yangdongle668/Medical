@@ -51,6 +51,9 @@ export const SIDE_EFFECT_TYPES = [
   "NextVisitScheduled",  // 按 SOA 生成了下一次访视窗口
   "SoaRevised",          // 访视计划表改版 —— 在途受试者的窗口跟着变
   "SubjectEnrolled",     // 受试者由筛选期转为已入组
+  /* 做完 SOA 上的全部访视 → 出组。**`completed` 此前是个到不了的状态**：
+     契约定义了它、漏斗专门数它，而没有一行代码写它，于是「已出组」永远是 0。 */
+  "SubjectCompleted",    // 受试者做完整条 SOA，出组
   "SpecimenClosed",      // 样本链闭环（收 / 存 / 运 / 到达都有记录）
   "CloseoutApproved",    // 结题报告获批 —— 中心关闭的最后一项前置
 

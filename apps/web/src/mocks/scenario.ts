@@ -1704,7 +1704,25 @@ export const mkSubjects = (): MockSubject[] => [
     randomized: false, randomizationNo: null, state: "screen_failed",
     icfSignedOn: day(-40), enrolledOn: null, exitedOn: day(-33),
     screenFailReason: "imaging", withdrawReason: null, crcName: "吴桐",
-    visitsDone: 1, visitsPlanned: 8, nextVisit: null }
+    visitsDone: 1, visitsPlanned: 8, nextVisit: null },
+  /* ── 卡住的那一位：筛选中，**一条访视都没有** ──────────────────────
+     现场真实撞上的就是这一行（SS-03-P001）：筛选中、`0/0`、
+     下一次访视空白，右边只有「登记脱落」。
+
+     **这一行是故意留着的，而且和从前不一样。** 从前 u-102 也是这个样子，
+     那是个 bug —— 它没有出路，只能作废。现在这种状态有出路了：
+     「补排访视」按 SOA 把它排出来（`scheduleSubjectVisit`）。
+     留着它，那个按钮在演示上才走得到 —— 走不到的分支等于没写过，
+     而这个按钮补的正是"整条流程唯一的出路"。
+
+     它怎么会存在：签知情那一下本该连访视一起排出来，但那个项目当时
+     还没配 SOA。服务端现在 fail-closed（没 SOA 不让签知情），
+     所以**新的**不会再出现 —— 存量还在，这一行演的就是存量。 */
+  { id: "u-104", studySiteId: "s1", siteCode: "SS-01", screeningNo: "SS-01-P104",
+    randomized: false, randomizationNo: null, state: "screening",
+    icfSignedOn: day(-6), enrolledOn: null, exitedOn: null,
+    screenFailReason: null, withdrawReason: null, crcName: "吴桐",
+    visitsDone: 0, visitsPlanned: 0, nextVisit: null }
 ];
 
 export const mkPayments = (): MockPayment[] => [

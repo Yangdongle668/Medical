@@ -30,6 +30,20 @@ export const SubjectState = z.enum(SUBJECT_STATES).meta({
     "脱落的受试者永远刷红超窗，且按整例计收入。"
 });
 
+/** 受试者状态的中文名 —— **界面、mock、闸门提示共用一份**。
+ *
+ *  写成 `Record<SubjectState, string>`：`SUBJECT_STATES` 加一个取值而这里
+ *  没跟上，编译就过不去。放这儿而不是放界面，是因为它有第三个读者了 ——
+ *  补排访视被拒时那句话要说「受试者当前是「预筛」」，而那句话服务端与
+ *  mock 都要说。抄一份的后果不是不一致告警，是两份都对不上而没人知道
+ *  哪份是真的（入组闸门那三句话刚因为这个红过一次 e2e）。 */
+export const SUBJECT_STATE_LABEL: Record<
+  (typeof SUBJECT_STATES)[number], string
+> = {
+  prescreen: "预筛", screening: "筛选中", enrolled: "已入组",
+  screen_failed: "筛败", withdrawn: "已脱落", completed: "已出组"
+};
+
 /** 筛败原因。与数据库 screen_fail_reason 查找表一一对应。 */
 export const SCREEN_FAIL_REASONS = [
   "lab", "prior_therapy", "imaging", "comorbidity", "withdrew_icf", "other"
