@@ -33,14 +33,14 @@ async function tickAllTasks(page: Page) {
 test("CRC 的一天：从今日清单走到方案偏离进台账", async ({ page }) => {
   await page.goto("/today");
 
-  /* ① 今日清单按窗口关闭日升序，超窗的排最上面 */
-  const rows = page.getByTestId("visit-row");
+  /* ① 首页是待办：已过期的在最上面，超窗的访视在里头 */
+  const rows = page.getByTestId("today-overdue").locator('[data-kind="visit"]');
   await expect(rows.first()).toBeVisible();
-  await expect(page.getByTestId("today-summary")).toContainText("已超窗");
+  await expect(page.getByTestId("today-summary")).toContainText("已过期");
   await expect(rows.first()).toContainText("已超窗");
 
   /* ② 打开超窗那一例 */
-  await rows.first().getByRole("link", { name: "打开" }).click();
+  await rows.first().getByRole("link", { name: "去完成" }).click();
   await expect(page.getByRole("heading", { level: 2 })).toBeVisible();
 
   /* ③ 任务没勾完 → 提交是禁用的，且旁边写清楚还差什么 */
@@ -88,9 +88,9 @@ test("CRC 的一天：从今日清单走到方案偏离进台账", async ({ page
 
 test("窗口内完成不要求填原因，也不生成偏离", async ({ page }) => {
   await page.goto("/today");
-  /* 挑一行「窗口内」的 */
-  const row = page.getByTestId("visit-row").filter({ hasText: "窗口内" }).first();
-  await row.getByRole("link", { name: "打开" }).click();
+  /* 挑一条窗口还开着的访视 */
+  const row = page.locator('[data-kind="visit"]').filter({ hasText: "窗口还剩" }).first();
+  await row.getByRole("link", { name: "去完成" }).click();
 
   await tickAllTasks(page);
   /* 把完成日改成目标日 —— 窗口正中 */

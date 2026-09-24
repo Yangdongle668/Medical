@@ -258,17 +258,31 @@ test.describe("被拦下来要给得出去处", () => {
   });
 });
 
-/* 「今天」只列未来 7 天做得了的访视：先办的（超窗 / 今天到期）在上，
-   其余在下；远期的去「我的日程」。原来是未完成访视的前 50 条，与日期无关。 */
+/* 「今天」是待办：要你动手的事按 已过期 → 今天 → 这几天 排成一列，
+   SAE 最前；每一条都点得进去办。原来这一页只有访视。 */
 test.describe("今天", () => {
-  test("超窗的在「先办这些」里，页面说得出更远的去哪看", async ({ page }) => {
+  test("待办分三段，每一条都有去处", async ({ page }) => {
     await page.goto("/today");
-    await expect(page.getByTestId("today-summary")).toContainText("未来 7 天");
-    const urgent = page.getByTestId("today-urgent");
-    await expect(urgent.getByTestId("visit-row").first()).toBeVisible();
-    await expect(urgent.locator(".chip.crit").first()).toBeVisible();
-    await expect(page.getByTestId("today-week").locator(".chip.crit")).toHaveCount(0);
-    await page.getByTestId("today-later").getByRole("link").click();
-    await expect(page).toHaveURL(/\/sched/);
+    await expect(page.getByTestId("today-summary")).toContainText("已过期");
+    const overdue = page.getByTestId("today-overdue");
+    await expect(overdue.getByTestId("inbox-item").first()).toBeVisible();
+    /* 不止访视：质疑、文件这些原来要去别的页面翻的，也在这里 */
+    await expect(page.locator('[data-kind="query"]').first()).toBeVisible();
+    for (const go of await page.getByTestId("inbox-go").all())
+      expect(await go.getAttribute("href")).toMatch(/^\//);
+  });
+
+  test("点「去回复」落在数据质疑页", async ({ page }) => {
+    await page.goto("/today");
+    await page.locator('[data-kind="query"]').first().getByTestId("inbox-go").click();
+    await expect(page).toHaveURL(/\/queries/);
+  });
+
+  test("没有审批权限的一线看不到「待审工时」；经营层看得到", async ({ page }) => {
+    await page.goto("/today");
+    await expect(page.getByTestId("inbox-item").first()).toBeVisible();
+    await expect(page.locator('[data-kind="approval"]')).toHaveCount(0);
+    await page.goto("/today?as=boss");
+    await expect(page.locator('[data-kind="approval"]')).toHaveCount(1);
   });
 });

@@ -59,7 +59,8 @@ for (const width of WIDTHS) {
 
 test("390px 上表格自己横向滚，而不是把整页撑开 —— 那是刻意的", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
-  await page.goto("/today");
+  /* 「今天」已经不是表格了（一行一件待办）；受试者那一页仍是宽表 */
+  await page.goto("/subjects");
   await page.waitForLoadState("networkidle");
 
   const wrap = page.locator(".table-wrap").first();

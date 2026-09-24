@@ -1944,6 +1944,153 @@ export const scenarioHandlers = [
      行策略上直接关掉（迁移 0032），因为机构办是外部的质量反馈闭环、
      DM 是内部的数据质量闭环，混在一起的后果不是多几行，而是
      机构质控页上「本院未关闭质量事件」这个数会把 EDC 质疑也算进去。 */
+  /* 我的待办。**由场景层现算**，不是一份静态示例 —— 首页上勾掉一件事、
+     完成一次访视、补上一次 SAE 上报，回到首页那一条就该不见了。
+     判定抄的是服务端 modules/workbench/inbox.service.ts 的口径（只给办得了的、
+     SAE 最前、每类至多 20 条）；**规则以服务端为准**，这里只是把它演出来。 */
+  http.get(pathToRegExp("/v1/me/inbox"), () => {
+    const me = identity();
+    const can = (a: string) => (me.actions as readonly string[]).includes(a);
+    type Item = {
+      kind: string; urgency: "overdue" | "today" | "soon";
+      dueOn: string | null; dueAt: string | null; title: string; detail: string;
+      studySiteId: string | null; siteCode: string | null; screeningNo?: string | undefined;
+      ref: { type: string; id: string | null };
+    };
+    const items: Item[] = [];
+    const plus = (d: string, n: number) =>
+      new Date(Date.parse(d + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
+    const siteId = (code: string) => SITES_LIST.find(s => s.code === code)?.id ?? null;
+
+    if (can("subjWrite")) {
+      for (const e of inScope(scenario.qualityEvents))
+        if (e.kind === "sae" && e.state !== "closed" && e.occurredAt && !e.reportedAt) {
+          const due = new Date(Date.parse(e.occurredAt) + 24 * 3_600_000);
+          const late = Date.now() > due.getTime();
+          items.push({ kind: "sae", urgency: late ? "overdue" : "today",
+            dueOn: null, dueAt: due.toISOString(), title: `SAE 未上报 · ${e.title}`,
+            detail: late ? "已超过知悉后 24 小时" : "知悉后 24 小时内要上报",
+            studySiteId: e.studySiteId ?? siteId(e.siteCode), siteCode: e.siteCode,
+            ref: { type: "quality_event", id: e.id } });
+        }
+    }
+    const visits = inScope(scenario.visits).map(withDaysLeft);
+    if (can("subjRead") && can("subjWrite")) {
+      for (const v of visits)
+        if (v.status === "planned" && v.windowFrom <= plus(TODAY_STR, 7))
+          items.push({ kind: "visit",
+            urgency: v.outOfWindow ? "overdue" : v.daysLeft === 0 ? "today" : "soon",
+            dueOn: v.windowTo, dueAt: null, title: v.visitLabel,
+            detail: v.outOfWindow ? `已超窗 ${-(v.daysLeft ?? 0)} 天`
+              : v.daysLeft === 0 ? "今天是窗口最后一天"
+              : v.windowFrom > TODAY_STR ? `窗口 ${v.windowFrom} 打开` : `窗口还剩 ${v.daysLeft} 天`,
+            studySiteId: v.studySiteId, siteCode: v.siteCode, screeningNo: v.screeningNo,
+            ref: { type: "subject_visit", id: v.id } });
+      for (const v of visits)
+        if (v.actualDate && v.edcStatus === "pending") {
+          const late = (v.edcDaysLate ?? 0) > 0;
+          items.push({ kind: "edc", urgency: late ? "overdue" : "soon", dueOn: null, dueAt: null,
+            title: `${v.visitLabel} · 录入 EDC`,
+            detail: late ? `超出 5 个工作日 ${v.edcDaysLate} 天` : "访视完成后 5 个工作日内录入",
+            studySiteId: v.studySiteId, siteCode: v.siteCode, screeningNo: v.screeningNo,
+            ref: { type: "subject_visit", id: v.id } });
+        }
+    }
+    if (can("subjRead") && can("piConfirm")) {
+      for (const v of visits)
+        if (v.status === "done_pending_pi" && !v.piConfirmedAt) {
+          const waited = v.actualDate ? daysBetween(v.actualDate, TODAY_STR) : 0;
+          items.push({ kind: "pi_confirm", urgency: waited > 7 ? "overdue" : "soon",
+            dueOn: null, dueAt: null, title: `${v.visitLabel} · 登记 PI 签字`,
+            detail: `访视 ${v.actualDate ?? "—"} 完成，已等 ${waited} 天 —— 登记之前不计入「已完成」`,
+            studySiteId: v.studySiteId, siteCode: v.siteCode, screeningNo: v.screeningNo,
+            ref: { type: "subject_visit", id: v.id } });
+        }
+    }
+    for (const q of visibleQueries())
+      if (q.state === "open" && q.ownerAccountId === me.id)
+        items.push({ kind: "query", urgency: q.ageDays > QUERY_STALE_DAYS ? "overdue" : "soon",
+          dueOn: null, dueAt: null, title: `${q.code} · ${q.form}「${q.fieldName}」`,
+          detail: `挂起 ${q.ageDays} 天` + (q.ageDays > QUERY_STALE_DAYS ? "，该打电话了" : ""),
+          studySiteId: q.studySiteId, siteCode: q.siteCode, screeningNo: q.screeningNo,
+          ref: { type: "data_query", id: q.id } });
+    for (const h of scenario.handovers)
+      if (h.status === "pending" && h.toAccountId === me.id)
+        items.push({ kind: "handover",
+          urgency: h.plannedOn < TODAY_STR ? "overdue" : h.plannedOn === TODAY_STR ? "today" : "soon",
+          dueOn: h.plannedOn, dueAt: null, title: `${h.fromName} 交接给你`,
+          detail: `${h.sites.map(x => x.code).join("、")} · 清单 ` +
+            `${h.items.filter(i => i.doneAt).length}/${h.items.length}`,
+          studySiteId: h.sites[0]?.id ?? null, siteCode: h.sites[0]?.code ?? null,
+          ref: { type: "handover", id: h.id } });
+    if (can("approve")) {
+      const others = inScope(scenario.timesheets)
+        .filter(t => !t.approvedAt && !t.voidedAt && t.accountId !== me.id);
+      if (others.length) {
+        const oldest = others.map(t => t.workDate).sort()[0]!;
+        const age = daysBetween(oldest, TODAY_STR);
+        items.push({ kind: "approval", urgency: age > 14 ? "overdue" : "soon",
+          dueOn: null, dueAt: null, title: `${others.length} 条工时待审`,
+          detail: `最早一条是 ${oldest}（${age} 天前）`,
+          studySiteId: null, siteCode: null, ref: { type: "timesheet", id: null } });
+      }
+    }
+    if (can("isfWrite")) {
+      for (const i of visibleIsf().map(isfDto))
+        if (i.status === "missing" || i.status === "expired" || i.status === "due")
+          items.push({ kind: "isf",
+            urgency: i.status === "due" ? "soon" : "overdue",
+            dueOn: i.expiresOn, dueAt: null, title: i.item,
+            detail: i.status === "missing" ? "缺失"
+              : i.status === "expired" ? `已过期 ${-(i.daysLeft ?? 0)} 天` : `还有 ${i.daysLeft} 天过期`,
+            studySiteId: i.studySiteId, siteCode: i.siteCode,
+            ref: { type: "isf_item", id: i.id } });
+    }
+    for (const e of inScope(scenario.qualityEvents))
+      if (e.kind !== "sae" && e.state !== "closed" && e.capaOwnerAccountId === me.id)
+        items.push({ kind: "capa",
+          urgency: e.capaDueOn && e.capaDueOn < TODAY_STR ? "overdue" : !e.capaPlan ? "today" : "soon",
+          dueOn: e.capaDueOn ?? null, dueAt: null, title: `${e.code} · ${e.title}`,
+          detail: e.capaDueOn && e.capaDueOn < TODAY_STR ? "整改已逾期"
+            : !e.capaPlan ? "还没写整改措施" : "整改进行中",
+          studySiteId: e.studySiteId ?? siteId(e.siteCode), siteCode: e.siteCode,
+          ref: { type: "quality_event", id: e.id } });
+    for (const raw of visibleMonitorVisits()) {
+      if (raw.monitorAccountId !== me.id) continue;
+      const v = monitorDto(raw);
+      if (v.state === "done" && !v.reportSubmittedOn)
+        items.push({ kind: "mvr", urgency: v.mvrOverdue ? "overdue" : "today",
+          dueOn: v.performedOn ? plus(v.performedOn, 10) : null, dueAt: null,
+          title: `${v.code} 监查报告`,
+          detail: v.mvrOverdue ? `到现场后已 ${v.mvrLagDays} 天，超过 10 天` : `到现场后第 ${v.mvrLagDays ?? 0} 天`,
+          studySiteId: v.studySiteId, siteCode: v.siteCode, ref: { type: "monitor_visit", id: v.id } });
+      if ((v.state === "proposed" || v.state === "scheduled") && v.plannedOn <= plus(TODAY_STR, 14))
+        items.push({ kind: "monitor_visit",
+          urgency: v.plannedOn < TODAY_STR ? "overdue" : v.plannedOn === TODAY_STR ? "today" : "soon",
+          dueOn: v.plannedOn, dueAt: null, title: `${v.code} 监查访视 · ${v.hospital}`,
+          detail: v.state === "proposed" ? "中心还没确认" : `计划 ${v.plannedOn}，${v.days} 天`,
+          studySiteId: v.studySiteId, siteCode: v.siteCode, ref: { type: "monitor_visit", id: v.id } });
+    }
+
+    const RANK = { overdue: 0, today: 1, soon: 2 };
+    const by = (a: Item, b: Item) => Number(b.kind === "sae") - Number(a.kind === "sae")
+      || RANK[a.urgency] - RANK[b.urgency]
+      || (a.dueAt ?? a.dueOn ?? "9999").localeCompare(b.dueAt ?? b.dueOn ?? "9999");
+    const per = new Map<string, Item[]>();
+    for (const i of items) per.set(i.kind, [...(per.get(i.kind) ?? []), i]);
+    const truncatedKinds = [...per].filter(([, l]) => l.length > 20).map(([k]) => k);
+    const out = [...per.values()].flatMap(l => l.sort(by).slice(0, 20)).sort(by);
+    return HttpResponse.json(mask({
+      items: out,
+      counts: {
+        overdue: out.filter(i => i.urgency === "overdue").length,
+        today: out.filter(i => i.urgency === "today").length,
+        soon: out.filter(i => i.urgency === "soon").length
+      },
+      truncatedKinds, generatedAt: new Date().toISOString()
+    }));
+  }),
+
   http.get(pathToRegExp("/v1/data-queries"), ({ request }) => {
     const q = new URL(request.url).searchParams;
     let items = visibleQueries();

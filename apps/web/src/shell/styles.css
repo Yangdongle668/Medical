@@ -290,6 +290,30 @@ td .row.acts { flex-wrap: nowrap; white-space: nowrap; }
    写法照这套语言：左规则而不是整块着色，发丝线而不是边框。
    ══════════════════════════════════════════════════════════════════ */
 
+/* ── 首页待办（features/today）：一行一件事，左边一条颜色说有多急 ────────
+   不用表格：手机上表格要横着滚，而待办是**要一眼扫完**的东西。
+   颜色之外还有文字标签（chip）—— 色觉差异下颜色那条线索会消失。 */
+.inbox { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.inbox-item {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--line-2);
+  border-radius: 8px; padding: 10px 12px;
+}
+.inbox-item.u-overdue { border-left-color: var(--crit); }
+.inbox-item.u-today { border-left-color: var(--warn); }
+.inbox-item.u-soon { border-left-color: var(--line-2); }
+.inbox-item > .chip { flex: none; }
+.inbox-main { flex: 1; min-width: 0; }
+.inbox-title { font-weight: 500; overflow-wrap: anywhere; }
+.inbox-sub { font-size: 12px; overflow-wrap: anywhere; }
+.inbox-go { flex: none; text-decoration: none; }
+/* 手机上按钮不占整行 —— 占整行的话一件待办高一倍，一屏只剩五件。
+   按钮缩到右边，高度仍保证手指按得准（≥ 40px）。 */
+@media (max-width: 720px) {
+  .inbox-item { gap: 10px; padding: 10px; }
+  .inbox-go { min-height: 40px; padding: 0 12px; display: inline-flex; align-items: center; }
+}
+
 .tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .tasks li {
   display: flex; gap: 10px; align-items: center;

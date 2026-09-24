@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { SaePanel } from "./SaePanel.js";
@@ -33,7 +34,9 @@ export function QualityPage() {
   const [sites, setSites] = useState<Site[]>([]);
   /* 两本台账是**按中心**的（SAE 及时率、药品在手数量都没有跨中心的口径），
      所以这里要选一个中心。默认选第一个，而不是让人先点一下才有内容。 */
-  const [siteId, setSiteId] = useState("");
+  /* `?site=` 由首页待办带过来（「SAE 未上报」那一条要直接落在它那个中心上）。 */
+  const [params] = useSearchParams();
+  const [siteId, setSiteId] = useState(params.get("site") ?? "");
   const [me, setMe] = useState<Me | null>(null);
   const [capaOn, setCapaOn] = useState<QualityEvent | null>(null);
   const [plan, setPlan] = useState("");

@@ -1,10 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { call } from "../../api/client.js";
-import { daysFromToday } from "../../shell/dates.js";
+import { loadMe } from "../login/me.js";
+import { recallWho } from "../login/session.js";
+import { Why } from "../../shell/Why.js";
 
-/* CRC 每天第一件事是看「今天谁到期」—— 所以这是首页，
-   而且默认按窗口关闭日升序，超窗的排在最上面。 */
+/* ════════════════════════════════════════════════════════════════════
+   今天 —— 一线的首页：**要你动手的事，按先后排成一列。**
+
+   原来这一页只有访视。而 CRC 每天要处理的事散在十来个页面上：
+   SAE 的 24 小时在「质量与 SAE」某个中心的面板里、待回复的质疑在
+   「数据质疑」、交接给他的在「交接」、过期的批件在「中心文件」……
+   「今天先做哪件」要他自己翻一遍再心算。
+
+   现在由 `GET /v1/me/inbox` 一次给齐（见 contracts/src/workbench/api.ts）：
+   只给你办得了的，SAE 最前，其余按 已过期 → 今天 → 这几天。
+   每一条点进去就是办这件事的那一页。
+   ════════════════════════════════════════════════════════════════════ */
 
 export interface Visit {
   id: string; screeningNo?: string; siteCode: string;
@@ -23,133 +35,159 @@ export interface Visit {
   tasks: { seq: number; task: string; doneAt: string | null }[];
 }
 
-function windowChip(v: Visit) {
-  /* 「待**登记** PI 确认」—— 一个字之差，但它决定人会不会去等。
-     原来写的是「待 PI 确认」，读起来像是"球在 PI 那边"，
-     于是没有人会去点它；而 PI 多数时候根本没有本系统的账号，
-     那一等就是永远（实测 189 条卡在这个状态上）。见迁移 0050。 */
-  if (v.status !== "planned") return <span className="chip flat">待登记 PI 确认</span>;
-  const d = v.daysLeft ?? 0;
-  if (d < 0) return <span className="chip crit">已超窗 {-d} 天</span>;
-  if (d === 0) return <span className="chip crit">今天到期</span>;
-  if (d <= 2) return <span className="chip warn">还剩 {d} 天</span>;
-  return <span className="chip good">窗口内</span>;
+export interface InboxItem {
+  kind: Kind; urgency: "overdue" | "today" | "soon";
+  dueOn: string | null; dueAt: string | null;
+  title: string; detail: string;
+  studySiteId: string | null; siteCode: string | null; screeningNo?: string;
+  ref: { type: string; id: string | null };
+}
+type Kind = "sae" | "visit" | "pi_confirm" | "edc" | "query" | "handover"
+  | "approval" | "isf" | "capa" | "mvr" | "monitor_visit";
+interface Inbox {
+  items: InboxItem[];
+  counts: { overdue: number; today: number; soon: number };
+  truncatedKinds: Kind[];
+  generatedAt: string;
 }
 
-/** 往后看几天。一周是 CRC 排班的自然单位，也是访视窗口最常见的宽度。 */
-const AHEAD = 7;
-/** 一次取多少。按窗口关闭日排序，所以截断的永远是最不急的那一头 ——
- *  但截断了要**说出来**，见下面的 `more`。 */
-const LIMIT = 200;
+/** 每一类：叫什么、按钮上写什么、去哪办、截断时去哪看全。 */
+const KIND: Record<Kind, { label: string; go: string; href: (i: InboxItem) => string; all: string }> = {
+  sae:           { label: "SAE",      go: "去上报", all: "/quality",
+                   href: i => `/quality${i.studySiteId ? `?site=${i.studySiteId}` : ""}` },
+  visit:         { label: "访视",     go: "去完成", all: "/subjects", href: i => `/visits/${i.ref.id}` },
+  pi_confirm:    { label: "PI 签字",  go: "去登记", all: "/subjects", href: i => `/visits/${i.ref.id}` },
+  edc:           { label: "EDC",      go: "去标记", all: "/subjects", href: i => `/visits/${i.ref.id}` },
+  query:         { label: "质疑",     go: "去回复", all: "/queries",  href: () => "/queries" },
+  handover:      { label: "交接",     go: "去确认", all: "/handovers", href: () => "/handovers" },
+  approval:      { label: "审批",     go: "去审",   all: "/approvals", href: () => "/approvals" },
+  isf:           { label: "文件",     go: "去处理", all: "/isf",      href: () => "/isf" },
+  capa:          { label: "整改",     go: "去处理", all: "/quality",
+                   href: i => `/quality${i.studySiteId ? `?site=${i.studySiteId}` : ""}` },
+  mvr:           { label: "监查报告", go: "去提交", all: "/monitoring", href: () => "/monitoring" },
+  monitor_visit: { label: "监查访视", go: "查看",   all: "/monitoring", href: () => "/monitoring" }
+};
+
+const GROUPS = [
+  { urgency: "overdue", title: "已过期", sub: "期限已经过了" },
+  { urgency: "today",   title: "今天",   sub: "今天就是期限" },
+  { urgency: "soon",    title: "这几天", sub: "7 天内要办" }
+] as const;
+
+/* 离线时给上一次拿到的那份 —— 按账号分开存，共用一台平板时不串。
+   **只是一份快照**：页面上写明截至几点，不假装是现在的。 */
+const CACHE = "sitedesk.inbox.";
+function saveCache(accountId: string, b: Inbox) {
+  try { localStorage.setItem(CACHE + accountId, JSON.stringify(b)); } catch { /* 存不下就算了 */ }
+}
+function readCache(accountId: string): Inbox | null {
+  try {
+    const raw = localStorage.getItem(CACHE + accountId);
+    return raw ? JSON.parse(raw) as Inbox : null;
+  } catch { return null; }
+}
 
 export function TodayPage() {
-  const [visits, setVisits] = useState<Visit[] | null>(null);
-  const [more, setMore] = useState(false);
+  const [box, setBox] = useState<Inbox | null>(null);
+  const [stale, setStale] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    /* **在服务端筛，不在这里筛。**
-       原来是拉 50 条回来再 `filter(status === "planned")` ——
-       种子里只有 10 条访视且恰好都没做完时，两种写法看不出区别。
-       数据一多就不是了：列表按窗口升序，最早的那 50 条全是历史上
-       已经做完的，于是"今天要做什么"这一页**空着**，
-       而它看起来完全正常（没有报错、没有加载中）。
-
-       后来改成只取 planned，还是只取前 50 条、而且**与日期无关** ——
-       一个在管 30 个受试者的 CRC，未完成的访视里大半是一两个月后的；
-       第 51 条起静默消失，页面上一个字都不说。
-       现在只取**窗口在 7 天内已经打开**的（超窗的、今天到期的、本周能做的），
-       远期的去「我的日程」看；真的多到截断时，页面上说出来。 */
-    call<{ items: Visit[]; nextCursor: string | null }>("listSubjectVisits", {
-      query: { limit: LIMIT, status: "planned", windowOpensBy: daysFromToday(AHEAD) }
-    }).then(r => { setVisits(r.items); setMore(!!r.nextCursor); });
+    void (async () => {
+      try {
+        const [me, b] = await Promise.all([loadMe(), call<Inbox>("getMyInbox")]);
+        setBox(b); saveCache(me.account.id, b);
+      } catch {
+        const who = recallWho();
+        const cached = who ? readCache(who.accountId) : null;
+        if (cached) { setBox(cached); setStale(true); } else setFailed(true);
+      }
+    })();
   }, []);
 
-  const open = visits ?? [];
-  const late = open.filter(v => v.outOfWindow).length;
-  /* 先办的：已超窗，或者今天是窗口最后一天。 */
-  const urgent = open.filter(v => v.outOfWindow || (v.daysLeft ?? 1) <= 0);
-  const week = open.filter(v => !urgent.includes(v));
+  if (failed) return (
+    <>
+      <div className="page-head"><h2>今天</h2></div>
+      <p className="problem" data-testid="today-failed">
+        待办没取到，而这台设备上也没有上一次的记录。联网之后刷新一下。
+      </p>
+    </>
+  );
+  if (!box) return <p className="muted">加载中…</p>;
+
+  const { counts } = box;
+  const at = new Date(box.generatedAt);
 
   return (
     <>
       <div className="page-head">
         <h2>今天</h2>
         <p data-testid="today-summary">
-          {visits === null ? "加载中…"
-            : open.length === 0 ? `未来 ${AHEAD} 天没有要做的访视。`
-            : `未来 ${AHEAD} 天有 ${open.length} 次访视待完成` + (late ? `，其中 ${late} 次已超窗` : "")}
+          {box.items.length === 0 ? "没有要你办的事。"
+            : [counts.overdue && `${counts.overdue} 件已过期`,
+               counts.today && `${counts.today} 件今天要办`,
+               counts.soon && `${counts.soon} 件这几天要办`].filter(Boolean).join("，") + "。"}
         </p>
       </div>
 
-      {late > 0 && (
-        <div className="problem" style={{ marginBottom: 14 }} role="status">
-          有 {late} 次访视已超窗，已排在最前。完成时需要填写超窗原因，
-          系统会据此记一条方案偏离。
+      {stale && (
+        <div className="problem" data-testid="today-stale" style={{ marginBottom: 14 }}>
+          <b>离线</b> —— 下面是 {at.toLocaleString("zh-CN", { hour12: false })} 的待办，可能已经有变化。
         </div>
       )}
 
-      {urgent.length > 0 && (
-        <VisitTable title="先办这些" sub="已超窗或今天到期" rows={urgent} testid="today-urgent" />
-      )}
-      {week.length > 0 && (
-        <VisitTable title={`${AHEAD} 天内`} sub="窗口已经打开或即将打开" rows={week} testid="today-week" />
+      {GROUPS.map(g => {
+        const list = box.items.filter(i => i.urgency === g.urgency);
+        if (!list.length) return null;
+        return (
+          <section key={g.urgency} className="stack" data-testid={`today-${g.urgency}`}
+            style={{ marginBottom: 18 }}>
+            <h3>{g.title} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>
+              {g.sub} · {list.length}</span></h3>
+            <ul className="inbox">
+              {list.map(i => <Row key={`${i.kind}:${i.ref.id ?? i.title}`} i={i} />)}
+            </ul>
+          </section>
+        );
+      })}
+
+      {box.truncatedKinds.length > 0 && (
+        <p className="muted" data-testid="today-truncated">
+          每类只列最急的 20 条。其余的在：{box.truncatedKinds.map((k, n) => (
+            <span key={k}>{n > 0 && "、"}<Link to={KIND[k].all}>{KIND[k].label}</Link></span>
+          ))}。
+        </p>
       )}
 
-      {more && (
-        <p className="problem" data-testid="today-more" style={{ marginTop: 14 }}>
-          这里只列出了窗口最早的 {LIMIT} 次。全部受试者在
-          <Link to="/subjects">「受试者访视窗口」</Link>里看。
-        </p>
-      )}
-      {visits !== null && (
-        <p className="muted" style={{ marginTop: 14 }} data-testid="today-later">
-          {AHEAD} 天以后的访视在 <Link to="/sched">「我的日程」</Link> 里。
-        </p>
-      )}
+      <Why style={{ marginTop: 14 }}>
+        这里只列<b>你办得了的</b>：没有完成访视权限的角色看不到别人该做的访视，
+        没有审批权限的看不到待审工时。SAE 永远排在最前 —— 24 小时是按小时走的，
+        一条一个月前就超窗的访视已经是偏离了，SAE 现在办还来得及。
+        <br />
+        访视只看 7 天内的；更远的在 <Link to="/sched">「我的日程」</Link>，
+        全部受试者在 <Link to="/subjects">「受试者访视窗口」</Link>。
+      </Why>
     </>
   );
 }
 
-function VisitTable({ title, sub, rows, testid }: {
-  title: string; sub: string; rows: Visit[]; testid: string;
-}) {
+/* 类名写全，不拼 —— 拼出来的类名 design.test 查不到定义。 */
+const URGENCY_CLASS = { overdue: "u-overdue", today: "u-today", soon: "u-soon" } as const;
+
+function Row({ i }: { i: InboxItem }) {
+  const k = KIND[i.kind];
   return (
-    <section className="stack" data-testid={testid} style={{ marginBottom: 18 }}>
-      <div className="spread">
-        <h3>{title} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>{sub}</span></h3>
-        <span className="muted num">{rows.length}</span>
+    <li className={`inbox-item ${URGENCY_CLASS[i.urgency]}`} data-testid="inbox-item" data-kind={i.kind}>
+      <span className={`chip ${i.urgency === "overdue" || i.kind === "sae" ? "crit"
+        : i.urgency === "today" ? "warn" : "flat"}`}>{k.label}</span>
+      <div className="inbox-main">
+        <div className="inbox-title">{i.title}</div>
+        <div className="inbox-sub muted">
+          {[i.screeningNo, i.siteCode].filter(Boolean).join(" · ")}
+          {(i.screeningNo || i.siteCode) && " · "}{i.detail}
+        </div>
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>受试者</th><th>中心</th><th>访视</th>
-              <th>窗口</th><th>状态</th><th>任务</th><th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(v => {
-              const done = v.tasks.filter(t => t.doneAt).length;
-              return (
-                <tr key={v.id} data-testid="visit-row">
-                  <td className="mono">{v.screeningNo ?? "—"}</td>
-                  <td className="mono">{v.siteCode}</td>
-                  <td>{v.visitLabel}</td>
-                  <td className="mono muted">{v.windowFrom} ~ {v.windowTo}</td>
-                  <td>{windowChip(v)}</td>
-                  <td className="num">{done}/{v.tasks.length}</td>
-                  <td>
-                    <Link to={`/visits/${v.id}`} className="btn"
-                      style={{ textDecoration: "none", display: "inline-block" }}>
-                      打开
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <Link to={k.href(i)} className="btn primary inbox-go" data-testid="inbox-go">{k.go}</Link>
+    </li>
   );
 }
