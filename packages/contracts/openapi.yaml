@@ -3841,6 +3841,112 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/exports:record:
+    post:
+      operationId: recordExport
+      tags:
+        - workbench
+      summary: 登记一次列表导出
+      description: 只写审计（哪张表、多少行、什么筛选条件），不传数据本身。行范围照常：给了 `studySiteId` 而看不到那个中心时 404。
+      x-layer: L2
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordExportRequest'
+      responses:
+        '200':
+          description: 登记一次列表导出
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecordExportResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/feasibility:
     get:
       operationId: listFeasibility
@@ -5033,6 +5139,439 @@ paths:
                 title: 服务暂时不可用
                 status: 503
                 code: service-unavailable
+  /v1/imports/accounts:commit:
+    post:
+      operationId: commitAccountImport
+      tags:
+        - workbench
+      summary: 人员账号批量创建 · 执行
+      description: 逐行执行，每行各自成败；与单个建号走同一套校验与审计。
+      x-layer: L2
+      x-required-action: manage
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommitAccountImportRequest'
+      responses:
+        '200':
+          description: 人员账号批量创建 · 执行
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitAccountImportResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/imports/accounts:preview:
+    post:
+      operationId: previewAccountImport
+      tags:
+        - workbench
+      summary: 人员账号批量创建 · 试运行
+      description: |-
+        列：`登录名`、`姓名`、`角色`（代号或名称）、`级别`、`城市`、`GCP证书到期日`（可空）、`分组`（可空）。
+        只建内部账号，建号的同时登记员工名册（级别 / 城市必填）；不设口令 —— 本人走一次性链接或单点登录进来。
+        **不写任何东西**，逐行返回能不能建、为什么不能。
+      x-layer: L2
+      x-required-action: manage
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommitAccountImportRequest'
+      responses:
+        '200':
+          description: 人员账号批量创建 · 试运行
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewAccountImportResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/imports/prescreen:commit:
+    post:
+      operationId: commitPrescreenImport
+      tags:
+        - workbench
+      summary: 预筛登记批量导入 · 执行
+      description: 逐行执行，每行各自成败；结果逐行返回。与单条登记走同一套校验与审计。
+      x-layer: L2
+      x-required-action: subjWrite
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommitPrescreenImportRequest'
+      responses:
+        '200':
+          description: 预筛登记批量导入 · 执行
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitPrescreenImportResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+  /v1/imports/prescreen:preview:
+    post:
+      operationId: previewPrescreenImport
+      tags:
+        - workbench
+      summary: 预筛登记批量导入 · 试运行
+      description: |-
+        列：`筛选号`（空着 = 按中心自动发号）、`知情签署日`（YYYY-MM-DD，可空；填了就一并登记签署，进入筛选期并排出筛选期访视）。
+        **不写任何东西**，逐行返回能不能导、为什么不能。
+      x-layer: L2
+      x-required-action: subjWrite
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: 幂等键（uuid）。24 小时内重放同一键返回首次结果。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommitPrescreenImportRequest'
+      responses:
+        '200':
+          description: 预筛登记批量导入 · 试运行
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewPrescreenImportResponse'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '409':
+          description: 幂等键被不同的请求体复用
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/idempotency-key-reused
+                title: 幂等键被不同的请求体复用
+                status: 409
+                code: idempotency-key-reused
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/intake-applications:
     get:
       operationId: listIntakeApplications
@@ -22915,6 +23454,65 @@ components:
         - urgent
         - hasEmail
       additionalProperties: false
+    ImportRow:
+      type: object
+      properties:
+        line:
+          type: integer
+          minimum: 2
+          maximum: 9007199254740991
+        status:
+          type: string
+          enum:
+            - ok
+            - error
+            - done
+            - failed
+          description: 试运行：ok 可导入 / error 不行；执行：done 已建 / failed 没建成
+        summary:
+          type: string
+        error:
+          nullable: true
+          type: string
+        screeningNo:
+          x-gated-by: subject
+          description: 【受试者筛选号】无权限时该字段不出现在响应中（不是 null）
+          type: string
+        ref:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      required:
+        - line
+        - status
+        - summary
+        - error
+        - ref
+      additionalProperties: false
+    ImportResult:
+      type: object
+      properties:
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportRow'
+        ok:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          description: 试运行：可导入的行数；执行：建成的行数
+        bad:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          description: 试运行：不能导入的行数；执行：没建成的行数
+      required:
+        - rows
+        - ok
+        - bad
+      additionalProperties: false
     ListAccountsResponse:
       type: object
       properties:
@@ -23456,6 +24054,59 @@ components:
         - items
         - nextCursor
       additionalProperties: false
+    RecordExportRequest:
+      type: object
+      properties:
+        list:
+          type: string
+          enum:
+            - subjects
+            - visits
+            - queries
+            - timesheets
+            - monitorVisits
+            - qualityEvents
+        rows:
+          type: integer
+          minimum: 0
+          maximum: 100000
+        studySiteId:
+          nullable: true
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+        filters:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 128
+      required:
+        - list
+        - rows
+      additionalProperties: false
+    RecordExportResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            recorded:
+              type: boolean
+              enum:
+                - true
+          required:
+            - recorded
+          additionalProperties: false
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
     ListFeasibilityResponse:
       type: object
       properties:
@@ -23641,6 +24292,88 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/Handover'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    CommitAccountImportRequest:
+      type: object
+      properties:
+        csv:
+          type: string
+          minLength: 1
+          maxLength: 60000
+      required:
+        - csv
+      additionalProperties: false
+    CommitAccountImportResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ImportResult'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    PreviewAccountImportResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ImportResult'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    CommitPrescreenImportRequest:
+      type: object
+      properties:
+        csv:
+          type: string
+          minLength: 1
+          maxLength: 60000
+        studySiteId:
+          type: string
+          format: uuid
+          pattern: >-
+            ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      required:
+        - csv
+        - studySiteId
+      additionalProperties: false
+    CommitPrescreenImportResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ImportResult'
+        sideEffects:
+          type: array
+          items:
+            $ref: '#/components/schemas/SideEffect'
+          description: 本次命令连带触发的事件。为空数组表示没有连带影响。
+      required:
+        - data
+        - sideEffects
+      additionalProperties: false
+    PreviewPrescreenImportResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ImportResult'
         sideEffects:
           type: array
           items:

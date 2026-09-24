@@ -5,6 +5,8 @@ import { today } from "../../shell/dates.js";
 import { Why } from "../../shell/Why.js";
 import { loadMe } from "../login/me.js";
 import { PlanVisitForm, type SiteOption } from "../oversight/PlanVisitForm.js";
+import { ExportButton } from "../../shell/ExportButton.js";
+import type { CsvColumn } from "../../shell/csv.js";
 
 /* ════════════════════════════════════════════════════════════════════
    我的日程。
@@ -34,6 +36,17 @@ interface Visit {
   daysLeft: number | null; outOfWindow: boolean; status: string;
   tasks: { seq: number; task: string; doneAt: string | null }[];
 }
+const EXPORT_COLS: CsvColumn<Visit>[] = [
+  { label: "中心", value: v => v.siteCode },
+  { label: "筛选号", value: v => v.screeningNo },
+  { label: "访视", value: v => v.visitLabel },
+  { label: "目标日", value: v => v.targetDate },
+  { label: "窗口开始", value: v => v.windowFrom },
+  { label: "窗口结束", value: v => v.windowTo },
+  { label: "剩余天数", value: v => v.daysLeft },
+  { label: "已超窗", value: v => v.outOfWindow },
+  { label: "未完成事项", value: v => v.tasks.filter(t => !t.doneAt).length }
+];
 /** 监查访视（本人的）。一趟占 plannedOn 起的 days 天。 */
 interface Trip {
   id: string; code: string; siteCode: string; hospital: string;
@@ -113,7 +126,11 @@ export function SchedulePage() {
   return (
     <>
       <div className="page-head">
-        <h2>我的日程</h2>
+        <div className="spread">
+          <h2>我的日程</h2>
+          <ExportButton op="listSubjectVisits" columns={EXPORT_COLS} list="visits" name="访视日程"
+            query={{ status: "planned", windowOpensBy: until }} />
+        </div>
         <p data-testid="sched-summary">
           {view === "list" ? `未来 ${span} 天。`
             : `${Number(first.slice(5, 7))} 月${monthDays.length ? `还剩 ${monthDays.length} 天` : "已经过去"}。`}

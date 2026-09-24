@@ -32,7 +32,7 @@ import { IDENTITIES, type MockRole } from "./roles.js";
    界面刚填好的日期会被 mock 判成「在将来」。 */
 import { today as today_ } from "../shell/dates.js";
 /* 角色代号 → 名册工种的映射**用契约里那一份** —— 服务端读的是同一张表。 */
-import { STAFF_ROLE_KIND } from "@sitedesk/contracts";
+import { STAFF_ROLE_KIND, STAFF_LEVELS } from "@sitedesk/contracts";
 /* EDC 及时线与 total 的口径**用 calc 那一份** —— mock 另算一遍的话，
    演示上的数和真接口的数会在某一天悄悄分叉。 */
 import { edcDaysLate, dutyTotal } from "@sitedesk/calc";
@@ -3237,6 +3237,20 @@ export const scenarioHandlers = [
     return HttpResponse.json({ items, nextCursor: null });
   }),
 
+  /* ── 导出留痕 / 批量导入（W16 / W17）──────────────────────────────
+     与服务端同一套口径：试运行不写；执行逐行各自成败；表头缺列整体 422。 */
+  http.post(pathToRegExp("/v1/exports:record"), () =>
+    HttpResponse.json({ data: { recorded: true }, sideEffects: [] }, { status: 201 })),
+
+  http.post(pathToRegExp("/v1/imports/prescreen:preview"), async ({ request }) =>
+    mockPrescreenImport(await request.json() as { csv: string; studySiteId: string }, true)),
+  http.post(pathToRegExp("/v1/imports/prescreen:commit"), async ({ request }) =>
+    mockPrescreenImport(await request.json() as { csv: string; studySiteId: string }, false)),
+  http.post(pathToRegExp("/v1/imports/accounts:preview"), async ({ request }) =>
+    mockAccountImport(await request.json() as { csv: string }, true)),
+  http.post(pathToRegExp("/v1/imports/accounts:commit"), async ({ request }) =>
+    mockAccountImport(await request.json() as { csv: string }, false)),
+
   http.post(pathToRegExp("/v1/subjects"), async ({ request }) => {
     const b = await request.json() as { studySiteId: string; screeningNo?: string };
     const site = SITES_LIST.find(x => x.id === b.studySiteId);
@@ -4165,6 +4179,105 @@ const scheduledSummary = (v: MockVisit) =>
  *  犯过同一个错，修法一样。 */
 function addDays(d: string, n: number): string {
   return shiftStr(d, n);
+}
+
+/* ── 批量导入的 mock ────────────────────────────────────────────────
+   CSV 只做 mock 够用的那一截（不认引号里的逗号）—— 真解析在服务端 infra/csv.ts。 */
+type ImpRow = { line: number; status: "ok" | "error" | "done" | "failed"; summary: string;
+  error: string | null; screeningNo?: string; ref: string | null };
+
+function mockTable(csv: string, need: string[]) {
+  const lines = csv.replace(/^\ufeff/, "").split(/\r?\n/).map(l => l.split(",").map(c => c.trim()));
+  const head = (lines[0] ?? []).map(h => h.replace(/[（(].*[)）]$/, "").trim());
+  const miss = need.filter(n => !head.includes(n));
+  if (miss.length) return { error: `第 1 行（表头）缺少这几列：${miss.join("、")}。请从页面上下载模板填写` };
+  const rows = lines.slice(1).map((c, i) => ({ line: i + 2, c }))
+    .filter(r => r.c.some(v => v !== ""))
+    .map(r => ({ line: r.line, get: (h: string) => head.indexOf(h) >= 0 ? r.c[head.indexOf(h)] ?? "" : "" }));
+  if (!rows.length) return { error: "文件里除了表头没有数据" };
+  return { rows };
+}
+
+function impResult(rows: ImpRow[]) {
+  const ok = rows.filter(r => r.status === "ok" || r.status === "done").length;
+  return HttpResponse.json({ data: { rows, ok, bad: rows.length - ok }, sideEffects: [] }, { status: 201 });
+}
+
+function mockPrescreenImport(b: { csv: string; studySiteId: string }, dry: boolean) {
+  const t = mockTable(b.csv, []);
+  if ("error" in t) return HttpResponse.json(problem("validation-failed", 422, t.error!), { status: 422 });
+  const site = SITES_LIST.find(x => x.id === b.studySiteId);
+  if (!site) return HttpResponse.json(problem("not-found", 404, "中心不存在"), { status: 404 });
+  const seen = new Set<string>();
+  const out: ImpRow[] = t.rows!.map(r => {
+    const no = r.get("筛选号"), icf = r.get("知情签署日");
+    const fail = (error: string): ImpRow => ({ line: r.line, status: dry ? "error" : "failed",
+      summary: icf ? "登记预筛，并登记知情签署" : "登记预筛", error, ref: null });
+    if (no && seen.has(no)) return fail("与文件里前面某一行的筛选号重复");
+    if (no) seen.add(no);
+    if (icf && !/^\d{4}-\d{2}-\d{2}$/.test(icf)) return fail(`知情签署日「${icf}」不是 YYYY-MM-DD 格式的日期`);
+    if (icf && icf > todayStr()) return fail("知情同意签署日不能晚于今天");
+    if (no && scenario.subjects.some(x => x.screeningNo === no)) return fail("库里已经有这一条了（重复）");
+    const summary = (icf ? `登记预筛，并登记知情签署（${icf}）` : "登记预筛") + (no ? "" : "，筛选号自动发");
+    if (dry) return { line: r.line, status: "ok", summary, error: null, ...(no ? { screeningNo: no } : {}), ref: null };
+    const screeningNo = no || nextMockCode(`${site.code}-P`, 3, scenario.subjects.map(x => x.screeningNo));
+    const s = {
+      id: `u-${scenario.subjects.length + 1}`, studySiteId: site.id, siteCode: site.code, screeningNo,
+      randomized: false, randomizationNo: null, state: icf ? "screening" : "prescreen",
+      icfSignedOn: icf || null, enrolledOn: null, exitedOn: null,
+      screenFailReason: null, withdrawReason: null, crcName: me().account.displayName,
+      visitsDone: 0, visitsPlanned: 0, nextVisit: null
+    };
+    scenario.subjects.push(s);
+    /* 签了知情的，与单条签知情同样把筛选期第 0 次访视排出来 —— 否则导进来的每一位都是"访视没排出来" */
+    if (icf) {
+      const su = scenario.subjects.at(-1)!;
+      su.visitsPlanned = 8;
+      const v0 = schedVisit(su, 0, icf);
+      scenario.visits.push(v0);
+      su.nextVisit = nextOf(v0);
+    }
+    return { line: r.line, status: "done", summary, error: null, screeningNo, ref: s.id };
+  });
+  return impResult(out);
+}
+
+function mockAccountImport(b: { csv: string }, dry: boolean) {
+  const t = mockTable(b.csv, ["登录名", "姓名", "角色", "级别", "城市"]);
+  if ("error" in t) return HttpResponse.json(problem("validation-failed", 422, t.error!), { status: 422 });
+  const seen = new Set<string>();
+  const out: ImpRow[] = t.rows!.map(r => {
+    const login = r.get("登录名"), name = r.get("姓名"), rv = r.get("角色");
+    const level = r.get("级别"), city = r.get("城市"), gcp = r.get("GCP证书到期日"), tv = r.get("分组");
+    const fail = (error: string): ImpRow => ({ line: r.line, status: dry ? "error" : "failed",
+      summary: `新建账号 ${login}`, error, ref: null });
+    if (seen.has(login)) return fail("与文件里前面某一行的登录名重复");
+    seen.add(login);
+    const role = scenario.roles.find(x => x.code.toLowerCase() === rv.toLowerCase() || x.name === rv ||
+      x.name.replace(/\s*[A-Za-z]+$/, "").trim() === rv);
+    if (!role) return fail(`没有叫「${rv}」的角色（填角色代号或名称，如 crc / 临床协调员）`);
+    if (role.isExternal) return fail(`「${role.name}」是外部方角色 —— 外部方账号请在账号台账里单个建（要选所属机构）`);
+    if (!(STAFF_LEVELS as readonly string[]).includes(level)) return fail(`级别「${level}」不在 ${STAFF_LEVELS.join(" / ")} 里`);
+    const team = tv ? scenario.teams.find(x => x.code === tv || x.name === tv) : null;
+    if (tv && !team) return fail(`没有叫「${tv}」的分组`);
+    if (!/^[a-z][a-z0-9_]{2,31}$/.test(login)) return fail("登录名：3–32 位小写字母 / 数字 / 下划线，且以字母开头");
+    if (!name) return fail("姓名：必填");
+    if (!city) return fail("城市：必填");
+    if (scenario.accounts.some(a => a.login === login)) return fail(`登录名 ${login} 已存在`);
+    const summary = `新建账号 ${login}（${role.name} · ${level} · ${city}）`;
+    if (dry) return { line: r.line, status: "ok", summary, error: null, ref: null };
+    const acc = {
+      id: `a-${login}`, login, displayName: name,
+      role: { id: role.id, code: role.code, name: role.name, isExternal: role.isExternal },
+      team: team ? { id: team.id, code: team.code, name: team.name } : null,
+      isExternal: false, orgRef: null, status: "active" as const, joinedOn: todayStr(),
+      disabledAt: null, disabledReason: null, lastLoginAt: null
+    };
+    scenario.accounts.push(acc);
+    STAFF_LIST.push(mkStaff(acc.id, login, name, STAFF_ROLE_KIND[role.code] ?? "CRC", level, city, gcp || null));
+    return { line: r.line, status: "done", summary, error: null, ref: acc.id };
+  });
+  return impResult(out);
 }
 
 function problem(code: string, status: number, detail: string) {

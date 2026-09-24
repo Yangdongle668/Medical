@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { Why } from "../../shell/Why.js";
+import { ExportButton } from "../../shell/ExportButton.js";
+import type { CsvColumn } from "../../shell/csv.js";
 
 /* ════════════════════════════════════════════════════════════════════
    数据质疑（EDC Query）。
@@ -42,6 +44,29 @@ interface Load {
   meanAgeDays: number | null; worstAgeDays: number | null; meetsTarget: boolean | null;
 }
 interface Stats { load: Load; sites: unknown[]; calcVersion: string }
+
+const STATE_TEXT: Record<Query["state"], string> =
+  { open: "待中心回复", pending_review: "已回复待关闭", closed: "已关闭" };
+
+const EXPORT_COLS: CsvColumn<Query>[] = [
+  { label: "编号", value: q => q.code },
+  { label: "中心", value: q => q.siteCode },
+  { label: "医院", value: q => q.hospital },
+  { label: "筛选号", value: q => q.screeningNo },
+  { label: "表单", value: q => q.form },
+  { label: "字段", value: q => q.fieldName },
+  { label: "内容", value: q => q.detail },
+  { label: "严重度", value: q => q.severity },
+  { label: "状态", value: q => STATE_TEXT[q.state] },
+  { label: "提出人", value: q => q.raisedByName ?? q.raisedBy },
+  { label: "提出日", value: q => q.raisedOn },
+  { label: "负责人", value: q => q.ownerName },
+  { label: "回复", value: q => q.answer },
+  { label: "回复日", value: q => q.answeredOn },
+  { label: "催办次数", value: q => q.chaseCount },
+  { label: "挂起天数", value: q => q.ageDays },
+  { label: "关闭结论", value: q => q.resolution }
+];
 
 /** 目标平均关闭天数 —— 与 calc 的 QUERY_TARGET_DAYS 同一个数。 */
 const TARGET = 5;
@@ -100,7 +125,12 @@ export function QueryPage({ studySiteId }: { studySiteId?: string } = {}) {
   return (
     <>
       <div className="page-head">
-        <h2>数据质疑</h2>
+        <div className="spread">
+          <h2>数据质疑</h2>
+          <ExportButton op="listDataQueries" columns={EXPORT_COLS} list="queries" name="数据质疑"
+            query={{ ...(isCrc ? { mine: true } : {}), ...(studySiteId ? { studySiteId } : {}) }}
+            studySiteId={studySiteId ?? null} />
+        </div>
         <p data-testid="query-summary">
           {isCrc
             ? <>指派给你的 {rows.length} 条，<b>{open.length} 条待你回复</b>。</>

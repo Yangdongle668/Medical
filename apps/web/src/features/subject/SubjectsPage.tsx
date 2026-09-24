@@ -9,6 +9,8 @@ import {
 import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
 import { WithdrawForm } from "./WithdrawForm.js";
 import { Why } from "../../shell/Why.js";
+import { ExportButton } from "../../shell/ExportButton.js";
+import type { CsvColumn } from "../../shell/csv.js";
 
 /* ════════════════════════════════════════════════════════════════════
    受试者访视窗口。
@@ -26,6 +28,25 @@ import { Why } from "../../shell/Why.js";
    按筛选号排的表看不出这件事，而它是这一页唯一的紧急信号。
    ════════════════════════════════════════════════════════════════════ */
 
+/** 导出的列。筛选号受列权限管：没权限的人拿到的行里没有这个字段，这一列就是空的。 */
+const EXPORT_COLS: CsvColumn<Subject>[] = [
+  { label: "筛选号", value: s => s.screeningNo },
+  { label: "中心", value: s => s.siteCode },
+  { label: "状态", value: s => STATE_LABEL[s.state] ?? s.state },
+  { label: "随机号", value: s => s.randomizationNo },
+  { label: "知情签署日", value: s => s.icfSignedOn },
+  { label: "入组日", value: s => s.enrolledOn },
+  { label: "出组日", value: s => s.exitedOn },
+  { label: "已完成访视", value: s => s.visitsDone },
+  { label: "计划访视", value: s => s.visitsPlanned },
+  { label: "下一次访视", value: s => s.nextVisit?.visitLabel },
+  { label: "窗口开始", value: s => s.nextVisit?.windowFrom },
+  { label: "窗口结束", value: s => s.nextVisit?.windowTo },
+  { label: "剩余天数", value: s => s.nextVisit?.daysLeft },
+  { label: "已超窗", value: s => s.nextVisit ? s.nextVisit.outOfWindow : null },
+  { label: "CRC", value: s => s.crcName }
+];
+
 /** 嵌在中心工作台的页签里时给 —— 只看这一个中心。独立页面（侧栏进来的）不给，看全部。 */
 export function SubjectsPage({ studySiteId }: { studySiteId?: string } = {}) {
   const [subs, setSubs] = useState<Subject[] | null>(null);
@@ -42,6 +63,11 @@ export function SubjectsPage({ studySiteId }: { studySiteId?: string } = {}) {
   const [schedProblem, setSchedProblem] = useState<ProblemDetails | null>(null);
   const say = useToast();
 
+  /** 列表与导出用同一组条件 —— 导出的就是这一页在看的那批人 */
+  const query = {
+    ...(openOnly ? { state: OPEN_STATES } : {}),
+    ...(studySiteId ? { studySiteId } : {})
+  };
   const load = useCallback(() => {
     void listSubjects({
       ...(openOnly ? { state: OPEN_STATES } : {}),
@@ -86,7 +112,11 @@ export function SubjectsPage({ studySiteId }: { studySiteId?: string } = {}) {
   return (
     <>
       <div className="page-head">
-        <h2>受试者访视窗口</h2>
+        <div className="spread">
+          <h2>受试者访视窗口</h2>
+          <ExportButton op="listSubjects" query={query} columns={EXPORT_COLS}
+            list="subjects" name="受试者" studySiteId={studySiteId ?? null} />
+        </div>
         <p data-testid="subj-summary">
           {subs.length} 人。
           {late.length > 0 && <> <b>{late.length} 人的下一次访视已超窗</b>。</>}

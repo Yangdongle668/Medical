@@ -4,6 +4,8 @@ import { loadMe, type Me } from "../login/me.js";
 import { yuan } from "../cost/money.js";
 import { PlanVisitForm } from "./PlanVisitForm.js";
 import { Why } from "../../shell/Why.js";
+import { ExportButton } from "../../shell/ExportButton.js";
+import type { CsvColumn } from "../../shell/csv.js";
 
 /* ════════════════════════════════════════════════════════════════════
    监查访视。
@@ -41,6 +43,28 @@ interface Visit {
   items: Item[]; openItems: number;
   mvrLagDays: number | null; mvrOverdue: boolean; visitOverdueDays: number | null;
 }
+const KIND_TEXT: Record<Visit["kind"], string> = { siv: "启动访视", imv: "常规监查", cov: "关闭访视" };
+const STATE_TEXT: Record<Visit["state"], string> =
+  { proposed: "待中心确认", scheduled: "已确认", done: "已到现场", reported: "报告已交" };
+const EXPORT_COLS: CsvColumn<Visit>[] = [
+  { label: "编号", value: v => v.code },
+  { label: "中心", value: v => v.siteCode },
+  { label: "医院", value: v => v.hospital },
+  { label: "项目", value: v => v.studyShortName },
+  { label: "类型", value: v => KIND_TEXT[v.kind] },
+  { label: "计划日", value: v => v.plannedOn },
+  { label: "天数", value: v => v.days },
+  { label: "监查员", value: v => v.monitorName },
+  { label: "状态", value: v => STATE_TEXT[v.state] },
+  { label: "中心确认日", value: v => v.confirmedOn },
+  { label: "到现场日", value: v => v.performedOn },
+  { label: "报告提交日", value: v => v.reportSubmittedOn },
+  { label: "SDV 比例（%）", value: v => v.sdvSamplePct },
+  { label: "未关闭事项", value: v => v.openItems },
+  { label: "报告已逾期", value: v => v.mvrOverdue },
+  { label: "备注", value: v => v.note }
+];
+
 interface SitePlan {
   studySiteId: string; siteCode: string; hospital: string; siteState: string;
   band: "low" | "normal" | "high"; riskScore: number;
@@ -133,7 +157,11 @@ export function MonPage({ studySiteId }: { studySiteId?: string } = {}) {
   return (
     <>
       {!embedded && <div className="page-head">
-        <h2>监查访视</h2>
+        <div className="spread">
+          <h2>监查访视</h2>
+          <ExportButton op="listMonitorVisits" columns={EXPORT_COLS} list="monitorVisits"
+            name="监查访视" query={studySiteId ? { studySiteId } : {}} studySiteId={studySiteId ?? null} />
+        </div>
         <p data-testid="mon-summary">
           未来四周 <b>{board.upcomingVisits} 次</b>（{board.upcomingDays} 人天）
           {seesCost && <>，预估差旅 <b>{yuan(board.travelEstimateCents!)}</b></>}。

@@ -10,6 +10,7 @@ import { Pick } from "../../shell/CreateForm.js";
 import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
 import { Why } from "../../shell/Why.js";
 import { useCurrentSite } from "../../shell/currentSite.js";
+import { ImportDialog } from "../../shell/ImportDialog.js";
 
 /* ════════════════════════════════════════════════════════════════════
    预筛登记。
@@ -42,6 +43,7 @@ export function PrescreenPage() {
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [acting, setActing] = useState<{ id: string; kind: "icf" | "fail" | "enroll" } | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const reload = () => listSubjects({ state: ["prescreen", "screening"] })
     .then(r => setSubs(r.items));
@@ -106,6 +108,10 @@ export function PrescreenPage() {
               placeholder="自动生成，如 SS-01-P042" /></label>
         </div>
         <div className="row" style={{ justifyContent: "flex-end" }}>
+          {/* 一次几十个（从纸质登记表、从 IWRS 导出的名单）走批量导入 —— 到哪个中心同样看上面选的 */}
+          <button className="btn" data-testid="pre-import" disabled={!siteId}
+            title={siteId ? "从 CSV 一次登记多位" : "先选中心"}
+            onClick={() => setImporting(true)}>批量导入</button>
           <button className="btn primary" data-testid="pre-create"
             disabled={!siteId}
             onClick={() => void run("已登记", async () => {
@@ -122,6 +128,20 @@ export function PrescreenPage() {
           </button>
         </div>
       </div>
+
+      {siteId && (
+        <ImportDialog open={importing} onClose={() => setImporting(false)}
+          onDone={() => void reload()} testid="pre-imp"
+          title={`批量登记预筛 · ${sites.find(x => x.id === siteId)?.code ?? ""}`}
+          previewOp="previewPrescreenImport" commitOp="commitPrescreenImport"
+          body={{ studySiteId: siteId }}
+          template={{
+            name: "prescreen-template",
+            csv: "序号,筛选号（空着=自动发号）,知情签署日（YYYY-MM-DD，可空）\r\n1,,\r\n2,,\r\n3,,\r\n",
+            hint: "一行一位（序号那一列只为占行，不导入）。筛选号空着就按中心自动发；填了知情签署日的，会一并登记签署、进入筛选期并排出筛选期访视。" +
+              "表里不要写姓名、电话这类能认出人的信息。"
+          }} />
+      )}
 
       {problem && (
         <div className="problem stack" data-testid="pre-problem" style={{ marginBottom: 12 }}>

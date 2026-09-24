@@ -2,6 +2,7 @@ import { z } from "zod";
 import { define } from "../kernel/registry.js";
 import { Uuid, DateOnly, Timestamp, Code } from "../kernel/primitives.js";
 import { gated } from "../kernel/fields.js";
+import { commandResult } from "../kernel/command.js";
 
 /* ════════════════════════════════════════════════════════════════════
    「我的待办」—— 一线首页的数据源。
@@ -150,4 +151,122 @@ define({
   description: "只改自己的。没有这一行时等于两个都开。",
   body: SetNotifyPrefsBody,
   response: NotifyPrefs
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   导出留痕（W16）。
+
+   导出本身在前端做：按当前筛选条件把列表翻页拉完，拼成 CSV。
+   **数据走的是列表接口**，行范围与列权限照常生效 —— 导出的就是他本来看得到的。
+   这一条只记"谁在什么时候导出了哪张表、多少行、什么条件"，不传数据本身。
+   列表接口每翻一页已经各记一条"查询明细"；这一条是把它们认成一次导出。
+   ════════════════════════════════════════════════════════════════════ */
+
+export const EXPORT_LISTS = [
+  "subjects", "visits", "queries", "timesheets", "monitorVisits", "qualityEvents"
+] as const;
+
+export const RecordExportBody = z.object({
+  list: z.enum(EXPORT_LISTS),
+  rows: z.int().min(0).max(100_000),
+  studySiteId: Uuid.nullable().optional(),
+  /** 当时的筛选条件，原样记进审计。只收短字符串 —— 这里不是传数据的地方 */
+  filters: z.record(z.string().max(32), z.string().max(128)).optional()
+});
+
+define({
+  id: "recordExport", method: "post", path: "/v1/exports:record", layer: "L2", context: CTX,
+  summary: "登记一次列表导出",
+  description:
+    "只写审计（哪张表、多少行、什么筛选条件），不传数据本身。行范围照常：" +
+    "给了 `studySiteId` 而看不到那个中心时 404。",
+  body: RecordExportBody,
+  response: commandResult(z.object({ recorded: z.literal(true) })),
+  errors: ["idempotency-key-reused"]
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   批量导入（W17）：先试运行，再逐行执行。
+
+   只收 CSV（Excel「另存为 → CSV UTF-8」）。不解析 xlsx：
+   那需要引入一个体积大、历史上出过原型污染与 zip 炸弹问题的解析库，
+   而一线手里的模板本来就是我们给的那一份。
+
+   ── 两步 ────────────────────────────────────────────────────────
+   · `:preview` 不写任何东西：逐行说"可导入 / 为什么不行"。
+   · `:commit` 逐行执行，每行各自成败（行级 SAVEPOINT）—— 第 7 行筛选号重复
+     不会连累其他 49 行；结果逐行返回。整个请求带幂等键，重发不会建两遍；
+     再传一次同一份文件，已建的行会在试运行里标成"已存在"。
+   ════════════════════════════════════════════════════════════════════ */
+
+export const ImportCsvBody = z.object({
+  /** 整个 CSV 文件的文本（UTF-8，可带 BOM）。至多 500 行数据 */
+  csv: z.string().min(1).max(60_000)
+});
+
+export const ImportPrescreenBody = ImportCsvBody.extend({ studySiteId: Uuid });
+
+export const ImportRow = z.object({
+  /** 文件里的行号（表头是第 1 行） */
+  line: z.int().min(2),
+  status: z.enum(["ok", "error", "done", "failed"])
+    .describe("试运行：ok 可导入 / error 不行；执行：done 已建 / failed 没建成"),
+  /** 这一行要做（或做了）什么，给人看的一句话。不含筛选号 —— 那一栏单独给、受列权限管 */
+  summary: z.string(),
+  error: z.string().nullable(),
+  screeningNo: gated(z.string(), "subject"),
+  /** 建成了的对象 id（执行后才有） */
+  ref: Uuid.nullable()
+}).meta({ id: "ImportRow" });
+
+export const ImportResult = z.object({
+  rows: z.array(ImportRow),
+  ok: z.int().min(0).describe("试运行：可导入的行数；执行：建成的行数"),
+  bad: z.int().min(0).describe("试运行：不能导入的行数；执行：没建成的行数")
+}).meta({ id: "ImportResult" });
+
+define({
+  id: "previewPrescreenImport", method: "post", path: "/v1/imports/prescreen:preview",
+  layer: "L2", context: CTX, action: "subjWrite",
+  summary: "预筛登记批量导入 · 试运行",
+  description:
+    "列：`筛选号`（空着 = 按中心自动发号）、`知情签署日`（YYYY-MM-DD，可空；" +
+    "填了就一并登记签署，进入筛选期并排出筛选期访视）。\n" +
+    "**不写任何东西**，逐行返回能不能导、为什么不能。",
+  body: ImportPrescreenBody,
+  response: commandResult(ImportResult),
+  errors: ["not-found", "idempotency-key-reused"]
+});
+
+define({
+  id: "commitPrescreenImport", method: "post", path: "/v1/imports/prescreen:commit",
+  layer: "L2", context: CTX, action: "subjWrite",
+  summary: "预筛登记批量导入 · 执行",
+  description: "逐行执行，每行各自成败；结果逐行返回。与单条登记走同一套校验与审计。",
+  body: ImportPrescreenBody,
+  response: commandResult(ImportResult),
+  errors: ["not-found", "idempotency-key-reused"]
+});
+
+define({
+  id: "previewAccountImport", method: "post", path: "/v1/imports/accounts:preview",
+  layer: "L2", context: CTX, action: "manage",
+  summary: "人员账号批量创建 · 试运行",
+  description:
+    "列：`登录名`、`姓名`、`角色`（代号或名称）、`级别`、`城市`、`GCP证书到期日`（可空）、`分组`（可空）。\n" +
+    "只建内部账号，建号的同时登记员工名册（级别 / 城市必填）；不设口令 —— 本人走一次性链接或单点登录进来。\n" +
+    "**不写任何东西**，逐行返回能不能建、为什么不能。",
+  body: ImportCsvBody,
+  response: commandResult(ImportResult),
+  errors: ["idempotency-key-reused"]
+});
+
+define({
+  id: "commitAccountImport", method: "post", path: "/v1/imports/accounts:commit",
+  layer: "L2", context: CTX, action: "manage",
+  summary: "人员账号批量创建 · 执行",
+  description: "逐行执行，每行各自成败；与单个建号走同一套校验与审计。",
+  body: ImportCsvBody,
+  response: commandResult(ImportResult),
+  errors: ["idempotency-key-reused"]
 });
