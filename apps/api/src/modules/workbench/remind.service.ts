@@ -8,6 +8,7 @@ import { ctx } from "../../infra/ctx.js";
 import { emit } from "../../infra/log.js";
 import { NotifyService } from "../../infra/notify.js";
 import { InboxService } from "./inbox.service.js";
+import { bizTz } from "../../infra/clock.js";
 
 /* ════════════════════════════════════════════════════════════════════
    邮件提醒（迁移 0055 的文件头说了为什么）。
@@ -127,7 +128,7 @@ export class RemindService implements OnModuleInit, OnModuleDestroy {
 
   /** 跑一轮。返回这一轮给多少人发了紧急 / 摘要（测试与日志用）。 */
   async tick(now = new Date()): Promise<{ skipped: boolean; urgent: number; digest: number }> {
-    const tz = process.env["SITEDESK_TZ"] ?? "Asia/Shanghai";
+    const tz = bizTz();
     const digestHour = Number(process.env["SITEDESK_DIGEST_HOUR"] ?? 8);
     /* 会话级咨询锁：一轮里要开很多个事务（每人一个），事务级锁撑不过第一个人 */
     const lock = await this.pool.connect();

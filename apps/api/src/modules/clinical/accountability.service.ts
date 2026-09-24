@@ -3,6 +3,7 @@ import { ctx } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
+import { todayLocal } from "../../infra/clock.js";
 
 /* ════════════════════════════════════════════════════════════════════
    药品台账 · 生物样本 · 伦理递交
@@ -18,7 +19,7 @@ import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keys
    ════════════════════════════════════════════════════════════════════ */
 
 const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => todayLocal();   // 业务时区的今天（infra/clock.ts）—— 不是服务器的 UTC 今天
 
 interface IpRow {
   id: string; study_site_id: string; moved_on: Date; kind: string;

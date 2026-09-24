@@ -7,6 +7,7 @@ import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { nextCode } from "../../infra/code.js";
 import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
+import { todayLocal } from "../../infra/clock.js";
 
 /* ════════════════════════════════════════════════════════════════════
    立项受理与中心文件（ISF）。
@@ -24,7 +25,7 @@ import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keys
    ════════════════════════════════════════════════════════════════════ */
 
 const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
-const todayStr = () => day(new Date())!;
+const todayStr = () => todayLocal();   // 业务时区的今天（infra/clock.ts）—— 不是服务器的 UTC 今天
 
 interface AcRow {
   id: string; code: string; study_id: string; study_code: string;

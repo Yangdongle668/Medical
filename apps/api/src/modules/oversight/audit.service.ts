@@ -7,6 +7,7 @@ import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService as AuditLog } from "../../infra/audit.service.js";
 import { nextCode } from "../../infra/code.js";
+import { todayLocal } from "../../infra/clock.js";
 
 /* ════════════════════════════════════════════════════════════════════
    内部稽查 —— 我方的第二道防线。
@@ -27,7 +28,7 @@ import { nextCode } from "../../infra/code.js";
 
 const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
 const iso = (v: Date | null) => v ? v.toISOString() : null;
-const todayStr = () => day(new Date())!;
+const todayStr = () => todayLocal();   // 业务时区的今天（infra/clock.ts）
 
 /** category 为空时按 kind 归类。**不能直接丢掉** ——
  *  丢掉的那几条会让「这一类一共几条」变小，而分母变小会让复发率虚高。 */

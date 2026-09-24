@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { runInCtx, type RequestCtx } from "./ctx.js";
 import { loadPrincipal } from "../auth/principal.loader.js";
 import { emit } from "./log.js";
+import { bizTz } from "./clock.js";
 
 /* ════════════════════════════════════════════════════════════════════
    以某个账号的身份跑一段 —— 给**没有请求**的后台任务用。
@@ -33,6 +34,7 @@ export async function runAs<T>(pool: Pool, accountId: string, job: string,
   try {
     await client.query("BEGIN");
     await client.query("SELECT set_config('app.account_id', $1, true)", [accountId]);
+    await client.query("SELECT set_config('TimeZone', $1, true)", [bizTz()]);
     const loaded = await loadPrincipal(client, accountId);
     c.principal = loaded.principal;
     c.scope = loaded.scope;

@@ -8,6 +8,7 @@ import { ctx, principal } from "../../infra/ctx.js";
 import { siteScopeSql } from "@sitedesk/policy";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { todayDate, todayLocal } from "../../infra/clock.js";
 
 /* ════════════════════════════════════════════════════════════════════
    里程碑 · 客户 · 现金流。
@@ -104,7 +105,7 @@ export class FinanceService {
         ORDER BY (m.state = 'paid'), m.due_on NULLS LAST, m.reached_on DESC
         LIMIT ${add(q.limit + 1)}`, params);
 
-    const today = new Date();
+    const today = todayDate();   // 按天算账龄 —— 业务时区的今天
     const items = rows.slice(0, q.limit).map(r => this.msDto(r, today));
     return {
       items, nextCursor: rows.length > q.limit ? items.at(-1)?.code ?? null : null
@@ -126,7 +127,7 @@ export class FinanceService {
     if (q.clientId) { params.push(q.clientId); conds.push(`cl.id = $${params.length}`); }
     const { rows } = await c.client.query<{ amount_cents: string; due_on: Date }>(
       `SELECT m.amount_cents, m.due_on ${MS_FROM} WHERE ${conds.join(" AND ")}`, params);
-    const today = new Date();
+    const today = todayDate();   // 按天算账龄 —— 业务时区的今天
     return {
       ...arAging(rows.map(r => ({
         amountCents: Number(r.amount_cents),
@@ -151,7 +152,7 @@ export class FinanceService {
       throw new ProblemException("invariant-violated", {
         detail: `${before.code} 已经开过票了（${before.state === "paid" ? "并且已回款" : ""}）` });
 
-    const on = b.invoicedOn ?? new Date().toISOString().slice(0, 10);
+    const on = b.invoicedOn ?? todayLocal();
     if (on < day(before.reached_on)!)
       throw new ProblemException("invariant-violated", {
         detail: `开票日不能早于达成日（${day(before.reached_on)}）—— 开不出那样的票` });
@@ -180,7 +181,7 @@ export class FinanceService {
       after: { state: "invoiced", invoicedOn: on, dueOn: day(rows[0]!.due_on) },
       studySiteId: before.study_site_id, reason: b.note ?? null });
 
-    const data = this.msDto(await this.oneMs(id), new Date());
+    const data = this.msDto(await this.oneMs(id), todayDate());
     return {
       data,
       sideEffects: [{
@@ -206,7 +207,7 @@ export class FinanceService {
         detail: `${before.code} 已经登记过回款了（${day(before.paid_on)}）——` +
           "钱到账是不可撤销的事实，写错了要走冲销" });
 
-    const on = b.paidOn ?? new Date().toISOString().slice(0, 10);
+    const on = b.paidOn ?? todayLocal();
     if (on < day(before.invoiced_on)!)
       throw new ProblemException("invariant-violated", {
         detail: `回款日不能早于开票日（${day(before.invoiced_on)}）` });
@@ -221,7 +222,7 @@ export class FinanceService {
 
     const late = daysBetween(before.due_on!, new Date(on));
     return {
-      data: this.msDto(await this.oneMs(id), new Date()),
+      data: this.msDto(await this.oneMs(id), todayDate()),
       sideEffects: [{
         type: "MilestoneReached" as const,
         summary: late > 0
@@ -345,7 +346,7 @@ export class FinanceService {
   async cashForecast(months = 6) {
     const c = ctx();
     const sc = siteScopeSql(principal(), "s", 1);
-    const today = new Date();
+    const today = todayDate();   // 按天算账龄 —— 业务时区的今天
 
     const [plan, msRows, siteRows, burn] = await Promise.all([
       this.plan(),

@@ -53,11 +53,14 @@ let app: INestApplication;
 let crc: Caller;
 const K = () => ({ "Idempotency-Key": randomUUID() });
 
+/* 这一组的时刻都按北京时间写（周一 09:00 = UTC 01:00）；测试默认把业务时区钉成 UTC，这里换回来 */
+const savedTz = process.env["SITEDESK_TZ"];
 beforeAll(async () => {
+  process.env["SITEDESK_TZ"] = "Asia/Shanghai";
   resetDb(); app = await boot();
   crc = await as(app, "wutong");
 }, 180_000);
-afterAll(async () => { await app?.close(); });
+afterAll(async () => { await app?.close(); if (savedTz === undefined) delete process.env["SITEDESK_TZ"]; else process.env["SITEDESK_TZ"] = savedTz; });
 
 /** 跑一轮，收下这一轮发出去的邮件（按收件地址分）。 */
 async function round(now: Date) {

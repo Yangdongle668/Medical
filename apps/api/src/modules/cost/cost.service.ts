@@ -9,6 +9,7 @@ import { siteScopeSql } from "@sitedesk/policy";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
+import { todayLocal, todayDate } from "../../infra/clock.js";
 
 /* ════════════════════════════════════════════════════════════════════
    Timesheet & Cost —— 服务层只做三件事：取数、调用 calc、写审计。
@@ -124,7 +125,7 @@ export class CostService {
       `SELECT id, code FROM study_site WHERE id = $1`, [b.studySiteId]);
     if (!site.rows[0]) throw notFound("中心");
 
-    if (b.workDate > new Date().toISOString().slice(0, 10))
+    if (b.workDate > todayLocal())
       throw new ProblemException("invariant-violated", {
         detail: "不能给未来的日期填报工时", invariant: "timesheet-not-future" });
 
@@ -394,7 +395,8 @@ export class CostService {
     /* 月份轴：最近 N 个月（含当月）。**不是"有数据的那几个月"** ——
        中间空掉的月份必须画出来，"那个月一分钱收入都没有"正是要看见的事。 */
     const axis: string[] = [];
-    const now = new Date();
+    /* 月份轴从业务时区的这个月数起 —— 按 UTC 的话每月 1 号北京 0–8 点会少画当月 */
+    const now = todayDate();
     for (let i = months - 1; i >= 0; i--) {
       const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
       axis.push(d.toISOString().slice(0, 7));

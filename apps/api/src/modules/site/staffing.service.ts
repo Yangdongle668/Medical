@@ -10,6 +10,7 @@ import { AuditService } from "../../infra/audit.service.js";
 import { NotifyService } from "../../infra/notify.js";
 import { evaluateGate } from "./gate.js";
 import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
+import { todayDate, todayLocal } from "../../infra/clock.js";
 
 const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
 const iso = (v: Date | null) => v ? v.toISOString() : null;
@@ -37,7 +38,7 @@ const ITEM_FROM = `
   LEFT JOIN account o ON o.id = i.owner_account_id
   LEFT JOIN account b ON b.id = i.done_by`;
 
-const toItem = (r: ItemRow, today = new Date()) => ({
+const toItem = (r: ItemRow, today = todayDate()) => ({
   id: r.id, studySiteId: r.study_site_id,
   category: r.category, categoryLabel: r.category_label, item: r.item,
   ownerAccountId: r.owner_account_id, ownerName: r.owner_name,
@@ -71,7 +72,7 @@ export class StaffingService {
     const { rows } = await c.client.query<ItemRow>(
       `SELECT ${ITEM_COLS} FROM ${ITEM_FROM}
         WHERE i.study_site_id = $1 ORDER BY c.seq, i.sort_order`, [siteId]);
-    const today = new Date();
+    const today = todayDate();   // 业务时区的今天（infra/clock.ts）
     const items = rows.map(r => toItem(r, today));
 
     return {
@@ -126,7 +127,7 @@ export class StaffingService {
        ORDER BY s.code LIMIT ${add(q.limit + 1)}`, params);
 
     const page = rows.slice(0, q.limit);
-    const today = new Date();
+    const today = todayDate();   // 业务时区的今天（infra/clock.ts）
     let items = page.map(r => ({
       studySiteId: r.id, siteCode: r.code, hospital: r.hospital, state: r.state,
       sivPlannedOn: day(r.siv_planned_on),
@@ -247,7 +248,7 @@ export class StaffingService {
         LEFT JOIN account su ON su.id = st.successor_account_id
        WHERE ${conds.join(" AND ")} ORDER BY a.login LIMIT ${add(q.limit + 1)}`, params);
 
-    const today = new Date();
+    const today = todayDate();   // 业务时区的今天（infra/clock.ts）
     let items = rows.slice(0, q.limit).map(r => {
       const n = Number(r.site_count);
       return {
@@ -299,7 +300,7 @@ export class StaffingService {
          WHERE ${conds.join(" AND ")}
          ORDER BY r.account_id, r.site_code`, params);
 
-    const today = new Date();
+    const today = todayDate();   // 业务时区的今天（infra/clock.ts）
     const byAccount = new Map<string, {
       accountId: string; displayName: string; roleKind: string;
       gcpExpiresOn: string | null; gcpDaysLeft: number | null; active: boolean;
@@ -587,7 +588,7 @@ export class StaffingService {
     studySiteIds: string[]; since?: string; reason: string;
   }) {
     const c = ctx();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     const since = b.since ?? today;
     /* 将来的日期不收：一条"下周一生效"的派工在今天看不出任何效果，
        而派工的人会以为已经派好了 —— 他下周一才发现没有。
@@ -667,7 +668,7 @@ export class StaffingService {
       [accountId, fresh.map(s => s.id)]);
 
     const gcpLeft = w.gcp_expires_on
-      ? daysBetween(new Date(), w.gcp_expires_on) : null;
+      ? daysBetween(todayDate(), w.gcp_expires_on) : null;
     return {
       data: made,
       sideEffects: [
@@ -737,7 +738,7 @@ export class StaffingService {
     await this.audit.write({
       action: "从中心撤下", targetType: "account", targetId: w.display_name,
       before: { sites: codes },
-      after: { until: new Date().toISOString().slice(0, 10),
+      after: { until: todayLocal(),
                cancelled: live.filter(r => r.same_day).map(r => r.code) },
       studySiteId: live[0]!.study_site_id, reason: b.reason });
 

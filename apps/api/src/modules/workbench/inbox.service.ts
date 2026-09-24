@@ -8,6 +8,7 @@ import { StaffingService } from "../site/staffing.service.js";
 import { AcceptanceService } from "../site/acceptance.service.js";
 import { CostService } from "../cost/cost.service.js";
 import { MonitorService } from "../oversight/monitor.service.js";
+import { todayLocal, plusDays } from "../../infra/clock.js";
 
 /* ════════════════════════════════════════════════════════════════════
    我的待办（契约见 contracts/src/workbench/api.ts）。
@@ -50,12 +51,8 @@ const PI_STALE_DAYS = 7;
 
 const RANK = { overdue: 0, today: 1, soon: 2 } as const;
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
-const addDays = (d: string, n: number) => {
-  const t = new Date(d + "T00:00:00Z");
-  t.setUTCDate(t.getUTCDate() + n);
-  return t.toISOString().slice(0, 10);
-};
+const todayStr = () => todayLocal();   // 业务时区的今天（infra/clock.ts）—— 不是服务器的 UTC 今天
+const addDays = plusDays;
 const daysBetween = (a: string, b: string) =>
   Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86_400_000);
 

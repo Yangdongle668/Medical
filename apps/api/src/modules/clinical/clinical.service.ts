@@ -20,6 +20,7 @@ import { nextCode } from "../../infra/code.js";
    三份读者（服务端、mock、界面）共用契约那一份，见那边的注释。 */
 import { screeningGateWording, SUBJECT_STATE_LABEL, VISIT_STATUS_LABEL,
   type VisitStatus, type SUBJECT_STATES } from "@sitedesk/contracts";
+import { todayLocal } from "../../infra/clock.js";
 type SubjectState = (typeof SUBJECT_STATES)[number];
 
 /* ════════════════════════════════════════════════════════════════════
@@ -35,7 +36,7 @@ const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
 const iso = (v: Date | null) => v ? v.toISOString() : null;
 const between = (a: Date | string, b: Date | string) =>
   Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => todayLocal();   // 业务时区的今天（infra/clock.ts）—— 不是服务器的 UTC 今天
 
 /** 副作用信封。type 是契约的一部分，summary 前端直接展示。 */
 interface Effect {

@@ -9,6 +9,7 @@ import { hashPassword, passwordProblem } from "../../auth/password.js";
    在这里再写一份 switch，加一个角色那天必然只改一处。 */
 import { STAFF_ROLE_KIND } from "@sitedesk/contracts";
 import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
+import { todayLocal } from "../../infra/clock.js";
 
 
 interface AccountRow {
@@ -198,7 +199,7 @@ export class IdentityService {
     const r = rows[0]!;
     const gcpDaysLeft = r.gcp_expires_on
       ? Math.round((new Date(day(r.gcp_expires_on)! + "T00:00:00").getTime()
-          - new Date(new Date().toISOString().slice(0, 10) + "T00:00:00").getTime()) / 86_400_000)
+          - new Date(todayLocal() + "T00:00:00").getTime()) / 86_400_000)
       : null;
 
     return {
