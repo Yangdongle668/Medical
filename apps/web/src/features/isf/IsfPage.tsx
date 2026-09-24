@@ -63,7 +63,8 @@ function daysText(i: Item): string {
   return `还剩 ${i.daysLeft} 天`;
 }
 
-export function IsfPage() {
+/** 嵌在中心工作台的页签里时给 —— 只看这一个中心。独立页面（侧栏进来的）不给，看全部。 */
+export function IsfPage({ studySiteId }: { studySiteId?: string } = {}) {
   const [me, setMe] = useState<Me | null>(null);
   const [items, setItems] = useState<Item[] | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -77,7 +78,7 @@ export function IsfPage() {
 
   const reload = (only: boolean) =>
     call<{ items: Item[]; summary: Summary }>("getIsfBoard",
-      { query: only ? { openOnly: true } : {} })
+      { query: { ...(only ? { openOnly: true } : {}), ...(studySiteId ? { studySiteId } : {}) } })
       .then(r => { setItems(r.items); setSummary(r.summary); });
 
   useEffect(() => { void loadMe().then(setMe); }, []);

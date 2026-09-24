@@ -1179,6 +1179,12 @@ export const scenarioHandlers = [
     let items = inScope(scenario.qualityEvents);
     const kinds = q.getAll("kind");
     if (kinds.length) items = items.filter(e => kinds.includes(e.kind));
+    /* 中心工作台的「质量与 SAE」页签按中心筛。行上有的只存了中心代号 */
+    const site = q.get("studySiteId");
+    if (site) {
+      const code = SITES_LIST.find(x => x.id === site)?.code;
+      items = items.filter(e => (e.studySiteId ?? null) === site || e.siteCode === code);
+    }
     return HttpResponse.json({ items: items.map(qualityDto), nextCursor: null });
   }),
 
@@ -1824,6 +1830,7 @@ export const scenarioHandlers = [
     if (q.get("mine") === "true")
       items = items.filter(v => v.monitorAccountId === identity().id);
     if (q.get("openOnly") === "true") items = items.filter(v => v.state !== "reported");
+    if (q.get("studySiteId")) items = items.filter(v => v.studySiteId === q.get("studySiteId"));
     items = [...items].sort((a, b) => a.plannedOn.localeCompare(b.plannedOn));
     return HttpResponse.json({ items: items.map(monitorDto), nextCursor: null });
   }),
@@ -2112,6 +2119,7 @@ export const scenarioHandlers = [
     let items = visibleQueries();
     const states = q.getAll("state");
     if (states.length) items = items.filter(x => states.includes(x.state));
+    if (q.get("studySiteId")) items = items.filter(x => x.studySiteId === q.get("studySiteId"));
     if (q.get("mine") === "true")
       items = items.filter(x => x.ownerAccountId === identity().id);
     /* 真接口按 raised_by_account 比对；mock 的行上没存账号 id，

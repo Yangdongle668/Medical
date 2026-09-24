@@ -290,6 +290,27 @@ td .row.acts { flex-wrap: nowrap; white-space: nowrap; }
    写法照这套语言：左规则而不是整块着色，发丝线而不是边框。
    ══════════════════════════════════════════════════════════════════ */
 
+/* ── 中心工作台的页签（features/site/SiteDetailPage）────────────────
+   是链接不是按钮：页签就是地址（/sites/:id/queries），刷新、收藏、发给同事都还在。
+   手机上一行放不下就横着滚，不折行 —— 折成两行的页签分不清哪个是当前。 */
+.site-tabs {
+  display: flex; gap: 4px; margin: -6px 0 16px; padding: 0 0 1px;
+  border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin;
+}
+.site-tabs a {
+  flex: none; padding: 8px 12px; font-size: 13.5px; color: var(--ink-2);
+  text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  white-space: nowrap;
+}
+.site-tabs a:hover { color: var(--ink); }
+.site-tabs a[aria-current="page"] {
+  color: var(--accent); border-bottom-color: var(--accent); font-weight: 600;
+}
+/* 页签里嵌的就是侧栏那一页本身。它自己的大标题与页签重复（「质疑」下面又一个
+   「数据质疑」），收掉；标题下那一句摘要留着 —— 那是按这个中心算出来的。 */
+.site-tab .page-head h2 { display: none; }
+.site-tab .page-head { padding-top: 0; }
+
 /* ── 首页待办（features/today）：一行一件事，左边一条颜色说有多急 ────────
    不用表格：手机上表格要横着滚，而待办是**要一眼扫完**的东西。
    颜色之外还有文字标签（chip）—— 色觉差异下颜色那条线索会消失。 */

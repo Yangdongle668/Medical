@@ -29,7 +29,8 @@ import { Why } from "../../shell/Why.js";
    按筛选号排的表看不出这件事，而它是这一页唯一的紧急信号。
    ════════════════════════════════════════════════════════════════════ */
 
-export function SubjectsPage() {
+/** 嵌在中心工作台的页签里时给 —— 只看这一个中心。独立页面（侧栏进来的）不给，看全部。 */
+export function SubjectsPage({ studySiteId }: { studySiteId?: string } = {}) {
   const [subs, setSubs] = useState<Subject[] | null>(null);
   const [openOnly, setOpenOnly] = useState(true);
   const [canWrite, setCanWrite] = useState(false);
@@ -49,8 +50,11 @@ export function SubjectsPage() {
   const say = useToast();
 
   const load = useCallback(() => {
-    void listSubjects(openOnly ? { state: OPEN_STATES } : {}).then(r => setSubs(r.items));
-  }, [openOnly]);
+    void listSubjects({
+      ...(openOnly ? { state: OPEN_STATES } : {}),
+      ...(studySiteId ? { studySiteId } : {})
+    }).then(r => setSubs(r.items));
+  }, [openOnly, studySiteId]);
   useEffect(load, [load]);
 
   useEffect(() => {

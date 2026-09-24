@@ -75,7 +75,11 @@ const BAND: Record<SitePlan["band"], { text: string; chip: string }> = {
 /** 与 calc 的 MVR_DUE_DAYS 同一个数。 */
 const MVR_DUE = 10;
 
-export function MonPage() {
+/** 嵌在中心工作台的页签里时给 —— 只看这一个中心。独立页面（侧栏进来的）不给，看全部。 */
+export function MonPage({ studySiteId }: { studySiteId?: string } = {}) {
+  /* 嵌在一个中心里时，页头那一行和四个统计是**全范围**的数（监查排期的看板
+     没有按中心筛的口径）—— 放在某一个中心的页签里会被读成这个中心的数，所以不画。 */
+  const embedded = !!studySiteId;
   const [me, setMe] = useState<Me | null>(null);
   const [rows, setRows] = useState<Visit[] | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
@@ -85,9 +89,11 @@ export function MonPage() {
   const [said, setSaid] = useState<string | null>(null);
 
   const reload = () => Promise.all([
-    call<{ items: Visit[] }>("listMonitorVisits", { query: { limit: 200 } })
+    call<{ items: Visit[] }>("listMonitorVisits",
+      { query: { limit: 200, ...(studySiteId ? { studySiteId } : {}) } })
       .then(r => { setRows(r.items); setSel(s => s ?? r.items.find(v => v.state !== "reported")?.id ?? r.items[0]?.id ?? null); }),
-    call<Board>("getMonitorBoard", {}).then(setBoard)
+    call<Board>("getMonitorBoard", {}).then(b => setBoard(studySiteId
+      ? { ...b, sites: b.sites.filter(s => s.studySiteId === studySiteId) } : b))
   ]);
 
   useEffect(() => { void loadMe().then(setMe); void reload(); }, []);
@@ -126,7 +132,7 @@ export function MonPage() {
 
   return (
     <>
-      <div className="page-head">
+      {!embedded && <div className="page-head">
         <h2>监查访视</h2>
         <p data-testid="mon-summary">
           未来四周 <b>{board.upcomingVisits} 次</b>（{board.upcomingDays} 人天）
@@ -134,7 +140,7 @@ export function MonPage() {
           {board.load.outstanding > 0 && <> <b>{board.load.outstanding} 份监查报告没交</b>
             {board.load.overdue > 0 && <>（其中 {board.load.overdue} 份已超 {MVR_DUE} 天）</>}。</>}
         </p>
-      </div>
+      </div>}
 
       <Why style={{ marginBottom: 14 }}>
         <b>「去过了」和「报告交了」是两件事。</b>
@@ -143,7 +149,7 @@ export function MonPage() {
         所以这一页把「已到现场」单独列成一格，而不是从「已排期」直接跳到「已提交」。
       </Why>
 
-      <div className="stats" style={{ marginBottom: 16 }}>
+      {!embedded && <div className="stats" style={{ marginBottom: 16 }}>
         <Stat label="未来四周" v={String(board.upcomingVisits)}
           note={`${board.upcomingDays} 人天`} />
         <Stat label="逾期未监查" v={String(overdueSites.length)}
@@ -158,9 +164,9 @@ export function MonPage() {
             ? "—" : `${board.load.meanLagDays.toFixed(1)} 天`}
           note={`目标 ≤ ${MVR_DUE} 天`}
           bad={(board.load.meanLagDays ?? 0) > MVR_DUE} />
-      </div>
+      </div>}
 
-      {board.load.performed > 0 && (
+      {!embedded && board.load.performed > 0 && (
         <Why summary="报告滞后怎么算？" style={{ marginBottom: 14 }} data-testid="mon-lag-note">
           <b>平均报告滞后把没交的也算进去了。</b>
           只统计已提交的那些，一份永远不交的报告就永远不进分母 ——

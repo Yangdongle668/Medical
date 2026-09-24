@@ -43,9 +43,11 @@ const IP_KIND: Record<string, string> = {
 const INBOUND = new Set(["receipt", "return"]);
 
 
-export function MaterialPage() {
+/** 嵌在中心工作台的页签里时给 —— 只看这一个中心。独立页面（侧栏进来的）不给，看全部。 */
+export function MaterialPage({ studySiteId }: { studySiteId?: string } = {}) {
   const [sites, setSites] = useState<Site[] | null>(null);
-  const [siteId, setSiteId] = useCurrentSite(sites);
+  const [current, setSiteId] = useCurrentSite(studySiteId ? null : sites);
+  const siteId = studySiteId ?? current;
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [specimens, setSpecimens] = useState<Specimen[]>([]);
   const [tab, setTab] = useState<"ip" | "spec">("ip");
@@ -92,10 +94,12 @@ export function MaterialPage() {
         <p>两本账都是<b>关闭中心时对不上的那种</b>：药品在手数量、样本闭环。</p>
       </div>
 
-      <Pick label="中心" v={siteId} on={setSiteId} testid="mat-site" placeholder={null}
-        style={{ maxWidth: 340, marginBottom: 14 }}
-        options={sites.map(s => ({ value: s.id, label: `${s.code} · ${s.hospital}` }))}
-        empty="你的范围里还没有中心 —— 药品与样本台账是按中心记的，没有中心就没有台账。" />
+      {!studySiteId && (
+        <Pick label="中心" v={siteId} on={setSiteId} testid="mat-site" placeholder={null}
+          style={{ maxWidth: 340, marginBottom: 14 }}
+          options={sites.map(s => ({ value: s.id, label: `${s.code} · ${s.hospital}` }))}
+          empty="你的范围里还没有中心 —— 药品与样本台账是按中心记的，没有中心就没有台账。" />
+      )}
 
       {ledger && ledger.balance < 0 && (
         <div className="problem" role="alert" data-testid="ip-negative" style={{ marginBottom: 14 }}>

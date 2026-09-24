@@ -29,13 +29,15 @@ const KIND: Record<string, string> = {
   sae: "严重不良事件", sae_late: "SAE 超时上报", other: "其他"
 };
 
-export function QualityPage() {
+/** 嵌在中心工作台的页签里时给 —— 只看这一个中心。独立页面（侧栏进来的）不给，看全部。 */
+export function QualityPage({ studySiteId }: { studySiteId?: string } = {}) {
   const [items, setItems] = useState<QualityEvent[] | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   /* 两本台账是**按中心**的（SAE 及时率、药品在手数量都没有跨中心的口径），
      所以这里要选一个中心。默认选第一个，而不是让人先点一下才有内容。 */
   /* 当前中心（shell/currentSite.ts）：首页待办用 `?site=` 带过来，别的页选过的也认。 */
-  const [siteId, setSiteId] = useCurrentSite(sites.length ? sites : null);
+  const [current, setSiteId] = useCurrentSite(studySiteId || !sites.length ? null : sites);
+  const siteId = studySiteId ?? current;
   const [me, setMe] = useState<Me | null>(null);
   const [capaOn, setCapaOn] = useState<QualityEvent | null>(null);
   const [plan, setPlan] = useState("");
@@ -45,7 +47,8 @@ export function QualityPage() {
   const [said, setSaid] = useState<string | null>(null);
 
   const reloadEvents = () =>
-    call<{ items: QualityEvent[] }>("listQualityEvents", { query: { limit: 50 } })
+    call<{ items: QualityEvent[] }>("listQualityEvents",
+      { query: { limit: 50, ...(studySiteId ? { studySiteId } : {}) } })
       .then(r => setItems(r.items)).catch(() => setItems([]));
 
   useEffect(() => {
@@ -84,7 +87,7 @@ export function QualityPage() {
         </p>
       </div>
 
-      {sites.length > 0 && (
+      {!studySiteId && sites.length > 0 && (
         <Pick label="中心" hint="SAE 及时率与药品台账按中心算"
           v={siteId} on={setSiteId} testid="quality-site" placeholder={null}
           style={{ maxWidth: 380, marginBottom: 14 }}

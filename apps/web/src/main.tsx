@@ -129,6 +129,9 @@ const router = createBrowserRouter([
       { path: "sites/:id", element: <SiteDetailPage /> },
       { path: "sites/:id/startup", element: <StartupChecklistPage /> },
       { path: "sites/:id/pnl", element: <SitePnlPage /> },
+      /* 中心工作台的页签（受试者 / 质疑 / 质量与 SAE / 文件 / 药品样本 / 监查）。
+         上面两条是静态段，react-router 按具体程度排，不会被这一条吃掉。 */
+      { path: "sites/:id/:tab", element: <SiteDetailPage /> },
       { path: "rate-cards", element: <RateCardPage /> },
       { path: "outbox", element: <OutboxPage /> },
       /* 兜底：手敲了一个不存在的路径。回首页比留在一张白页上有用。 */

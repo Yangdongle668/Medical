@@ -178,7 +178,7 @@ export function TodayPage() {
             <h3>{g.title} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>
               {g.sub} · {list.length}</span></h3>
             <ul className="inbox">
-              {list.map(i => <Row key={`${i.kind}:${i.ref.id ?? i.title}`} i={i} />)}
+              {list.map(i => <InboxRow key={`${i.kind}:${i.ref.id ?? i.title}`} i={i} />)}
             </ul>
           </section>
         );
@@ -207,7 +207,8 @@ export function TodayPage() {
 /* 类名写全，不拼 —— 拼出来的类名 design.test 查不到定义。 */
 const URGENCY_CLASS = { overdue: "u-overdue", today: "u-today", soon: "u-soon" } as const;
 
-function Row({ i }: { i: InboxItem }) {
+/** 一件待办的那一行。中心工作台的「本中心待办」也用它。 */
+export function InboxRow({ i }: { i: InboxItem }) {
   const k = KIND[i.kind];
   return (
     <li className={`inbox-item ${URGENCY_CLASS[i.urgency]}`} data-testid="inbox-item" data-kind={i.kind}>

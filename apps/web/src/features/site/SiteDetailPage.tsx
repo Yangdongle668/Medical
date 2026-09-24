@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useParams, Link, NavLink } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { SITE_STATE_LABEL, SITE_ORDER } from "./states.js";
@@ -7,6 +7,40 @@ import { SubmitAcceptanceForm } from "../instac/SubmitAcceptanceForm.js";
 import { SiteCrew } from "./SiteCrew.js";
 import { UnmetList } from "../../shell/Unmet.js";
 import { EffectItem } from "../../shell/Effects.js";
+import { InboxRow, type Inbox } from "../today/TodayPage.js";
+import { SubjectsPage } from "../subject/SubjectsPage.js";
+import { QueryPage } from "../dataquery/QueryPage.js";
+import { QualityPage } from "../quality/QualityPage.js";
+import { IsfPage } from "../isf/IsfPage.js";
+import { MaterialPage } from "../material/MaterialPage.js";
+import { MonPage } from "../oversight/MonPage.js";
+
+/* ════════════════════════════════════════════════════════════════════
+   中心工作台的页签。
+
+   一线脑子里的对象是「中心 → 受试者 → 访视」，不是「现场 / 质量 / 项目周期」
+   这些管理职能分组。原来一个中心的事散在十几页上，每一页再选一次中心。
+   现在进了一个中心，它的受试者、质疑、SAE、文件、药品、监查都在页签里。
+
+   每个页签就是侧栏里那一页本身，带上 `studySiteId` 只看这一个中心 ——
+   **同一份代码**，不是另写一份简化版。侧栏那些页照旧在，给要看全局的人。
+   页签按模块权限出：没有那个模块的人看不到那个页签，与侧栏同一个口径。
+   ════════════════════════════════════════════════════════════════════ */
+const TABS: { key: string; label: string; modules: string[];
+              render: (siteId: string) => ReactNode }[] = [
+  { key: "subjects", label: "受试者", modules: ["subj"],
+    render: id => <SubjectsPage studySiteId={id} /> },
+  { key: "queries", label: "质疑", modules: ["query", "dm"],
+    render: id => <QueryPage studySiteId={id} /> },
+  { key: "quality", label: "质量与 SAE", modules: ["capa", "qa"],
+    render: id => <QualityPage studySiteId={id} /> },
+  { key: "isf", label: "文件", modules: ["isf"],
+    render: id => <IsfPage studySiteId={id} /> },
+  { key: "material", label: "药品样本", modules: ["material"],
+    render: id => <MaterialPage studySiteId={id} /> },
+  { key: "monitoring", label: "监查", modules: ["mon"],
+    render: id => <MonPage studySiteId={id} /> }
+];
 
 /* ════════════════════════════════════════════════════════════════════
    中心详情 = 状态机 + 闸门。
@@ -68,7 +102,10 @@ const yuan = (cents: number) => (cents / 100).toLocaleString("zh-CN",
   { style: "currency", currency: "CNY", maximumFractionDigits: 0 });
 
 export function SiteDetailPage() {
-  const { id = "" } = useParams();
+  const { id = "", tab } = useParams();
+  const [modules, setModules] = useState<readonly string[]>([]);
+  /** 本中心的待办 —— 首页那一份按中心筛出来。 */
+  const [todo, setTodo] = useState<Inbox["items"] | null>(null);
   const [site, setSite] = useState<Site | null>(null);
   const [gate, setGate] = useState<GateState>({ kind: "loading" });
   const [canAdvance, setCanAdvance] = useState<boolean | null>(null);
@@ -107,13 +144,22 @@ export function SiteDetailPage() {
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
     void loadMe().then(m => {
+      setModules(m.permissions.modules);
       setCanAdvance(m.permissions.actions.includes("advance"));
       setCanSubmitAcceptance(m.permissions.actions.includes("advance"));
       setCanAssign(m.permissions.actions.includes("assign"));
     }).catch(() => setCanAdvance(null));
   }, []);
 
+  useEffect(() => {
+    call<Inbox>("getMyInbox")
+      .then(b => setTodo(b.items.filter(i => i.studySiteId === id)))
+      .catch(() => setTodo(null));
+  }, [id]);
+
   if (!site) return <p className="muted">加载中…</p>;
+  const tabs = TABS.filter(t => t.modules.some(m => modules.includes(m)));
+  const current = tabs.find(t => t.key === tab);
   const idx = SITE_ORDER.indexOf(site.state);
   /* 推进是 SENSITIVE_ACTIONS 里的动作 —— **每一次**都要写原因，不分节点。
      所以这里不做"哪些节点要填"的判断：那种判断一旦和策略层分家，
@@ -147,7 +193,35 @@ export function SiteDetailPage() {
         <p>{site.study.shortName} · {site.dept} · {site.city} · 研究者 {site.piName}</p>
       </div>
 
+      <nav className="site-tabs" data-testid="site-tabs" aria-label="这个中心的各个方面">
+        <NavLink to={`/sites/${id}`} end>概览</NavLink>
+        {tabs.map(t => (
+          <NavLink key={t.key} to={`/sites/${id}/${t.key}`} data-testid={`site-tab-${t.key}`}>
+            {t.label}
+          </NavLink>
+        ))}
+      </nav>
+
+      {tab ? (
+        current
+          /* key = 中心 id：从 A 中心的某个页签直接跳到 B 中心的同一个页签时，
+             组件要重新挂载 —— 否则它还拿着 A 的数据。 */
+          ? <div className="site-tab" key={`${id}:${current.key}`}>{current.render(id)}</div>
+          : <p className="problem" data-testid="site-tab-missing">
+              这一页不存在，或者你的角色没有这一块。<Link to={`/sites/${id}`}>回到概览</Link>
+            </p>
+      ) : (
       <div className="stack" style={{ maxWidth: 760 }}>
+        {todo && todo.length > 0 && (
+          <section className="card stack" data-testid="site-todo">
+            <h3>本中心待办 <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>
+              {todo.length} 件</span></h3>
+            <ul className="inbox">
+              {todo.map(i => <InboxRow key={`${i.kind}:${i.ref.id ?? i.title}`} i={i} />)}
+            </ul>
+          </section>
+        )}
+
         {/* 状态机：走到哪一步一眼看得出来 */}
         <section className="card">
           <h3 style={{ marginBottom: 10 }}>阶段</h3>
@@ -314,6 +388,7 @@ export function SiteDetailPage() {
             data-testid="open-pnl">损益</Link>
         </div>
       </div>
+      )}
     </>
   );
 }

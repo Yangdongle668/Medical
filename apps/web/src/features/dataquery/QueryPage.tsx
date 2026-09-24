@@ -46,7 +46,8 @@ interface Stats { load: Load; sites: unknown[]; calcVersion: string }
 /** 目标平均关闭天数 —— 与 calc 的 QUERY_TARGET_DAYS 同一个数。 */
 const TARGET = 5;
 
-export function QueryPage() {
+/** 嵌在中心工作台的页签里时给 —— 只看这一个中心。独立页面（侧栏进来的）不给，看全部。 */
+export function QueryPage({ studySiteId }: { studySiteId?: string } = {}) {
   const [me, setMe] = useState<Me | null>(null);
   const [rows, setRows] = useState<Query[] | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -61,8 +62,11 @@ export function QueryPage() {
   const isCrc = me?.account.role.code === "crc";
   const reload = (crc: boolean) => Promise.all([
     call<{ items: Query[] }>("listDataQueries",
-      { query: { limit: 200, ...(crc ? { mine: true } : {}) } }).then(r => setRows(r.items)),
-    call<Stats>("getQueryStats", { query: crc ? { mine: true } : {} }).then(setStats)
+      { query: { limit: 200, ...(crc ? { mine: true } : {}), ...(studySiteId ? { studySiteId } : {}) } })
+      .then(r => setRows(r.items)),
+    call<Stats>("getQueryStats",
+      { query: { ...(crc ? { mine: true } : {}), ...(studySiteId ? { studySiteId } : {}) } })
+      .then(setStats)
   ]);
 
   useEffect(() => {
