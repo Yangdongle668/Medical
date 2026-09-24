@@ -7,6 +7,7 @@
 
 import { emit } from "./log.js";
 import { drainConfig, DRAIN_DEFAULT_WARNING } from "./drain.js";
+import { validTz } from "./clock.js";
 import { deliveryPlan, NO_CHANNEL_WARNING } from "./login-delivery.js";
 
 export interface Preflight { fatal: string[]; warn: string[] }
@@ -108,6 +109,16 @@ export function preflight(env: NodeJS.ProcessEnv = process.env): Preflight {
       "    pg 把无时区的 date 列解析成本地零点，而全仓用 toISOString() 把它切成\n" +
       "    日期串：非 UTC 时区下每一个日期字段都会少一天，且不会报任何错。\n" +
       "    请移除 TZ，或设为 UTC。日志要本地时间的话在采集侧转换。");
+
+  /* ── 业务时区 ──────────────────────────────────────────────────
+     与上面的进程 TZ 不是一回事：它只决定「今天」是哪一天（见 clock.ts）。
+     名字写错的话，每个请求开头的 set_config('TimeZone') 都会报错 ——
+     不如在启动时就说清楚。 */
+  const biz = env["SITEDESK_TZ"]?.trim();
+  if (biz && !validTz(biz))
+    fatal.push(
+      `SITEDESK_TZ=${biz} 不是可识别的时区名。\n` +
+      "    请用 IANA 名，如 Asia/Shanghai。");
 
   return { fatal, warn };
 }

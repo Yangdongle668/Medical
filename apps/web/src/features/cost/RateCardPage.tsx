@@ -3,6 +3,7 @@ import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { yuan } from "./money.js";
 import { today } from "../../shell/dates.js";
+import { EffectItem } from "../../shell/Effects.js";
 
 /* ════════════════════════════════════════════════════════════════════
    费率卡 —— I2 住在这里。
@@ -101,7 +102,7 @@ export function RateCardPage() {
         {effects && (
           <ul className="effects" data-testid="rate-effects">
             {effects.map((e, i) => (
-              <li key={i}><div className="t">{e.type}</div><div>{e.summary}</div></li>
+              <EffectItem key={i} type={e.type} summary={e.summary} />
             ))}
           </ul>
         )}

@@ -8,6 +8,9 @@ import {
 import { SCREEN_FAIL_LABEL } from "../enrollment/api.js";
 import { Pick } from "../../shell/CreateForm.js";
 import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
+import { Why } from "../../shell/Why.js";
+import { useCurrentSite } from "../../shell/currentSite.js";
+import { ImportDialog } from "../../shell/ImportDialog.js";
 
 /* ════════════════════════════════════════════════════════════════════
    预筛登记。
@@ -34,11 +37,13 @@ interface Site { id: string; code: string; hospital: string }
 export function PrescreenPage() {
   const [sites, setSites] = useState<Site[]>([]);
   const [subs, setSubs] = useState<Subject[] | null>(null);
-  const [siteId, setSiteId] = useState("");
+  /* 登记到哪个中心：认当前中心，但**不默认成第一个** —— 登错中心的代价大，不认得就让人选 */
+  const [siteId, setSiteId] = useCurrentSite(sites.length ? sites : null, false);
   const [no, setNo] = useState("");
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const [acting, setActing] = useState<{ id: string; kind: "icf" | "fail" | "enroll" } | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const reload = () => listSubjects({ state: ["prescreen", "screening"] })
     .then(r => setSubs(r.items));
@@ -47,7 +52,6 @@ export function PrescreenPage() {
     void (async () => {
       const s = await call<{ items: Site[] }>("listStudySites", { query: { limit: 200 } });
       setSites(s.items);
-      if (s.items.length === 1) setSiteId(s.items[0]!.id);
       await reload();
     })();
   }, []);
@@ -104,6 +108,10 @@ export function PrescreenPage() {
               placeholder="自动生成，如 SS-01-P042" /></label>
         </div>
         <div className="row" style={{ justifyContent: "flex-end" }}>
+          {/* 一次几十个（从纸质登记表、从 IWRS 导出的名单）走批量导入 —— 到哪个中心同样看上面选的 */}
+          <button className="btn" data-testid="pre-import" disabled={!siteId}
+            title={siteId ? "从 CSV 一次登记多位" : "先选中心"}
+            onClick={() => setImporting(true)}>批量导入</button>
           <button className="btn primary" data-testid="pre-create"
             disabled={!siteId}
             onClick={() => void run("已登记", async () => {
@@ -120,6 +128,20 @@ export function PrescreenPage() {
           </button>
         </div>
       </div>
+
+      {siteId && (
+        <ImportDialog open={importing} onClose={() => setImporting(false)}
+          onDone={() => void reload()} testid="pre-imp"
+          title={`批量登记预筛 · ${sites.find(x => x.id === siteId)?.code ?? ""}`}
+          previewOp="previewPrescreenImport" commitOp="commitPrescreenImport"
+          body={{ studySiteId: siteId }}
+          template={{
+            name: "prescreen-template",
+            csv: "序号,筛选号（空着=自动发号）,知情签署日（YYYY-MM-DD，可空）\r\n1,,\r\n2,,\r\n3,,\r\n",
+            hint: "一行一位（序号那一列只为占行，不导入）。筛选号空着就按中心自动发；填了知情签署日的，会一并登记签署、进入筛选期并排出筛选期访视。" +
+              "表里不要写姓名、电话这类能认出人的信息。"
+          }} />
+      )}
 
       {problem && (
         <div className="problem stack" data-testid="pre-problem" style={{ marginBottom: 12 }}>
@@ -195,19 +217,19 @@ export function PrescreenPage() {
 
       {acting?.kind === "fail" && (
         <FailForm onCancel={() => setActing(null)}
-          onGo={(reason, d, note) => void run("已登记筛败 —— 它按 I8′ 计入收入",
+          onGo={(reason, d, note) => void run("已登记筛败，筛败费已计入这个中心的收入",
             () => screenFail(acting.id, reason, d, note))} />
       )}
 
-      <div className="derive" style={{ marginTop: 14 }}>
-        <b>筛败不是失败，是收入。</b> 筛败例数 × 单价 × 筛败费率计入收入（I8′）——
+      <Why style={{ marginTop: 14 }}>
+        <b>筛败不是失败，是收入。</b> 筛败例数 × 单价 × 筛败费率计入收入 ——
         不记录筛败，会把本来赚钱的高筛败中心算成亏损。
         所以原因是受控取值，不是自由文本：自由文本统计不出
         「入排标准与病源不匹配」这件事。
         <br />
         签知情日与入组的两条前置由<b>数据库</b>判，这张表单不重复判 ——
         两边各判一次，迟早长出分歧，而界面那一份总是更宽松的那个。
-      </div>
+      </Why>
     </>
   );
 }
@@ -283,8 +305,7 @@ function FailForm({ onCancel, onGo }:
       <div className="spread"><h3>登记筛败</h3>
         <button className="btn" onClick={onCancel}>取消</button></div>
       <p className="muted" style={{ margin: 0 }}>
-        <b>筛败不是失败，是收入</b>（I8′）。原因是受控取值 ——
-        自由文本统计不出「入排标准与病源不匹配」。
+        筛败也按筛败费计入收入。原因从下拉里选 —— 这样才统计得出哪类原因筛掉的最多。
       </p>
       <div className="grid-form">
         <label className="field"><span>原因</span>

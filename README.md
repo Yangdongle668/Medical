@@ -317,6 +317,9 @@ docker compose --project-directory deploy -f deploy/docker-compose.yml down -v
 | `SITEDESK_SMTP_URL` | 未设 | `smtp://用户:口令@主机:587`。开机那条路；系统里配了以系统里为准 |
 | `SITEDESK_MAIL_FROM` | 未设 | 发件人。配了 SMTP 却没配它 → **拒绝启动** |
 | `SITEDESK_SMS_WEBHOOK_URL` | 未设 | 短信网关，POST `{to, text}` + Bearer |
+| `SITEDESK_REMIND_INTERVAL_MS` | `600000`（10 分钟） | 邮件提醒多久扫一轮；`0` = 关。紧急提醒（SAE 时限、今天关窗的访视）到点就发，每件事每个档一次 |
+| `SITEDESK_DIGEST_HOUR` | `8` | 每日摘要：工作日本地时间过了几点发 |
+| `SITEDESK_TZ` | `Asia/Shanghai` | 业务时区：服务端的「今天」（到期、超窗、待办、提醒、摘要钟点）都按它算，SQL 的 `CURRENT_DATE` 也跟着它（每个事务开头设会话时区）。与进程 `TZ` 无关 —— 进程仍须 UTC。写错名字拒绝启动 |
 | `SITEDESK_HSTS_MAX_AGE` | `63072000`（两年） | 秒。只在 `X-Forwarded-Proto: https` 时发；`0` = 关 |
 | `SITEDESK_HSTS_INCLUDE_SUBDOMAINS` | 未设（关） | `1` 打开。锁的是本部署不拥有的子域名，确认它们都有证书再开 |
 | `SITEDESK_FORCE_HTTPS` | 未设（关） | 明文请求 308 到 https（探针除外） |
@@ -416,6 +419,7 @@ npm run web:integration # 27 条，真实浏览器打真库
 - [开发需求与技术架构](docs/03-开发需求与技术架构.md) — 领域模型、计算引擎、三维权限、接口、测试
 - [Phase 0：系统分析与架构](docs/04-Phase0-系统分析与架构.md) — 10 个限界上下文、API 四层、30 周阶段计划
 - [阶段交付记录](docs/05-阶段交付记录.md) — 每阶段的产出、**踩过的坑**与已知问题
+- [易用性改造计划](docs/06-易用性改造计划.md) — 站在 CRC / CRA 这一侧：统一待办首页、以中心为中心的导航、手机端、主动提醒
 
 网页版由文档生成，两者不可能分叉：
 

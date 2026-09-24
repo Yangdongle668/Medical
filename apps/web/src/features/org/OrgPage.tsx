@@ -16,6 +16,7 @@ import {
 } from "./api.js";
 import { Pick, Field } from "../../shell/CreateForm.js";
 import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
+import { ImportDialog } from "../../shell/ImportDialog.js";
 
 /* ════════════════════════════════════════════════════════════════════
    组织与权限 —— 管理员的主界面（原型 26-org.html）。
@@ -176,6 +177,7 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
   const [pwFor, setPwFor] = useState<Account | null>(null);
   const [addrFor, setAddrFor] = useState<Account | null>(null);
   const [staffFor, setStaffFor] = useState<Account | null>(null);
+  const [importing, setImporting] = useState(false);
 
   /* 登录名的规则**与契约同一个正则**（CreateAccountBody）。
      在这里当场判，是因为服务端那句提示要等一次往返才看得到 ——
@@ -209,8 +211,22 @@ function UserTab({ me, accounts, roles, teams, run, goTab }: {
       <div className="card stack" style={{ marginBottom: 12 }}>
         <div className="spread">
           <h3>新增人员</h3>
-          <span className="muted">新账号建出来就能被授权，权限由角色决定</span>
+          <span className="row" style={{ gap: 8, alignItems: "center" }}>
+            <span className="muted">新账号建出来就能被授权，权限由角色决定</span>
+            {/* 新项目一次进来十几个人时走这里 —— 一张表，逐行试运行再确认 */}
+            <button className="btn" data-testid="acc-import" onClick={() => setImporting(true)}>批量建号</button>
+          </span>
         </div>
+        <ImportDialog open={importing} onClose={() => setImporting(false)}
+          onDone={() => void run("批量建号已完成", async () => {})} testid="acc-imp"
+          title="批量建号" previewOp="previewAccountImport" commitOp="commitAccountImport"
+          template={{
+            name: "accounts-template",
+            csv: "登录名,姓名,角色,级别,城市,GCP证书到期日（可空）,分组（可空）\r\n",
+            hint: `一行一人，例如「zhoumin,周敏,crc,中级,北京,2027-06-30,」。角色填代号或名称（${roles.filter(r => !r.isExternal)
+              .slice(0, 4).map(r => r.code).join(" / ")}…）；级别是 ${STAFF_LEVELS.join(" / ")}。` +
+              "只建内部账号并同时登记员工名册；不设口令 —— 本人走一次性链接或单点登录进来。外部方账号请在这里单个建。"
+          }} />
         <div className="grid-form">
           <label className="field"><span>姓名</span>
             <input value={name} data-testid="new-name"

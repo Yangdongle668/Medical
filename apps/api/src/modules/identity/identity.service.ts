@@ -8,6 +8,8 @@ import { hashPassword, passwordProblem } from "../../auth/password.js";
 /* 角色代号 → 名册工种的映射**在契约里一处** —— 服务端与界面都读它。
    在这里再写一份 switch，加一个角色那天必然只改一处。 */
 import { STAFF_ROLE_KIND } from "@sitedesk/contracts";
+import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
+import { todayLocal } from "../../infra/clock.js";
 
 
 interface AccountRow {
@@ -63,6 +65,9 @@ const toAccount = (r: AccountRow) => ({
   hasLoginAddress: r.has_login_address,
   staffRoleKind: r.staff_role_kind
 });
+
+/** 审计轨迹：新的在前（at 降序），同一时刻 id 降序。 */
+const AUDIT_KEYSET: Keyset = { key: "e.at", type: "timestamptz", dir: "desc", idDir: "desc", id: "e.id" };
 
 @Injectable()
 export class IdentityService {
@@ -194,7 +199,7 @@ export class IdentityService {
     const r = rows[0]!;
     const gcpDaysLeft = r.gcp_expires_on
       ? Math.round((new Date(day(r.gcp_expires_on)! + "T00:00:00").getTime()
-          - new Date(new Date().toISOString().slice(0, 10) + "T00:00:00").getTime()) / 86_400_000)
+          - new Date(todayLocal() + "T00:00:00").getTime()) / 86_400_000)
       : null;
 
     return {
@@ -604,13 +609,13 @@ export class IdentityService {
     if (q.targetId)     conds.push(`e.target_id = ${add(q.targetId)}`);
     if (q.sensitiveOnly) conds.push(`e.is_sensitive`);
     if (q.since)        conds.push(`e.at >= ${add(q.since)}`);
-    if (q.cursor)       conds.push(`e.id < ${add(q.cursor)}`);
-    const { rows } = await c.client.query<{
+    if (q.cursor) conds.push(keysetCond(AUDIT_KEYSET, q.cursor, add));
+    const { rows } = await c.client.query<{ cursor_key: string;
       id: string; at: Date; actor_account_id: string | null; actor_login: string;
       actor_role_code: string; action: string; target_type: string; target_id: string;
       before_value: unknown; after_value: unknown; study_site_id: string | null;
       reason: string | null; is_sensitive: boolean;
-    }>(`SELECT * FROM audit_entry e WHERE ${conds.join(" AND ")}
+    }>(`SELECT ${keysetCol(AUDIT_KEYSET)}, * FROM audit_entry e WHERE ${conds.join(" AND ")}
          ORDER BY e.at DESC, e.id DESC LIMIT ${add(q.limit + 1)}`, params);
     const items = rows.slice(0, q.limit).map(r => ({
       id: r.id, at: r.at.toISOString(), actorLogin: r.actor_login,
@@ -619,6 +624,6 @@ export class IdentityService {
       before: r.before_value ?? null, after: r.after_value ?? null,
       studySiteId: r.study_site_id, reason: r.reason, isSensitive: r.is_sensitive
     }));
-    return { items, nextCursor: rows.length > q.limit ? items.at(-1)!.id : null };
+    return { items, nextCursor: keysetNext(rows, q.limit) };
   }
 }

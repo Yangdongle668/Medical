@@ -56,6 +56,8 @@ import { MODULES } from "./shell/modules.js";
 import { MOCK_ROLES, type MockRole } from "./mocks/roles.js";
 import { ToastHost } from "@sitedesk/ui/react";
 import "./shell/styles.css";
+import { SubjectPage } from "./features/subject/SubjectPage.js";
+import { NotifyPrefsPage } from "./features/today/NotifyPrefsPage.js";
 
 /* 已经建好的页 —— 按路径登记。
    模块登记表（shell/modules.ts）里凡是没出现在这张表里的路径，
@@ -126,9 +128,14 @@ const router = createBrowserRouter([
       /* 详情页与不进导航的那几页。它们不属于任何模块 ——
          详情页从列表点进去，发件箱由侧栏那个角标进去。 */
       { path: "visits/:id", element: <VisitPage /> },
+      { path: "subjects/:id", element: <SubjectPage /> },
+      { path: "settings/notify", element: <NotifyPrefsPage /> },
       { path: "sites/:id", element: <SiteDetailPage /> },
       { path: "sites/:id/startup", element: <StartupChecklistPage /> },
       { path: "sites/:id/pnl", element: <SitePnlPage /> },
+      /* 中心工作台的页签（受试者 / 质疑 / 质量与 SAE / 文件 / 药品样本 / 监查）。
+         上面两条是静态段，react-router 按具体程度排，不会被这一条吃掉。 */
+      { path: "sites/:id/:tab", element: <SiteDetailPage /> },
       { path: "rate-cards", element: <RateCardPage /> },
       { path: "outbox", element: <OutboxPage /> },
       /* 兜底：手敲了一个不存在的路径。回首页比留在一张白页上有用。 */

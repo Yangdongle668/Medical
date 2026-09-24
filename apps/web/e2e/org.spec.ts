@@ -37,6 +37,9 @@ test.describe("导航与页面一一对应", () => {
          三条全部超时，而超时报的是"页面打不开"，跟它要盯的事毫无关系。
          点链接走的是客户端路由，也更接近用户真的在做的事。 */
       await page.goto(`/sites?as=${role}`);
+      /* 一线的侧栏把前六项以外的收进了「更多」（迁移 0054）。
+         展开之后要能数到全部 —— 收起来不等于没给。 */
+      if (role === "crc") await page.getByTestId("nav-more").click();
       const links = page.locator(".rail nav a");
       await expect(links).toHaveCount(count);
       for (let i = 0; i < count; i++) {

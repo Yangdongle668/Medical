@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
-import type { Group, ModuleDef } from "./modules.js";
+import type { Group, ModuleDef, SplitNav } from "./modules.js";
 
 /* ════════════════════════════════════════════════════════════════════
    侧栏。**它对不同的人是两个不同的东西**，所以这里有两套行为。
@@ -83,9 +83,14 @@ function useWide(): boolean {
   return wide;
 }
 
-export function Rail({ groups, here }: {
+/** 「更多」在 localStorage 里的键 —— 与分组开合共用一份记录。 */
+const MORE = "__more__";
+
+export function Rail({ groups, here, split = null }: {
   groups: { group: Group; items: ModuleDef[] }[];
   here: string | null;
+  /** 一线的主入口 / 更多（见 modules.ts 的 splitNav）。null = 照旧按分组铺。 */
+  split?: SplitNav | null;
 }) {
   const wide = useWide();
   const total = groups.reduce((s, g) => s + g.items.length, 0);
@@ -135,6 +140,59 @@ export function Rail({ groups, here }: {
     setManual(next); saveOpen(next);
   };
 
+  const link = (m: ModuleDef) => (
+    <NavLink key={m.key} to={m.path}
+      aria-current={m.path === here ? "page" : undefined}
+      /* 跳过去之后过滤词就该清掉 —— 留着它，侧栏会一直只剩
+         那一条，而人已经在读页面了，不会想起来是自己筛的。 */
+      onClick={() => setQ("")}>
+      {m.title}
+      {/* 还没建的页照样出现在导航里 —— 权限已经生效了，
+          藏起来反而让"我到底有没有这个模块"变成猜。
+          但要标出来，免得点进去像是坏了。 */}
+      {m.todo && <span className="nav-todo" title="这一页还没建">·</span>}
+    </NavLink>
+  );
+
+  /* ── 一线：主入口平铺，其余收进「更多」 ──────────────────────────
+     密的时候（管理员）不走这条 —— 那边有自己的折叠与过滤框。
+     「更多」默认收起；**你正在「更多」里的某一页上时默认展开**，
+     否则侧栏上没有一项是亮的，"我在哪"就答不出来了。
+     手动开合记下来，与分组开合同一份记录。 */
+  if (split && !dense) {
+    const moreItems = split.more.flatMap(g => g.items);
+    const hereInMore = moreItems.some(m => m.path === here);
+    const moreOpen = manual[MORE] ?? hereInMore;
+    return (
+      <nav>
+        <div className="nav-group" data-testid="nav-primary">
+          {split.primary.map(link)}
+        </div>
+        {moreItems.length > 0 && (
+          <div className="nav-group">
+            <button className="nav-group-h nav-more" data-testid="nav-more"
+              aria-expanded={moreOpen}
+              onClick={() => {
+                const next = { ...manual, [MORE]: !moreOpen };
+                setManual(next); saveOpen(next);
+              }}>
+              <span className="nav-more-label">更多</span>
+              <span className="nav-n">{moreItems.length}</span>
+              {!moreOpen && hereInMore && <span className="nav-at" title="你正在这一组里" />}
+              <span className="nav-caret" aria-hidden="true">{moreOpen ? "▾" : "▸"}</span>
+            </button>
+            {moreOpen && split.more.map(({ group, items }) => (
+              <div key={group} className="nav-sub">
+                <span className="nav-sub-title">{group}</span>
+                {items.map(link)}
+              </div>
+            ))}
+          </div>
+        )}
+      </nav>
+    );
+  }
+
   return (
     <nav>
       {dense && (
@@ -163,19 +221,7 @@ export function Rail({ groups, here }: {
             </button>
           ) : <span className="nav-group-title">{group}</span>)}
 
-          {isOpen(group) && items.map(m => (
-            <NavLink key={m.key} to={m.path}
-              aria-current={m.path === here ? "page" : undefined}
-              /* 跳过去之后过滤词就该清掉 —— 留着它，侧栏会一直只剩
-                 那一条，而人已经在读页面了，不会想起来是自己筛的。 */
-              onClick={() => setQ("")}>
-              {m.title}
-              {/* 还没建的页照样出现在导航里 —— 权限已经生效了，
-                  藏起来反而让"我到底有没有这个模块"变成猜。
-                  但要标出来，免得点进去像是坏了。 */}
-              {m.todo && <span className="nav-todo" title="这一页还没建">·</span>}
-            </NavLink>
-          ))}
+          {isOpen(group) && items.map(link)}
         </div>
       ))}
 

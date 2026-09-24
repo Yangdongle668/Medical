@@ -31,3 +31,4 @@ export * from "./cost/api.js";
 export * from "./bizdev/api.js";
 export * from "./finance/api.js";
 export * from "./oversight/api.js";
+export * from "./workbench/api.js";

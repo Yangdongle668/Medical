@@ -15,7 +15,7 @@ const WIDTHS = [390, 834, 1500];
    在 390px 上最容易把整页顶出去 —— 正是这条断言要抓的东西。 */
 const ROUTES = ["/today", "/sites", "/sites/s3", "/sites/s3/startup",
   "/handovers", "/quality", "/timesheets", "/sites/s1/pnl", "/rate-cards",
-  "/outbox"];
+  "/outbox", "/sites/s1/subjects", "/sites/s1/quality", "/subjects/u1", "/subjects"];
 
 async function overflow(page: Page) {
   return page.evaluate(() => {
@@ -59,7 +59,8 @@ for (const width of WIDTHS) {
 
 test("390px 上表格自己横向滚，而不是把整页撑开 —— 那是刻意的", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
-  await page.goto("/today");
+  /* 「今天」与受试者页在手机上都已是卡片（.cards-sm）；中心文件那张仍是宽表，在容器里横滚 */
+  await page.goto("/isf");
   await page.waitForLoadState("networkidle");
 
   const wrap = page.locator(".table-wrap").first();
@@ -138,4 +139,101 @@ test("暗色模式下同样不溢出，且背景确实换了", async ({ page }) 
 
   const { scroll, client } = await overflow(page);
   expect(scroll).toBeLessThanOrEqual(client);
+});
+
+/* 手机上侧栏底部的身份区是藏掉的（放不下）。在此之前一起藏掉的还有
+   **登出** —— 手机上登出不了，也看不出现在登着的是谁。
+   窄屏另有一条身份条；宽屏上它不出现，免得同一个按钮出现两次。 */
+test("390px 上看得到是谁登着，并且能登出", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto("/today");
+  await expect(page.getByTestId("who-bar")).toBeVisible();
+  await page.getByTestId("logout-bar").click();
+  await expect(page).toHaveURL(/\/login/);
+});
+
+test("1500px 上身份在侧栏底部，窄屏那条不出现", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.goto("/today");
+  await expect(page.getByTestId("logout")).toBeVisible();
+  await expect(page.getByTestId("who-bar")).toBeHidden();
+});
+
+/* 一线的侧栏：前六项平铺，其余收进「更多」（迁移 0054 / shell/modules.ts）。 */
+test.describe("一线侧栏", () => {
+  test("CRC 首屏只有六项主入口，「更多」展开后一项不少", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await page.goto("/today");
+    await expect(page.getByTestId("nav-primary").locator("a")).toHaveCount(6);
+    await expect(page.locator(".rail nav a")).toHaveCount(6);
+    await page.getByTestId("nav-more").click();
+    await expect(page.locator(".rail nav a")).toHaveCount(15);
+  });
+
+  test("人在「更多」里的某一页上，「更多」默认是展开的 —— 否则侧栏上没有一项是亮的", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await page.goto("/handovers");
+    await expect(page.getByTestId("nav-more")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator('.rail nav a[aria-current="page"]')).toHaveText("交接");
+  });
+
+  test("CRA 有「我的日程」「中心文件与物资」「伦理事务」", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await page.goto("/sites?as=cra");
+    await expect(page.getByTestId("nav-primary").getByRole("link", { name: "我的日程" })).toBeVisible();
+    await page.getByTestId("nav-more").click();
+    await expect(page.getByRole("link", { name: "中心文件与物资" })).toBeVisible();
+    await page.getByRole("link", { name: "伦理事务" }).click();
+    /* CRA 没有 ethics 动作：看得到批件，没有点了必错的登记按钮 */
+    await expect(page.getByTestId("ethics-site").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "登记递交" })).toHaveCount(0);
+  });
+
+  test("390px：「更多」在底部页签条上，拉起的抽屉不把页面顶出去", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto("/today");
+    await page.getByTestId("tab-more").click();
+    await expect(page.getByTestId("more-sheet")).toBeVisible();
+    const { scroll, client } = await overflow(page);
+    expect(scroll).toBeLessThanOrEqual(client);
+  });
+});
+
+/* 手机底部页签条（W13）。原来手机上侧栏是横着的一条，CRC 的 15 项首尾相连地横滚。 */
+test.describe("手机底部页签条", () => {
+  test("390px：四个常用的 + 更多；侧栏那条横滚导航收起来", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto("/today");
+    const bar = page.getByTestId("tabbar");
+    await expect(bar).toBeVisible();
+    await expect(bar.locator("a")).toHaveCount(4);
+    await expect(bar.getByTestId("tab-crc")).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".rail nav")).toBeHidden();
+  });
+
+  test("390px：「更多」里按分组列全部页面，点一页就收起并跳过去；那一页不在前四个里时「更多」是亮的", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto("/today");
+    await page.getByTestId("tab-more").click();
+    await page.getByTestId("more-sheet").getByRole("link", { name: "交接" }).click();
+    await expect(page).toHaveURL(/\/handovers/);
+    await expect(page.getByTestId("more-sheet")).toBeHidden();
+    await expect(page.getByTestId("tab-more")).toHaveClass(/active/);
+  });
+
+  test("390px：卡片不被底部条挡住最后一行", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 700 });
+    await page.goto("/subjects");
+    const last = page.getByTestId("subject-row").last();
+    await last.scrollIntoViewIfNeeded();
+    const r = await last.boundingBox();
+    const bar = await page.getByTestId("tabbar").boundingBox();
+    expect(r!.y + r!.height).toBeLessThanOrEqual(bar!.y + 1);
+  });
+
+  test("1500px：没有底部页签条", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await page.goto("/today");
+    await expect(page.getByTestId("tabbar")).toBeHidden();
+  });
 });

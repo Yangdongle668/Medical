@@ -101,3 +101,21 @@ test.describe("药品与样本", () => {
     await expect(row.getByRole("button", { name: "收到" })).toHaveCount(0);
   });
 });
+
+/* 当前中心：在一页选过，别的页都认（shell/currentSite.ts）。
+   原来每页各自默认成第一个 —— 管 SS-07 的人每换一页就要再选一次 SS-07。 */
+test("在药品页选了中心，去质量页还是它；链接带 ?site= 时认链接", async ({ page }) => {
+  await page.goto("/material");
+  const pick = page.getByTestId("mat-site");
+  const second = await pick.locator("option").nth(1).getAttribute("value");
+  expect(second).toBeTruthy();
+  await pick.selectOption(second!);
+  await expect(page).toHaveURL(new RegExp(`site=${second}`));
+
+  await page.goto("/quality");
+  await expect(page.getByTestId("quality-site")).toHaveValue(second!);
+
+  const first = await page.getByTestId("quality-site").locator("option").first().getAttribute("value");
+  await page.goto(`/material?site=${first}`);
+  await expect(page.getByTestId("mat-site")).toHaveValue(first!);
+});

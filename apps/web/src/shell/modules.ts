@@ -100,7 +100,9 @@ export const MODULES: ModuleDef[] = [
      **还差一层**：按负责人再筛一次（原型里 capa 是 own === 本人）。
      没做完不写 todo，是因为 todo 会让整页变成一张说明页，
      而这一页现在是真的能用的；缺的那一层记在这里，别记在用户眼前。 */
-  { key: "capa", title: "我的整改", group: "质量", path: "/quality" },
+  /* 标题原来是「我的整改」。一线找 SAE 时找的是「SAE」和「质量」这两个词，
+     而 SAE 台账正是这一页上的一块 —— 标题里没有它，就等于没有入口。 */
+  { key: "capa", title: "质量与 SAE", group: "质量", path: "/quality" },
   { key: "trail", title: "审计轨迹", group: "质量", path: "/trail" },
 
   /* ── 机构办公室（外部） ───────────────────────────────────────── */
@@ -140,4 +142,41 @@ export function navFor(moduleKeys: readonly string[]): { group: Group; items: Mo
   return GROUP_ORDER
     .filter(g => byGroup.has(g))
     .map(g => ({ group: g, items: byGroup.get(g)! }));
+}
+
+/* ── 主入口 / 更多 ───────────────────────────────────────────────────
+   一线（CRC / CRA）的侧栏 15 项，按「项目周期 / 现场 / 质量」这些
+   **管理职能**分组 —— 而他们每天真正要点的只有五六项，其余一周一次。
+   平铺 15 项的代价是：每天都要在 15 项里找那 5 项。
+
+   所以对一线：**`role_module` 顺序里去重后的前 PRIMARY 项平铺，其余收进「更多」**。
+   顺序由库里定（迁移 0054），管理员在「组织与权限」里改顺序就改了主入口，
+   这里不写死哪几项。
+
+   **只对一线。** 经营层、项目总监的顺序从来没有按"每天用哪几项"排过，
+   给他们套这条规则，等于把「成本与毛利」随机地塞进「更多」。
+   总数不超过 PRIMARY + 2 时也不拆 —— 为了省两行多一次点击不值得。 */
+export const PRIMARY = 6;
+const PRIMARY_ROLES = new Set(["crc", "cra"]);
+
+export interface SplitNav {
+  primary: ModuleDef[];
+  more: { group: Group; items: ModuleDef[] }[];
+}
+
+export function splitNav(roleCode: string | undefined,
+                         moduleKeys: readonly string[]): SplitNav | null {
+  if (!roleCode || !PRIMARY_ROLES.has(roleCode)) return null;
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const key of moduleKeys) {
+    const m = BY_KEY.get(key);
+    if (!m || seen.has(m.path)) continue;
+    seen.add(m.path); order.push(key);
+  }
+  if (order.length <= PRIMARY + 2) return null;
+  return {
+    primary: order.slice(0, PRIMARY).map(k => BY_KEY.get(k)!),
+    more: navFor(order.slice(PRIMARY))
+  };
 }

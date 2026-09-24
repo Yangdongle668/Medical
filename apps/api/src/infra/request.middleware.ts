@@ -5,6 +5,7 @@ import type { Pool, PoolClient } from "pg";
 import { POOL } from "./db.js";
 import { runInCtx, type RequestCtx } from "./ctx.js";
 import { emit } from "./log.js";
+import { bizTz } from "./clock.js";
 import { loadPrincipal } from "../auth/principal.loader.js";
 import { EMPTY_SCOPE } from "@sitedesk/policy";
 
@@ -293,6 +294,9 @@ export class RequestMiddleware implements NestMiddleware {
         `SET LOCAL statement_timeout = ${Number(STATEMENT_TIMEOUT_MS)}`);
       await client.query(
         `SET LOCAL idle_in_transaction_session_timeout = ${Number(IDLE_TX_TIMEOUT_MS)}`);
+      /* 业务时区：SQL 里的 CURRENT_DATE 与 JS 的 todayLocal() 是同一个「今天」（见 clock.ts）。
+         第三个参数 true = 只在本事务内有效，连接还回池里不留痕。 */
+      await client.query("SELECT set_config('TimeZone', $1, true)", [bizTz()]);
 
       const auth = req.headers.authorization;
       const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;

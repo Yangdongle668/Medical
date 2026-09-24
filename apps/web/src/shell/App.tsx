@@ -8,7 +8,9 @@ import { loadMe, forgetMe, type Me } from "../features/login/me.js";
 import { ErrorBoundary } from "./ErrorBoundary.js";
 import { FactoryPasswordBanner } from "./FactoryPasswordBanner.js";
 import { Rail } from "./Rail.js";
-import { navFor } from "./modules.js";
+import { navFor, splitNav } from "./modules.js";
+import { CommandPalette } from "./CommandPalette.js";
+import { TabBar, TAB_COUNT } from "./TabBar.js";
 
 /* 侧栏原来是这六项写死的：今天 / 我的中心 / 交接 / 工时 / 质量台账 / 费率卡。
    而**谁看得到哪些模块**库里早有答案（role_module，随 /v1/me 下发）——
@@ -42,6 +44,7 @@ export function App() {
   const [offlineWho, setOfflineWho] = useState<CachedWho | null>(null);
   const [ready, setReady] = useState(false);
   const [pending, setPending] = useState(0);
+  const [searching, setSearching] = useState(false);
   const loc = useLocation();
   const nav = useNavigate();
 
@@ -82,6 +85,17 @@ export function App() {
       });
   }, []);
 
+  /* Ctrl/⌘ + K 在哪一页都能打开搜索（输入框里也行 —— 这个组合键不会是在打字）。 */
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault(); setSearching(true);
+      }
+    };
+    addEventListener("keydown", on);
+    return () => removeEventListener("keydown", on);
+  }, []);
+
   /* 发件箱：入队要知道是谁排的（共用电脑上不许冒名），
      侧栏要看得见还有多少没发出去。 */
   useEffect(() => subscribe(s => setPending(s.pending.length)), []);
@@ -97,11 +111,23 @@ export function App() {
 
   if (!ready) return <div className="main"><p className="muted">加载中…</p></div>;
 
+  /* 服务端吊销失败（断网、5xx）也要走到登录页。`logout()` 在 finally 里
+     已经把本地令牌清掉了；原来这里只接了 then —— 请求一失败，
+     令牌没了、人却还停在原页，界面看起来仍然登着。 */
+  const signOut = () => void logout()
+    .catch(() => { /* 本地已登出；服务端那份会话由过期清理收走 */ })
+    .then(() => nav("/login", { replace: true }));
+
   const groups = navFor(me?.permissions.modules ?? OFFLINE_MODULES);
+  const split = me ? splitNav(me.account.role.code, me.permissions.modules) : null;
   const here = activePath(loc.pathname, groups.flatMap(g => g.items.map(m => m.path)));
+  /* 手机底部的四个：一线用主入口的前四个，其余角色用侧栏顺序的前四个 */
+  const tabs = (split?.primary ?? groups.flatMap(g => g.items)).slice(0, TAB_COUNT);
 
   return (
-    <div className="app">
+    /* has-tabbar：手机上有底部页签条时，侧栏那条横滚的导航收起来（见 styles.css）。
+       一项模块都没有的角色没有页签条 —— 那时侧栏里那段「默认没有开通」的话还得在。 */
+    <div className={`app${tabs.length ? " has-tabbar" : ""}`}>
       <aside className="rail">
         {/* 品牌区与登录页是同一块（.brand-mark + .brand-name/.brand-sub）——
             两处不一致的话，登进来那一刻会有一瞬间"换了个系统"的感觉。 */}
@@ -114,7 +140,10 @@ export function App() {
         </h1>
         {/* 分组标题只在**不止一组**时出现；条目多到一屏放不下时才折叠。
             两条规则都在 Rail 里，连同为什么。 */}
-        <Rail groups={groups} here={here} />
+        <button className="rail-search" data-testid="open-search" onClick={() => setSearching(true)}>
+          <span>搜索</span><kbd>Ctrl K</kbd>
+        </button>
+        <Rail groups={groups} here={here} split={split} />
         {/* 待发数量常驻侧栏 —— 「我到底发出去没有」不该由用户去猜 */}
         {pending > 0 && (
           <NavLink to="/outbox" className="outbox-badge" data-testid="outbox-badge"
@@ -140,7 +169,7 @@ export function App() {
             <div data-testid="who">{me.account.displayName} · {me.account.role.name}</div>
             <div data-testid="scope">{me.scopeLabel}</div>
             <button className="btn" data-testid="logout" style={{ marginTop: 8 }}
-              onClick={() => void logout().then(() => nav("/login", { replace: true }))}>
+              onClick={signOut}>
               登出
             </button>
           </> : "未登录"}
@@ -150,11 +179,24 @@ export function App() {
           人还能换一页、还能看见待发条数、还能登出。
           key 用路径：换一页就是一次新的尝试，不必手动点重试。 */}
       <main className="main">
+        {/* 手机上侧栏是横着的一条，底部的身份区放不下（见 styles.css 720px 断点）。
+            原来的处置是直接藏掉 —— 于是手机上**没有登出**，也看不出现在登着的是谁，
+            而医院里一台平板几个人轮着用是常态。这一条只在窄屏出现。 */}
+        {me && (
+          <div className="who-bar" data-testid="who-bar">
+            <span className="who-bar-name">{me.account.displayName} · {me.account.role.name}</span>
+            <button className="btn" data-testid="open-search-bar" onClick={() => setSearching(true)}>搜索</button>
+            <button className="btn" data-testid="logout-bar" onClick={signOut}>登出</button>
+          </div>
+        )}
         {/* 出厂口令那条红条在**边界之外**：某一页炸了，警报不该跟着消失。
             也在 key 之外 —— 换页不该把它重置成"没看过"。 */}
         {me?.credentials.passwordIsInitial && (
           <FactoryPasswordBanner login={me.account.login} onDone={() => { forgetMe(); void reload(); }} />
         )}
+        <CommandPalette open={searching} onClose={() => setSearching(false)}
+          pages={groups.flatMap(g => g.items)} />
+        {tabs.length > 0 && <TabBar tabs={tabs} groups={groups} pending={pending} />}
         <ErrorBoundary scope={`page:${loc.pathname}`} key={loc.pathname}>
           <Outlet />
         </ErrorBoundary>

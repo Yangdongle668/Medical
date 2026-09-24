@@ -4,6 +4,7 @@ import { call } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { SITE_STATE_LABEL } from "./states.js";
 import { StartupTemplateEditor } from "./StartupTemplateEditor.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    中心启动清单（各中心汇总）。
@@ -146,7 +147,7 @@ export function StartupSummaryPage() {
         </table>
       </div>
 
-      <div className="derive" style={{ marginTop: 14 }}>
+      <Why style={{ marginTop: 14 }}>
         <b>按阻塞项排，不按完成度。</b> 15/16 听起来很好，但如果差的那一项是
         阻塞项，这个中心一天都开不了工；而 8/16 且阻塞项已清零的中心，
         明天就能启动。完成度是过程，阻塞项是闸门。
@@ -154,7 +155,7 @@ export function StartupSummaryPage() {
         「已过启动期」不画成 0/0：那看起来像一项都没做，
         而实际是这一段早就过去了 —— 两者混在一起，
         这一页会看起来到处都是问题，然后没人再看它。
-      </div>
+      </Why>
     </>
   );
 }

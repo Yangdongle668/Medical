@@ -42,12 +42,31 @@ const CASES = [
     why: "没有它就是全表扫 18 万行，而 RLS 行谓词是每行一次函数调用 —— 实测 48 秒"
   },
   {
+    name: "访视列表：第二页（游标 = 收口日 | id）",
+    sql: `SELECT v.id FROM subject_visit v
+           WHERE upper(v.visit_window) >= DATE '2026-06-01'
+             AND (upper(v.visit_window) > DATE '2026-06-01'
+                  OR v.id < 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)
+           ORDER BY upper(v.visit_window), v.id DESC LIMIT 51`,
+    mustUse: "visit_feed_idx",
+    why: "翻页的每一页都该从索引上接着读，而不是回头把前面的全扫一遍"
+  },
+  {
     name: "访视列表：限定到一个中心",
     sql: (ctx) => `SELECT v.id FROM subject_visit v
                     WHERE v.study_site_id = '${ctx.site}'
                     ORDER BY upper(v.visit_window), v.id DESC LIMIT 51`,
     mustNotSeqScan: "subject_visit",
     why: "限定中心之后仍然不该扫全表"
+  },
+  {
+    name: "「今天」：未完成、窗口在 7 天内已打开（windowOpensBy）",
+    sql: `SELECT v.id FROM subject_visit v
+           WHERE v.status = ANY('{planned}')
+             AND v.visit_window && daterange(NULL, (CURRENT_DATE + 7)::date, '[]')
+           ORDER BY upper(v.visit_window), v.id DESC LIMIT 201`,
+    mustNotSeqScan: "subject_visit",
+    why: "一线的首页，每个人每天第一眼。写成 lower(visit_window) <= 会用不上窗口索引"
   },
   {
     name: "受试者列表：按中心 + 游标",

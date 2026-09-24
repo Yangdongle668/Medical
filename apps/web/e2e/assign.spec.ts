@@ -98,8 +98,8 @@ test.describe("中心详情 · 这个中心上有谁", () => {
     await page.goto("/sites?as=pm");
     await page.getByTestId("open-site").first().click();
     await expect(page.getByTestId("site-crew")).toBeVisible();
-    await expect(page.getByTestId("site-crew")).toContainText("site_assignment");
-    await expect(page.getByTestId("site-crew")).toContainText("pi_account_id");
+    await expect(page.getByTestId("site-crew")).toContainText("来自派工");
+    await expect(page.getByTestId("site-crew")).toContainText("中心上登记的 PI 账号");
   });
 
   test("没绑账号的 PI **说清楚它只是一个名字** —— 他登进来一个中心也看不到",

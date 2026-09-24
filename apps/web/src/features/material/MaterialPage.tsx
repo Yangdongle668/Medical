@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { today, daysSince } from "../../shell/dates.js";
 import { Pick } from "../../shell/CreateForm.js";
+import { Why } from "../../shell/Why.js";
+import { useCurrentSite } from "../../shell/currentSite.js";
 
 /* ════════════════════════════════════════════════════════════════════
    药品与样本。
@@ -41,9 +43,11 @@ const IP_KIND: Record<string, string> = {
 const INBOUND = new Set(["receipt", "return"]);
 
 
-export function MaterialPage() {
+/** 嵌在中心工作台的页签里时给 —— 只看这一个中心。独立页面（侧栏进来的）不给，看全部。 */
+export function MaterialPage({ studySiteId }: { studySiteId?: string } = {}) {
   const [sites, setSites] = useState<Site[] | null>(null);
-  const [siteId, setSiteId] = useState("");
+  const [current, setSiteId] = useCurrentSite(studySiteId ? null : sites);
+  const siteId = studySiteId ?? current;
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [specimens, setSpecimens] = useState<Specimen[]>([]);
   const [tab, setTab] = useState<"ip" | "spec">("ip");
@@ -53,7 +57,7 @@ export function MaterialPage() {
 
   useEffect(() => {
     void call<{ items: Site[] }>("listStudySites", { query: { limit: 200 } })
-      .then(r => { setSites(r.items); if (r.items[0]) setSiteId(r.items[0].id); });
+      .then(r => setSites(r.items));
   }, []);
 
   const load = async (id: string) => {
@@ -75,7 +79,7 @@ export function MaterialPage() {
   if (!sites.length) return (
     <>
       <div className="page-head"><h2>药品与样本</h2></div>
-      <p className="muted">你的行范围里没有中心。</p>
+      <p className="muted">你名下还没有负责的中心。</p>
     </>
   );
 
@@ -90,10 +94,12 @@ export function MaterialPage() {
         <p>两本账都是<b>关闭中心时对不上的那种</b>：药品在手数量、样本闭环。</p>
       </div>
 
-      <Pick label="中心" v={siteId} on={setSiteId} testid="mat-site" placeholder={null}
-        style={{ maxWidth: 340, marginBottom: 14 }}
-        options={sites.map(s => ({ value: s.id, label: `${s.code} · ${s.hospital}` }))}
-        empty="你的范围里还没有中心 —— 药品与样本台账是按中心记的，没有中心就没有台账。" />
+      {!studySiteId && (
+        <Pick label="中心" v={siteId} on={setSiteId} testid="mat-site" placeholder={null}
+          style={{ maxWidth: 340, marginBottom: 14 }}
+          options={sites.map(s => ({ value: s.id, label: `${s.code} · ${s.hospital}` }))}
+          empty="你的范围里还没有中心 —— 药品与样本台账是按中心记的，没有中心就没有台账。" />
+      )}
 
       {ledger && ledger.balance < 0 && (
         <div className="problem" role="alert" data-testid="ip-negative" style={{ marginBottom: 14 }}>
@@ -179,12 +185,12 @@ export function MaterialPage() {
               </tbody>
             </table>
           </div>
-          <div className="derive" style={{ marginTop: 14 }}>
+          <Why style={{ marginTop: 14 }}>
             在手数量是<b>算出来的</b>，不是存出来的 —— 存了就要维护，维护就会错。
             <br />
             这本账<b>只追加</b>：记错了要用反向流水冲销，不能改历史。
             核查看的就是它，而一本能改的账在核查眼里等于没有账。
-          </div>
+          </Why>
         </>
       ) : (
         <>
@@ -244,13 +250,13 @@ export function MaterialPage() {
               </tbody>
             </table>
           </div>
-          <div className="derive" style={{ marginTop: 14 }}>
+          <Why style={{ marginTop: 14 }}>
             闭环 = 实验室<b>确认收到</b>，或者<b>销毁登记</b>。
             两个都没有 = 在路上不知去向 —— 而中心一关就再也查不清。
             <br />
             所以"寄出了但没确认"不算进行中，它是一件<b>迟早要出事、
             而现在还问得到</b>的事，要顶到最上面。
-          </div>
+          </Why>
         </>
       )}
     </>

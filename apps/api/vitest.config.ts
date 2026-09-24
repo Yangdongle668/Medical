@@ -9,6 +9,11 @@ export default defineConfig({
     /* 每个请求一行访问日志，跑起来是几百行 —— 会把 reporter 的输出淹掉。
        降到 warn：告警和错误照样看得见，日志本身由 log.test.ts 单独验
        （那个文件在 beforeEach 里把这个变量删掉，用的是真实默认值）。 */
-    env: { SITEDESK_LOG_LEVEL: "warn" }
+    env: {
+      SITEDESK_LOG_LEVEL: "warn",
+      /* 测试里造数据的「今天」多数按 UTC 算（toISOString）；业务时区也钉成 UTC，
+         否则每天 UTC 16–24 点这些测试会差一天。换时区的效果由 clock.test.ts 专门验。 */
+      SITEDESK_TZ: "UTC"
+    }
   }
 });

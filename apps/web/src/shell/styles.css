@@ -118,6 +118,18 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
   width: 4px; height: 4px; border-radius: 50%; background: var(--accent); flex: none;
 }
 
+/* ── 一线的「更多」（见 Rail.tsx 与 modules.ts 的 splitNav） ─────────
+   主入口是第一组，没有标题；「更多」是第二组的标题按钮。
+   它长得像分组标题而不像导航项，理由同上。 */
+.nav-more { margin-top: 10px; border-top: 1px solid var(--line); border-radius: 0; }
+.nav-more-label {
+  flex: 1; font-size: 11px; letter-spacing: .06em; font-weight: 600;
+  color: var(--ink-3); padding: 12px 12px 6px;
+}
+.nav-group-h.nav-more .nav-n, .nav-group-h.nav-more .nav-caret { padding-top: 12px; }
+.nav-sub { display: flex; flex-direction: column; gap: 2px; }
+.nav-sub-title { font-size: 10.5px; color: var(--ink-3); padding: 10px 12px 3px; }
+
 /* 过滤框。它是侧栏里唯一一个输入框，所以要比正文控件更收敛：
    无边框、贴着底色，聚焦时才显出轮廓。 */
 .rail-find { padding: 4px 12px 8px; }
@@ -136,6 +148,41 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
   color: var(--ink-3); font-size: 11px; line-height: 1.6;
   display: block; align-items: initial;
 }
+
+/* ── 全局搜索（shell/CommandPalette.tsx）───────────────────────────
+   侧栏顶上一个入口，长得像输入框 —— 人一看就知道「这里能搜」；
+   右边标着快捷键，用惯了的人不必再点它。 */
+.rail-search {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 10px 2px 6px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface-2); color: var(--ink-3); font-size: 12.5px; cursor: pointer; text-align: left;
+}
+.rail-search:hover { border-color: var(--line-2); color: var(--ink-2); }
+.rail-search kbd { font-family: inherit; font-size: 11px; color: var(--ink-3); }
+.palette { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 2px; max-height: 55vh; overflow-y: auto; }
+.palette button {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 8px 10px; border: 0; border-radius: 6px; background: none; color: inherit; cursor: pointer;
+}
+.palette button.on { background: var(--accent-soft); }
+.palette-title { font-weight: 500; white-space: nowrap; }
+.palette-sub { font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── 手机底部页签条（shell/TabBar.tsx）。宽屏不出现。 ──────────────── */
+.tabbar { display: none; }
+.tab-badge {
+  display: inline-block; min-width: 16px; margin-left: 3px; padding: 0 4px; border-radius: 99px;
+  background: var(--crit); color: #fff; font-size: 10px; line-height: 16px; font-weight: 600;
+}
+.more-group { display: flex; flex-direction: column; gap: 2px; }
+.more-group h4 { margin: 6px 0 4px; font-size: 11px; color: var(--ink-3); letter-spacing: .06em; }
+.more-group a {
+  padding: 10px 12px; border-radius: 6px; color: var(--ink); text-decoration: none;
+}
+.more-group a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+/* 窄屏专用的身份条（见 App.tsx）。宽屏上身份在侧栏底部，这里不出现。 */
+.who-bar { display: none; }
 
 .main {
   min-width: 0; padding: 32px clamp(18px, 3vw, 40px) 88px;
@@ -171,9 +218,24 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
   .nav-group { flex-direction: row; gap: 4px; }
   .nav-group + .nav-group { margin-top: 0; margin-left: 8px; }
   .nav-group-title { display: none; }
+  /* 「更多」在横条上是一个紧凑的按钮；展开后其余链接接在后面一起滚。 */
+  .nav-more { margin-top: 0; border-top: 0; border-radius: 6px; width: auto; flex: none; }
+  .nav-more-label, .nav-group-h.nav-more .nav-n, .nav-group-h.nav-more .nav-caret,
+  .nav-group-h.nav-more[aria-expanded="false"] > * { padding: 6px 4px; }
+  .nav-more-label { padding-left: 11px; }
+  .nav-sub { flex-direction: row; gap: 4px; }
+  .nav-sub-title { display: none; }
   .rail a { white-space: nowrap; padding: 6px 11px; }
   .rail a[aria-current="page"] { background: var(--accent-soft); }
   .rail .who { display: none; }
+  /* 手机上侧栏是横条，搜索入口挪到身份条上（见 App.tsx 的 who-bar） */
+  .rail-search { display: none; }
+  .who-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin: -4px 0 12px; font-size: 12px; color: var(--ink-3);
+  }
+  .who-bar-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who-bar .btn { flex: none; }
   /* 过滤框是给"一列二十四项、要滚"的侧栏用的。手机上导航已经是
      一条横向滚动条，再摆一个搜索框只是在首屏上占掉六十像素。 */
   .rail-find { display: none; }
@@ -182,6 +244,23 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
      横向滚动条拉得很长 —— 给个上限让它在原地折行。 */
   .nav-none { max-width: 62vw; white-space: normal; }
   .main { padding: 22px 16px 72px; }
+  /* 有了底部页签条，侧栏只剩品牌、发件箱角标与离线提示那一行 */
+  .app.has-tabbar .rail nav { display: none; }
+  .app.has-tabbar .main { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+  .tabbar {
+    display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: var(--surface); border-top: 1px solid var(--line);
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+  .tabbar a, .tabbar button {
+    display: flex; align-items: center; justify-content: center; min-height: 48px;
+    font-size: 13px; color: var(--ink-2); text-decoration: none; border: 0; background: none;
+    border-radius: 8px; white-space: nowrap; cursor: pointer; font-family: inherit;
+  }
+  .tabbar a[aria-current="page"], .tabbar button.active {
+    color: var(--accent); font-weight: 600; background: var(--accent-soft);
+  }
   .page-head h2 { font-size: 22px; }
 }
 
@@ -261,6 +340,103 @@ td .row.acts { flex-wrap: nowrap; white-space: nowrap; }
    （离线、幂等重放、闸门推导），所以在这里，不在 components.css。
    写法照这套语言：左规则而不是整块着色，发丝线而不是边框。
    ══════════════════════════════════════════════════════════════════ */
+
+/* ── 中心工作台的页签（features/site/SiteDetailPage）────────────────
+   是链接不是按钮：页签就是地址（/sites/:id/queries），刷新、收藏、发给同事都还在。
+   手机上一行放不下就横着滚，不折行 —— 折成两行的页签分不清哪个是当前。 */
+.site-tabs {
+  display: flex; gap: 4px; margin: -6px 0 16px; padding: 0 0 1px;
+  border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin;
+}
+.site-tabs a {
+  flex: none; padding: 8px 12px; font-size: 13.5px; color: var(--ink-2);
+  text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  white-space: nowrap;
+}
+.site-tabs a:hover { color: var(--ink); }
+.site-tabs a[aria-current="page"] {
+  color: var(--accent); border-bottom-color: var(--accent); font-weight: 600;
+}
+/* 页签里嵌的就是侧栏那一页本身。它自己的大标题与页签重复（「质疑」下面又一个
+   「数据质疑」），收掉；标题下那一句摘要留着 —— 那是按这个中心算出来的。 */
+.site-tab .page-head h2 { display: none; }
+.site-tab .page-head { padding-top: 0; }
+
+/* ── 手机上表格变卡片：.table-wrap.cards-sm ─────────────────────────
+   一行一张卡片，每一格前面用 data-label 写上它是哪一列。
+   只给「在手机上看」的那几张表用；宽表（工时、损益）照旧在容器里横滚。 */
+@media (max-width: 720px) {
+  .table-wrap.cards-sm { overflow-x: visible; border: 0; background: none; box-shadow: none; }
+  .cards-sm table, .cards-sm tbody, .cards-sm tr, .cards-sm td { display: block; width: 100%; }
+  /* 压过 `.table-wrap > table { min-width: 560px }` —— 卡片就是为了不要那个宽度 */
+  .table-wrap.cards-sm > table { min-width: 0; }
+  .table-wrap.cards-sm > table > * > tr > :first-child,
+  .table-wrap.cards-sm > table > * > tr > :last-child { padding-left: 0; padding-right: 0; }
+  .cards-sm thead { display: none; }
+  .cards-sm tr {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px;
+  }
+  .cards-sm td {
+    display: flex; gap: 10px; align-items: center; padding: 3px 0; border: 0;
+    text-align: left; min-width: 0;
+  }
+  .cards-sm td[data-label]::before {
+    content: attr(data-label); flex: none; width: 72px; color: var(--ink-3); font-size: 12px;
+  }
+  .cards-sm td.card-title { font-size: 15px; font-weight: 600; }
+  .cards-sm td.card-title::before { display: none; }
+  .cards-sm td.card-actions { padding-top: 8px; }
+}
+
+/* ── 我的日程 · 月（features/workbench/SchedulePage）─────────────────
+   七列，周一开头。一格一天：几次访视可做、哪天有监查。
+   手机上格子只剩几十像素宽 —— 字缩小、标签折行，不横向溢出。 */
+.month {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px;
+}
+.month-h { font-size: 11px; color: var(--ink-3); text-align: center; padding: 2px 0; }
+.month-cell {
+  min-height: 74px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  text-align: left; cursor: pointer; font-family: inherit; color: inherit; min-width: 0;
+}
+.month-cell.blank { background: none; border-color: transparent; cursor: default; }
+.month-cell.is-past { opacity: .5; }
+.month-cell.is-today { border-color: var(--warn); }
+.month-cell.is-picked { border-color: var(--accent); box-shadow: var(--ring); }
+.month-cell .chip { font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.month-n { font-size: 12px; font-weight: 600; }
+.month-trip { white-space: nowrap; }
+@media (max-width: 720px) {
+  .month { gap: 2px; }
+  .month-cell { min-height: 58px; padding: 3px; }
+  .month-cell .chip { font-size: 10px; padding: 0 4px; }
+}
+
+/* ── 首页待办（features/today）：一行一件事，左边一条颜色说有多急 ────────
+   不用表格：手机上表格要横着滚，而待办是**要一眼扫完**的东西。
+   颜色之外还有文字标签（chip）—— 色觉差异下颜色那条线索会消失。 */
+.inbox { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.inbox-item {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--line-2);
+  border-radius: 8px; padding: 10px 12px;
+}
+.inbox-item.u-overdue { border-left-color: var(--crit); }
+.inbox-item.u-today { border-left-color: var(--warn); }
+.inbox-item.u-soon { border-left-color: var(--line-2); }
+.inbox-item > .chip { flex: none; }
+.inbox-main { flex: 1; min-width: 0; }
+.inbox-title { font-weight: 500; overflow-wrap: anywhere; }
+.inbox-sub { font-size: 12px; overflow-wrap: anywhere; }
+.inbox-go { flex: none; text-decoration: none; }
+/* 手机上按钮不占整行 —— 占整行的话一件待办高一倍，一屏只剩五件。
+   按钮缩到右边，高度仍保证手指按得准（≥ 40px）。 */
+@media (max-width: 720px) {
+  .inbox-item { gap: 10px; padding: 10px; }
+  .inbox-go { min-height: 40px; padding: 0 12px; display: inline-flex; align-items: center; }
+}
 
 .tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .tasks li {
@@ -370,6 +546,13 @@ td .row.acts { flex-wrap: nowrap; white-space: nowrap; }
   border-radius: 0 8px 8px 0; padding: 12px 14px;
   display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); line-height: 1.65;
 }
+/* 收起来的「为什么？」（shell/Why.tsx）。首屏只占一行小字。 */
+.why > summary {
+  cursor: pointer; width: max-content; max-width: 100%;
+  font-size: 12px; color: var(--ink-3); padding: 2px 0; list-style-position: inside;
+}
+.why > summary:hover { color: var(--accent); }
+.why[open] > summary { margin-bottom: 6px; }
 .derive .tot {
   border-top: 1px solid var(--line-2); margin-top: 4px; padding-top: 6px;
   font-size: 15px; color: var(--ink);

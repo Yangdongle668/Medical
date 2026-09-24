@@ -61,3 +61,12 @@ export const today = (): string => {
   const n = new Date();
   return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}`;
 };
+
+/** 今天往后第 n 个日历日，`YYYY-MM-DD`。同样取本地日历日 ——
+ *  用 `new Date(y, m, d + n)` 让月底、年底自己进位，不做毫秒加法
+ *  （有夏令时的地方，一天不一定是 86 400 000 毫秒）。 */
+export const daysFromToday = (n: number): string => {
+  const t = new Date();
+  const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + n);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};

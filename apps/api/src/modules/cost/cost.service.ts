@@ -8,6 +8,8 @@ import { ctx, principal } from "../../infra/ctx.js";
 import { siteScopeSql } from "@sitedesk/policy";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
+import { todayLocal, todayDate } from "../../infra/clock.js";
 
 /* ════════════════════════════════════════════════════════════════════
    Timesheet & Cost —— 服务层只做三件事：取数、调用 calc、写审计。
@@ -79,6 +81,9 @@ async function staffRate(client: PoolClient, accountId: string, on: string) {
   };
 }
 
+/** 工时台账：工作日新的在前，同日 id 降序。游标见 infra/keyset.ts。 */
+const TIMESHEET_KEYSET: Keyset = { key: "t.work_date", type: "date", dir: "desc", idDir: "desc", id: "t.id" };
+
 @Injectable()
 export class CostService {
   constructor(private readonly audit: AuditService) {}
@@ -102,13 +107,13 @@ export class CostService {
     if (!q.includeVoided) conds.push(`t.voided_at IS NULL`);
     /* 已作废的不需要审 —— 它已经不在成本里了。所以"待审"天然排除作废。 */
     if (q.unapprovedOnly) conds.push(`t.approved_at IS NULL AND t.voided_at IS NULL`);
-    if (q.cursor) conds.push(`t.id < ${add(q.cursor)}`);
+    if (q.cursor) conds.push(keysetCond(TIMESHEET_KEYSET, q.cursor, add));
 
-    const { rows } = await c.client.query<EntryRow>(
-      `SELECT ${ENTRY_COLS} FROM ${ENTRY_FROM} WHERE ${conds.join(" AND ")}
+    const { rows } = await c.client.query<EntryRow & { cursor_key: string }>(
+      `SELECT ${keysetCol(TIMESHEET_KEYSET)}, ${ENTRY_COLS} FROM ${ENTRY_FROM} WHERE ${conds.join(" AND ")}
         ORDER BY t.work_date DESC, t.id DESC LIMIT ${add(q.limit + 1)}`, params);
     const items = rows.slice(0, q.limit).map(toEntry);
-    return { items, nextCursor: rows.length > q.limit ? items.at(-1)?.id ?? null : null };
+    return { items, nextCursor: keysetNext(rows, q.limit) };
   }
 
   async createTimesheet(b: {
@@ -120,7 +125,7 @@ export class CostService {
       `SELECT id, code FROM study_site WHERE id = $1`, [b.studySiteId]);
     if (!site.rows[0]) throw notFound("中心");
 
-    if (b.workDate > new Date().toISOString().slice(0, 10))
+    if (b.workDate > todayLocal())
       throw new ProblemException("invariant-violated", {
         detail: "不能给未来的日期填报工时", invariant: "timesheet-not-future" });
 
@@ -390,7 +395,8 @@ export class CostService {
     /* 月份轴：最近 N 个月（含当月）。**不是"有数据的那几个月"** ——
        中间空掉的月份必须画出来，"那个月一分钱收入都没有"正是要看见的事。 */
     const axis: string[] = [];
-    const now = new Date();
+    /* 月份轴从业务时区的这个月数起 —— 按 UTC 的话每月 1 号北京 0–8 点会少画当月 */
+    const now = todayDate();
     for (let i = months - 1; i >= 0; i--) {
       const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
       axis.push(d.toISOString().slice(0, 7));

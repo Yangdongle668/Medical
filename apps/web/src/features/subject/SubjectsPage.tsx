@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useToast } from "@sitedesk/ui/react";
-import { WITHDRAW_REASONS } from "@sitedesk/contracts";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import {
   listSubjects, scheduleVisit, STATE_LABEL, OPEN_STATES, anonymous, type Subject
 } from "./api.js";
-/* 脱落原因的中文名与筛选漏斗那一页共用一份 —— 各写一份的话，
-   同一个 `adverse_event` 会在两页上叫两个名字。 */
-import { WITHDRAW_LABEL } from "../enrollment/api.js";
 import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
+import { WithdrawForm } from "./WithdrawForm.js";
+import { Why } from "../../shell/Why.js";
+import { ExportButton } from "../../shell/ExportButton.js";
+import type { CsvColumn } from "../../shell/csv.js";
 
 /* ════════════════════════════════════════════════════════════════════
    受试者访视窗口。
@@ -28,28 +28,52 @@ import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
    按筛选号排的表看不出这件事，而它是这一页唯一的紧急信号。
    ════════════════════════════════════════════════════════════════════ */
 
-export function SubjectsPage() {
+/** 导出的列。筛选号受列权限管：没权限的人拿到的行里没有这个字段，这一列就是空的。 */
+const EXPORT_COLS: CsvColumn<Subject>[] = [
+  { label: "筛选号", value: s => s.screeningNo },
+  { label: "中心", value: s => s.siteCode },
+  { label: "状态", value: s => STATE_LABEL[s.state] ?? s.state },
+  { label: "随机号", value: s => s.randomizationNo },
+  { label: "知情签署日", value: s => s.icfSignedOn },
+  { label: "入组日", value: s => s.enrolledOn },
+  { label: "出组日", value: s => s.exitedOn },
+  { label: "已完成访视", value: s => s.visitsDone },
+  { label: "计划访视", value: s => s.visitsPlanned },
+  { label: "下一次访视", value: s => s.nextVisit?.visitLabel },
+  { label: "窗口开始", value: s => s.nextVisit?.windowFrom },
+  { label: "窗口结束", value: s => s.nextVisit?.windowTo },
+  { label: "剩余天数", value: s => s.nextVisit?.daysLeft },
+  { label: "已超窗", value: s => s.nextVisit ? s.nextVisit.outOfWindow : null },
+  { label: "CRC", value: s => s.crcName }
+];
+
+/** 嵌在中心工作台的页签里时给 —— 只看这一个中心。独立页面（侧栏进来的）不给，看全部。 */
+export function SubjectsPage({ studySiteId }: { studySiteId?: string } = {}) {
   const [subs, setSubs] = useState<Subject[] | null>(null);
   const [openOnly, setOpenOnly] = useState(true);
   const [canWrite, setCanWrite] = useState(false);
   /** 正在给谁登记脱落。**行内，不弹层** —— 填的时候要看得见
    *  他做到第几次访视了，那正是这一步的收入口径。 */
   const [wdOn, setWdOn] = useState<Subject | null>(null);
-  const [wdReason, setWdReason] = useState("");
-  const [wdOn2, setWdOn2] = useState("");
-  const [wdNote, setWdNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<ProblemDetails | null>(null);
-  /** 补排访视失败时说的话。**和脱落那个分开** —— `problem` 只画在
-   *  脱落表单里面（`{wdOn && …}` 里），表单没开的时候写进去等于没写：
+  /** 补排访视失败时说的话。**和脱落那个分开** —— 脱落的错误画在
+   *  脱落表单（WithdrawForm）里面，表单没开的时候写进去等于没写：
    *  按钮点下去、什么也不发生、控制台一条错误都没有。
    *  一个按得动而必定失败的控件，比没有这个控件更糟。 */
   const [schedProblem, setSchedProblem] = useState<ProblemDetails | null>(null);
   const say = useToast();
 
+  /** 列表与导出用同一组条件 —— 导出的就是这一页在看的那批人 */
+  const query = {
+    ...(openOnly ? { state: OPEN_STATES } : {}),
+    ...(studySiteId ? { studySiteId } : {})
+  };
   const load = useCallback(() => {
-    void listSubjects(openOnly ? { state: OPEN_STATES } : {}).then(r => setSubs(r.items));
-  }, [openOnly]);
+    void listSubjects({
+      ...(openOnly ? { state: OPEN_STATES } : {}),
+      ...(studySiteId ? { studySiteId } : {})
+    }).then(r => setSubs(r.items));
+  }, [openOnly, studySiteId]);
   useEffect(load, [load]);
 
   useEffect(() => {
@@ -57,25 +81,6 @@ export function SubjectsPage() {
       .then(m => setCanWrite(m.permissions.actions.includes("subjWrite")))
       .catch(() => setCanWrite(false));
   }, []);
-
-  /** 登记脱落。**两件事同时发生，都要在按下去之前说清楚**：
-   *  收入按已完成访视比例计（不按整例），剩余未完成的访视一并作废 ——
-   *  不作废的话这一例会永远刷红超窗。 */
-  const withdraw = async () => {
-    if (!wdOn) return;
-    setBusy(true); setProblem(null);
-    try {
-      const r = await call<{ sideEffects: { summary: string }[] }>("withdrawSubject", {
-        params: { id: wdOn.id },
-        body: { reason: wdReason, withdrawnOn: wdOn2, note: wdNote.trim() }
-      });
-      load();
-      setWdOn(null); setWdReason(""); setWdOn2(""); setWdNote("");
-      say(r.sideEffects[0]?.summary ?? "已登记脱落");
-    } catch (e) {
-      if (e instanceof ApiError) setProblem(e.problem); else throw e;
-    } finally { setBusy(false); }
-  };
 
   /** 补排访视。**这一格此前只有一句话，没有按钮。**
    *
@@ -107,7 +112,11 @@ export function SubjectsPage() {
   return (
     <>
       <div className="page-head">
-        <h2>受试者访视窗口</h2>
+        <div className="spread">
+          <h2>受试者访视窗口</h2>
+          <ExportButton op="listSubjects" query={query} columns={EXPORT_COLS}
+            list="subjects" name="受试者" studySiteId={studySiteId ?? null} />
+        </div>
         <p data-testid="subj-summary">
           {subs.length} 人。
           {late.length > 0 && <> <b>{late.length} 人的下一次访视已超窗</b>。</>}
@@ -117,15 +126,13 @@ export function SubjectsPage() {
 
       {masked && (
         <div className="problem" data-testid="subj-masked" style={{ marginBottom: 14 }}>
-          你的角色看得到「这个中心有几例在组」，看不到<b>是哪几例</b>。
-          下面这张表里没有筛选号那一列 —— 不是没查到，是后端把它删掉了（I10）。
+          你的角色只看得到例数，看不到具体是哪几例，所以表里没有筛选号一列。
         </div>
       )}
 
       {late.length > 0 && (
         <div className="problem" style={{ marginBottom: 14 }} role="status">
-          超窗的访视每多一天都在往方案偏离上走。超窗完成时要填原因，
-          它会原样进入质量台账 —— 所以<b>先做，别先补记录</b>。
+          超窗的已排在最前。<b>先把访视做了</b>，完成时再填超窗原因。
         </div>
       )}
 
@@ -149,7 +156,9 @@ export function SubjectsPage() {
         <span>只看还在流程里的（预筛 / 筛选中 / 已入组）</span>
       </label>
 
-      <div className="table-wrap">
+      {/* 手机上一行变一张卡片（.cards-sm，见 styles.css）—— 八列的表在 390px 上要横着滚，
+          而这一页是「被问到某某某怎么样了」时拿出手机看的 */}
+      <div className="table-wrap cards-sm">
         <table>
           <thead>
             <tr>
@@ -165,9 +174,13 @@ export function SubjectsPage() {
               .sort((a, b) => rank(a) - rank(b))
               .map(s => (
                 <tr key={s.id} data-testid="subject-row">
-                  {!masked && <td className="mono">{s.screeningNo ?? "—"}</td>}
-                  <td className="mono">{s.siteCode}</td>
-                  <td>
+                  {/* 点筛选号进这个人的详情 —— 「某某某现在什么情况」在那一页答 */}
+                  {!masked && <td className="mono card-title" data-label="筛选号">
+                    <Link to={`/subjects/${s.id}`} data-testid={`subject-open-${s.id}`}>
+                      {s.screeningNo ?? "—"}</Link>
+                  </td>}
+                  <td className="mono" data-label="中心">{s.siteCode}</td>
+                  <td data-label="状态">
                     <span className={`chip ${s.state === "enrolled" ? "good"
                       : ["screen_failed", "withdrawn"].includes(s.state) ? "flat" : "warn"}`}>
                       {STATE_LABEL[s.state] ?? s.state}
@@ -176,7 +189,7 @@ export function SubjectsPage() {
                       {s.randomizationNo ?? "已随机"}
                     </span>}
                   </td>
-                  <td className="num">
+                  <td className="num" data-label="进度">
                     {s.visitsDone}/{s.visitsPlanned}
                   </td>
                   {/* 下一次访视。**排不出来的时候要说话，而且要给得动手** ——
@@ -192,7 +205,7 @@ export function SubjectsPage() {
                       对它喊"没排出来"是一句假警报，而假警报会让真的那句也没人看。
                       筛选中不一样：签知情那一下一定会排出筛选期访视，
                       没有就是出了事。 */}
-                  <td>{s.nextVisit?.visitLabel ?? (
+                  <td data-label="下一次访视">{s.nextVisit?.visitLabel ?? (
                     s.state === "screening"
                       ? <span className="chip warn" data-testid={`no-visit-${s.id}`}
                           title={"签署知情同意时会连筛选期访视一起排出来。这一例没有，" +
@@ -203,9 +216,9 @@ export function SubjectsPage() {
                         </span>
                       : <span className="muted">—</span>
                   )}</td>
-                  <td>{windowChip(s)}</td>
-                  <td className="muted">{s.crcName ?? "—"}</td>
-                  <td>
+                  <td data-label="窗口">{windowChip(s)}</td>
+                  <td className="muted" data-label="CRC">{s.crcName ?? "—"}</td>
+                  <td className="card-actions">
                     <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
                       {s.nextVisit && (
                         <Link to={`/visits/${s.nextVisit.id}`} className="btn go"
@@ -226,10 +239,7 @@ export function SubjectsPage() {
                           已经筛败或已脱落的人没有"脱落"这一步。 */}
                       {canWrite && OPEN_STATES.includes(s.state) && (
                         <button className="btn link" data-testid={`wd-${s.id}`}
-                          onClick={() => {
-                            setWdOn(s); setWdReason(""); setWdNote("");
-                            setWdOn2(""); setProblem(null);
-                          }}>登记脱落</button>
+                          onClick={() => setWdOn(s)}>登记脱落</button>
                       )}
                     </span>
                   </td>
@@ -239,77 +249,12 @@ export function SubjectsPage() {
         </table>
       </div>
 
-      {/* ── 登记脱落 ─────────────────────────────────────────────────
-          这一步有两个不显形的后果，都要在按下去之前说出来：
-          ① 收入按**已完成访视比例**计，不按整例（I8'）；
-          ② 剩余未完成的访视**一并作废** —— 不作废的话，
-             这一例会永远刷红超窗，而超窗每天都在往方案偏离上走。 */}
       {wdOn && (
-        <section className="card" data-testid="wd-form" style={{ marginTop: 18 }}>
-          <div className="card-h">
-            <h3>登记脱落</h3>
-            <span className="sub">
-              {wdOn.screeningNo ?? "受试者"} · {wdOn.siteCode} ·
-              已完成 {wdOn.visitsDone}/{wdOn.visitsPlanned} 次访视
-            </span>
-            <span className="sp" />
-            <button className="btn link" onClick={() => setWdOn(null)}>取消</button>
-          </div>
-          <div className="card-b stack">
-            {problem && (
-              <div className="problem" data-testid="wd-problem">
-                <strong>{problem.title}</strong>
-                {problem.detail && <div>{problem.detail}</div>}
-              </div>
-            )}
-            <div className="grid-form">
-              <label className="field">
-                <span>脱落原因</span>
-                <select value={wdReason} data-testid="wd-reason"
-                  onChange={e => setWdReason(e.target.value)}>
-                  <option value="">— 选一个 —</option>
-                  {WITHDRAW_REASONS.map(r => (
-                    <option key={r} value={r}>{WITHDRAW_LABEL[r] ?? r}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>脱落日期</span>
-                <input type="date" value={wdOn2} data-testid="wd-date"
-                  onChange={e => setWdOn2(e.target.value)} />
-              </label>
-            </div>
-            <label className="field">
-              <span>说明 <span className="t-mut">· 至少 4 字</span></span>
-              <textarea rows={2} value={wdNote} data-testid="wd-note"
-                placeholder="例：受试者第 3 周期出现 III 度肝损伤，研究者判断需终止治疗，已完成末次安全性随访。"
-                onChange={e => setWdNote(e.target.value)} />
-            </label>
-            <div className="derive" data-testid="wd-consequence">
-              <b>这一下有两个后果，都不显形：</b>
-              <br />
-              ① 这一例的收入按<b>已完成访视比例</b>计 ——
-              {wdOn.visitsPlanned > 0 && <>
-                {" "}也就是 {wdOn.visitsDone}/{wdOn.visitsPlanned}，
-                不是整例。
-              </>}
-              <br />
-              ② 剩余 <b>{Math.max(0, wdOn.visitsPlanned - wdOn.visitsDone)}</b> 次
-              未完成的访视<b>一并作废</b> —— 不作废的话，
-              这一例会永远刷红超窗，而超窗每天都在往方案偏离上走。
-            </div>
-            <div className="row">
-              <button className="btn btn-p" data-testid="wd-submit"
-                disabled={busy || !wdReason || !wdOn2 || wdNote.trim().length < 4}
-                onClick={() => void withdraw()}>
-                {busy ? "登记中…" : "登记脱落"}
-              </button>
-            </div>
-          </div>
-        </section>
+        <WithdrawForm key={wdOn.id} subject={wdOn} onCancel={() => setWdOn(null)}
+          onDone={summary => { load(); setWdOn(null); say(summary); }} />
       )}
 
-      <div className="derive" style={{ marginTop: 14 }}>
+      <Why style={{ marginTop: 14 }}>
         这一页一行<b>一个人</b>；「今天」那一页一行<b>一次访视</b>。
         同一批数据两种切法，回答的是两个问题 ——
         每天干活看那一页，被问到「某某某现在什么情况」看这一页。
@@ -320,7 +265,7 @@ export function SubjectsPage() {
         <b>筛选中而没有访视的排在最前</b> —— 那不是走完了，是卡住了：
         签了知情、访视没排出来、入不了组，而筛选期每天都在过去。
         右边「补排访视」按访视计划表把它排出来。
-      </div>
+      </Why>
     </>
   );
 }

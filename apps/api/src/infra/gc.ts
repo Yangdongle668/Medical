@@ -52,6 +52,8 @@ export function startGc(pool: Pool, env: NodeJS.ProcessEnv = process.env): GcHan
       /* -1 = 这一轮没抢到锁（别的副本在扫）。那不是异常，也不该按 info 打 ——
          多副本下它会是绝大多数轮次的结果。 */
       if (idem < 0) return emit("debug", "gc", "这一轮由别的实例在扫，跳过");
+      /* 邮件提醒的去重记录（迁移 0055）：九十天前的那些不会再被用到 */
+      await pool.query("SELECT app.gc_notify_sent()");
       if (idem || tok || ses)
         emit("info", "gc", "清掉了过期数据",
           { idempotencyKeys: idem, loginTokens: tok, sessions: ses });

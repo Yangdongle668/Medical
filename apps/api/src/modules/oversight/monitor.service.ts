@@ -7,6 +7,7 @@ import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { nextCode } from "../../infra/code.js";
+import { todayLocal } from "../../infra/clock.js";
 
 /* ════════════════════════════════════════════════════════════════════
    监查访视。
@@ -27,7 +28,7 @@ import { nextCode } from "../../infra/code.js";
 
 const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
 const iso = (v: Date | null) => v ? v.toISOString() : null;
-const todayStr = () => day(new Date())!;
+const todayStr = () => todayLocal();   // 业务时区的今天（infra/clock.ts）—— 不是服务器的 UTC 今天
 const between = (a: string, b: string) =>
   Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
 

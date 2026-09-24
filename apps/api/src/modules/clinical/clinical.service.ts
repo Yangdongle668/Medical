@@ -4,6 +4,7 @@ import { ctx, principal } from "../../infra/ctx.js";
 import { siteScopeSql } from "@sitedesk/policy";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
 import { pendingSubscribers } from "./visit-completed.js";
 import { VISIT_TIMESHEET_PORT, type VisitTimesheetPort } from "./ports.js";
 /* `edcDaysLate` 原来是这个文件里的两个私有物（`workdaysBetween` 与
@@ -19,6 +20,7 @@ import { nextCode } from "../../infra/code.js";
    三份读者（服务端、mock、界面）共用契约那一份，见那边的注释。 */
 import { screeningGateWording, SUBJECT_STATE_LABEL, VISIT_STATUS_LABEL,
   type VisitStatus, type SUBJECT_STATES } from "@sitedesk/contracts";
+import { todayLocal } from "../../infra/clock.js";
 type SubjectState = (typeof SUBJECT_STATES)[number];
 
 /* ════════════════════════════════════════════════════════════════════
@@ -34,7 +36,7 @@ const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
 const iso = (v: Date | null) => v ? v.toISOString() : null;
 const between = (a: Date | string, b: Date | string) =>
   Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => todayLocal();   // 业务时区的今天（infra/clock.ts）—— 不是服务器的 UTC 今天
 
 /** 副作用信封。type 是契约的一部分，summary 前端直接展示。 */
 interface Effect {
@@ -63,7 +65,7 @@ const SUBJECT_COLS = `
   (SELECT count(*) FROM visit_template t WHERE t.study_id = s.study_id) AS visits_planned,
   nv.id AS nv_id, nv.seq AS nv_seq, nv.visit_code AS nv_code,
   nv.visit_label AS nv_label, nv.target_date AS nv_target,
-  lower(nv.visit_window) AS nv_from, upper(nv.visit_window) AS nv_to`;
+  lower(nv.visit_window) AS nv_from, upper(nv.visit_window) - 1 AS nv_to`;
 
 const SUBJECT_FROM = `
   subject su
@@ -108,9 +110,15 @@ interface VisitRow {
 const VISIT_COLS = `
   v.id, v.subject_id, su.screening_no, v.study_site_id, s.code AS site_code, v.seq,
   v.visit_code, v.visit_label, v.target_date, v.window_days,
-  lower(v.visit_window) AS win_from, upper(v.visit_window) AS win_to,
+  /* upper() - 1：日期区间被规范成 [) —— upper 是窗口关闭后的第一天，不是最后一天。
+     直接用它，窗口长一天，关窗第二天完成的访视也不算超窗。 */
+  lower(v.visit_window) AS win_from, upper(v.visit_window) - 1 AS win_to,
   v.actual_date, v.status, v.edc_status, v.edc_entered_on, v.out_of_window,
   v.pi_confirmed_at, p.display_name AS pi_name`;
+/** 访视清单的排序：窗口收口日升序（最急的在前），同日 id 降序 —— 与 visit_feed_idx 同形。 */
+const VISIT_KEYSET: Keyset = {
+  key: "upper(v.visit_window)", type: "date", dir: "asc", idDir: "desc", id: "v.id"
+};
 const VISIT_FROM = `
   subject_visit v
   JOIN subject su ON su.id = v.subject_id
@@ -136,6 +144,12 @@ function toVisit(r: VisitRow) {
   };
 }
 
+/** 质量事件：新的在前（raised_on 降序），同日 id 降序。 */
+const QUALITY_KEYSET: Keyset = { key: "q.raised_on", type: "date", dir: "desc", idDir: "desc", id: "q.id" };
+
+/** 受试者补偿：到期最早的在前（due_on 升序），同日 id 降序。 */
+const PAYMENT_KEYSET: Keyset = { key: "p.due_on", type: "date", dir: "asc", idDir: "desc", id: "p.id" };
+
 @Injectable()
 export class ClinicalService {
   constructor(
@@ -157,7 +171,7 @@ export class ClinicalService {
     if (q.studySiteId) conds.push(`su.study_site_id = ${add(q.studySiteId)}`);
     if (q.state?.length) conds.push(`su.state = ANY(${add(q.state)})`);
     if (q.q) conds.push(`su.screening_no ILIKE ${add("%" + q.q + "%")}`);
-    if (q.outOfWindow) conds.push(`nv.id IS NOT NULL AND upper(nv.visit_window) < CURRENT_DATE`);
+    if (q.outOfWindow) conds.push(`nv.id IS NOT NULL AND upper(nv.visit_window) <= CURRENT_DATE`);
     if (q.cursor) conds.push(`su.id < ${add(q.cursor)}`);
 
     const { rows } = await c.client.query<SubjectRow>(
@@ -318,7 +332,9 @@ export class ClinicalService {
 
   async listVisits(q: {
     limit: number; cursor?: string; studySiteId?: string; subjectId?: string;
-    status?: string[]; outOfWindow?: boolean; pendingPi?: boolean;
+    status?: string[]; outOfWindow?: boolean; pendingPi?: boolean; windowOpensBy?: string;
+    /** 内部用（我的待办）：已完成而 EDC 还没录的。契约里没有它。 */
+    edcPending?: boolean;
   }) {
     const c = ctx();
     const params: unknown[] = [];
@@ -328,18 +344,25 @@ export class ClinicalService {
     if (q.subjectId) conds.push(`v.subject_id = ${add(q.subjectId)}`);
     if (q.status?.length) conds.push(`v.status = ANY(${add(q.status)})`);
     if (q.pendingPi) conds.push(`v.status = 'done_pending_pi'`);
+    if (q.edcPending) conds.push(`v.actual_date IS NOT NULL AND v.edc_status = 'pending'`);
     /* 走 GiST 索引：未完成而窗口已关，或已完成但落在窗口外 */
     if (q.outOfWindow)
-      conds.push(`(v.out_of_window OR (v.status = 'planned' AND upper(v.visit_window) < CURRENT_DATE))`);
-    if (q.cursor) conds.push(`v.id < ${add(q.cursor)}`);
+      conds.push(`(v.out_of_window OR (v.status = 'planned' AND upper(v.visit_window) <= CURRENT_DATE))`);
+    /* 「窗口在这一天之前已经打开」= 与 (-∞, 那一天] 相交。
+       写成 `&&` 而不是 `lower(v.visit_window) <=`，才走得上窗口上的 GiST 索引。 */
+    if (q.windowOpensBy)
+      conds.push(`v.visit_window && daterange(NULL, ${add(q.windowOpensBy)}::date, '[]')`);
+    /* 游标是排序键本身：(窗口收口日, id)，见 infra/keyset.ts。
+       原来是 `v.id < 末行 id` —— 与排序键无关，第二页漏行又重复。 */
+    if (q.cursor) conds.push(keysetCond(VISIT_KEYSET, q.cursor, add));
 
-    const { rows } = await c.client.query<VisitRow>(
-      `SELECT ${VISIT_COLS} FROM ${VISIT_FROM} WHERE ${conds.join(" AND ")}
+    const { rows } = await c.client.query<VisitRow & { cursor_key: string }>(
+      `SELECT ${VISIT_COLS}, ${keysetCol(VISIT_KEYSET)}
+         FROM ${VISIT_FROM} WHERE ${conds.join(" AND ")}
         ORDER BY upper(v.visit_window), v.id DESC LIMIT ${add(q.limit + 1)}`, params);
-    const page = rows.slice(0, q.limit);
-    const items = page.map(toVisit);
+    const items = rows.slice(0, q.limit).map(toVisit);
     if (items.length) await this.attachTasks(c.client, items);
-    return { items, nextCursor: rows.length > q.limit ? items.at(-1)?.id ?? null : null };
+    return { items, nextCursor: keysetNext(rows, q.limit) };
   }
 
   private async attachTasks(client: PoolClient, visits: { id: string; tasks: unknown[] }[]) {
@@ -363,7 +386,16 @@ export class ClinicalService {
     if (!rows[0]) throw notFound("访视");
     const v = toVisit(rows[0]);
     await this.attachTasks(c.client, [v]);
-    return v;
+    /* 工时默认值：本中心同一访视最近 5 次的中位数 —— 用中位数不用均值，
+       一次补录时填的 12 小时不该把后面每个人的默认值都拉高。 */
+    const { rows: h } = await c.client.query<{ hours: string }>(
+      `SELECT hours FROM subject_visit
+        WHERE study_site_id = $1 AND visit_code = $2 AND hours IS NOT NULL
+        ORDER BY actual_date DESC, id DESC LIMIT 5`, [v.studySiteId, v.visitCode]);
+    const xs = h.map(r => Number(r.hours)).sort((a, b) => a - b);
+    const mid = xs.length ? (xs.length % 2 ? xs[(xs.length - 1) / 2]!
+      : (xs[xs.length / 2 - 1]! + xs[xs.length / 2]!) / 2) : null;
+    return { ...v, suggestedHours: mid === null ? null : Math.round(mid * 2) / 2 };
   }
 
   /* ── 受试者生命周期 ─────────────────────────────────────────────── */
@@ -1034,9 +1066,9 @@ export class ClinicalService {
     if (q.studySiteId) conds.push(`q.study_site_id = ${add(q.studySiteId)}`);
     if (q.kind?.length) conds.push(`q.kind = ANY(${add(q.kind)})`);
     if (q.state?.length) conds.push(`q.state = ANY(${add(q.state)})`);
-    if (q.cursor) conds.push(`q.id < ${add(q.cursor)}`);
+    if (q.cursor) conds.push(keysetCond(QUALITY_KEYSET, q.cursor, add));
 
-    const { rows } = await c.client.query<{
+    const { rows } = await c.client.query<{ cursor_key: string;
       id: string; code: string; study_site_id: string; site_code: string;
       subject_id: string | null; screening_no: string | null; visit_id: string | null;
       kind: string; severity: string; state: string; title: string; detail: string;
@@ -1045,7 +1077,7 @@ export class ClinicalService {
       category: string | null; capa_plan: string | null;
       capa_owner_account_id: string | null; capa_owner_name: string | null;
       capa_due_on: Date | null;
-    }>(`SELECT q.id, q.code, q.study_site_id, s.code AS site_code, q.subject_id,
+    }>(`SELECT ${keysetCol(QUALITY_KEYSET)}, q.id, q.code, q.study_site_id, s.code AS site_code, q.subject_id,
                su.screening_no, q.visit_id, q.kind, q.severity, q.state, q.title,
                q.detail, q.auto_generated, q.raised_by, q.raised_on, q.closed_at,
                q.occurred_at, q.reported_at, q.source_event_id,
@@ -1090,7 +1122,7 @@ export class ClinicalService {
       /* **已指派、还没提交措施**：它不是「正在整改」，是有人欠着一份措施。 */
       owesCapaPlan: r.capa_owner_account_id !== null && r.capa_plan === null
     }));
-    return { items, nextCursor: rows.length > q.limit ? items.at(-1)?.id ?? null : null };
+    return { items, nextCursor: keysetNext(rows, q.limit) };
   }
 
   /* ── SOA 配置（欠账 D2） ──────────────────────────────────────────
@@ -1473,13 +1505,13 @@ export class ClinicalService {
     const conds = ["true"];
     if (q.studySiteId) conds.push(`p.study_site_id = ${add(q.studySiteId)}`);
     if (q.unpaid) conds.push(`p.paid_on IS NULL`);
-    if (q.cursor) conds.push(`p.id < ${add(q.cursor)}`);
+    if (q.cursor) conds.push(keysetCond(PAYMENT_KEYSET, q.cursor, add));
 
-    const { rows } = await c.client.query<{
+    const { rows } = await c.client.query<{ cursor_key: string;
       id: string; study_site_id: string; site_code: string; subject_id: string;
       screening_no: string; visit_id: string | null; visit_label: string | null;
       amount_cents: string; due_on: Date; paid_on: Date | null; receipt_ref: string | null;
-    }>(`SELECT p.id, p.study_site_id, s.code AS site_code, p.subject_id, su.screening_no,
+    }>(`SELECT ${keysetCol(PAYMENT_KEYSET)}, p.id, p.study_site_id, s.code AS site_code, p.subject_id, su.screening_no,
                p.visit_id, v.visit_label, p.amount_cents, p.due_on, p.paid_on, p.receipt_ref
           FROM subject_payment p
           JOIN study_site s ON s.id = p.study_site_id
@@ -1497,7 +1529,7 @@ export class ClinicalService {
       paidOn: day(r.paid_on), receiptRef: r.receipt_ref,
       ageDays: between(day(r.due_on)!, r.paid_on ? day(r.paid_on)! : today)
     }));
-    return { items, nextCursor: rows.length > q.limit ? items.at(-1)?.id ?? null : null };
+    return { items, nextCursor: keysetNext(rows, q.limit) };
   }
 
   async payPayment(id: string, b: { paidOn: string; receiptRef: string }) {

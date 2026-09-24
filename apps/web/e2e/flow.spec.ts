@@ -33,14 +33,14 @@ async function tickAllTasks(page: Page) {
 test("CRC 的一天：从今日清单走到方案偏离进台账", async ({ page }) => {
   await page.goto("/today");
 
-  /* ① 今日清单按窗口关闭日升序，超窗的排最上面 */
-  const rows = page.getByTestId("visit-row");
+  /* ① 首页是待办：已过期的在最上面，超窗的访视在里头 */
+  const rows = page.getByTestId("today-overdue").locator('[data-kind="visit"]');
   await expect(rows.first()).toBeVisible();
-  await expect(page.getByTestId("today-summary")).toContainText("已超窗");
+  await expect(page.getByTestId("today-summary")).toContainText("已过期");
   await expect(rows.first()).toContainText("已超窗");
 
   /* ② 打开超窗那一例 */
-  await rows.first().getByRole("link", { name: "打开" }).click();
+  await rows.first().getByRole("link", { name: "去完成" }).click();
   await expect(page.getByRole("heading", { level: 2 })).toBeVisible();
 
   /* ③ 任务没勾完 → 提交是禁用的，且旁边写清楚还差什么 */
@@ -65,9 +65,12 @@ test("CRC 的一天：从今日清单走到方案偏离进台账", async ({ page
   await submit.click();
   const effects = page.getByTestId("effects");
   await expect(effects).toBeVisible();
+  /* 每一行认 data-type（程序认键）；显示的是中文名（人读名字）—— 不是枚举键 */
   for (const type of ["DeviationDetected", "CompensationDue",
                       "TimesheetPosted", "CostPosted", "NextVisitScheduled"])
-    await expect(effects).toContainText(type);
+    await expect(effects.locator(`li[data-type="${type}"]`)).toHaveCount(1);
+  await expect(effects).toContainText("方案偏离");
+  await expect(effects).not.toContainText("DeviationDetected");
 
   /* 七个订阅者全接上了，界面上不该再出现"待接"那一块。
      它曾经挂着 RefreshProjections —— 断言它消失了，
@@ -79,7 +82,7 @@ test("CRC 的一天：从今日清单走到方案偏离进台账", async ({ page
   /* CRC 的侧栏里这一页叫「我的整改」（原型的 capa），
      经营层看到的同一页叫「质量事件与 CAPA」（qa）—— 同一本台账，
      行范围把各人收在自己那几个中心上。 */
-  await page.getByRole("link", { name: "我的整改" }).click();
+  await page.getByRole("link", { name: "质量与 SAE" }).click();
   const item = page.getByTestId("quality-item").first();
   await expect(item).toContainText("访视超窗");
   await expect(item).toContainText("系统自动生成");
@@ -88,9 +91,9 @@ test("CRC 的一天：从今日清单走到方案偏离进台账", async ({ page
 
 test("窗口内完成不要求填原因，也不生成偏离", async ({ page }) => {
   await page.goto("/today");
-  /* 挑一行「窗口内」的 */
-  const row = page.getByTestId("visit-row").filter({ hasText: "窗口内" }).first();
-  await row.getByRole("link", { name: "打开" }).click();
+  /* 挑一条窗口还开着的访视 */
+  const row = page.locator('[data-kind="visit"]').filter({ hasText: "窗口还剩" }).first();
+  await row.getByRole("link", { name: "去完成" }).click();
 
   await tickAllTasks(page);
   /* 把完成日改成目标日 —— 窗口正中 */
@@ -106,6 +109,6 @@ test("窗口内完成不要求填原因，也不生成偏离", async ({ page }) 
   await page.getByTestId("submit").click();
   const effects = page.getByTestId("effects");
   await expect(effects).toBeVisible();
-  await expect(effects).not.toContainText("DeviationDetected");
-  await expect(effects).toContainText("NextVisitScheduled");
+  await expect(effects.locator('li[data-type="DeviationDetected"]')).toHaveCount(0);
+  await expect(effects.locator('li[data-type="NextVisitScheduled"]')).toHaveCount(1);
 });

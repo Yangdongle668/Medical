@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { today, daysSince } from "../src/shell/dates.js";
+import { today, daysSince, daysFromToday } from "../src/shell/dates.js";
 
 /* ════════════════════════════════════════════════════════════════════
    日历日 —— **每天早上那八个小时曾经是错的**。
@@ -107,6 +107,21 @@ describe("daysSince()：今天 = 0", () => {
     北京(2026, 3, 1, 10);
     expect(daysSince("2026-02-28")).toBe(1);
     expect(daysSince("2026-01-31")).toBe(29);   // 2026 不是闰年
+  });
+});
+
+describe("daysFromToday()：往后数日历日", () => {
+  it("北京早上七点往后七天，从本地的今天数起", () => {
+    北京(2026, 9, 9, 7);
+    expect(daysFromToday(0)).toBe("2026-09-09");
+    expect(daysFromToday(7)).toBe("2026-09-16");
+  });
+
+  it("月底、年底自己进位", () => {
+    北京(2026, 9, 28, 10);
+    expect(daysFromToday(7)).toBe("2026-10-05");
+    北京(2026, 12, 29, 23);
+    expect(daysFromToday(7)).toBe("2027-01-05");
   });
 });
 

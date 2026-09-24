@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { today, daysSince } from "../../shell/dates.js";
+import { Why } from "../../shell/Why.js";
+import { loadMe } from "../login/me.js";
 
 /* ════════════════════════════════════════════════════════════════════
    伦理事务。
@@ -58,6 +60,16 @@ export function EthicsPage() {
   };
 
   useEffect(() => { void load(); }, []);
+
+  /* 登记递交 / 登记批复要 `ethics` 动作。CRA 看得到这一页（监查时要核对批件），
+     但没有这个动作 —— 按钮照样画出来的话，点下去必定 403。
+     一个按得动而必定失败的控件，比没有这个控件更糟。 */
+  const [canWrite, setCanWrite] = useState(false);
+  useEffect(() => {
+    void loadMe()
+      .then(m => setCanWrite(m.permissions.actions.includes("ethics")))
+      .catch(() => setCanWrite(false));
+  }, []);
 
   const run = async (what: string, fn: () => Promise<unknown>) => {
     setProblem(null); setSaid(null);
@@ -123,10 +135,12 @@ export function EthicsPage() {
                     ? <span className="muted mono">批件 {site.irbApprovedOn}</span>
                     : <span className="chip crit">无批件日</span>}
                   {open.length > 0 && <span className="chip warn">{open.length} 份待批复</span>}
-                  <button className="btn" data-testid={`add-${site.code}`}
-                    onClick={() => { setAdding(site); setProblem(null); setSaid(null); }}>
-                    登记递交
-                  </button>
+                  {canWrite && (
+                    <button className="btn" data-testid={`add-${site.code}`}
+                      onClick={() => { setAdding(site); setProblem(null); setSaid(null); }}>
+                      登记递交
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -155,7 +169,7 @@ export function EthicsPage() {
                               <td className="mono muted">{x.refNo ?? "—"}</td>
                               <td className="muted">{x.note ?? "—"}</td>
                               <td>
-                                {x.decision === "pending" && (
+                                {canWrite && x.decision === "pending" && (
                                   <button className="btn" data-testid={`decide-${x.id}`}
                                     onClick={() => { setDeciding(x); setProblem(null); setSaid(null); }}>
                                     登记批复
@@ -187,7 +201,7 @@ export function EthicsPage() {
               { params: { id: deciding.id }, body: b }))} />
       )}
 
-      <div className="derive" style={{ marginTop: 14 }}>
+      <Why style={{ marginTop: 14 }}>
         <b>递交了不等于批下来了。</b> 关闭闸门看的是批复，不是递交 ——
         所以「待批复」用的是警告色，不是中性色：
         一份递上去三个月没动静的修正案，和一份刚递上去的，必须分得开。
@@ -195,7 +209,7 @@ export function EthicsPage() {
         按中心分组而不是一张大表，因为<b>伦理是按中心批的</b>：
         同一个项目在 A 医院批了、在 B 医院还没批是正常状态，
         混成一张按时间排的表就再也看不出「哪个中心还差一份批件」。
-      </div>
+      </Why>
     </>
   );
 }

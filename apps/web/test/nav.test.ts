@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { navFor, MODULES, GROUP_ORDER } from "../src/shell/modules.js";
+import { navFor, splitNav, PRIMARY, MODULES, GROUP_ORDER } from "../src/shell/modules.js";
 import { activePath } from "../src/shell/App.js";
 
 /* ════════════════════════════════════════════════════════════════════
@@ -66,6 +66,44 @@ describe("navFor", () => {
 
   it("空清单给空侧栏，不给一个报错", () => {
     expect(navFor([])).toEqual([]);
+  });
+});
+
+describe("splitNav：一线的主入口 / 更多", () => {
+  const CRC = ["crc", "subj", "sched", "query", "mysite", "capa",
+    "startup", "prescreen", "ethics", "instac", "handover", "isf", "material", "pay", "time"];
+
+  it("前六项按库里的顺序平铺，不按分组重排", () => {
+    /* navFor 按 GROUP_ORDER 排；主入口不行 —— 它的意义就是"每天用的那几项在最上面"，
+       按分组一排，「质量与 SAE」又沉回底下去了。 */
+    const s = splitNav("crc", CRC)!;
+    expect(s.primary.map(m => m.key)).toEqual(["crc", "subj", "sched", "query", "mysite", "capa"]);
+    expect(s.more.flatMap(g => g.items)).toHaveLength(CRC.length - PRIMARY);
+  });
+
+  it("「更多」里仍按分组排，一项不丢", () => {
+    const s = splitNav("crc", CRC)!;
+    const all = [...s.primary, ...s.more.flatMap(g => g.items)].map(m => m.key).sort();
+    expect(all).toEqual([...CRC].sort());
+    expect(s.more.map(g => g.group)).toEqual(["项目周期", "现场", "资源", "机构办公室"]);
+  });
+
+  it("先去重再数六项 —— qa 与 capa 是同一页，不能占两个位置", () => {
+    const s = splitNav("cra", ["cra", "sched", "capa", "qa", "mon", "mysites", "query",
+      "isf", "ethics", "time"])!;
+    expect(s.primary.map(m => m.key)).toEqual(["cra", "sched", "capa", "mon", "mysites", "query"]);
+    expect(s.more.flatMap(g => g.items).map(m => m.key)).not.toContain("qa");
+  });
+
+  it("只对一线；经营层、项目总监照旧按分组铺", () => {
+    expect(splitNav("boss", ["dash", "intake", "sites", "enr", "screen", "client", "cash",
+      "bid", "change", "staff", "pnl"])).toBeNull();
+    expect(splitNav(undefined, CRC)).toBeNull();
+  });
+
+  it("总共就七八项的时候不拆 —— 为省两行多一次点击不值得", () => {
+    expect(splitNav("crc", CRC.slice(0, PRIMARY + 2))).toBeNull();
+    expect(splitNav("crc", CRC.slice(0, PRIMARY + 3))).not.toBeNull();
   });
 });
 

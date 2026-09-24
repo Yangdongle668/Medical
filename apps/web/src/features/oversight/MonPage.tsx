@@ -3,6 +3,9 @@ import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { yuan } from "../cost/money.js";
 import { PlanVisitForm } from "./PlanVisitForm.js";
+import { Why } from "../../shell/Why.js";
+import { ExportButton } from "../../shell/ExportButton.js";
+import type { CsvColumn } from "../../shell/csv.js";
 
 /* ════════════════════════════════════════════════════════════════════
    监查访视。
@@ -40,6 +43,28 @@ interface Visit {
   items: Item[]; openItems: number;
   mvrLagDays: number | null; mvrOverdue: boolean; visitOverdueDays: number | null;
 }
+const KIND_TEXT: Record<Visit["kind"], string> = { siv: "启动访视", imv: "常规监查", cov: "关闭访视" };
+const STATE_TEXT: Record<Visit["state"], string> =
+  { proposed: "待中心确认", scheduled: "已确认", done: "已到现场", reported: "报告已交" };
+const EXPORT_COLS: CsvColumn<Visit>[] = [
+  { label: "编号", value: v => v.code },
+  { label: "中心", value: v => v.siteCode },
+  { label: "医院", value: v => v.hospital },
+  { label: "项目", value: v => v.studyShortName },
+  { label: "类型", value: v => KIND_TEXT[v.kind] },
+  { label: "计划日", value: v => v.plannedOn },
+  { label: "天数", value: v => v.days },
+  { label: "监查员", value: v => v.monitorName },
+  { label: "状态", value: v => STATE_TEXT[v.state] },
+  { label: "中心确认日", value: v => v.confirmedOn },
+  { label: "到现场日", value: v => v.performedOn },
+  { label: "报告提交日", value: v => v.reportSubmittedOn },
+  { label: "SDV 比例（%）", value: v => v.sdvSamplePct },
+  { label: "未关闭事项", value: v => v.openItems },
+  { label: "报告已逾期", value: v => v.mvrOverdue },
+  { label: "备注", value: v => v.note }
+];
+
 interface SitePlan {
   studySiteId: string; siteCode: string; hospital: string; siteState: string;
   band: "low" | "normal" | "high"; riskScore: number;
@@ -74,7 +99,11 @@ const BAND: Record<SitePlan["band"], { text: string; chip: string }> = {
 /** 与 calc 的 MVR_DUE_DAYS 同一个数。 */
 const MVR_DUE = 10;
 
-export function MonPage() {
+/** 嵌在中心工作台的页签里时给 —— 只看这一个中心。独立页面（侧栏进来的）不给，看全部。 */
+export function MonPage({ studySiteId }: { studySiteId?: string } = {}) {
+  /* 嵌在一个中心里时，页头那一行和四个统计是**全范围**的数（监查排期的看板
+     没有按中心筛的口径）—— 放在某一个中心的页签里会被读成这个中心的数，所以不画。 */
+  const embedded = !!studySiteId;
   const [me, setMe] = useState<Me | null>(null);
   const [rows, setRows] = useState<Visit[] | null>(null);
   const [board, setBoard] = useState<Board | null>(null);
@@ -84,9 +113,11 @@ export function MonPage() {
   const [said, setSaid] = useState<string | null>(null);
 
   const reload = () => Promise.all([
-    call<{ items: Visit[] }>("listMonitorVisits", { query: { limit: 200 } })
+    call<{ items: Visit[] }>("listMonitorVisits",
+      { query: { limit: 200, ...(studySiteId ? { studySiteId } : {}) } })
       .then(r => { setRows(r.items); setSel(s => s ?? r.items.find(v => v.state !== "reported")?.id ?? r.items[0]?.id ?? null); }),
-    call<Board>("getMonitorBoard", {}).then(setBoard)
+    call<Board>("getMonitorBoard", {}).then(b => setBoard(studySiteId
+      ? { ...b, sites: b.sites.filter(s => s.studySiteId === studySiteId) } : b))
   ]);
 
   useEffect(() => { void loadMe().then(setMe); void reload(); }, []);
@@ -125,24 +156,28 @@ export function MonPage() {
 
   return (
     <>
-      <div className="page-head">
-        <h2>监查访视</h2>
+      {!embedded && <div className="page-head">
+        <div className="spread">
+          <h2>监查访视</h2>
+          <ExportButton op="listMonitorVisits" columns={EXPORT_COLS} list="monitorVisits"
+            name="监查访视" query={studySiteId ? { studySiteId } : {}} studySiteId={studySiteId ?? null} />
+        </div>
         <p data-testid="mon-summary">
           未来四周 <b>{board.upcomingVisits} 次</b>（{board.upcomingDays} 人天）
           {seesCost && <>，预估差旅 <b>{yuan(board.travelEstimateCents!)}</b></>}。
           {board.load.outstanding > 0 && <> <b>{board.load.outstanding} 份监查报告没交</b>
             {board.load.overdue > 0 && <>（其中 {board.load.overdue} 份已超 {MVR_DUE} 天）</>}。</>}
         </p>
-      </div>
+      </div>}
 
-      <div className="derive" style={{ marginBottom: 14 }}>
+      <Why style={{ marginBottom: 14 }}>
         <b>「去过了」和「报告交了」是两件事。</b>
         人去了、问题也看见了，报告压在手上两个月 ——
         中心那边该整改的事根本没开始，而<b>核查时看的是报告日期，不是出差日期</b>。
         所以这一页把「已到现场」单独列成一格，而不是从「已排期」直接跳到「已提交」。
-      </div>
+      </Why>
 
-      <div className="stats" style={{ marginBottom: 16 }}>
+      {!embedded && <div className="stats" style={{ marginBottom: 16 }}>
         <Stat label="未来四周" v={String(board.upcomingVisits)}
           note={`${board.upcomingDays} 人天`} />
         <Stat label="逾期未监查" v={String(overdueSites.length)}
@@ -157,10 +192,10 @@ export function MonPage() {
             ? "—" : `${board.load.meanLagDays.toFixed(1)} 天`}
           note={`目标 ≤ ${MVR_DUE} 天`}
           bad={(board.load.meanLagDays ?? 0) > MVR_DUE} />
-      </div>
+      </div>}
 
-      {board.load.performed > 0 && (
-        <div className="derive" style={{ marginBottom: 14 }} data-testid="mon-lag-note">
+      {!embedded && board.load.performed > 0 && (
+        <Why summary="报告滞后怎么算？" style={{ marginBottom: 14 }} data-testid="mon-lag-note">
           <b>平均报告滞后把没交的也算进去了。</b>
           只统计已提交的那些，一份永远不交的报告就永远不进分母 ——
           压得越久这个数越好看
@@ -169,7 +204,7 @@ export function MonPage() {
           <span className="muted mono" style={{ marginLeft: 8, fontSize: 12 }}>
             口径 {board.calcVersion}
           </span>
-        </div>
+        </Why>
       )}
 
       {problem && (
@@ -371,14 +406,14 @@ export function MonPage() {
             </tbody>
           </table>
         </div>
-        <div className="derive" style={{ margin: 0 }}>
+        <Why style={{ margin: 0 }}>
           质量稳定的中心可以降低 SDV 抽样比例、拉长间隔；
           有未关闭严重事件或入组停滞的要加密。
           <b>建议值一定带理由</b> —— 没有理由的建议值没人照着做，
           也没人能在核查时解释「为什么这个中心只抽了 {board.sites.at(-1)?.sdvSamplePct ?? 25}%」。
           实际用了多少<b>落在访视行上</b>：不采纳建议是可以的，
           但不采纳这件事本身要留得下来。
-        </div>
+        </Why>
       </div>
     </>
   );

@@ -203,7 +203,11 @@ export const SubjectVisit = z.object({
   daysLeft: z.int().nullable().describe("距窗口关闭的天数；已完成为 null"),
   piConfirmedAt: Timestamp.nullable(),
   piConfirmedByName: z.string().nullable(),
-  tasks: z.array(z.object({ seq: z.int(), task: z.string(), doneAt: Timestamp.nullable() }))
+  tasks: z.array(z.object({ seq: z.int(), task: z.string(), doneAt: Timestamp.nullable() })),
+  suggestedHours: z.number().nullable().optional().describe(
+    "只在单取一次访视时给：本中心最近 5 次同一访视（同 visitCode）登记工时的中位数；" +
+    "没有历史时为 null。完成访视那一栏的默认值 —— 原来写死 3.5，一次筛选期访视和一次" +
+    "C1D1 给药按同一个数默认，等于让每个人每次都去改它（或者不改，那更糟）。")
 }).meta({
   id: "SubjectVisit",
   description: "访视窗口用 daterange 表达，超窗查询走 GiST 索引，不在应用层遍历。"

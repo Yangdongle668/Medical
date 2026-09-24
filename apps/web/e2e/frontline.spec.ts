@@ -119,7 +119,7 @@ test.describe("CRC", () => {
     await page.getByTestId("fail-reason").selectOption({ label: "影像学不符合" });
     await page.getByTestId("fail-go").click();
     /* 筛败不是失败，是收入 —— 界面要说出来 */
-    await expect(page.getByTestId("pre-said")).toContainText("I8′");
+    await expect(page.getByTestId("pre-said")).toContainText("筛败费已计入");
   });
 
   test("补偿：欠得最久的排最前，发了没凭证的单独报警", async ({ page }) => {
@@ -256,4 +256,93 @@ test.describe("被拦下来要给得出去处", () => {
     await expect(unmet).toContainText("受试者访视窗口");
     await expect(unmet).not.toContainText("subj");
   });
+});
+
+/* 「今天」是待办：要你动手的事按 已过期 → 今天 → 这几天 排成一列，
+   SAE 最前；每一条都点得进去办。原来这一页只有访视。 */
+test.describe("今天", () => {
+  test("待办分三段，每一条都有去处", async ({ page }) => {
+    await page.goto("/today");
+    await expect(page.getByTestId("today-summary")).toContainText("已过期");
+    const overdue = page.getByTestId("today-overdue");
+    await expect(overdue.getByTestId("inbox-item").first()).toBeVisible();
+    /* 不止访视：质疑、文件这些原来要去别的页面翻的，也在这里 */
+    await expect(page.locator('[data-kind="query"]').first()).toBeVisible();
+    for (const go of await page.getByTestId("inbox-go").all())
+      expect(await go.getAttribute("href")).toMatch(/^\//);
+  });
+
+  test("点「去回复」落在数据质疑页", async ({ page }) => {
+    await page.goto("/today");
+    await page.locator('[data-kind="query"]').first().getByTestId("inbox-go").click();
+    await expect(page).toHaveURL(/\/queries/);
+  });
+
+  test("没有审批权限的一线看不到「待审工时」；经营层看得到", async ({ page }) => {
+    await page.goto("/today");
+    await expect(page.getByTestId("inbox-item").first()).toBeVisible();
+    await expect(page.locator('[data-kind="approval"]')).toHaveCount(0);
+    await page.goto("/today?as=boss");
+    await expect(page.locator('[data-kind="approval"]')).toHaveCount(1);
+  });
+});
+
+/* 「报告 SAE」在首页最上面。原来它在 质量与 SAE → 选中心 → 面板 里 ——
+   一线手上最急、最不能等的一件事，路径最深。 */
+test.describe("首页报告 SAE", () => {
+  test("在首页登记，登记完它带着倒计时出现在待办最前面", async ({ page }) => {
+    await page.goto("/today");
+    await page.getByTestId("new-sae").click();
+    /* 发生时刻仍然不预填 —— 与质量页同一个表单 */
+    await expect(page.getByTestId("sae-occurred")).toHaveValue("");
+    /* 不止一个中心时要选；默认是第一个 */
+    await expect(page.getByTestId("sae-site")).toBeVisible();
+
+    const recent = new Date(Date.now() - 2 * 3_600_000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const local = `${recent.getFullYear()}-${pad(recent.getMonth() + 1)}-${pad(recent.getDate())}` +
+      `T${pad(recent.getHours())}:${pad(recent.getMinutes())}`;
+    await page.getByTestId("sae-title").fill("首页登记的 SAE");
+    await page.getByTestId("sae-detail").fill("受试者夜间高热入院，研究者次晨知悉。");
+    await page.getByTestId("sae-occurred").fill(local);
+    await page.getByTestId("new-sae-submit").click();
+
+    const mine = page.getByTestId("inbox-item").filter({ hasText: "首页登记的 SAE" });
+    await expect(mine).toContainText("24 小时内要上报");
+    /* SAE 那一组排在所有别的待办前面（已超时的 SAE 在它之前，那是对的） */
+    const kinds = await page.getByTestId("inbox-item").evaluateAll(
+      els => els.map(e => [e.getAttribute("data-kind"), e.textContent ?? ""] as const));
+    const at = kinds.findIndex(([, t]) => t.includes("首页登记的 SAE"));
+    expect(kinds.slice(0, at + 1).every(([k]) => k === "sae")).toBe(true);
+  });
+
+  test("CRA 不上报，但首页有 SAE 的跟进提醒", async ({ page }) => {
+    await page.goto("/today?as=cra");
+    const sae = page.getByTestId("today-sae").locator('[data-kind="sae"]').first();
+    await expect(sae).toContainText("由中心上报");
+    await expect(sae.getByTestId("inbox-go")).toHaveText("去跟进");
+  });
+
+  test("没有 subjWrite 的角色没有这个按钮", async ({ page }) => {
+    await page.goto("/today?as=cra");
+    await expect(page.getByTestId("today-summary")).toBeVisible();
+    await expect(page.getByTestId("new-sae")).toHaveCount(0);
+  });
+});
+
+/* 提醒设置（W14）：每封提醒邮件底下都指到这一页，退订要比忍着方便。 */
+test("首页右上角进提醒设置，关掉每日摘要，回来还是关着", async ({ page }) => {
+  await page.goto("/today");
+  await page.getByTestId("open-notify-prefs").click();
+  await expect(page).toHaveURL(/\/settings\/notify/);
+  const digest = page.getByTestId("prefs-digest");
+  await expect(digest).toBeChecked();
+  await digest.uncheck();
+  await expect(page.getByTestId("toast")).toContainText("已保存");
+  /* 不整页刷新：mock 的状态在页面内存里，刷新会连同 mock 场景一起重来。
+     走客户端路由离开再回来，读到的是服务端（mock）存下的那一份。 */
+  await page.getByRole("link", { name: "← 今天" }).click();
+  await page.getByTestId("open-notify-prefs").click();
+  await expect(page.getByTestId("prefs-digest")).not.toBeChecked();
+  await expect(page.getByTestId("prefs-urgent")).toBeChecked();
 });

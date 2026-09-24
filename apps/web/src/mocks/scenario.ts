@@ -382,15 +382,18 @@ export function nextOf(v: MockVisit): MockSubject["nextVisit"] {
 export function makeScenario(): Scenario {
   const roles = mkRoles();
   const teams = mkTeams();
-  return {
+  const sc: Scenario = {
     roles, teams, accounts: mkAccounts(roles, teams),
     subjects: mkSubjects(), payments: mkPayments(), submissions: mkSubmissions(),
+    /* 访视上的筛选号与受试者、中心必须和下面 mkSubjects 那张表对得上 ——
+       原来 v1/v7 写的是 S-0331、v2/v8 写的是 S-0203，与受试者表正好相反。
+       分开看的时候看不出来；受试者详情把两张表排在一起，当场露馅。 */
     visits: [
       /* 已超窗 3 天 —— 列表第一屏就该看见它 */
-      mkVisit("v1", SITES[0]!, "S-0331", "u1", 4, "C4D1 第 4 周期给药",
+      mkVisit("v1", SITES[0]!, "S-0203", "u1", 4, "C4D1 第 4 周期给药",
         -6, 3, TASKS_ONCO, 2),
       /* 今天到期 */
-      mkVisit("v2", SITES[0]!, "S-0203", "u2", 8, "C8D1 第 8 周期给药",
+      mkVisit("v2", SITES[1]!, "S-0331", "u2", 8, "C8D1 第 8 周期给药",
         0, 3, TASKS_ONCO, 3),
       /* 窗口内，还有 2 天 */
       mkVisit("v3", SITES[1]!, "S-0224", "u3", 3, "C3D1 给药 + 肿瘤评估",
@@ -417,9 +420,9 @@ export function makeScenario(): Scenario {
          （calc 的 `DUTY_STALE_DAYS`）—— 那是"已经不是来不及，是忘了"的线。
          原来这里是 -12，于是那条分支在演示上永远画不出来，
          而它正是那张表最要紧的一格。 */
-      done(mkVisit("v7", SITES[0]!, "S-0331", "u1", 5, "C5D1 第 5 周期给药",
+      done(mkVisit("v7", SITES[0]!, "S-0203", "u1", 5, "C5D1 第 5 周期给药",
         -25, 3, TASKS_ONCO), -25),
-      done(mkVisit("v8", SITES[0]!, "S-0203", "u2", 9, "C9D1 第 9 周期给药",
+      done(mkVisit("v8", SITES[1]!, "S-0331", "u2", 9, "C9D1 第 9 周期给药",
         -1, 3, TASKS_ONCO), -1),
       /* 已经签过字的那条 —— 队列里**不该**出现它。
          少了这条对照，"pendingPi 到底筛没筛"在界面上看不出来。
@@ -459,6 +462,13 @@ export function makeScenario(): Scenario {
     soa: { st1: makeSoa("st1", TASKS_ONCO), st2: makeSoa("st2", TASKS_IO) },
     handovers: [makeHandover()]
   };
+  /* 受试者的「下一次访视」**从访视表里取**，不在受试者表里另写一份窗口 ——
+     另写的那份会跟访视表各走各的（原来 S-0203 在这边超窗 6 天、在访视表超窗 3 天）。 */
+  for (const sub of sc.subjects) {
+    const v = sub.nextVisit && sc.visits.find(x => x.id === sub.nextVisit!.id);
+    if (v) sub.nextVisit = nextOf(v);
+  }
+  return sc;
 }
 
 /** 启动清单由**契约里的标准清单**铺开，不另写一份。
@@ -1699,7 +1709,7 @@ export const mkSubjects = (): MockSubject[] => [
     randomized: true, randomizationNo: "R-0331", state: "enrolled",
     icfSignedOn: day(-80), enrolledOn: day(-72), exitedOn: null,
     screenFailReason: null, withdrawReason: null, crcName: "廖萌",
-    visitsDone: 3, visitsPlanned: 8, nextVisit: mkNext("v3", "C3D1 给药 + 肿瘤评估", 12) },
+    visitsDone: 3, visitsPlanned: 8, nextVisit: mkNext("v2", "C8D1 第 8 周期给药", 0) },
   { id: "u-099", studySiteId: "s1", siteCode: "SS-01", screeningNo: "SS-01-P099",
     randomized: false, randomizationNo: null, state: "screen_failed",
     icfSignedOn: day(-40), enrolledOn: null, exitedOn: day(-33),

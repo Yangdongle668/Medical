@@ -75,8 +75,9 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
        一份路径清单会让 mock 模式下的导航整个空掉。 */
     /* `instac`（立项受理台账）这一版给进来 —— 闸门叫他们去那一页登记
        受理意见函，而在这之前他们的侧栏上根本没有那一页（迁移 0052）。 */
-    modules: ["crc", "mysite", "startup", "sched", "subj", "prescreen", "ethics",
-      "instac", "query", "capa", "isf", "material", "pay", "handover", "time"]
+    /* 顺序与迁移 0054 一致：前六项是侧栏主入口，其余收进「更多」。 */
+    modules: ["crc", "subj", "sched", "query", "mysite", "capa",
+      "startup", "prescreen", "ethics", "instac", "handover", "isf", "material", "pay", "time"]
   },
   /* **监查员 CRA。** 它是唯一握着 `monitor` 的一线角色 ——
      排监查、登记到现场、提交监查报告三件事，只有换到这个身份才点得动。
@@ -89,8 +90,9 @@ export const IDENTITIES: Record<MockRole, MockIdentity> = {
     rowRule: "assigned", fields: ["subject"],
     actions: ["advance", "capaWrite", "isfWrite", "monitor", "piConfirm", "raiseQ",
       "subjRead", "timeWrite"],
-    modules: ["cra", "mysites", "mon", "query", "screen", "feas", "material",
-      "instac", "time", "qa", "capa", "trail"]
+    /* 顺序与迁移 0054 一致；sched / isf / ethics 是那一版补的。 */
+    modules: ["cra", "sched", "mon", "mysites", "query", "capa",
+      "isf", "ethics", "instac", "material", "time", "qa", "screen", "feas", "trail"]
   },
   /* **项目总监 PM。** 立项那一页需要两个内部身份才演得出来：
      PM 提交、经营层批准 —— 而**提交人不能批准自己的申请**这条规矩，

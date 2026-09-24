@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
+import { Why } from "../../shell/Why.js";
+import { ExportButton } from "../../shell/ExportButton.js";
+import type { CsvColumn } from "../../shell/csv.js";
 
 /* ════════════════════════════════════════════════════════════════════
    数据质疑（EDC Query）。
@@ -42,10 +45,34 @@ interface Load {
 }
 interface Stats { load: Load; sites: unknown[]; calcVersion: string }
 
+const STATE_TEXT: Record<Query["state"], string> =
+  { open: "待中心回复", pending_review: "已回复待关闭", closed: "已关闭" };
+
+const EXPORT_COLS: CsvColumn<Query>[] = [
+  { label: "编号", value: q => q.code },
+  { label: "中心", value: q => q.siteCode },
+  { label: "医院", value: q => q.hospital },
+  { label: "筛选号", value: q => q.screeningNo },
+  { label: "表单", value: q => q.form },
+  { label: "字段", value: q => q.fieldName },
+  { label: "内容", value: q => q.detail },
+  { label: "严重度", value: q => q.severity },
+  { label: "状态", value: q => STATE_TEXT[q.state] },
+  { label: "提出人", value: q => q.raisedByName ?? q.raisedBy },
+  { label: "提出日", value: q => q.raisedOn },
+  { label: "负责人", value: q => q.ownerName },
+  { label: "回复", value: q => q.answer },
+  { label: "回复日", value: q => q.answeredOn },
+  { label: "催办次数", value: q => q.chaseCount },
+  { label: "挂起天数", value: q => q.ageDays },
+  { label: "关闭结论", value: q => q.resolution }
+];
+
 /** 目标平均关闭天数 —— 与 calc 的 QUERY_TARGET_DAYS 同一个数。 */
 const TARGET = 5;
 
-export function QueryPage() {
+/** 嵌在中心工作台的页签里时给 —— 只看这一个中心。独立页面（侧栏进来的）不给，看全部。 */
+export function QueryPage({ studySiteId }: { studySiteId?: string } = {}) {
   const [me, setMe] = useState<Me | null>(null);
   const [rows, setRows] = useState<Query[] | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -60,8 +87,11 @@ export function QueryPage() {
   const isCrc = me?.account.role.code === "crc";
   const reload = (crc: boolean) => Promise.all([
     call<{ items: Query[] }>("listDataQueries",
-      { query: { limit: 200, ...(crc ? { mine: true } : {}) } }).then(r => setRows(r.items)),
-    call<Stats>("getQueryStats", { query: crc ? { mine: true } : {} }).then(setStats)
+      { query: { limit: 200, ...(crc ? { mine: true } : {}), ...(studySiteId ? { studySiteId } : {}) } })
+      .then(r => setRows(r.items)),
+    call<Stats>("getQueryStats",
+      { query: { ...(crc ? { mine: true } : {}), ...(studySiteId ? { studySiteId } : {}) } })
+      .then(setStats)
   ]);
 
   useEffect(() => {
@@ -95,7 +125,12 @@ export function QueryPage() {
   return (
     <>
       <div className="page-head">
-        <h2>数据质疑</h2>
+        <div className="spread">
+          <h2>数据质疑</h2>
+          <ExportButton op="listDataQueries" columns={EXPORT_COLS} list="queries" name="数据质疑"
+            query={{ ...(isCrc ? { mine: true } : {}), ...(studySiteId ? { studySiteId } : {}) }}
+            studySiteId={studySiteId ?? null} />
+        </div>
         <p data-testid="query-summary">
           {isCrc
             ? <>指派给你的 {rows.length} 条，<b>{open.length} 条待你回复</b>。</>
@@ -104,12 +139,12 @@ export function QueryPage() {
         </p>
       </div>
 
-      <div className="derive" style={{ marginBottom: 14 }}>
+      <Why style={{ marginBottom: 14 }}>
         待中心回复 → <b>已回复待关闭</b> → 已关闭。
         <b>中间那一格不能省</b> —— 回复了不等于问题解决了，
         判定权在数据管理，不在回复的人手上。
         省掉它，「已关闭」就只是「我说我改好了」，而核查时看的不是这句话。
-      </div>
+      </Why>
 
       <div className="stats" style={{ marginBottom: 16 }}>
         <Stat label={isCrc ? "待我回复" : "待中心回复"} v={String(open.length)}
@@ -127,7 +162,7 @@ export function QueryPage() {
       </div>
 
       {stats.load.meanAgeDays !== null && (
-        <div className="derive" style={{ marginBottom: 14 }} data-testid="query-mean-note">
+        <Why summary="平均挂起怎么算？" style={{ marginBottom: 14 }} data-testid="query-mean-note">
           <b>平均挂起把没关掉的也算进去了。</b>
           只算已关闭的那些，一条永远不关的质疑就永远不进分母 ——
           越拖这个数越好看，而「平均 4.2 天，目标 5 天」底下压着的，
@@ -135,7 +170,7 @@ export function QueryPage() {
           <span className="muted mono" style={{ marginLeft: 8, fontSize: 12 }}>
             口径 {stats.calcVersion}
           </span>
-        </div>
+        </Why>
       )}
 
       {problem && (

@@ -32,7 +32,7 @@ import { IDENTITIES, type MockRole } from "./roles.js";
    界面刚填好的日期会被 mock 判成「在将来」。 */
 import { today as today_ } from "../shell/dates.js";
 /* 角色代号 → 名册工种的映射**用契约里那一份** —— 服务端读的是同一张表。 */
-import { STAFF_ROLE_KIND } from "@sitedesk/contracts";
+import { STAFF_ROLE_KIND, STAFF_LEVELS } from "@sitedesk/contracts";
 /* EDC 及时线与 total 的口径**用 calc 那一份** —— mock 另算一遍的话，
    演示上的数和真接口的数会在某一天悄悄分叉。 */
 import { edcDaysLate, dutyTotal } from "@sitedesk/calc";
@@ -172,6 +172,7 @@ const mailTransport = {
 export const setEmptyOps = (ops: string[]) => { emptied = new Set(ops); };
 const isEmptied = (op: string) => emptied.has(op);
 const identity = () => IDENTITIES[mockRole];
+const PREFS: Record<string, { digest: boolean; urgent: boolean }> = {};
 
 /** mock 的行范围。
  *
@@ -727,6 +728,8 @@ export const scenarioHandlers = [
     const subjectId = q.get("subjectId");
     if (subjectId) items = items.filter(v => v.subjectId === subjectId);
     if (q.get("outOfWindow") === "true") items = items.filter(v => v.outOfWindow);
+    const opensBy = q.get("windowOpensBy");
+    if (opensBy) items = items.filter(v => v.windowFrom <= opensBy);
     const status = q.getAll("status");
     if (status.length) items = items.filter(v => status.includes(v.status));
     /* 待登记 PI 确认 = 已完成、但还没签字。**在服务端筛** ——
@@ -747,7 +750,18 @@ export const scenarioHandlers = [
        那本身就是一条信息。 */
     if (!v || !siteInScope(v.studySiteId))
       return HttpResponse.json(problem("not-found", 404, "访视不存在"), { status: 404 });
-    return HttpResponse.json(withDaysLeft(v));
+    /* 工时默认值：本中心同一访视最近 5 次的中位数（服务端同一口径，见 clinical.service 的 visit）。
+       mock 的访视行上不存工时，从它自动记的那几条工时里取。 */
+    const same = new Set(scenario.visits
+      .filter(x => x.studySiteId === v.studySiteId && x.visitCode === v.visitCode).map(x => x.id));
+    const xs = scenario.timesheets
+      .filter(t => t.visitId && same.has(t.visitId) && !t.voidedAt)
+      .sort((a, b) => b.workDate.localeCompare(a.workDate)).slice(0, 5)
+      .map(t => t.hours).sort((a, b) => a - b);
+    const mid = xs.length ? (xs.length % 2 ? xs[(xs.length - 1) / 2]!
+      : (xs[xs.length / 2 - 1]! + xs[xs.length / 2]!) / 2) : null;
+    return HttpResponse.json({
+      ...withDaysLeft(v), suggestedHours: mid === null ? null : Math.round(mid * 2) / 2 });
   }),
 
   http.post(pathToRegExp("/v1/subject-visits/{id}/tasks/{seq}:done"), ({ request }) => {
@@ -1166,6 +1180,12 @@ export const scenarioHandlers = [
     let items = inScope(scenario.qualityEvents);
     const kinds = q.getAll("kind");
     if (kinds.length) items = items.filter(e => kinds.includes(e.kind));
+    /* 中心工作台的「质量与 SAE」页签按中心筛。行上有的只存了中心代号 */
+    const site = q.get("studySiteId");
+    if (site) {
+      const code = SITES_LIST.find(x => x.id === site)?.code;
+      items = items.filter(e => (e.studySiteId ?? null) === site || e.siteCode === code);
+    }
     return HttpResponse.json({ items: items.map(qualityDto), nextCursor: null });
   }),
 
@@ -1811,6 +1831,7 @@ export const scenarioHandlers = [
     if (q.get("mine") === "true")
       items = items.filter(v => v.monitorAccountId === identity().id);
     if (q.get("openOnly") === "true") items = items.filter(v => v.state !== "reported");
+    if (q.get("studySiteId")) items = items.filter(v => v.studySiteId === q.get("studySiteId"));
     items = [...items].sort((a, b) => a.plannedOn.localeCompare(b.plannedOn));
     return HttpResponse.json({ items: items.map(monitorDto), nextCursor: null });
   }),
@@ -1942,11 +1963,195 @@ export const scenarioHandlers = [
      行策略上直接关掉（迁移 0032），因为机构办是外部的质量反馈闭环、
      DM 是内部的数据质量闭环，混在一起的后果不是多几行，而是
      机构质控页上「本院未关闭质量事件」这个数会把 EDC 质疑也算进去。 */
+  /* 提醒偏好。按 mock 身份各存一份；没存过 = 全开。 */
+  http.get(pathToRegExp("/v1/me/notify-prefs"), () =>
+    HttpResponse.json({ digest: true, urgent: true, ...PREFS[mockRole], hasEmail: true })),
+  http.patch(pathToRegExp("/v1/me/notify-prefs"), async ({ request }) => {
+    const b = await request.json() as { digest: boolean; urgent: boolean };
+    PREFS[mockRole] = { digest: b.digest, urgent: b.urgent };
+    return HttpResponse.json({ ...PREFS[mockRole], hasEmail: true });
+  }),
+
+  /* 全局搜索。与服务端同一口径：中心按代号 / 医院，受试者按筛选号；
+     受试者要 subjRead **且**有受试者列权限；两个字起搜。 */
+  http.get(pathToRegExp("/v1/search"), ({ request }) => {
+    const q = (new URL(request.url).searchParams.get("q") ?? "").trim();
+    if (q.length < 2) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约"), { status: 422 });
+    const me = identity();
+    const low = q.toLowerCase();
+    const items: unknown[] = visibleSites()
+      .filter(x => x.code.toLowerCase().includes(low) || x.hospital.includes(q)).slice(0, 5)
+      .map(x => ({ type: "site", id: x.id, label: `${x.code} ${x.hospital}`, sub: "",
+        studySiteId: x.id }));
+    if (me.actions.includes("subjRead") && (me.fields as readonly string[]).includes("subject"))
+      for (const x of inScope(scenario.subjects)
+        .filter(x => x.screeningNo.toLowerCase().includes(low)).slice(0, 5))
+        items.push({ type: "subject", id: x.id, label: x.siteCode,
+          sub: x.nextVisit ? `下一次：${x.nextVisit.visitLabel}` : "",
+          studySiteId: x.studySiteId, screeningNo: x.screeningNo });
+    return HttpResponse.json(mask({ items }));
+  }),
+
+  /* 我的待办。**由场景层现算**，不是一份静态示例 —— 首页上勾掉一件事、
+     完成一次访视、补上一次 SAE 上报，回到首页那一条就该不见了。
+     判定抄的是服务端 modules/workbench/inbox.service.ts 的口径（只给办得了的、
+     SAE 最前、每类至多 20 条）；**规则以服务端为准**，这里只是把它演出来。 */
+  http.get(pathToRegExp("/v1/me/inbox"), () => {
+    const me = identity();
+    const can = (a: string) => (me.actions as readonly string[]).includes(a);
+    type Item = {
+      kind: string; urgency: "overdue" | "today" | "soon";
+      dueOn: string | null; dueAt: string | null; title: string; detail: string;
+      studySiteId: string | null; siteCode: string | null; screeningNo?: string | undefined;
+      watch?: boolean;
+      ref: { type: string; id: string | null };
+    };
+    const items: Item[] = [];
+    const plus = (d: string, n: number) =>
+      new Date(Date.parse(d + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
+    const siteId = (code: string) => SITES_LIST.find(s => s.code === code)?.id ?? null;
+
+    /* 监查员（没有 subjWrite、有 monitor）拿到的是「跟进」—— 与服务端同一条规则 */
+    const saeWatch = !can("subjWrite") && can("monitor");
+    if (can("subjWrite") || saeWatch) {
+      for (const e of inScope(scenario.qualityEvents))
+        if (e.kind === "sae" && e.state !== "closed" && e.occurredAt && !e.reportedAt) {
+          const due = new Date(Date.parse(e.occurredAt) + 24 * 3_600_000);
+          const late = Date.now() > due.getTime();
+          items.push({ kind: "sae", urgency: late ? "overdue" : "today",
+            dueOn: null, dueAt: due.toISOString(), title: `SAE 未上报 · ${e.title}`,
+            detail: (saeWatch ? "由中心上报，请跟进 · " : "")
+              + (late ? "已超过知悉后 24 小时" : "知悉后 24 小时内要上报"),
+            ...(saeWatch ? { watch: true } : {}),
+            studySiteId: e.studySiteId ?? siteId(e.siteCode), siteCode: e.siteCode,
+            ref: { type: "quality_event", id: e.id } });
+        }
+    }
+    const visits = inScope(scenario.visits).map(withDaysLeft);
+    if (can("subjRead") && can("subjWrite")) {
+      for (const v of visits)
+        if (v.status === "planned" && v.windowFrom <= plus(TODAY_STR, 7))
+          items.push({ kind: "visit",
+            urgency: v.outOfWindow ? "overdue" : v.daysLeft === 0 ? "today" : "soon",
+            dueOn: v.windowTo, dueAt: null, title: v.visitLabel,
+            detail: v.outOfWindow ? `已超窗 ${-(v.daysLeft ?? 0)} 天`
+              : v.daysLeft === 0 ? "今天是窗口最后一天"
+              : v.windowFrom > TODAY_STR ? `窗口 ${v.windowFrom} 打开` : `窗口还剩 ${v.daysLeft} 天`,
+            studySiteId: v.studySiteId, siteCode: v.siteCode, screeningNo: v.screeningNo,
+            ref: { type: "subject_visit", id: v.id } });
+      for (const v of visits)
+        if (v.actualDate && v.edcStatus === "pending") {
+          const late = (v.edcDaysLate ?? 0) > 0;
+          items.push({ kind: "edc", urgency: late ? "overdue" : "soon", dueOn: null, dueAt: null,
+            title: `${v.visitLabel} · 录入 EDC`,
+            detail: late ? `超出 5 个工作日 ${v.edcDaysLate} 天` : "访视完成后 5 个工作日内录入",
+            studySiteId: v.studySiteId, siteCode: v.siteCode, screeningNo: v.screeningNo,
+            ref: { type: "subject_visit", id: v.id } });
+        }
+    }
+    if (can("subjRead") && can("piConfirm")) {
+      for (const v of visits)
+        if (v.status === "done_pending_pi" && !v.piConfirmedAt) {
+          const waited = v.actualDate ? daysBetween(v.actualDate, TODAY_STR) : 0;
+          items.push({ kind: "pi_confirm", urgency: waited > 7 ? "overdue" : "soon",
+            dueOn: null, dueAt: null, title: `${v.visitLabel} · 登记 PI 签字`,
+            detail: `访视 ${v.actualDate ?? "—"} 完成，已等 ${waited} 天 —— 登记之前不计入「已完成」`,
+            studySiteId: v.studySiteId, siteCode: v.siteCode, screeningNo: v.screeningNo,
+            ref: { type: "subject_visit", id: v.id } });
+        }
+    }
+    for (const q of visibleQueries())
+      if (q.state === "open" && q.ownerAccountId === me.id)
+        items.push({ kind: "query", urgency: q.ageDays > QUERY_STALE_DAYS ? "overdue" : "soon",
+          dueOn: null, dueAt: null, title: `${q.code} · ${q.form}「${q.fieldName}」`,
+          detail: `挂起 ${q.ageDays} 天` + (q.ageDays > QUERY_STALE_DAYS ? "，该打电话了" : ""),
+          studySiteId: q.studySiteId, siteCode: q.siteCode, screeningNo: q.screeningNo,
+          ref: { type: "data_query", id: q.id } });
+    for (const h of scenario.handovers)
+      if (h.status === "pending" && h.toAccountId === me.id)
+        items.push({ kind: "handover",
+          urgency: h.plannedOn < TODAY_STR ? "overdue" : h.plannedOn === TODAY_STR ? "today" : "soon",
+          dueOn: h.plannedOn, dueAt: null, title: `${h.fromName} 交接给你`,
+          detail: `${h.sites.map(x => x.code).join("、")} · 清单 ` +
+            `${h.items.filter(i => i.doneAt).length}/${h.items.length}`,
+          studySiteId: h.sites[0]?.id ?? null, siteCode: h.sites[0]?.code ?? null,
+          ref: { type: "handover", id: h.id } });
+    if (can("approve")) {
+      const others = inScope(scenario.timesheets)
+        .filter(t => !t.approvedAt && !t.voidedAt && t.accountId !== me.id);
+      if (others.length) {
+        const oldest = others.map(t => t.workDate).sort()[0]!;
+        const age = daysBetween(oldest, TODAY_STR);
+        items.push({ kind: "approval", urgency: age > 14 ? "overdue" : "soon",
+          dueOn: null, dueAt: null, title: `${others.length} 条工时待审`,
+          detail: `最早一条是 ${oldest}（${age} 天前）`,
+          studySiteId: null, siteCode: null, ref: { type: "timesheet", id: null } });
+      }
+    }
+    if (can("isfWrite")) {
+      for (const i of visibleIsf().map(isfDto))
+        if (i.status === "missing" || i.status === "expired" || i.status === "due")
+          items.push({ kind: "isf",
+            urgency: i.status === "due" ? "soon" : "overdue",
+            dueOn: i.expiresOn, dueAt: null, title: i.item,
+            detail: i.status === "missing" ? "缺失"
+              : i.status === "expired" ? `已过期 ${-(i.daysLeft ?? 0)} 天` : `还有 ${i.daysLeft} 天过期`,
+            studySiteId: i.studySiteId, siteCode: i.siteCode,
+            ref: { type: "isf_item", id: i.id } });
+    }
+    for (const e of inScope(scenario.qualityEvents))
+      if (e.kind !== "sae" && e.state !== "closed" && e.capaOwnerAccountId === me.id)
+        items.push({ kind: "capa",
+          urgency: e.capaDueOn && e.capaDueOn < TODAY_STR ? "overdue" : !e.capaPlan ? "today" : "soon",
+          dueOn: e.capaDueOn ?? null, dueAt: null, title: `${e.code} · ${e.title}`,
+          detail: e.capaDueOn && e.capaDueOn < TODAY_STR ? "整改已逾期"
+            : !e.capaPlan ? "还没写整改措施" : "整改进行中",
+          studySiteId: e.studySiteId ?? siteId(e.siteCode), siteCode: e.siteCode,
+          ref: { type: "quality_event", id: e.id } });
+    for (const raw of visibleMonitorVisits()) {
+      if (raw.monitorAccountId !== me.id) continue;
+      const v = monitorDto(raw);
+      if (v.state === "done" && !v.reportSubmittedOn)
+        items.push({ kind: "mvr", urgency: v.mvrOverdue ? "overdue" : "today",
+          dueOn: v.performedOn ? plus(v.performedOn, 10) : null, dueAt: null,
+          title: `${v.code} 监查报告`,
+          detail: v.mvrOverdue ? `到现场后已 ${v.mvrLagDays} 天，超过 10 天` : `到现场后第 ${v.mvrLagDays ?? 0} 天`,
+          studySiteId: v.studySiteId, siteCode: v.siteCode, ref: { type: "monitor_visit", id: v.id } });
+      if ((v.state === "proposed" || v.state === "scheduled") && v.plannedOn <= plus(TODAY_STR, 14))
+        items.push({ kind: "monitor_visit",
+          urgency: v.plannedOn < TODAY_STR ? "overdue" : v.plannedOn === TODAY_STR ? "today" : "soon",
+          dueOn: v.plannedOn, dueAt: null, title: `${v.code} 监查访视 · ${v.hospital}`,
+          detail: v.state === "proposed" ? "中心还没确认" : `计划 ${v.plannedOn}，${v.days} 天`,
+          studySiteId: v.studySiteId, siteCode: v.siteCode, ref: { type: "monitor_visit", id: v.id } });
+    }
+
+    const RANK = { overdue: 0, today: 1, soon: 2 };
+    const by = (a: Item, b: Item) => Number(b.kind === "sae") - Number(a.kind === "sae")
+      || RANK[a.urgency] - RANK[b.urgency]
+      || (a.dueAt ?? a.dueOn ?? "9999").localeCompare(b.dueAt ?? b.dueOn ?? "9999");
+    const per = new Map<string, Item[]>();
+    for (const i of items) per.set(i.kind, [...(per.get(i.kind) ?? []), i]);
+    const truncatedKinds = [...per].filter(([, l]) => l.length > 20).map(([k]) => k);
+    const out = [...per.values()].flatMap(l => l.sort(by).slice(0, 20)).sort(by);
+    return HttpResponse.json(mask({
+      items: out,
+      counts: {
+        overdue: out.filter(i => i.urgency === "overdue").length,
+        today: out.filter(i => i.urgency === "today").length,
+        soon: out.filter(i => i.urgency === "soon").length
+      },
+      truncatedKinds, generatedAt: new Date().toISOString()
+    }));
+  }),
+
   http.get(pathToRegExp("/v1/data-queries"), ({ request }) => {
     const q = new URL(request.url).searchParams;
     let items = visibleQueries();
     const states = q.getAll("state");
     if (states.length) items = items.filter(x => states.includes(x.state));
+    if (q.get("studySiteId")) items = items.filter(x => x.studySiteId === q.get("studySiteId"));
+    if (q.get("subjectId")) items = items.filter(x => x.subjectId === q.get("subjectId"));
     if (q.get("mine") === "true")
       items = items.filter(x => x.ownerAccountId === identity().id);
     /* 真接口按 raised_by_account 比对；mock 的行上没存账号 id，
@@ -3032,6 +3237,20 @@ export const scenarioHandlers = [
     return HttpResponse.json({ items, nextCursor: null });
   }),
 
+  /* ── 导出留痕 / 批量导入（W16 / W17）──────────────────────────────
+     与服务端同一套口径：试运行不写；执行逐行各自成败；表头缺列整体 422。 */
+  http.post(pathToRegExp("/v1/exports:record"), () =>
+    HttpResponse.json({ data: { recorded: true }, sideEffects: [] }, { status: 201 })),
+
+  http.post(pathToRegExp("/v1/imports/prescreen:preview"), async ({ request }) =>
+    mockPrescreenImport(await request.json() as { csv: string; studySiteId: string }, true)),
+  http.post(pathToRegExp("/v1/imports/prescreen:commit"), async ({ request }) =>
+    mockPrescreenImport(await request.json() as { csv: string; studySiteId: string }, false)),
+  http.post(pathToRegExp("/v1/imports/accounts:preview"), async ({ request }) =>
+    mockAccountImport(await request.json() as { csv: string }, true)),
+  http.post(pathToRegExp("/v1/imports/accounts:commit"), async ({ request }) =>
+    mockAccountImport(await request.json() as { csv: string }, false)),
+
   http.post(pathToRegExp("/v1/subjects"), async ({ request }) => {
     const b = await request.json() as { studySiteId: string; screeningNo?: string };
     const site = SITES_LIST.find(x => x.id === b.studySiteId);
@@ -3206,6 +3425,16 @@ export const scenarioHandlers = [
   }),
 
   /* ── 受试者补偿 ────────────────────────────────────────────────── */
+  /* 受试者详情。范围外与不存在同样 404；没有 subjRead 是 403（与服务端同一口径）。 */
+  http.get(pathToRegExp("/v1/subjects/{id}"), ({ request }) => {
+    if (!identity().actions.includes("subjRead")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能查看受试者明细"), { status: 403 });
+    const id = seg(request.url, /\/subjects\/([^/?:]+)/);
+    const s = inScope(scenario.subjects).find(x => x.id === id);
+    return s ? HttpResponse.json(maskSubject(s))
+      : HttpResponse.json(problem("not-found", 404, "受试者不存在"), { status: 404 });
+  }),
+
   http.get(pathToRegExp("/v1/subject-payments"), ({ request }) => {
     const q = new URL(request.url).searchParams;
     let items = scenario.payments.map(maskPayment);
@@ -3950,6 +4179,105 @@ const scheduledSummary = (v: MockVisit) =>
  *  犯过同一个错，修法一样。 */
 function addDays(d: string, n: number): string {
   return shiftStr(d, n);
+}
+
+/* ── 批量导入的 mock ────────────────────────────────────────────────
+   CSV 只做 mock 够用的那一截（不认引号里的逗号）—— 真解析在服务端 infra/csv.ts。 */
+type ImpRow = { line: number; status: "ok" | "error" | "done" | "failed"; summary: string;
+  error: string | null; screeningNo?: string; ref: string | null };
+
+function mockTable(csv: string, need: string[]) {
+  const lines = csv.replace(/^\ufeff/, "").split(/\r?\n/).map(l => l.split(",").map(c => c.trim()));
+  const head = (lines[0] ?? []).map(h => h.replace(/[（(].*[)）]$/, "").trim());
+  const miss = need.filter(n => !head.includes(n));
+  if (miss.length) return { error: `第 1 行（表头）缺少这几列：${miss.join("、")}。请从页面上下载模板填写` };
+  const rows = lines.slice(1).map((c, i) => ({ line: i + 2, c }))
+    .filter(r => r.c.some(v => v !== ""))
+    .map(r => ({ line: r.line, get: (h: string) => head.indexOf(h) >= 0 ? r.c[head.indexOf(h)] ?? "" : "" }));
+  if (!rows.length) return { error: "文件里除了表头没有数据" };
+  return { rows };
+}
+
+function impResult(rows: ImpRow[]) {
+  const ok = rows.filter(r => r.status === "ok" || r.status === "done").length;
+  return HttpResponse.json({ data: { rows, ok, bad: rows.length - ok }, sideEffects: [] }, { status: 201 });
+}
+
+function mockPrescreenImport(b: { csv: string; studySiteId: string }, dry: boolean) {
+  const t = mockTable(b.csv, []);
+  if ("error" in t) return HttpResponse.json(problem("validation-failed", 422, t.error!), { status: 422 });
+  const site = SITES_LIST.find(x => x.id === b.studySiteId);
+  if (!site) return HttpResponse.json(problem("not-found", 404, "中心不存在"), { status: 404 });
+  const seen = new Set<string>();
+  const out: ImpRow[] = t.rows!.map(r => {
+    const no = r.get("筛选号"), icf = r.get("知情签署日");
+    const fail = (error: string): ImpRow => ({ line: r.line, status: dry ? "error" : "failed",
+      summary: icf ? "登记预筛，并登记知情签署" : "登记预筛", error, ref: null });
+    if (no && seen.has(no)) return fail("与文件里前面某一行的筛选号重复");
+    if (no) seen.add(no);
+    if (icf && !/^\d{4}-\d{2}-\d{2}$/.test(icf)) return fail(`知情签署日「${icf}」不是 YYYY-MM-DD 格式的日期`);
+    if (icf && icf > todayStr()) return fail("知情同意签署日不能晚于今天");
+    if (no && scenario.subjects.some(x => x.screeningNo === no)) return fail("库里已经有这一条了（重复）");
+    const summary = (icf ? `登记预筛，并登记知情签署（${icf}）` : "登记预筛") + (no ? "" : "，筛选号自动发");
+    if (dry) return { line: r.line, status: "ok", summary, error: null, ...(no ? { screeningNo: no } : {}), ref: null };
+    const screeningNo = no || nextMockCode(`${site.code}-P`, 3, scenario.subjects.map(x => x.screeningNo));
+    const s = {
+      id: `u-${scenario.subjects.length + 1}`, studySiteId: site.id, siteCode: site.code, screeningNo,
+      randomized: false, randomizationNo: null, state: icf ? "screening" : "prescreen",
+      icfSignedOn: icf || null, enrolledOn: null, exitedOn: null,
+      screenFailReason: null, withdrawReason: null, crcName: me().account.displayName,
+      visitsDone: 0, visitsPlanned: 0, nextVisit: null
+    };
+    scenario.subjects.push(s);
+    /* 签了知情的，与单条签知情同样把筛选期第 0 次访视排出来 —— 否则导进来的每一位都是"访视没排出来" */
+    if (icf) {
+      const su = scenario.subjects.at(-1)!;
+      su.visitsPlanned = 8;
+      const v0 = schedVisit(su, 0, icf);
+      scenario.visits.push(v0);
+      su.nextVisit = nextOf(v0);
+    }
+    return { line: r.line, status: "done", summary, error: null, screeningNo, ref: s.id };
+  });
+  return impResult(out);
+}
+
+function mockAccountImport(b: { csv: string }, dry: boolean) {
+  const t = mockTable(b.csv, ["登录名", "姓名", "角色", "级别", "城市"]);
+  if ("error" in t) return HttpResponse.json(problem("validation-failed", 422, t.error!), { status: 422 });
+  const seen = new Set<string>();
+  const out: ImpRow[] = t.rows!.map(r => {
+    const login = r.get("登录名"), name = r.get("姓名"), rv = r.get("角色");
+    const level = r.get("级别"), city = r.get("城市"), gcp = r.get("GCP证书到期日"), tv = r.get("分组");
+    const fail = (error: string): ImpRow => ({ line: r.line, status: dry ? "error" : "failed",
+      summary: `新建账号 ${login}`, error, ref: null });
+    if (seen.has(login)) return fail("与文件里前面某一行的登录名重复");
+    seen.add(login);
+    const role = scenario.roles.find(x => x.code.toLowerCase() === rv.toLowerCase() || x.name === rv ||
+      x.name.replace(/\s*[A-Za-z]+$/, "").trim() === rv);
+    if (!role) return fail(`没有叫「${rv}」的角色（填角色代号或名称，如 crc / 临床协调员）`);
+    if (role.isExternal) return fail(`「${role.name}」是外部方角色 —— 外部方账号请在账号台账里单个建（要选所属机构）`);
+    if (!(STAFF_LEVELS as readonly string[]).includes(level)) return fail(`级别「${level}」不在 ${STAFF_LEVELS.join(" / ")} 里`);
+    const team = tv ? scenario.teams.find(x => x.code === tv || x.name === tv) : null;
+    if (tv && !team) return fail(`没有叫「${tv}」的分组`);
+    if (!/^[a-z][a-z0-9_]{2,31}$/.test(login)) return fail("登录名：3–32 位小写字母 / 数字 / 下划线，且以字母开头");
+    if (!name) return fail("姓名：必填");
+    if (!city) return fail("城市：必填");
+    if (scenario.accounts.some(a => a.login === login)) return fail(`登录名 ${login} 已存在`);
+    const summary = `新建账号 ${login}（${role.name} · ${level} · ${city}）`;
+    if (dry) return { line: r.line, status: "ok", summary, error: null, ref: null };
+    const acc = {
+      id: `a-${login}`, login, displayName: name,
+      role: { id: role.id, code: role.code, name: role.name, isExternal: role.isExternal },
+      team: team ? { id: team.id, code: team.code, name: team.name } : null,
+      isExternal: false, orgRef: null, status: "active" as const, joinedOn: todayStr(),
+      disabledAt: null, disabledReason: null, lastLoginAt: null
+    };
+    scenario.accounts.push(acc);
+    STAFF_LIST.push(mkStaff(acc.id, login, name, STAFF_ROLE_KIND[role.code] ?? "CRC", level, city, gcp || null));
+    return { line: r.line, status: "done", summary, error: null, ref: acc.id };
+  });
+  return impResult(out);
 }
 
 function problem(code: string, status: number, detail: string) {
