@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { call } from "../../api/client.js";
+import { daysFromToday } from "../../shell/dates.js";
 
 /* CRC 每天第一件事是看「今天谁到期」—— 所以这是首页，
    而且默认按窗口关闭日升序，超窗的排在最上面。 */
@@ -35,8 +36,15 @@ function windowChip(v: Visit) {
   return <span className="chip good">窗口内</span>;
 }
 
+/** 往后看几天。一周是 CRC 排班的自然单位，也是访视窗口最常见的宽度。 */
+const AHEAD = 7;
+/** 一次取多少。按窗口关闭日排序，所以截断的永远是最不急的那一头 ——
+ *  但截断了要**说出来**，见下面的 `more`。 */
+const LIMIT = 200;
+
 export function TodayPage() {
   const [visits, setVisits] = useState<Visit[] | null>(null);
+  const [more, setMore] = useState(false);
 
   useEffect(() => {
     /* **在服务端筛，不在这里筛。**
@@ -46,18 +54,21 @@ export function TodayPage() {
        已经做完的，于是"今天要做什么"这一页**空着**，
        而它看起来完全正常（没有报错、没有加载中）。
 
-       一个先截断再过滤的列表，过滤条件越常见，它越安全；
-       而这一条恰恰是最不常见的那种 —— 未完成的访视永远是少数。 */
-    call<{ items: Visit[] }>("listSubjectVisits",
-      { query: { limit: 50, status: "planned" } })
-      .then(r => setVisits(r.items));
+       后来改成只取 planned，还是只取前 50 条、而且**与日期无关** ——
+       一个在管 30 个受试者的 CRC，未完成的访视里大半是一两个月后的；
+       第 51 条起静默消失，页面上一个字都不说。
+       现在只取**窗口在 7 天内已经打开**的（超窗的、今天到期的、本周能做的），
+       远期的去「我的日程」看；真的多到截断时，页面上说出来。 */
+    call<{ items: Visit[]; nextCursor: string | null }>("listSubjectVisits", {
+      query: { limit: LIMIT, status: "planned", windowOpensBy: daysFromToday(AHEAD) }
+    }).then(r => { setVisits(r.items); setMore(!!r.nextCursor); });
   }, []);
 
-  /* 服务端已经只给 planned 了。这里不再二次过滤 ——
-     留着的话，摘要数的和表格画的又会是两批东西
-     （原来正是如此：摘要用过滤后的，表格 map 的是全部）。 */
   const open = visits ?? [];
   const late = open.filter(v => v.outOfWindow).length;
+  /* 先办的：已超窗，或者今天是窗口最后一天。 */
+  const urgent = open.filter(v => v.outOfWindow || (v.daysLeft ?? 1) <= 0);
+  const week = open.filter(v => !urgent.includes(v));
 
   return (
     <>
@@ -65,7 +76,8 @@ export function TodayPage() {
         <h2>今天</h2>
         <p data-testid="today-summary">
           {visits === null ? "加载中…"
-            : `${open.length} 次访视待完成` + (late ? `，其中 ${late} 次已超窗` : "")}
+            : open.length === 0 ? `未来 ${AHEAD} 天没有要做的访视。`
+            : `未来 ${AHEAD} 天有 ${open.length} 次访视待完成` + (late ? `，其中 ${late} 次已超窗` : "")}
         </p>
       </div>
 
@@ -76,6 +88,37 @@ export function TodayPage() {
         </div>
       )}
 
+      {urgent.length > 0 && (
+        <VisitTable title="先办这些" sub="已超窗或今天到期" rows={urgent} testid="today-urgent" />
+      )}
+      {week.length > 0 && (
+        <VisitTable title={`${AHEAD} 天内`} sub="窗口已经打开或即将打开" rows={week} testid="today-week" />
+      )}
+
+      {more && (
+        <p className="problem" data-testid="today-more" style={{ marginTop: 14 }}>
+          这里只列出了窗口最早的 {LIMIT} 次。全部受试者在
+          <Link to="/subjects">「受试者访视窗口」</Link>里看。
+        </p>
+      )}
+      {visits !== null && (
+        <p className="muted" style={{ marginTop: 14 }} data-testid="today-later">
+          {AHEAD} 天以后的访视在 <Link to="/sched">「我的日程」</Link> 里。
+        </p>
+      )}
+    </>
+  );
+}
+
+function VisitTable({ title, sub, rows, testid }: {
+  title: string; sub: string; rows: Visit[]; testid: string;
+}) {
+  return (
+    <section className="stack" data-testid={testid} style={{ marginBottom: 18 }}>
+      <div className="spread">
+        <h3>{title} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>{sub}</span></h3>
+        <span className="muted num">{rows.length}</span>
+      </div>
       <div className="table-wrap">
         <table>
           <thead>
@@ -85,7 +128,7 @@ export function TodayPage() {
             </tr>
           </thead>
           <tbody>
-            {open.map(v => {
+            {rows.map(v => {
               const done = v.tasks.filter(t => t.doneAt).length;
               return (
                 <tr key={v.id} data-testid="visit-row">
@@ -107,6 +150,6 @@ export function TodayPage() {
           </tbody>
         </table>
       </div>
-    </>
+    </section>
   );
 }

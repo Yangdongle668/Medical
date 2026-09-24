@@ -257,3 +257,18 @@ test.describe("被拦下来要给得出去处", () => {
     await expect(unmet).not.toContainText("subj");
   });
 });
+
+/* 「今天」只列未来 7 天做得了的访视：先办的（超窗 / 今天到期）在上，
+   其余在下；远期的去「我的日程」。原来是未完成访视的前 50 条，与日期无关。 */
+test.describe("今天", () => {
+  test("超窗的在「先办这些」里，页面说得出更远的去哪看", async ({ page }) => {
+    await page.goto("/today");
+    await expect(page.getByTestId("today-summary")).toContainText("未来 7 天");
+    const urgent = page.getByTestId("today-urgent");
+    await expect(urgent.getByTestId("visit-row").first()).toBeVisible();
+    await expect(urgent.locator(".chip.crit").first()).toBeVisible();
+    await expect(page.getByTestId("today-week").locator(".chip.crit")).toHaveCount(0);
+    await page.getByTestId("today-later").getByRole("link").click();
+    await expect(page).toHaveURL(/\/sched/);
+  });
+});

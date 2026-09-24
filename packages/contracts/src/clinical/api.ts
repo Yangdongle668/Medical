@@ -85,7 +85,11 @@ export const ListSubjectVisitsQuery = PageQuery.extend({
     subjectId: Uuid.optional(),
     status: QueryArray(VisitStatus),
     outOfWindow: QueryBool.optional(),
-    pendingPi: QueryBool.optional().describe("只看待 PI 确认的")
+    pendingPi: QueryBool.optional().describe("只看待 PI 确认的"),
+    windowOpensBy: DateOnly.optional().describe(
+      "只看窗口在这一天（含）之前已经打开的 —— 「这几天做得了、该做的」。\n" +
+      "「今天」那一页传今天 + 7：超窗的、今天到期的、本周能做的都在，" +
+      "窗口还在一个月后的不进来 —— 否则按窗口排序的前 N 条会被远期访视挤满。")
   });
 
 define({

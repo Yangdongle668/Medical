@@ -727,6 +727,8 @@ export const scenarioHandlers = [
     const subjectId = q.get("subjectId");
     if (subjectId) items = items.filter(v => v.subjectId === subjectId);
     if (q.get("outOfWindow") === "true") items = items.filter(v => v.outOfWindow);
+    const opensBy = q.get("windowOpensBy");
+    if (opensBy) items = items.filter(v => v.windowFrom <= opensBy);
     const status = q.getAll("status");
     if (status.length) items = items.filter(v => status.includes(v.status));
     /* 待登记 PI 确认 = 已完成、但还没签字。**在服务端筛** ——

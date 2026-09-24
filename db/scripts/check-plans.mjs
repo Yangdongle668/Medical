@@ -50,6 +50,15 @@ const CASES = [
     why: "限定中心之后仍然不该扫全表"
   },
   {
+    name: "「今天」：未完成、窗口在 7 天内已打开（windowOpensBy）",
+    sql: `SELECT v.id FROM subject_visit v
+           WHERE v.status = ANY('{planned}')
+             AND v.visit_window && daterange(NULL, (CURRENT_DATE + 7)::date, '[]')
+           ORDER BY upper(v.visit_window), v.id DESC LIMIT 201`,
+    mustNotSeqScan: "subject_visit",
+    why: "一线的首页，每个人每天第一眼。写成 lower(visit_window) <= 会用不上窗口索引"
+  },
+  {
     name: "受试者列表：按中心 + 游标",
     sql: (ctx) => `SELECT s.id FROM subject s
                     WHERE s.study_site_id = '${ctx.site}'

@@ -318,7 +318,7 @@ export class ClinicalService {
 
   async listVisits(q: {
     limit: number; cursor?: string; studySiteId?: string; subjectId?: string;
-    status?: string[]; outOfWindow?: boolean; pendingPi?: boolean;
+    status?: string[]; outOfWindow?: boolean; pendingPi?: boolean; windowOpensBy?: string;
   }) {
     const c = ctx();
     const params: unknown[] = [];
@@ -331,6 +331,10 @@ export class ClinicalService {
     /* 走 GiST 索引：未完成而窗口已关，或已完成但落在窗口外 */
     if (q.outOfWindow)
       conds.push(`(v.out_of_window OR (v.status = 'planned' AND upper(v.visit_window) < CURRENT_DATE))`);
+    /* 「窗口在这一天之前已经打开」= 与 (-∞, 那一天] 相交。
+       写成 `&&` 而不是 `lower(v.visit_window) <=`，才走得上窗口上的 GiST 索引。 */
+    if (q.windowOpensBy)
+      conds.push(`v.visit_window && daterange(NULL, ${add(q.windowOpensBy)}::date, '[]')`);
     if (q.cursor) conds.push(`v.id < ${add(q.cursor)}`);
 
     const { rows } = await c.client.query<VisitRow>(

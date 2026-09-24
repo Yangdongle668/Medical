@@ -1115,3 +1115,29 @@ describe("勾任务：SQL 成功了不等于事情发生了", () => {
     expect(b.status, "离线重放被当成了重复勾选").toBe(201);
   });
 });
+
+/* 「今天」那一页只要「这几天做得了、该做的」—— 窗口在某一天之前已经打开的。
+   在此之前它只能取未完成访视的前 N 条，与日期无关：远期的把近期的挤出去。 */
+describe("访视清单 · windowOpensBy", () => {
+  it("只给窗口在那一天（含）之前已经打开的", async () => {
+    const by = shift(today(), 7);
+    const r = await crc.get(`/v1/subject-visits?status=planned&limit=200&windowOpensBy=${by}`);
+    expect(r.status).toBe(200);
+    for (const v of r.body.items as { windowFrom: string }[])
+      expect(v.windowFrom <= by, `${v.windowFrom} 在 ${by} 之后才打开`).toBe(true);
+  });
+
+  it("是一个收窄：同样的条件不带它，只多不少", async () => {
+    const all = await crc.get(`/v1/subject-visits?status=planned&limit=200`);
+    const near = await crc.get(
+      `/v1/subject-visits?status=planned&limit=200&windowOpensBy=${shift(today(), 7)}`);
+    const ids = new Set((all.body.items as { id: string }[]).map(v => v.id));
+    expect(near.body.items.length).toBeLessThanOrEqual(all.body.items.length);
+    for (const v of near.body.items as { id: string }[]) expect(ids.has(v.id)).toBe(true);
+  });
+
+  it("日期写错被拒（422，与其它校验失败同一个口径），不是悄悄忽略", async () => {
+    const r = await crc.get(`/v1/subject-visits?status=planned&windowOpensBy=next-week`);
+    expect(r.status).toBe(422);
+  });
+});
