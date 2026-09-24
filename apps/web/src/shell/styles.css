@@ -149,6 +149,25 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
   display: block; align-items: initial;
 }
 
+/* ── 全局搜索（shell/CommandPalette.tsx）───────────────────────────
+   侧栏顶上一个入口，长得像输入框 —— 人一看就知道「这里能搜」；
+   右边标着快捷键，用惯了的人不必再点它。 */
+.rail-search {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 10px 2px 6px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface-2); color: var(--ink-3); font-size: 12.5px; cursor: pointer; text-align: left;
+}
+.rail-search:hover { border-color: var(--line-2); color: var(--ink-2); }
+.rail-search kbd { font-family: inherit; font-size: 11px; color: var(--ink-3); }
+.palette { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 2px; max-height: 55vh; overflow-y: auto; }
+.palette button {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 8px 10px; border: 0; border-radius: 6px; background: none; color: inherit; cursor: pointer;
+}
+.palette button.on { background: var(--accent-soft); }
+.palette-title { font-weight: 500; white-space: nowrap; }
+.palette-sub { font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* 窄屏专用的身份条（见 App.tsx）。宽屏上身份在侧栏底部，这里不出现。 */
 .who-bar { display: none; }
 
@@ -196,6 +215,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
   .rail a { white-space: nowrap; padding: 6px 11px; }
   .rail a[aria-current="page"] { background: var(--accent-soft); }
   .rail .who { display: none; }
+  /* 手机上侧栏是横条，搜索入口挪到身份条上（见 App.tsx 的 who-bar） */
+  .rail-search { display: none; }
   .who-bar {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     margin: -4px 0 12px; font-size: 12px; color: var(--ink-3);

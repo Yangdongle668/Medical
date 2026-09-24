@@ -1962,6 +1962,27 @@ export const scenarioHandlers = [
      行策略上直接关掉（迁移 0032），因为机构办是外部的质量反馈闭环、
      DM 是内部的数据质量闭环，混在一起的后果不是多几行，而是
      机构质控页上「本院未关闭质量事件」这个数会把 EDC 质疑也算进去。 */
+  /* 全局搜索。与服务端同一口径：中心按代号 / 医院，受试者按筛选号；
+     受试者要 subjRead **且**有受试者列权限；两个字起搜。 */
+  http.get(pathToRegExp("/v1/search"), ({ request }) => {
+    const q = (new URL(request.url).searchParams.get("q") ?? "").trim();
+    if (q.length < 2) return HttpResponse.json(
+      problem("validation-failed", 422, "请求参数不符合契约"), { status: 422 });
+    const me = identity();
+    const low = q.toLowerCase();
+    const items: unknown[] = visibleSites()
+      .filter(x => x.code.toLowerCase().includes(low) || x.hospital.includes(q)).slice(0, 5)
+      .map(x => ({ type: "site", id: x.id, label: `${x.code} ${x.hospital}`, sub: "",
+        studySiteId: x.id }));
+    if (me.actions.includes("subjRead") && (me.fields as readonly string[]).includes("subject"))
+      for (const x of inScope(scenario.subjects)
+        .filter(x => x.screeningNo.toLowerCase().includes(low)).slice(0, 5))
+        items.push({ type: "subject", id: x.id, label: x.siteCode,
+          sub: x.nextVisit ? `下一次：${x.nextVisit.visitLabel}` : "",
+          studySiteId: x.studySiteId, screeningNo: x.screeningNo });
+    return HttpResponse.json(mask({ items }));
+  }),
+
   /* 我的待办。**由场景层现算**，不是一份静态示例 —— 首页上勾掉一件事、
      完成一次访视、补上一次 SAE 上报，回到首页那一条就该不见了。
      判定抄的是服务端 modules/workbench/inbox.service.ts 的口径（只给办得了的、

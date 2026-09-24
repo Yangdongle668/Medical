@@ -89,3 +89,39 @@ define({
     "每类至多 20 条；截断的类列在 `truncatedKinds` 里。",
   response: Inbox
 });
+
+/* ════════════════════════════════════════════════════════════════════
+   全局搜索（Ctrl/⌘ + K）。
+
+   「S-0203 下次什么时候来」「SS-07 是哪家医院」—— 知道编号，不知道它在哪一页。
+   只搜两类对象：**中心**（代号 / 医院名）与**受试者**（筛选号）；
+   页面名在前端按侧栏模块匹配，不走这里。
+
+   受试者要同时有 `subjRead` 与受试者列权限才搜：没有列权限的人，
+   连「有 / 没有这个筛选号」这一点都不该从命中数里读出来。
+   搜受试者会像受试者列表一样**记一条访问审计**。
+   ════════════════════════════════════════════════════════════════════ */
+
+export const SearchQuery = z.object({
+  q: z.string().trim().min(2).max(64)
+});
+
+export const SearchHit = z.object({
+  type: z.enum(["site", "subject"]),
+  id: Uuid,
+  /** 中心：代号 + 医院；受试者：所在中心代号。筛选号不写在这里 —— 见下面那一栏 */
+  label: z.string(),
+  sub: z.string(),
+  studySiteId: Uuid,
+  screeningNo: gated(z.string(), "subject")
+}).meta({ id: "SearchHit" });
+
+define({
+  id: "search", method: "get", path: "/v1/search", layer: "L1", context: CTX,
+  summary: "全局搜索",
+  description:
+    "中心按代号 / 医院名、受试者按筛选号，每类至多 5 条。行范围照常生效。\n" +
+    "受试者需要 `subjRead` 与受试者列权限，缺一整类不出现（不是 403）。",
+  query: SearchQuery,
+  response: z.object({ items: z.array(SearchHit) })
+});

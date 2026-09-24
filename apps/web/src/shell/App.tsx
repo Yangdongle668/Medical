@@ -9,6 +9,7 @@ import { ErrorBoundary } from "./ErrorBoundary.js";
 import { FactoryPasswordBanner } from "./FactoryPasswordBanner.js";
 import { Rail } from "./Rail.js";
 import { navFor, splitNav } from "./modules.js";
+import { CommandPalette } from "./CommandPalette.js";
 
 /* 侧栏原来是这六项写死的：今天 / 我的中心 / 交接 / 工时 / 质量台账 / 费率卡。
    而**谁看得到哪些模块**库里早有答案（role_module，随 /v1/me 下发）——
@@ -42,6 +43,7 @@ export function App() {
   const [offlineWho, setOfflineWho] = useState<CachedWho | null>(null);
   const [ready, setReady] = useState(false);
   const [pending, setPending] = useState(0);
+  const [searching, setSearching] = useState(false);
   const loc = useLocation();
   const nav = useNavigate();
 
@@ -80,6 +82,17 @@ export function App() {
           setOfflineWho(who);
         }
       });
+  }, []);
+
+  /* Ctrl/⌘ + K 在哪一页都能打开搜索（输入框里也行 —— 这个组合键不会是在打字）。 */
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault(); setSearching(true);
+      }
+    };
+    addEventListener("keydown", on);
+    return () => removeEventListener("keydown", on);
   }, []);
 
   /* 发件箱：入队要知道是谁排的（共用电脑上不许冒名），
@@ -122,6 +135,9 @@ export function App() {
         </h1>
         {/* 分组标题只在**不止一组**时出现；条目多到一屏放不下时才折叠。
             两条规则都在 Rail 里，连同为什么。 */}
+        <button className="rail-search" data-testid="open-search" onClick={() => setSearching(true)}>
+          <span>搜索</span><kbd>Ctrl K</kbd>
+        </button>
         <Rail groups={groups} here={here} split={split} />
         {/* 待发数量常驻侧栏 —— 「我到底发出去没有」不该由用户去猜 */}
         {pending > 0 && (
@@ -164,6 +180,7 @@ export function App() {
         {me && (
           <div className="who-bar" data-testid="who-bar">
             <span className="who-bar-name">{me.account.displayName} · {me.account.role.name}</span>
+            <button className="btn" data-testid="open-search-bar" onClick={() => setSearching(true)}>搜索</button>
             <button className="btn" data-testid="logout-bar" onClick={signOut}>登出</button>
           </div>
         )}
@@ -172,6 +189,8 @@ export function App() {
         {me?.credentials.passwordIsInitial && (
           <FactoryPasswordBanner login={me.account.login} onDone={() => { forgetMe(); void reload(); }} />
         )}
+        <CommandPalette open={searching} onClose={() => setSearching(false)}
+          pages={groups.flatMap(g => g.items)} />
         <ErrorBoundary scope={`page:${loc.pathname}`} key={loc.pathname}>
           <Outlet />
         </ErrorBoundary>

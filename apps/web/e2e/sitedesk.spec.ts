@@ -94,3 +94,53 @@ test.describe("受试者详情", () => {
     await expect(page.getByTestId("subject-gone")).toBeVisible();
   });
 });
+
+/* 全局搜索（W11）：知道名字、不知道在哪 —— 一个框找页面、中心、受试者。 */
+test.describe("全局搜索", () => {
+  test("Ctrl+K 打开，敲筛选号回车就到这个人的详情", async ({ page }) => {
+    await page.goto("/today");
+    await expect(page.getByTestId("today-summary")).toBeVisible();
+    await page.keyboard.press("Control+k");
+    const input = page.getByTestId("palette-input");
+    await expect(input).toBeFocused();
+    await input.fill("S-0203");
+    await expect(page.getByTestId("palette-row").filter({ hasText: "S-0203" })).toBeVisible();
+    await input.press("Enter");
+    await expect(page).toHaveURL(/\/subjects\//);
+    await expect(page.getByTestId("subject-title")).toContainText("S-0203");
+  });
+
+  test("页面名也找得到 —— 只找这个人侧栏上有的", async ({ page }) => {
+    await page.goto("/today");
+    await page.getByTestId("open-search").click();
+    await page.getByTestId("palette-input").fill("工时");
+    await page.getByTestId("palette-row").filter({ hasText: "工时与差旅" }).click();
+    await expect(page).toHaveURL(/\/timesheets/);
+
+    await page.getByTestId("open-search").click();
+    await page.getByTestId("palette-input").fill("经营驾驶舱");
+    await expect(page.getByTestId("palette-none")).toBeVisible();
+  });
+
+  test("中心按代号找，点进去是中心工作台", async ({ page }) => {
+    await page.goto("/today");
+    await page.getByTestId("open-search").click();
+    await page.getByTestId("palette-input").fill("SS-07");
+    await page.getByTestId("palette-row").filter({ hasText: "SS-07" }).first().click();
+    await expect(page).toHaveURL(/\/sites\/s2$/);
+  });
+
+  test("经营层没有受试者列权限：筛选号搜不出人", async ({ page }) => {
+    await page.goto("/sites?as=boss");
+    await page.getByTestId("open-search").click();
+    await page.getByTestId("palette-input").fill("S-0203");
+    await expect(page.getByTestId("palette-none")).toBeVisible();
+  });
+
+  test("390px：搜索入口在顶上的身份条里", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto("/today");
+    await page.getByTestId("open-search-bar").click();
+    await expect(page.getByTestId("palette-input")).toBeVisible();
+  });
+});

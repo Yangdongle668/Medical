@@ -46,6 +46,8 @@ import { FinanceController } from "./modules/finance/finance.controller.js";
 import { VISIT_TIMESHEET_PORT } from "./modules/clinical/ports.js";
 import { InboxService } from "./modules/workbench/inbox.service.js";
 import { InboxController } from "./modules/workbench/inbox.controller.js";
+import { SearchService } from "./modules/workbench/search.service.js";
+import { SearchController } from "./modules/workbench/search.controller.js";
 
 /* 拦截器执行顺序 = 注册顺序（外 → 内）：
    TxInterceptor 在最外层，保证脱敏之后才提交/回滚；
@@ -55,7 +57,7 @@ import { InboxController } from "./modules/workbench/inbox.controller.js";
                 ClinicalController, DataQueryController, AccountabilityController, CostController,
                 AcceptanceController,
                 BizdevController, IntakeController, FinanceController, MonitorController,
-                InternalAuditController, InboxController],
+                InternalAuditController, InboxController, SearchController],
   providers: [
     /* 池子必须能被关掉。`enableShutdownHooks()` 会调 `app.close()`，
        而 `app.close()` 只会去调 provider 的 onModuleDestroy ——
@@ -83,7 +85,7 @@ import { InboxController } from "./modules/workbench/inbox.controller.js";
     ClinicalService, DataQueryService, AccountabilityService, CostService,
     AcceptanceService,
     FeasibilityService, BidService, IntakeService, FinanceService, MonitorService,
-    InternalAuditService, InboxService,
+    InternalAuditService, InboxService, SearchService,
     /* 跨上下文装配：ClinicalOps 只认 ports.ts 里的接口，不 import CostService */
     { provide: VISIT_TIMESHEET_PORT, useExisting: CostService },
     { provide: APP_FILTER, useClass: ProblemFilter },
