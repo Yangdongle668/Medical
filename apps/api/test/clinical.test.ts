@@ -1210,3 +1210,21 @@ describe("访视窗口的最后一天", () => {
     }
   });
 });
+
+/* 完成访视那一栏的工时默认值。原来写死 3.5 —— 一次筛选期访视和一次 C1D1 给药
+   按同一个数默认，等于让每个人每次都去改它（或者不改，那更糟）。 */
+describe("工时默认值 · suggestedHours", () => {
+  it("本中心同一访视最近 5 次的中位数；列表里不给", async () => {
+    const s = await siteByCode(crc, "SS-07");
+    for (let n = 0; n < 5; n++) {
+      const { id } = await freshSubject(crc, s.id);
+      const { res } = await doVisit(crc, id, { hours: 2 });
+      expect(res.status).toBe(201);
+    }
+    const { id } = await freshSubject(crc, s.id);
+    const v = await currentVisit(crc, id);
+    const one = await crc.get(`/v1/subject-visits/${v.id}`);
+    expect(one.body.suggestedHours).toBe(2);
+    expect(v).not.toHaveProperty("suggestedHours");
+  });
+});

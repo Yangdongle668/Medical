@@ -65,9 +65,12 @@ test("CRC 的一天：从今日清单走到方案偏离进台账", async ({ page
   await submit.click();
   const effects = page.getByTestId("effects");
   await expect(effects).toBeVisible();
+  /* 每一行认 data-type（程序认键）；显示的是中文名（人读名字）—— 不是枚举键 */
   for (const type of ["DeviationDetected", "CompensationDue",
                       "TimesheetPosted", "CostPosted", "NextVisitScheduled"])
-    await expect(effects).toContainText(type);
+    await expect(effects.locator(`li[data-type="${type}"]`)).toHaveCount(1);
+  await expect(effects).toContainText("方案偏离");
+  await expect(effects).not.toContainText("DeviationDetected");
 
   /* 七个订阅者全接上了，界面上不该再出现"待接"那一块。
      它曾经挂着 RefreshProjections —— 断言它消失了，
@@ -106,6 +109,6 @@ test("窗口内完成不要求填原因，也不生成偏离", async ({ page }) 
   await page.getByTestId("submit").click();
   const effects = page.getByTestId("effects");
   await expect(effects).toBeVisible();
-  await expect(effects).not.toContainText("DeviationDetected");
-  await expect(effects).toContainText("NextVisitScheduled");
+  await expect(effects.locator('li[data-type="DeviationDetected"]')).toHaveCount(0);
+  await expect(effects.locator('li[data-type="NextVisitScheduled"]')).toHaveCount(1);
 });

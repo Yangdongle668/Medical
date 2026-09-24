@@ -6,6 +6,7 @@ import { SITE_STATE_LABEL, SITE_ORDER } from "./states.js";
 import { SubmitAcceptanceForm } from "../instac/SubmitAcceptanceForm.js";
 import { SiteCrew } from "./SiteCrew.js";
 import { UnmetList } from "../../shell/Unmet.js";
+import { EffectItem } from "../../shell/Effects.js";
 
 /* ════════════════════════════════════════════════════════════════════
    中心详情 = 状态机 + 闸门。
@@ -279,7 +280,7 @@ export function SiteDetailPage() {
             <h3>这一次推进，系统还做了这些</h3>
             <ul className="effects">
               {effects.map((e, i) => (
-                <li key={i}><div className="t">{e.type}</div><div>{e.summary}</div></li>
+                <EffectItem key={i} type={e.type} summary={e.summary} />
               ))}
             </ul>
           </section>

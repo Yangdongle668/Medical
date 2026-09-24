@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { SITE_STATE_LABEL } from "./states.js";
 import { usePending } from "../../api/pending.js";
+import { EffectItem } from "../../shell/Effects.js";
 
 /* ════════════════════════════════════════════════════════════════════
    启动清单 —— 中心详情页上那句"还差 N 项"的落地处。
@@ -148,7 +149,7 @@ export function StartupChecklistPage() {
         {effects && (
           <ul className="effects" data-testid="checklist-effects">
             {effects.map((e, i) => (
-              <li key={i}><div className="t">{e.type}</div><div>{e.summary}</div></li>
+              <EffectItem key={i} type={e.type} summary={e.summary} />
             ))}
           </ul>
         )}

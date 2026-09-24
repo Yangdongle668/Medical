@@ -102,6 +102,59 @@ export const SIDE_EFFECT_TYPES = [
   "MailTransportChanged",    // 换了投递通道 —— 登录链接从此走另一台服务器
   "MailTransportTested"      // 试发了一封，结果在响应里
 ] as const;
+/** 副作用类型的中文名 —— 界面上显示这个，不显示枚举键。
+ *  键是给程序看的：一线在「这一次提交，系统还做了这些」底下读到
+ *  `COMPENSATIONDUE`，等于这一块白画了。与 SUBJECT_STATE_LABEL 同一个做法：
+ *  **类型是 Record<SideEffectType, …>** —— 新加一个副作用而忘了给它起名，编译不过。
+ *  服务端将来新增、而这边还没跟上的（x-extensible），界面退回「系统记录」。 */
+export const SIDE_EFFECT_LABEL: Record<(typeof SIDE_EFFECT_TYPES)[number], string> = {
+  TimesheetPosted: "记了工时",
+  TimesheetApproved: "工时已审",
+  CostPosted: "成本已归集",
+  CompensationDue: "受试者补偿待发",
+  DeviationDetected: "方案偏离",
+  SaeReportedLate: "SAE 超时上报",
+  QualityEventOpened: "质量事件",
+  CapaPlanned: "整改措施",
+  NextVisitScheduled: "下一次访视",
+  SoaRevised: "访视计划改版",
+  SubjectEnrolled: "受试者入组",
+  SubjectCompleted: "受试者出组",
+  SpecimenClosed: "样本闭环",
+  CloseoutApproved: "结题获批",
+  DataQueryRaised: "提出质疑",
+  DataQueryAnswered: "质疑已回复",
+  DataQueryReturned: "质疑退回",
+  DataQueryChased: "催办质疑",
+  DataQueryClosed: "质疑关闭",
+  MonitorVisitPlanned: "排了监查",
+  MonitorVisitPerformed: "监查已到现场",
+  MonitorVisitConfirmed: "中心已确认监查",
+  MonitorReportSubmitted: "监查报告已交",
+  InternalAuditOpened: "开始内部稽查",
+  AuditFindingAdded: "稽查发现",
+  AuditFindingClosed: "稽查发现关闭",
+  IntakeSubmitted: "立项已递交",
+  IntakeApproved: "立项获批",
+  IntakeReturned: "立项退回",
+  SiteAccepted: "机构已受理",
+  AcceptanceAmendRequested: "补正通知",
+  EthicsTaskCreated: "伦理递交待办",
+  SiteStateChanged: "中心阶段推进",
+  FeasibilityOverride: "破格入选",
+  FeasibilityBias: "可行性预测偏差",
+  BidDecided: "开标结果",
+  ScopeCreepRecorded: "范围蔓延",
+  MilestoneReached: "里程碑达成",
+  StudyTeamChanged: "承接组变更",
+  SiteAssignmentChanged: "派工变更",
+  AccountEnabled: "账号启用",
+  StaffRecordChanged: "员工名册",
+  StartupTemplateReplaced: "启动清单模板",
+  MailTransportChanged: "投递通道",
+  MailTransportTested: "试发邮件"
+};
+
 export const SideEffectType = z.enum(SIDE_EFFECT_TYPES).meta({
   id: "SideEffectType",
   "x-extensible": true,

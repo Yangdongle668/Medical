@@ -72,6 +72,13 @@ describe("界面文字", () => {
     expect(bad, `换成一线听得懂的说法：\n${bad.join("\n")}`).toEqual([]);
   });
 
+  it("副作用只显示中文名，不直接画枚举键（用 shell/Effects.tsx 的 EffectItem）", () => {
+    /* 六个页面曾经各自写 {e.type}：一线读到的是 COMPENSATIONDUE */
+    /* 只抓作为元素内容画出来的（`>{e.type}`），不抓 `type={e.type}` 这种传参 */
+    const bad = files.flatMap(f => hits(f, />\s*\{\s*e\.type\s*\}/));
+    expect(bad, `换成 <EffectItem type={e.type} … />：\n${bad.join("\n")}`).toEqual([]);
+  });
+
   it("护栏自己是好的：注释里的编号不算，字符串里的算", () => {
     const tmp = path.join(HERE, "__copy_probe.tsx");
     fs.writeFileSync(tmp, [

@@ -34,6 +34,8 @@ export interface Visit {
    *  确认由一线登记，那时这一栏空着而审计轨迹里有登记人。见迁移 0050。 */
   piConfirmedByName?: string | null;
   tasks: { seq: number; task: string; doneAt: string | null }[];
+  /** 只在单取一次访视时有：本中心同一访视最近几次工时的中位数。 */
+  suggestedHours?: number | null;
 }
 
 export interface InboxItem {
@@ -45,15 +47,16 @@ export interface InboxItem {
 }
 type Kind = "sae" | "visit" | "pi_confirm" | "edc" | "query" | "handover"
   | "approval" | "isf" | "capa" | "mvr" | "monitor_visit";
-interface Inbox {
+export interface Inbox {
   items: InboxItem[];
   counts: { overdue: number; today: number; soon: number };
   truncatedKinds: Kind[];
   generatedAt: string;
 }
 
-/** 每一类：叫什么、按钮上写什么、去哪办、截断时去哪看全。 */
-const KIND: Record<Kind, { label: string; go: string; href: (i: InboxItem) => string; all: string }> = {
+/** 每一类：叫什么、按钮上写什么、去哪办、截断时去哪看全。
+ *  访视页的「下一件」也用它 —— 两处各写一份，就会有一处的去处是错的。 */
+export const KIND: Record<Kind, { label: string; go: string; href: (i: InboxItem) => string; all: string }> = {
   sae:           { label: "SAE",      go: "去上报", all: "/quality",
                    href: i => `/quality${i.studySiteId ? `?site=${i.studySiteId}` : ""}` },
   visit:         { label: "访视",     go: "去完成", all: "/subjects", href: i => `/visits/${i.ref.id}` },

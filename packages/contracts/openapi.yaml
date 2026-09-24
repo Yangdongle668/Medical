@@ -19167,6 +19167,12 @@ components:
               - task
               - doneAt
             additionalProperties: false
+        suggestedHours:
+          description: >-
+            只在单取一次访视时给：本中心最近 5 次同一访视（同 visitCode）登记工时的中位数；没有历史时为 null。完成访视那一栏的默认值 —— 原来写死 3.5，一次筛选期访视和一次C1D1
+            给药按同一个数默认，等于让每个人每次都去改它（或者不改，那更糟）。
+          nullable: true
+          type: number
       required:
         - id
         - subjectId

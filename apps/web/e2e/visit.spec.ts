@@ -99,3 +99,41 @@ test.describe("登记 PI 确认", () => {
     await expect(page.getByTestId("pi-confirm-block")).toHaveCount(0);
   });
 });
+
+/* 一屏走完一次访视（W8）：全部勾选、三步进度、工时默认值、下一件。
+   v3 = S-0224 的 C3D1，窗口内、任务一项没勾。 */
+test.describe("一屏走完一次访视", () => {
+  test("全部勾选 → 完成 → 三步条走到第二步 → 下一件指向别的待办", async ({ page }) => {
+    await page.goto("/visits/v3?as=crc");
+    const steps = page.getByTestId("visit-steps");
+    await expect(steps.locator("li.now")).toHaveText(/完成访视/);
+
+    await page.getByTestId("tick-all").click();
+    /* n/n —— 等它回读完，不是点下去那一瞬间去读 */
+    await expect(page.getByTestId("task-count")).toHaveText(/^(\d+)\/\1$/);
+    await expect(page.getByTestId("tick-all")).toHaveCount(0);
+
+    await expect(page.getByTestId("submit")).toBeEnabled();
+    await page.getByTestId("submit").click();
+    await expect(page.getByTestId("effects")).toBeVisible();
+
+    /* 不离开这一页：第一步打勾，PI 签字那一块就在下面 */
+    await expect(steps.locator("li.past")).toHaveText(/完成访视/);
+    await expect(page.getByTestId("pi-confirm-block")).toBeVisible();
+
+    /* 下一件：同一份待办里、不是这一条的第一件 */
+    const next = page.getByTestId("next-go");
+    await expect(next).toBeVisible();
+    expect(await next.getAttribute("href")).not.toContain("/visits/v3");
+  });
+
+  test("工时有一个默认值，人改过之后勾任务不会把它冲掉", async ({ page }) => {
+    await page.goto("/visits/v4?as=crc");
+    const hours = page.getByTestId("hours");
+    await expect(hours).not.toHaveValue("");
+    await hours.fill("5");
+    await page.getByRole("checkbox").first().click();
+    await expect(page.getByTestId("task-count")).toContainText("1/");
+    await expect(hours).toHaveValue("5");
+  });
+});

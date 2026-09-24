@@ -72,7 +72,9 @@ test("启动一个中心：闸门拦下 → 清阻塞项 → 放行 → 推进�
 
   /* ⑦ 推进 → 状态机走了一格，副作用摊开 */
   await page.getByTestId("advance").click();
-  await expect(page.getByTestId("advance-effects")).toContainText("SiteStateChanged");
+  await expect(page.getByTestId("advance-effects").locator('li[data-type="SiteStateChanged"]'))
+    .toHaveCount(1);
+  await expect(page.getByTestId("advance-effects")).toContainText("中心阶段推进");
   await expect(page.getByTestId("flow").locator("li.now")).toHaveText("SIV启动");
 });
 

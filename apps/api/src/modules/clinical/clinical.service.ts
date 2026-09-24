@@ -385,7 +385,16 @@ export class ClinicalService {
     if (!rows[0]) throw notFound("访视");
     const v = toVisit(rows[0]);
     await this.attachTasks(c.client, [v]);
-    return v;
+    /* 工时默认值：本中心同一访视最近 5 次的中位数 —— 用中位数不用均值，
+       一次补录时填的 12 小时不该把后面每个人的默认值都拉高。 */
+    const { rows: h } = await c.client.query<{ hours: string }>(
+      `SELECT hours FROM subject_visit
+        WHERE study_site_id = $1 AND visit_code = $2 AND hours IS NOT NULL
+        ORDER BY actual_date DESC, id DESC LIMIT 5`, [v.studySiteId, v.visitCode]);
+    const xs = h.map(r => Number(r.hours)).sort((a, b) => a - b);
+    const mid = xs.length ? (xs.length % 2 ? xs[(xs.length - 1) / 2]!
+      : (xs[xs.length / 2 - 1]! + xs[xs.length / 2]!) / 2) : null;
+    return { ...v, suggestedHours: mid === null ? null : Math.round(mid * 2) / 2 };
   }
 
   /* ── 受试者生命周期 ─────────────────────────────────────────────── */

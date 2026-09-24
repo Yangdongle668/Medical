@@ -5,6 +5,7 @@ import { yuan, days } from "./money.js";
 import { usePending } from "../../api/pending.js";
 import { today } from "../../shell/dates.js";
 import { Pick } from "../../shell/CreateForm.js";
+import { EffectItem } from "../../shell/Effects.js";
 
 /* ════════════════════════════════════════════════════════════════════
    工时台账。
@@ -151,7 +152,7 @@ export function TimesheetPage() {
         {effects && (
           <ul className="effects" data-testid="timesheet-effects">
             {effects.map((e, i) => (
-              <li key={i}><div className="t">{e.type}</div><div>{e.summary}</div></li>
+              <EffectItem key={i} type={e.type} summary={e.summary} />
             ))}
           </ul>
         )}

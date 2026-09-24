@@ -749,7 +749,18 @@ export const scenarioHandlers = [
        那本身就是一条信息。 */
     if (!v || !siteInScope(v.studySiteId))
       return HttpResponse.json(problem("not-found", 404, "访视不存在"), { status: 404 });
-    return HttpResponse.json(withDaysLeft(v));
+    /* 工时默认值：本中心同一访视最近 5 次的中位数（服务端同一口径，见 clinical.service 的 visit）。
+       mock 的访视行上不存工时，从它自动记的那几条工时里取。 */
+    const same = new Set(scenario.visits
+      .filter(x => x.studySiteId === v.studySiteId && x.visitCode === v.visitCode).map(x => x.id));
+    const xs = scenario.timesheets
+      .filter(t => t.visitId && same.has(t.visitId) && !t.voidedAt)
+      .sort((a, b) => b.workDate.localeCompare(a.workDate)).slice(0, 5)
+      .map(t => t.hours).sort((a, b) => a - b);
+    const mid = xs.length ? (xs.length % 2 ? xs[(xs.length - 1) / 2]!
+      : (xs[xs.length / 2 - 1]! + xs[xs.length / 2]!) / 2) : null;
+    return HttpResponse.json({
+      ...withDaysLeft(v), suggestedHours: mid === null ? null : Math.round(mid * 2) / 2 });
   }),
 
   http.post(pathToRegExp("/v1/subject-visits/{id}/tasks/{seq}:done"), ({ request }) => {

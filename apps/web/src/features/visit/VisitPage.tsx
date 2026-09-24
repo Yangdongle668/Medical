@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
-import type { Visit } from "../today/TodayPage.js";
+import { KIND, type Visit, type Inbox, type InboxItem } from "../today/TodayPage.js";
 import { usePending } from "../../api/pending.js";
 import { loadMe, type Me } from "../login/me.js";
 import { today } from "../../shell/dates.js";
 import { UnmetList } from "../../shell/Unmet.js";
+import { EffectItem } from "../../shell/Effects.js";
 import { Why } from "../../shell/Why.js";
 
 /* 完成一次访视 —— 系统里最重要的一个动作。
@@ -28,6 +29,8 @@ export function VisitPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [actualDate, setActualDate] = useState(today());
   const [hours, setHours] = useState("3.5");
+  /** 人改过工时就不再拿默认值覆盖 —— 重读访视（勾一项任务就重读一次）不该把他填的冲掉。 */
+  const hoursTouched = useRef(false);
   const [reason, setReason] = useState("");
   /** PI 哪天签的字。载入访视之后默认成访视当天 —— 见下面那一段。 */
   const [confirmedOn, setConfirmedOn] = useState("");
@@ -56,6 +59,9 @@ export function VisitPage() {
            而那种"确认日比访视日晚八天"的记录，核查时是要被问的。
            已经登记过的（补登、改期）保留原值。 */
         setConfirmedOn(c => c || v.piConfirmedAt?.slice(0, 10) || v.actualDate || today());
+        /* 工时默认成本中心同一访视最近几次的中位数（服务端给）；没有历史才用 3.5。
+           原来一律 3.5 —— 筛选期访视和一次给药按同一个数默认，等于每次都要改。 */
+        if (!hoursTouched.current && v.suggestedHours != null) setHours(String(v.suggestedHours));
       })
       .catch(e => {
         if (e instanceof ApiError && e.problem.status === 404) { setVisit(null); setGone(true); return; }
@@ -63,7 +69,7 @@ export function VisitPage() {
       });
   /* 换一条访视要先把签字日期清掉 —— 不清的话，上一条的日期会跟过来，
      而它看起来完全像是"这一条的默认值"。 */
-  useEffect(() => { setConfirmedOn(""); void load(); }, [id]);
+  useEffect(() => { setConfirmedOn(""); hoursTouched.current = false; void load(); }, [id]);
   useEffect(() => { void loadMe().then(setMe); }, []);
 
   /* 三种状态要分得开：拿到了 / 还在拿 / 拿不到。
@@ -97,6 +103,24 @@ export function VisitPage() {
     /* 无论成没成都重读：失败那次多半是别人已经勾了，
        而"最新的清单"正是这时候最该给的东西。 */
     await load();
+  }
+
+  /** 全部勾上。**一项一项发**，不是一个批量接口：每一项各带各的幂等键，
+   *  断网时各自进发件箱，重放时各自认得出来 —— 与手点十次完全一样，只是不用点十次。
+   *  中途有一项失败（多半是别人刚勾了）就停下，把最新的清单读回来。 */
+  async function tickAll() {
+    setBusy(true); setProblem(null);
+    try {
+      for (const t of visit?.tasks ?? []) {
+        if (t.doneAt || pending("completeVisitTask", { id, seq: t.seq })) continue;
+        await call("completeVisitTask", { params: { id, seq: t.seq }, body: {} });
+      }
+    } catch (e) {
+      if (e instanceof ApiError) setProblem(e.problem); else throw e;
+    } finally {
+      setBusy(false);
+      await load();
+    }
   }
 
   /** 标记已录入 EDC。断网时照样能按 —— 与勾任务、完成访视同一条路，
@@ -151,11 +175,18 @@ export function VisitPage() {
       </div>
 
       <div className="stack" style={{ maxWidth: 720 }}>
+        <Steps visit={visit} />
         <section className="card">
           <div className="spread" style={{ marginBottom: 10 }}>
             <h3>访视任务</h3>
-            <span className="muted num" data-testid="task-count">
-              {visit.tasks.length - open.length}/{visit.tasks.length}
+            <span className="row" style={{ gap: 10, alignItems: "center" }}>
+              {!done && open.length > 1 && (
+                <button className="btn" data-testid="tick-all" disabled={busy}
+                  onClick={() => void tickAll()}>全部勾选</button>
+              )}
+              <span className="muted num" data-testid="task-count">
+                {visit.tasks.length - open.length}/{visit.tasks.length}
+              </span>
             </span>
           </div>
           <ul className="tasks">
@@ -187,7 +218,8 @@ export function VisitPage() {
               <label className="field" style={{ flex: "1 1 120px" }}>
                 <span>本次投入工时</span>
                 <input type="number" step="0.5" min="0.25" max="24" value={hours}
-                  data-testid="hours" onChange={e => setHours(e.target.value)} />
+                  data-testid="hours"
+                  onChange={e => { hoursTouched.current = true; setHours(e.target.value); }} />
               </label>
             </div>
 
@@ -362,10 +394,7 @@ export function VisitPage() {
             <h3>这一次提交，系统还做了这些</h3>
             <ul className="effects">
               {result.sideEffects.map((e, i) => (
-                <li key={i}>
-                  <div className="t">{e.type}</div>
-                  <div>{e.summary}</div>
-                </li>
+                <EffectItem key={i} type={e.type} summary={e.summary} />
               ))}
               {/* 「尚未接上」那一块。现在七个订阅者全接上了，后端下发的
                   pending 是空数组，于是这里一条都不画。
@@ -381,7 +410,59 @@ export function VisitPage() {
             </ul>
           </section>
         )}
+
+        <NextUp here={id} status={visit.status} edc={visit.edcStatus ?? "pending"} />
       </div>
     </>
+  );
+}
+
+/* ── 三步：完成访视 → 登记 PI 签字 → 录入 EDC ─────────────────────────
+   一次访视在系统里要走三步，原来它们是三块各自出现又各自消失的卡片，
+   人不知道自己走到了哪、还差几步。后两步不分先后（都在访视完成之后）。 */
+function Steps({ visit }: { visit: Visit }) {
+  const completed = visit.status !== "planned";
+  const steps = [
+    { label: "完成访视", done: completed, now: !completed },
+    { label: "登记 PI 签字", done: visit.status === "locked", now: visit.status === "done_pending_pi" },
+    { label: "录入 EDC", done: visit.edcStatus === "entered",
+      now: completed && visit.edcStatus !== "entered" }
+  ];
+  return (
+    /* 与中心详情页的阶段条是同一个样子（.flow）—— 同一种"走到哪了"，一种画法。 */
+    <ol className="flow" data-testid="visit-steps">
+      {steps.map(x => (
+        <li key={x.label} className={x.done ? "past" : x.now ? "now" : ""}>
+          <span aria-hidden="true">{x.done ? "✓" : "·"}</span> {x.label}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/* ── 下一件 ────────────────────────────────────────────────────────────
+   办完一件，下一件是什么 —— 不用回首页再找一遍。取的是同一份待办
+   （/v1/me/inbox），排除眼前这一条。访视状态一变就重取：刚完成的那次
+   访视会从「访视」变成「PI 签字 / EDC」两条，下一件可能就是它自己的下一步。 */
+function NextUp({ here, status, edc }: { here: string; status: string; edc: string }) {
+  const [next, setNext] = useState<InboxItem | null | undefined>(undefined);
+  useEffect(() => {
+    call<Inbox>("getMyInbox")
+      .then(b => setNext(b.items.find(i => i.ref.id !== here) ?? null))
+      .catch(() => setNext(undefined));   // 离线：不给这一块，不报错
+  }, [here, status, edc]);
+  if (next === undefined) return null;
+  return (
+    <div className="spread" data-testid="next-up" style={{ marginTop: 6, gap: 10, flexWrap: "wrap" }}>
+      <Link to="/today" className="btn" style={{ textDecoration: "none" }}>回到今天</Link>
+      {next
+        ? <Link to={KIND[next.kind].href(next)} className="btn primary" data-testid="next-go"
+            style={{ textDecoration: "none" }}>
+            {/* 标题里已经带着类别名的（「SAE 未上报 · …」）不再重复一遍 */}
+            下一件：{next.title.startsWith(KIND[next.kind].label) ? next.title
+              : `${KIND[next.kind].label} · ${next.title}`} →
+          </Link>
+        : <span className="muted">待办都清了。</span>}
+    </div>
   );
 }
