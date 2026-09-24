@@ -71,8 +71,8 @@ export function TodayPage() {
 
       {late > 0 && (
         <div className="problem" style={{ marginBottom: 14 }} role="status">
-          有 {late} 次访视已超窗。超窗完成会自动生成方案偏离，
-          提交时需要填写原因 —— 它会原样进入质量台账。
+          有 {late} 次访视已超窗，已排在最前。完成时需要填写超窗原因，
+          系统会据此记一条方案偏离。
         </div>
       )}
 

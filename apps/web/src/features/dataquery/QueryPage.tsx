@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    数据质疑（EDC Query）。
@@ -104,12 +105,12 @@ export function QueryPage() {
         </p>
       </div>
 
-      <div className="derive" style={{ marginBottom: 14 }}>
+      <Why style={{ marginBottom: 14 }}>
         待中心回复 → <b>已回复待关闭</b> → 已关闭。
         <b>中间那一格不能省</b> —— 回复了不等于问题解决了，
         判定权在数据管理，不在回复的人手上。
         省掉它，「已关闭」就只是「我说我改好了」，而核查时看的不是这句话。
-      </div>
+      </Why>
 
       <div className="stats" style={{ marginBottom: 16 }}>
         <Stat label={isCrc ? "待我回复" : "待中心回复"} v={String(open.length)}
@@ -127,7 +128,7 @@ export function QueryPage() {
       </div>
 
       {stats.load.meanAgeDays !== null && (
-        <div className="derive" style={{ marginBottom: 14 }} data-testid="query-mean-note">
+        <Why summary="平均挂起怎么算？" style={{ marginBottom: 14 }} data-testid="query-mean-note">
           <b>平均挂起把没关掉的也算进去了。</b>
           只算已关闭的那些，一条永远不关的质疑就永远不进分母 ——
           越拖这个数越好看，而「平均 4.2 天，目标 5 天」底下压着的，
@@ -135,7 +136,7 @@ export function QueryPage() {
           <span className="muted mono" style={{ marginLeft: 8, fontSize: 12 }}>
             口径 {stats.calcVersion}
           </span>
-        </div>
+        </Why>
       )}
 
       {problem && (

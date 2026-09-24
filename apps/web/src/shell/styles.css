@@ -379,6 +379,13 @@ td .row.acts { flex-wrap: nowrap; white-space: nowrap; }
   border-radius: 0 8px 8px 0; padding: 12px 14px;
   display: grid; gap: 4px; font-size: 12px; color: var(--ink-2); line-height: 1.65;
 }
+/* 收起来的「为什么？」（shell/Why.tsx）。首屏只占一行小字。 */
+.why > summary {
+  cursor: pointer; width: max-content; max-width: 100%;
+  font-size: 12px; color: var(--ink-3); padding: 2px 0; list-style-position: inside;
+}
+.why > summary:hover { color: var(--accent); }
+.why[open] > summary { margin-bottom: 6px; }
 .derive .tot {
   border-top: 1px solid var(--line-2); margin-top: 4px; padding-top: 6px;
   font-size: 15px; color: var(--ink);

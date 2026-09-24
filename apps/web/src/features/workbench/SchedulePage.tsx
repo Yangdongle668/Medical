@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { call } from "../../api/client.js";
 import { today } from "../../shell/dates.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    我的日程。
@@ -160,7 +161,7 @@ export function SchedulePage() {
         })}
       </div>
 
-      <div className="derive" style={{ marginTop: 14 }}>
+      <Why style={{ marginTop: 14 }}>
         一次访视<b>落在它的整个窗口里</b>，不是钉在目标日那一天 ——
         把它钉死会让"这周哪天有空"变成假的，而窗口正是排期时唯一的余地。
         所以同一次访视会出现在连续的好几天里：那不是重复，
@@ -169,9 +170,8 @@ export function SchedulePage() {
         一天 {CROWDED} 次以上标红。这个数不是拍的：一次肿瘤访视含采血、
         给药、评估，加上路上，两次是常态，三次就要看是不是同一家医院。
         <br />
-        <b>监查访视还没进来</b> —— 那要「监查访视」那个模块的后端，
-        现在这一页只有受试者访视。
-      </div>
+        这一页目前只排受试者访视；监查访视在「监查访视」那一页。
+      </Why>
     </>
   );
 }

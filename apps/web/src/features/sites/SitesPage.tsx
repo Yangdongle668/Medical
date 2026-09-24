@@ -38,7 +38,7 @@ export function SitesPage() {
     <>
       <div className="page-head">
         <h2>我的中心</h2>
-        <p>行范围由登录身份推导；<b>列</b>同理 —— 看得到中心，不等于看得到它的价钱。</p>
+        <p>这里是你能看到的全部中心。金额类字段按角色显示。</p>
       </div>
 
       {/* 建档入口。此前这一页只能看：`createStudySite` 在服务端跑着，

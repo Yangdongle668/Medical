@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { today, daysSince } from "../../shell/dates.js";
 import { Pick } from "../../shell/CreateForm.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    药品与样本。
@@ -75,7 +76,7 @@ export function MaterialPage() {
   if (!sites.length) return (
     <>
       <div className="page-head"><h2>药品与样本</h2></div>
-      <p className="muted">你的行范围里没有中心。</p>
+      <p className="muted">你名下还没有负责的中心。</p>
     </>
   );
 
@@ -179,12 +180,12 @@ export function MaterialPage() {
               </tbody>
             </table>
           </div>
-          <div className="derive" style={{ marginTop: 14 }}>
+          <Why style={{ marginTop: 14 }}>
             在手数量是<b>算出来的</b>，不是存出来的 —— 存了就要维护，维护就会错。
             <br />
             这本账<b>只追加</b>：记错了要用反向流水冲销，不能改历史。
             核查看的就是它，而一本能改的账在核查眼里等于没有账。
-          </div>
+          </Why>
         </>
       ) : (
         <>
@@ -244,13 +245,13 @@ export function MaterialPage() {
               </tbody>
             </table>
           </div>
-          <div className="derive" style={{ marginTop: 14 }}>
+          <Why style={{ marginTop: 14 }}>
             闭环 = 实验室<b>确认收到</b>，或者<b>销毁登记</b>。
             两个都没有 = 在路上不知去向 —— 而中心一关就再也查不清。
             <br />
             所以"寄出了但没确认"不算进行中，它是一件<b>迟早要出事、
             而现在还问得到</b>的事，要顶到最上面。
-          </div>
+          </Why>
         </>
       )}
     </>

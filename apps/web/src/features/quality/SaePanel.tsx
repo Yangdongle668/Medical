@@ -3,6 +3,7 @@ import { useToast } from "@sitedesk/ui/react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { CreateForm, Field, Area } from "../../shell/CreateForm.js";
 import { loadMe } from "../login/me.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    SAE 台账与 24 小时及时率（I6）。
@@ -273,11 +274,11 @@ function ReportSaeForm({ studySiteId, onCreated }:
           on={setReportedAt} testid="sae-reported" type="datetime-local" />
       </div>
 
-      <div className="derive">
+      <Why>
         <b>发生时刻不是录入时刻。</b>
         两者混为一谈，及时率就永远是 100% —— 所以这一栏不预填当前时间：
         预填等于替人回答了那个决定及时率的问题，而他多半会直接按下去。
-      </div>
+      </Why>
     </CreateForm>
   );
 }

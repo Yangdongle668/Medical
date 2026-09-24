@@ -3,6 +3,7 @@ import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { yuan, days } from "../cost/money.js";
 import { daysSince } from "../../shell/dates.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    待我审批。
@@ -93,12 +94,12 @@ export function ApprovalsPage() {
         </p>
       </div>
 
-      <div className="derive" style={{ marginBottom: 14 }}>
+      <Why style={{ marginBottom: 14 }}>
         <b>审批不改变任何金额。</b> 人已经干了活，成本已经发生 ——
         它只回答一个问题：这笔工时<b>有没有被第二个人看过</b>。
         所以待审的钱<b>已经在损益里</b>了；这个数一直不降说明审批积压，
         不是成本失控。
-      </div>
+      </Why>
 
       {mine.length > 0 && (
         <div className="problem" data-testid="own-entries" style={{ marginBottom: 14 }}>
@@ -179,14 +180,14 @@ export function ApprovalsPage() {
         </div>
       )}
 
-      <div className="derive" style={{ marginTop: 14 }}>
+      <Why style={{ marginTop: 14 }}>
         按日期升序 —— <b>最久的排最前</b>。一条挂了两个月的工时，
         填的人早就忘了当时做了什么，那时再审也审不出什么。
         <br />
         <b>审过不能撤回。</b> 审错了要作废这一笔再重报 ——
         能撤回的审批痕迹等于没有审批痕迹。所以这个按钮写的是「我看过了」，
         不是「通过」：它陈述的是一件已经发生的事。
-      </div>
+      </Why>
     </>
   );
 }

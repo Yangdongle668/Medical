@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ApiError, type ProblemDetails } from "../../api/client.js";
 import { listPayments, pay, today, anonymous, type Payment } from "./api.js";
 import { yuan } from "../cost/money.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    受试者补偿。
@@ -139,14 +140,14 @@ export function PaymentsPage() {
           }} />
       )}
 
-      <div className="derive" style={{ marginTop: 14 }}>
+      <Why style={{ marginTop: 14 }}>
         补偿未发放、或者发了但没有签收凭证，<b>中心关不掉</b> ——
         这是关闭闸门的七项之一。
         <br />
         所以登记发放时<b>两个字段一起要</b>，不做成两步：
         只记「发了」而没有凭证，关闭中心那天对不上，
         而那时受试者已经找不到了。
-      </div>
+      </Why>
     </>
   );
 }

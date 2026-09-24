@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { today, daysSince } from "../../shell/dates.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    伦理事务。
@@ -187,7 +188,7 @@ export function EthicsPage() {
               { params: { id: deciding.id }, body: b }))} />
       )}
 
-      <div className="derive" style={{ marginTop: 14 }}>
+      <Why style={{ marginTop: 14 }}>
         <b>递交了不等于批下来了。</b> 关闭闸门看的是批复，不是递交 ——
         所以「待批复」用的是警告色，不是中性色：
         一份递上去三个月没动静的修正案，和一份刚递上去的，必须分得开。
@@ -195,7 +196,7 @@ export function EthicsPage() {
         按中心分组而不是一张大表，因为<b>伦理是按中心批的</b>：
         同一个项目在 A 医院批了、在 B 医院还没批是正常状态，
         混成一张按时间排的表就再也看不出「哪个中心还差一份批件」。
-      </div>
+      </Why>
     </>
   );
 }

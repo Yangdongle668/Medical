@@ -8,6 +8,7 @@ import {
 import { SCREEN_FAIL_LABEL } from "../enrollment/api.js";
 import { Pick } from "../../shell/CreateForm.js";
 import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    预筛登记。
@@ -195,19 +196,19 @@ export function PrescreenPage() {
 
       {acting?.kind === "fail" && (
         <FailForm onCancel={() => setActing(null)}
-          onGo={(reason, d, note) => void run("已登记筛败 —— 它按 I8′ 计入收入",
+          onGo={(reason, d, note) => void run("已登记筛败，筛败费已计入这个中心的收入",
             () => screenFail(acting.id, reason, d, note))} />
       )}
 
-      <div className="derive" style={{ marginTop: 14 }}>
-        <b>筛败不是失败，是收入。</b> 筛败例数 × 单价 × 筛败费率计入收入（I8′）——
+      <Why style={{ marginTop: 14 }}>
+        <b>筛败不是失败，是收入。</b> 筛败例数 × 单价 × 筛败费率计入收入 ——
         不记录筛败，会把本来赚钱的高筛败中心算成亏损。
         所以原因是受控取值，不是自由文本：自由文本统计不出
         「入排标准与病源不匹配」这件事。
         <br />
         签知情日与入组的两条前置由<b>数据库</b>判，这张表单不重复判 ——
         两边各判一次，迟早长出分歧，而界面那一份总是更宽松的那个。
-      </div>
+      </Why>
     </>
   );
 }
@@ -283,8 +284,7 @@ function FailForm({ onCancel, onGo }:
       <div className="spread"><h3>登记筛败</h3>
         <button className="btn" onClick={onCancel}>取消</button></div>
       <p className="muted" style={{ margin: 0 }}>
-        <b>筛败不是失败，是收入</b>（I8′）。原因是受控取值 ——
-        自由文本统计不出「入排标准与病源不匹配」。
+        筛败也按筛败费计入收入。原因从下拉里选 —— 这样才统计得出哪类原因筛掉的最多。
       </p>
       <div className="grid-form">
         <label className="field"><span>原因</span>

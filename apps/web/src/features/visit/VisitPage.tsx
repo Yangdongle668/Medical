@@ -6,6 +6,7 @@ import { usePending } from "../../api/pending.js";
 import { loadMe, type Me } from "../login/me.js";
 import { today } from "../../shell/dates.js";
 import { UnmetList } from "../../shell/Unmet.js";
+import { Why } from "../../shell/Why.js";
 
 /* 完成一次访视 —— 系统里最重要的一个动作。
    界面要做对两件事：
@@ -288,11 +289,11 @@ export function VisitPage() {
                   </div>
                 </>
               )}
-              <div className="derive">
+              <Why>
                 <b>确认人这一栏不填，是有意的。</b>
                 PI 多数时候没有本系统的账号 —— 从一个下拉框里挑一个名字填进去，
                 填的是编的。<b>谁在系统里登记了这一条</b>进审计轨迹，那是另一件事。
-              </div>
+              </Why>
             </div>
           </section>
         )}

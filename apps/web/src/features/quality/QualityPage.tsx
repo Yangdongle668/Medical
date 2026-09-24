@@ -4,6 +4,7 @@ import { loadMe, type Me } from "../login/me.js";
 import { SaePanel } from "./SaePanel.js";
 import { IpPanel } from "./IpPanel.js";
 import { Pick } from "../../shell/CreateForm.js";
+import { Why } from "../../shell/Why.js";
 
 interface QualityEvent {
   id: string; code: string; siteCode: string; kind: string; severity: string;
@@ -175,7 +176,7 @@ export function QualityPage() {
             <input type="date" value={dueOn} data-testid="capa-due-input"
               onChange={e => setDueOn(e.target.value)} />
           </label>
-          <div className="derive" style={{ margin: 0 }}>
+          <Why style={{ margin: 0 }}>
             <b>措施要写到「预防」那一层。</b>
             「集中补签并留痕」是纠正 —— 补完签名，下个月照样缺；
             预防是把签名完整性做进每周自查清单并留痕。
@@ -184,7 +185,7 @@ export function QualityPage() {
             <b>写措施的人不能自己验证关闭</b> —— 这一步是
             <span className="mono"> capaWrite</span>，验证关闭是
             <span className="mono"> closeQA</span>（QA 与机构办）。
-          </div>
+          </Why>
           <div className="row">
             <button className="btn primary" data-testid="capa-submit"
               disabled={busy || plan.trim().length < 10 || !dueOn}

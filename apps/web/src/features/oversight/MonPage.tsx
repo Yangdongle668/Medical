@@ -3,6 +3,7 @@ import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { yuan } from "../cost/money.js";
 import { PlanVisitForm } from "./PlanVisitForm.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    监查访视。
@@ -135,12 +136,12 @@ export function MonPage() {
         </p>
       </div>
 
-      <div className="derive" style={{ marginBottom: 14 }}>
+      <Why style={{ marginBottom: 14 }}>
         <b>「去过了」和「报告交了」是两件事。</b>
         人去了、问题也看见了，报告压在手上两个月 ——
         中心那边该整改的事根本没开始，而<b>核查时看的是报告日期，不是出差日期</b>。
         所以这一页把「已到现场」单独列成一格，而不是从「已排期」直接跳到「已提交」。
-      </div>
+      </Why>
 
       <div className="stats" style={{ marginBottom: 16 }}>
         <Stat label="未来四周" v={String(board.upcomingVisits)}
@@ -160,7 +161,7 @@ export function MonPage() {
       </div>
 
       {board.load.performed > 0 && (
-        <div className="derive" style={{ marginBottom: 14 }} data-testid="mon-lag-note">
+        <Why summary="报告滞后怎么算？" style={{ marginBottom: 14 }} data-testid="mon-lag-note">
           <b>平均报告滞后把没交的也算进去了。</b>
           只统计已提交的那些，一份永远不交的报告就永远不进分母 ——
           压得越久这个数越好看
@@ -169,7 +170,7 @@ export function MonPage() {
           <span className="muted mono" style={{ marginLeft: 8, fontSize: 12 }}>
             口径 {board.calcVersion}
           </span>
-        </div>
+        </Why>
       )}
 
       {problem && (
@@ -371,14 +372,14 @@ export function MonPage() {
             </tbody>
           </table>
         </div>
-        <div className="derive" style={{ margin: 0 }}>
+        <Why style={{ margin: 0 }}>
           质量稳定的中心可以降低 SDV 抽样比例、拉长间隔；
           有未关闭严重事件或入组停滞的要加密。
           <b>建议值一定带理由</b> —— 没有理由的建议值没人照着做，
           也没人能在核查时解释「为什么这个中心只抽了 {board.sites.at(-1)?.sdvSamplePct ?? 25}%」。
           实际用了多少<b>落在访视行上</b>：不采纳建议是可以的，
           但不采纳这件事本身要留得下来。
-        </div>
+        </Why>
       </div>
     </>
   );

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    中心文件与物资（ISF）。
@@ -125,13 +126,13 @@ export function IsfPage() {
         </p>
       </div>
 
-      <div className="derive" style={{ marginBottom: 14 }}>
+      <Why style={{ marginBottom: 14 }}>
         <b>这里只存事实（在不在、什么时候到期、还剩几份），不存状态。</b>
         状态按<b>今天</b>算出来 —— 存成枚举它会过期：
         六月标「齐备」的那一项，十月已经是缺项，而没有人会回去改。
         <b>人员资质缺失与药品效期是核查现场最常见的两类严重发现</b>，
         它们都能被日历兜住，而一个存着过期状态的系统连日历都算不上。
-      </div>
+      </Why>
 
       <div className="stats" style={{ marginBottom: 16 }}>
         <Stat label="缺失" v={String(summary.missing)}
@@ -259,12 +260,12 @@ export function IsfPage() {
               placeholder="例：新护士 GCP 证书已归档，授权分工表同步更新。"
               onChange={e => setForm(f => ({ ...f, note: e.target.value }))} />
           </label>
-          <div className="derive" style={{ margin: 0 }}>
+          <Why style={{ margin: 0 }}>
             <b>不在的东西没有到期日。</b>
             标为缺失还留着到期日会被拦下 —— 缺失与过期是两种缺，
             混起来会让它们在统计上互相顶替：
             前者要去要，后者要去换。
-          </div>
+          </Why>
           <div className="row">
             <button className="btn primary" data-testid="isf-save" disabled={busy}
               onClick={() => void save()}>{busy ? "…" : "记下核对结果"}</button>
@@ -273,7 +274,7 @@ export function IsfPage() {
         </div>
       )}
 
-      <div className="derive" style={{ marginTop: 16 }} data-testid="isf-note">
+      <Why style={{ marginTop: 16 }} data-testid="isf-note">
         <b>核查现场翻的就是这几摞东西。</b>
         缺件与过期最终会变成质量事件 —— 去{" "}
         <Link to="/quality">质量事件与 CAPA</Link> 看已经发生的那些，
@@ -281,7 +282,7 @@ export function IsfPage() {
         <span className="muted mono" style={{ marginLeft: 8, fontSize: 12 }}>
           口径 {summary.calcVersion}
         </span>
-      </div>
+      </Why>
     </>
   );
 }

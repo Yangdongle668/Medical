@@ -107,7 +107,7 @@ export function SiteCrew({ siteId, piName, piAccountId, canAssign, onChanged }: 
       <div>
         <div className="row spread">
           <span className="muted" style={{ fontSize: 12 }}>
-            研究者 PI · 来自中心上的 <span className="mono">pi_account_id</span>
+            研究者 PI · 中心上登记的 PI 账号
           </span>
           {canAssign && !editing && (
             <button className="btn link" data-testid="edit-pi"
@@ -168,14 +168,14 @@ export function SiteCrew({ siteId, piName, piAccountId, canAssign, onChanged }: 
       {/* ── CRA / CRC ── */}
       <div>
         <span className="muted" style={{ fontSize: 12 }}>
-          CRA / CRC · 来自派工（<span className="mono">site_assignment</span>）
+          CRA / CRC · 来自派工
         </span>
         {crew === null
           ? <p className="muted">加载中…</p>
           : crew.length === 0
             ? <p className="problem" data-testid="crew-empty">
                 <strong>这个中心还没有派工。</strong>
-                {" "}也就是说除了行范围为「全部」或「本组」的人，
+                {" "}除了管理层和本组的项目总监，
                 没有任何 CRA / CRC 看得见它 ——
                 受试者、访视、质疑、药品台账，一个人也打不开。
               </p>

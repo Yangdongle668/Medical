@@ -11,6 +11,7 @@ import {
    同一个 `adverse_event` 会在两页上叫两个名字。 */
 import { WITHDRAW_LABEL } from "../enrollment/api.js";
 import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
+import { Why } from "../../shell/Why.js";
 
 /* ════════════════════════════════════════════════════════════════════
    受试者访视窗口。
@@ -117,15 +118,13 @@ export function SubjectsPage() {
 
       {masked && (
         <div className="problem" data-testid="subj-masked" style={{ marginBottom: 14 }}>
-          你的角色看得到「这个中心有几例在组」，看不到<b>是哪几例</b>。
-          下面这张表里没有筛选号那一列 —— 不是没查到，是后端把它删掉了（I10）。
+          你的角色只看得到例数，看不到具体是哪几例，所以表里没有筛选号一列。
         </div>
       )}
 
       {late.length > 0 && (
         <div className="problem" style={{ marginBottom: 14 }} role="status">
-          超窗的访视每多一天都在往方案偏离上走。超窗完成时要填原因，
-          它会原样进入质量台账 —— 所以<b>先做，别先补记录</b>。
+          超窗的已排在最前。<b>先把访视做了</b>，完成时再填超窗原因。
         </div>
       )}
 
@@ -309,7 +308,7 @@ export function SubjectsPage() {
         </section>
       )}
 
-      <div className="derive" style={{ marginTop: 14 }}>
+      <Why style={{ marginTop: 14 }}>
         这一页一行<b>一个人</b>；「今天」那一页一行<b>一次访视</b>。
         同一批数据两种切法，回答的是两个问题 ——
         每天干活看那一页，被问到「某某某现在什么情况」看这一页。
@@ -320,7 +319,7 @@ export function SubjectsPage() {
         <b>筛选中而没有访视的排在最前</b> —— 那不是走完了，是卡住了：
         签了知情、访视没排出来、入不了组，而筛选期每天都在过去。
         右边「补排访视」按访视计划表把它排出来。
-      </div>
+      </Why>
     </>
   );
 }

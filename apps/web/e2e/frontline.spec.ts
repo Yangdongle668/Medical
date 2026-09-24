@@ -119,7 +119,7 @@ test.describe("CRC", () => {
     await page.getByTestId("fail-reason").selectOption({ label: "影像学不符合" });
     await page.getByTestId("fail-go").click();
     /* 筛败不是失败，是收入 —— 界面要说出来 */
-    await expect(page.getByTestId("pre-said")).toContainText("I8′");
+    await expect(page.getByTestId("pre-said")).toContainText("筛败费已计入");
   });
 
   test("补偿：欠得最久的排最前，发了没凭证的单独报警", async ({ page }) => {
