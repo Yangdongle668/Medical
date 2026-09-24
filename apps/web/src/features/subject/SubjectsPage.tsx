@@ -126,7 +126,9 @@ export function SubjectsPage({ studySiteId }: { studySiteId?: string } = {}) {
         <span>只看还在流程里的（预筛 / 筛选中 / 已入组）</span>
       </label>
 
-      <div className="table-wrap">
+      {/* 手机上一行变一张卡片（.cards-sm，见 styles.css）—— 八列的表在 390px 上要横着滚，
+          而这一页是「被问到某某某怎么样了」时拿出手机看的 */}
+      <div className="table-wrap cards-sm">
         <table>
           <thead>
             <tr>
@@ -143,12 +145,12 @@ export function SubjectsPage({ studySiteId }: { studySiteId?: string } = {}) {
               .map(s => (
                 <tr key={s.id} data-testid="subject-row">
                   {/* 点筛选号进这个人的详情 —— 「某某某现在什么情况」在那一页答 */}
-                  {!masked && <td className="mono">
+                  {!masked && <td className="mono card-title" data-label="筛选号">
                     <Link to={`/subjects/${s.id}`} data-testid={`subject-open-${s.id}`}>
                       {s.screeningNo ?? "—"}</Link>
                   </td>}
-                  <td className="mono">{s.siteCode}</td>
-                  <td>
+                  <td className="mono" data-label="中心">{s.siteCode}</td>
+                  <td data-label="状态">
                     <span className={`chip ${s.state === "enrolled" ? "good"
                       : ["screen_failed", "withdrawn"].includes(s.state) ? "flat" : "warn"}`}>
                       {STATE_LABEL[s.state] ?? s.state}
@@ -157,7 +159,7 @@ export function SubjectsPage({ studySiteId }: { studySiteId?: string } = {}) {
                       {s.randomizationNo ?? "已随机"}
                     </span>}
                   </td>
-                  <td className="num">
+                  <td className="num" data-label="进度">
                     {s.visitsDone}/{s.visitsPlanned}
                   </td>
                   {/* 下一次访视。**排不出来的时候要说话，而且要给得动手** ——
@@ -173,7 +175,7 @@ export function SubjectsPage({ studySiteId }: { studySiteId?: string } = {}) {
                       对它喊"没排出来"是一句假警报，而假警报会让真的那句也没人看。
                       筛选中不一样：签知情那一下一定会排出筛选期访视，
                       没有就是出了事。 */}
-                  <td>{s.nextVisit?.visitLabel ?? (
+                  <td data-label="下一次访视">{s.nextVisit?.visitLabel ?? (
                     s.state === "screening"
                       ? <span className="chip warn" data-testid={`no-visit-${s.id}`}
                           title={"签署知情同意时会连筛选期访视一起排出来。这一例没有，" +
@@ -184,9 +186,9 @@ export function SubjectsPage({ studySiteId }: { studySiteId?: string } = {}) {
                         </span>
                       : <span className="muted">—</span>
                   )}</td>
-                  <td>{windowChip(s)}</td>
-                  <td className="muted">{s.crcName ?? "—"}</td>
-                  <td>
+                  <td data-label="窗口">{windowChip(s)}</td>
+                  <td className="muted" data-label="CRC">{s.crcName ?? "—"}</td>
+                  <td className="card-actions">
                     <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
                       {s.nextVisit && (
                         <Link to={`/visits/${s.nextVisit.id}`} className="btn go"

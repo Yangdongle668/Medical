@@ -10,6 +10,7 @@ import { FactoryPasswordBanner } from "./FactoryPasswordBanner.js";
 import { Rail } from "./Rail.js";
 import { navFor, splitNav } from "./modules.js";
 import { CommandPalette } from "./CommandPalette.js";
+import { TabBar, TAB_COUNT } from "./TabBar.js";
 
 /* 侧栏原来是这六项写死的：今天 / 我的中心 / 交接 / 工时 / 质量台账 / 费率卡。
    而**谁看得到哪些模块**库里早有答案（role_module，随 /v1/me 下发）——
@@ -120,9 +121,13 @@ export function App() {
   const groups = navFor(me?.permissions.modules ?? OFFLINE_MODULES);
   const split = me ? splitNav(me.account.role.code, me.permissions.modules) : null;
   const here = activePath(loc.pathname, groups.flatMap(g => g.items.map(m => m.path)));
+  /* 手机底部的四个：一线用主入口的前四个，其余角色用侧栏顺序的前四个 */
+  const tabs = (split?.primary ?? groups.flatMap(g => g.items)).slice(0, TAB_COUNT);
 
   return (
-    <div className="app">
+    /* has-tabbar：手机上有底部页签条时，侧栏那条横滚的导航收起来（见 styles.css）。
+       一项模块都没有的角色没有页签条 —— 那时侧栏里那段「默认没有开通」的话还得在。 */
+    <div className={`app${tabs.length ? " has-tabbar" : ""}`}>
       <aside className="rail">
         {/* 品牌区与登录页是同一块（.brand-mark + .brand-name/.brand-sub）——
             两处不一致的话，登进来那一刻会有一瞬间"换了个系统"的感觉。 */}
@@ -191,6 +196,7 @@ export function App() {
         )}
         <CommandPalette open={searching} onClose={() => setSearching(false)}
           pages={groups.flatMap(g => g.items)} />
+        {tabs.length > 0 && <TabBar tabs={tabs} groups={groups} pending={pending} />}
         <ErrorBoundary scope={`page:${loc.pathname}`} key={loc.pathname}>
           <Outlet />
         </ErrorBoundary>

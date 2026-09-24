@@ -168,6 +168,19 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
 .palette-title { font-weight: 500; white-space: nowrap; }
 .palette-sub { font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ── 手机底部页签条（shell/TabBar.tsx）。宽屏不出现。 ──────────────── */
+.tabbar { display: none; }
+.tab-badge {
+  display: inline-block; min-width: 16px; margin-left: 3px; padding: 0 4px; border-radius: 99px;
+  background: var(--crit); color: #fff; font-size: 10px; line-height: 16px; font-weight: 600;
+}
+.more-group { display: flex; flex-direction: column; gap: 2px; }
+.more-group h4 { margin: 6px 0 4px; font-size: 11px; color: var(--ink-3); letter-spacing: .06em; }
+.more-group a {
+  padding: 10px 12px; border-radius: 6px; color: var(--ink); text-decoration: none;
+}
+.more-group a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
 /* 窄屏专用的身份条（见 App.tsx）。宽屏上身份在侧栏底部，这里不出现。 */
 .who-bar { display: none; }
 
@@ -231,6 +244,23 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
      横向滚动条拉得很长 —— 给个上限让它在原地折行。 */
   .nav-none { max-width: 62vw; white-space: normal; }
   .main { padding: 22px 16px 72px; }
+  /* 有了底部页签条，侧栏只剩品牌、发件箱角标与离线提示那一行 */
+  .app.has-tabbar .rail nav { display: none; }
+  .app.has-tabbar .main { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+  .tabbar {
+    display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: var(--surface); border-top: 1px solid var(--line);
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+  .tabbar a, .tabbar button {
+    display: flex; align-items: center; justify-content: center; min-height: 48px;
+    font-size: 13px; color: var(--ink-2); text-decoration: none; border: 0; background: none;
+    border-radius: 8px; white-space: nowrap; cursor: pointer; font-family: inherit;
+  }
+  .tabbar a[aria-current="page"], .tabbar button.active {
+    color: var(--accent); font-weight: 600; background: var(--accent-soft);
+  }
   .page-head h2 { font-size: 22px; }
 }
 
@@ -331,6 +361,33 @@ td .row.acts { flex-wrap: nowrap; white-space: nowrap; }
    「数据质疑」），收掉；标题下那一句摘要留着 —— 那是按这个中心算出来的。 */
 .site-tab .page-head h2 { display: none; }
 .site-tab .page-head { padding-top: 0; }
+
+/* ── 手机上表格变卡片：.table-wrap.cards-sm ─────────────────────────
+   一行一张卡片，每一格前面用 data-label 写上它是哪一列。
+   只给「在手机上看」的那几张表用；宽表（工时、损益）照旧在容器里横滚。 */
+@media (max-width: 720px) {
+  .table-wrap.cards-sm { overflow-x: visible; border: 0; background: none; box-shadow: none; }
+  .cards-sm table, .cards-sm tbody, .cards-sm tr, .cards-sm td { display: block; width: 100%; }
+  /* 压过 `.table-wrap > table { min-width: 560px }` —— 卡片就是为了不要那个宽度 */
+  .table-wrap.cards-sm > table { min-width: 0; }
+  .table-wrap.cards-sm > table > * > tr > :first-child,
+  .table-wrap.cards-sm > table > * > tr > :last-child { padding-left: 0; padding-right: 0; }
+  .cards-sm thead { display: none; }
+  .cards-sm tr {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px;
+  }
+  .cards-sm td {
+    display: flex; gap: 10px; align-items: center; padding: 3px 0; border: 0;
+    text-align: left; min-width: 0;
+  }
+  .cards-sm td[data-label]::before {
+    content: attr(data-label); flex: none; width: 72px; color: var(--ink-3); font-size: 12px;
+  }
+  .cards-sm td.card-title { font-size: 15px; font-weight: 600; }
+  .cards-sm td.card-title::before { display: none; }
+  .cards-sm td.card-actions { padding-top: 8px; }
+}
 
 /* ── 首页待办（features/today）：一行一件事，左边一条颜色说有多急 ────────
    不用表格：手机上表格要横着滚，而待办是**要一眼扫完**的东西。
