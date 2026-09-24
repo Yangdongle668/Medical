@@ -157,3 +157,42 @@ test("1500px 上身份在侧栏底部，窄屏那条不出现", async ({ page })
   await expect(page.getByTestId("logout")).toBeVisible();
   await expect(page.getByTestId("who-bar")).toBeHidden();
 });
+
+/* 一线的侧栏：前六项平铺，其余收进「更多」（迁移 0054 / shell/modules.ts）。 */
+test.describe("一线侧栏", () => {
+  test("CRC 首屏只有六项主入口，「更多」展开后一项不少", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await page.goto("/today");
+    await expect(page.getByTestId("nav-primary").locator("a")).toHaveCount(6);
+    await expect(page.locator(".rail nav a")).toHaveCount(6);
+    await page.getByTestId("nav-more").click();
+    await expect(page.locator(".rail nav a")).toHaveCount(15);
+  });
+
+  test("人在「更多」里的某一页上，「更多」默认是展开的 —— 否则侧栏上没有一项是亮的", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await page.goto("/handovers");
+    await expect(page.getByTestId("nav-more")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator('.rail nav a[aria-current="page"]')).toHaveText("交接");
+  });
+
+  test("CRA 有「我的日程」「中心文件与物资」「伦理事务」", async ({ page }) => {
+    await page.setViewportSize({ width: 1500, height: 900 });
+    await page.goto("/sites?as=cra");
+    await expect(page.getByTestId("nav-primary").getByRole("link", { name: "我的日程" })).toBeVisible();
+    await page.getByTestId("nav-more").click();
+    await expect(page.getByRole("link", { name: "中心文件与物资" })).toBeVisible();
+    await page.getByRole("link", { name: "伦理事务" }).click();
+    /* CRA 没有 ethics 动作：看得到批件，没有点了必错的登记按钮 */
+    await expect(page.getByTestId("ethics-site").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "登记递交" })).toHaveCount(0);
+  });
+
+  test("390px：「更多」在横条上，不把页面顶出去", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto("/today");
+    await page.getByTestId("nav-more").click();
+    const { scroll, client } = await overflow(page);
+    expect(scroll).toBeLessThanOrEqual(client);
+  });
+});

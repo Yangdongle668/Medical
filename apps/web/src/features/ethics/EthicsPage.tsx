@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { today, daysSince } from "../../shell/dates.js";
 import { Why } from "../../shell/Why.js";
+import { loadMe } from "../login/me.js";
 
 /* ════════════════════════════════════════════════════════════════════
    伦理事务。
@@ -59,6 +60,16 @@ export function EthicsPage() {
   };
 
   useEffect(() => { void load(); }, []);
+
+  /* 登记递交 / 登记批复要 `ethics` 动作。CRA 看得到这一页（监查时要核对批件），
+     但没有这个动作 —— 按钮照样画出来的话，点下去必定 403。
+     一个按得动而必定失败的控件，比没有这个控件更糟。 */
+  const [canWrite, setCanWrite] = useState(false);
+  useEffect(() => {
+    void loadMe()
+      .then(m => setCanWrite(m.permissions.actions.includes("ethics")))
+      .catch(() => setCanWrite(false));
+  }, []);
 
   const run = async (what: string, fn: () => Promise<unknown>) => {
     setProblem(null); setSaid(null);
@@ -124,10 +135,12 @@ export function EthicsPage() {
                     ? <span className="muted mono">批件 {site.irbApprovedOn}</span>
                     : <span className="chip crit">无批件日</span>}
                   {open.length > 0 && <span className="chip warn">{open.length} 份待批复</span>}
-                  <button className="btn" data-testid={`add-${site.code}`}
-                    onClick={() => { setAdding(site); setProblem(null); setSaid(null); }}>
-                    登记递交
-                  </button>
+                  {canWrite && (
+                    <button className="btn" data-testid={`add-${site.code}`}
+                      onClick={() => { setAdding(site); setProblem(null); setSaid(null); }}>
+                      登记递交
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -156,7 +169,7 @@ export function EthicsPage() {
                               <td className="mono muted">{x.refNo ?? "—"}</td>
                               <td className="muted">{x.note ?? "—"}</td>
                               <td>
-                                {x.decision === "pending" && (
+                                {canWrite && x.decision === "pending" && (
                                   <button className="btn" data-testid={`decide-${x.id}`}
                                     onClick={() => { setDeciding(x); setProblem(null); setSaid(null); }}>
                                     登记批复

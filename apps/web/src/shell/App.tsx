@@ -8,7 +8,7 @@ import { loadMe, forgetMe, type Me } from "../features/login/me.js";
 import { ErrorBoundary } from "./ErrorBoundary.js";
 import { FactoryPasswordBanner } from "./FactoryPasswordBanner.js";
 import { Rail } from "./Rail.js";
-import { navFor } from "./modules.js";
+import { navFor, splitNav } from "./modules.js";
 
 /* 侧栏原来是这六项写死的：今天 / 我的中心 / 交接 / 工时 / 质量台账 / 费率卡。
    而**谁看得到哪些模块**库里早有答案（role_module，随 /v1/me 下发）——
@@ -105,6 +105,7 @@ export function App() {
     .then(() => nav("/login", { replace: true }));
 
   const groups = navFor(me?.permissions.modules ?? OFFLINE_MODULES);
+  const split = me ? splitNav(me.account.role.code, me.permissions.modules) : null;
   const here = activePath(loc.pathname, groups.flatMap(g => g.items.map(m => m.path)));
 
   return (
@@ -121,7 +122,7 @@ export function App() {
         </h1>
         {/* 分组标题只在**不止一组**时出现；条目多到一屏放不下时才折叠。
             两条规则都在 Rail 里，连同为什么。 */}
-        <Rail groups={groups} here={here} />
+        <Rail groups={groups} here={here} split={split} />
         {/* 待发数量常驻侧栏 —— 「我到底发出去没有」不该由用户去猜 */}
         {pending > 0 && (
           <NavLink to="/outbox" className="outbox-badge" data-testid="outbox-badge"

@@ -205,6 +205,9 @@ test.describe("闸门叫你去的地方，你得进得去", () => {
   test("CRC 的侧栏上有「立项受理」，点进去是真页面", async ({ page }) => {
     await page.goto("/sites?as=crc");
     const nav = page.locator(".rail nav");
+    /* 它不在一线的六项主入口里，收在「更多」下（迁移 0054）；
+       闸门上那句话本身带着直达链接，不必先找侧栏。 */
+    await page.getByTestId("nav-more").click();
     await expect(nav.getByRole("link", { name: "立项受理" })).toBeVisible();
     await nav.getByRole("link", { name: "立项受理" }).click();
     await expect(page.getByTestId("ac-summary")).toBeVisible();

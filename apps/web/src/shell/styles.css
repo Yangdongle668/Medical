@@ -118,6 +118,18 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
   width: 4px; height: 4px; border-radius: 50%; background: var(--accent); flex: none;
 }
 
+/* ── 一线的「更多」（见 Rail.tsx 与 modules.ts 的 splitNav） ─────────
+   主入口是第一组，没有标题；「更多」是第二组的标题按钮。
+   它长得像分组标题而不像导航项，理由同上。 */
+.nav-more { margin-top: 10px; border-top: 1px solid var(--line); border-radius: 0; }
+.nav-more-label {
+  flex: 1; font-size: 11px; letter-spacing: .06em; font-weight: 600;
+  color: var(--ink-3); padding: 12px 12px 6px;
+}
+.nav-group-h.nav-more .nav-n, .nav-group-h.nav-more .nav-caret { padding-top: 12px; }
+.nav-sub { display: flex; flex-direction: column; gap: 2px; }
+.nav-sub-title { font-size: 10.5px; color: var(--ink-3); padding: 10px 12px 3px; }
+
 /* 过滤框。它是侧栏里唯一一个输入框，所以要比正文控件更收敛：
    无边框、贴着底色，聚焦时才显出轮廓。 */
 .rail-find { padding: 4px 12px 8px; }
@@ -174,6 +186,13 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
   .nav-group { flex-direction: row; gap: 4px; }
   .nav-group + .nav-group { margin-top: 0; margin-left: 8px; }
   .nav-group-title { display: none; }
+  /* 「更多」在横条上是一个紧凑的按钮；展开后其余链接接在后面一起滚。 */
+  .nav-more { margin-top: 0; border-top: 0; border-radius: 6px; width: auto; flex: none; }
+  .nav-more-label, .nav-group-h.nav-more .nav-n, .nav-group-h.nav-more .nav-caret,
+  .nav-group-h.nav-more[aria-expanded="false"] > * { padding: 6px 4px; }
+  .nav-more-label { padding-left: 11px; }
+  .nav-sub { flex-direction: row; gap: 4px; }
+  .nav-sub-title { display: none; }
   .rail a { white-space: nowrap; padding: 6px 11px; }
   .rail a[aria-current="page"] { background: var(--accent-soft); }
   .rail .who { display: none; }
