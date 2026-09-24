@@ -8,6 +8,7 @@ import { ctx, principal } from "../../infra/ctx.js";
 import { siteScopeSql } from "@sitedesk/policy";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
 
 /* ════════════════════════════════════════════════════════════════════
    Timesheet & Cost —— 服务层只做三件事：取数、调用 calc、写审计。
@@ -79,6 +80,9 @@ async function staffRate(client: PoolClient, accountId: string, on: string) {
   };
 }
 
+/** 工时台账：工作日新的在前，同日 id 降序。游标见 infra/keyset.ts。 */
+const TIMESHEET_KEYSET: Keyset = { key: "t.work_date", type: "date", dir: "desc", idDir: "desc", id: "t.id" };
+
 @Injectable()
 export class CostService {
   constructor(private readonly audit: AuditService) {}
@@ -102,13 +106,13 @@ export class CostService {
     if (!q.includeVoided) conds.push(`t.voided_at IS NULL`);
     /* 已作废的不需要审 —— 它已经不在成本里了。所以"待审"天然排除作废。 */
     if (q.unapprovedOnly) conds.push(`t.approved_at IS NULL AND t.voided_at IS NULL`);
-    if (q.cursor) conds.push(`t.id < ${add(q.cursor)}`);
+    if (q.cursor) conds.push(keysetCond(TIMESHEET_KEYSET, q.cursor, add));
 
-    const { rows } = await c.client.query<EntryRow>(
-      `SELECT ${ENTRY_COLS} FROM ${ENTRY_FROM} WHERE ${conds.join(" AND ")}
+    const { rows } = await c.client.query<EntryRow & { cursor_key: string }>(
+      `SELECT ${keysetCol(TIMESHEET_KEYSET)}, ${ENTRY_COLS} FROM ${ENTRY_FROM} WHERE ${conds.join(" AND ")}
         ORDER BY t.work_date DESC, t.id DESC LIMIT ${add(q.limit + 1)}`, params);
     const items = rows.slice(0, q.limit).map(toEntry);
-    return { items, nextCursor: rows.length > q.limit ? items.at(-1)?.id ?? null : null };
+    return { items, nextCursor: keysetNext(rows, q.limit) };
   }
 
   async createTimesheet(b: {

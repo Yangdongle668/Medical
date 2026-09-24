@@ -9,6 +9,7 @@ import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { NotifyService } from "../../infra/notify.js";
 import { evaluateGate } from "./gate.js";
+import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
 
 const day = (v: Date | null) => v ? v.toISOString().slice(0, 10) : null;
 const iso = (v: Date | null) => v ? v.toISOString() : null;
@@ -46,6 +47,9 @@ const toItem = (r: ItemRow, today = new Date()) => ({
   overdueDays: !r.done_at && r.due_on && daysBetween(r.due_on, today) > 0
     ? daysBetween(r.due_on, today) : null
 });
+
+/** 交接：计划日新的在前，同日 id 降序。 */
+const HANDOVER_KEYSET: Keyset = { key: "h.planned_on", type: "date", dir: "desc", idDir: "desc", id: "h.id" };
 
 @Injectable()
 export class StaffingService {
@@ -845,12 +849,12 @@ export class StaffingService {
     const conds = ["true"];
     const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
     if (q.status) conds.push(`h.status = ${add(q.status)}`);
-    if (q.cursor) conds.push(`h.id < ${add(q.cursor)}`);
-    const { rows } = await c.client.query<{ id: string }>(
-      `SELECT h.id FROM handover h WHERE ${conds.join(" AND ")}
+    if (q.cursor) conds.push(keysetCond(HANDOVER_KEYSET, q.cursor, add));
+    const { rows } = await c.client.query<{ cursor_key: string; id: string }>(
+      `SELECT ${keysetCol(HANDOVER_KEYSET)}, h.id FROM handover h WHERE ${conds.join(" AND ")}
         ORDER BY h.planned_on DESC, h.id DESC LIMIT ${add(q.limit + 1)}`, params);
     const items = await this.assemble(rows.slice(0, q.limit).map(r => r.id));
-    return { items, nextCursor: rows.length > q.limit ? items.at(-1)?.id ?? null : null };
+    return { items, nextCursor: keysetNext(rows, q.limit) };
   }
 
   async createHandover(b: {

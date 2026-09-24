@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { ctx } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
+import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
 
 /* ════════════════════════════════════════════════════════════════════
    药品台账 · 生物样本 · 伦理递交
@@ -52,6 +53,11 @@ const toSubmission = (r: SubmissionRow) => ({
   decidedOn: day(r.decided_on), refNo: r.ref_no, note: r.note
 });
 
+/* 三本台账都是"新的在前"：日期降序，同日 id 降序。游标见 infra/keyset.ts。 */
+const IP_KEYSET: Keyset = { key: "m.moved_on", type: "date", dir: "desc", idDir: "desc", id: "m.id" };
+const SPECIMEN_KEYSET: Keyset = { key: "s.collected_on", type: "date", dir: "desc", idDir: "desc", id: "s.id" };
+const SUBMISSION_KEYSET: Keyset = { key: "r.submitted_on", type: "date", dir: "desc", idDir: "desc", id: "r.id" };
+
 @Injectable()
 export class AccountabilityService {
   constructor(private readonly audit: AuditService) {}
@@ -68,11 +74,12 @@ export class AccountabilityService {
     await this.assertSite(siteId);
     const c = ctx();
     const params: unknown[] = [siteId];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
     let cond = "";
-    if (q.cursor) { params.push(q.cursor); cond = ` AND m.id < $${params.length}`; }
+    if (q.cursor) cond += ` AND ${keysetCond(IP_KEYSET, q.cursor, add)}`;
     params.push(q.limit + 1);
-    const { rows } = await c.client.query<IpRow>(
-      `SELECT m.* FROM ip_movement m WHERE m.study_site_id = $1${cond}
+    const { rows } = await c.client.query<IpRow & { cursor_key: string }>(
+      `SELECT ${keysetCol(IP_KEYSET)}, m.* FROM ip_movement m WHERE m.study_site_id = $1${cond}
         ORDER BY m.moved_on DESC, m.id DESC LIMIT $${params.length}`, params);
     const { rows: bal } = await c.client.query<{ n: string }>(
       "SELECT app.ip_balance($1) AS n", [siteId]);
@@ -80,7 +87,7 @@ export class AccountabilityService {
     const items = rows.slice(0, q.limit).map(toIp);
     return {
       items,
-      nextCursor: rows.length > q.limit ? items.at(-1)?.id ?? null : null,
+      nextCursor: keysetNext(rows, q.limit),
       balance,
       /* 关闭闸门看的就是它：不为 0 就关不掉（负数是账不平，正数是还有药在手）。
          放在台账里，是为了让人在这一页直接看见"我为什么关不掉中心"。 */
@@ -121,15 +128,16 @@ export class AccountabilityService {
     await this.assertSite(siteId);
     const c = ctx();
     const params: unknown[] = [siteId];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
     let cond = "";
     if (q.openOnly) cond += " AND s.received_on IS NULL AND s.discarded_on IS NULL";
-    if (q.cursor) { params.push(q.cursor); cond += ` AND s.id < $${params.length}`; }
+    if (q.cursor) cond += ` AND ${keysetCond(SPECIMEN_KEYSET, q.cursor, add)}`;
     params.push(q.limit + 1);
-    const { rows } = await c.client.query<SpecimenRow>(
-      `SELECT s.* FROM specimen s WHERE s.study_site_id = $1${cond}
+    const { rows } = await c.client.query<SpecimenRow & { cursor_key: string }>(
+      `SELECT ${keysetCol(SPECIMEN_KEYSET)}, s.* FROM specimen s WHERE s.study_site_id = $1${cond}
         ORDER BY s.collected_on DESC, s.id DESC LIMIT $${params.length}`, params);
     const items = rows.slice(0, q.limit).map(toSpecimen);
-    return { items, nextCursor: rows.length > q.limit ? items.at(-1)?.id ?? null : null };
+    return { items, nextCursor: keysetNext(rows, q.limit) };
   }
 
   async recordSpecimen(siteId: string, b: {
@@ -192,14 +200,15 @@ export class AccountabilityService {
     await this.assertSite(siteId);
     const c = ctx();
     const params: unknown[] = [siteId];
+    const add = (v: unknown) => { params.push(v); return `$${params.length}`; };
     let cond = "";
-    if (q.cursor) { params.push(q.cursor); cond = ` AND r.id < $${params.length}`; }
+    if (q.cursor) cond += ` AND ${keysetCond(SUBMISSION_KEYSET, q.cursor, add)}`;
     params.push(q.limit + 1);
-    const { rows } = await c.client.query<SubmissionRow>(
-      `SELECT r.* FROM regulatory_submission r WHERE r.study_site_id = $1${cond}
+    const { rows } = await c.client.query<SubmissionRow & { cursor_key: string }>(
+      `SELECT ${keysetCol(SUBMISSION_KEYSET)}, r.* FROM regulatory_submission r WHERE r.study_site_id = $1${cond}
         ORDER BY r.submitted_on DESC, r.id DESC LIMIT $${params.length}`, params);
     const items = rows.slice(0, q.limit).map(toSubmission);
-    return { items, nextCursor: rows.length > q.limit ? items.at(-1)?.id ?? null : null };
+    return { items, nextCursor: keysetNext(rows, q.limit) };
   }
 
   async recordSubmission(siteId: string, b: {

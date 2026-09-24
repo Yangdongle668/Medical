@@ -1141,3 +1141,72 @@ describe("访视清单 · windowOpensBy", () => {
     expect(r.status).toBe(422);
   });
 });
+
+/* 翻页。原来的游标是 `v.id < 末行 id`，而排序是按窗口收口日 ——
+   两者无关，第二页会漏行、也会重复。只取一页的调用方永远看不出来。 */
+describe("访视清单 · 翻页", () => {
+  it("逐页翻完 = 一次取完：不漏、不重、顺序一致", async () => {
+    /* 找一个访视数在 8～200 之间的中心：够翻好几页，又能一次取完做对照。 */
+    const sites = (await boss.get(`/v1/study-sites?limit=200`)).body.items as { id: string }[];
+    let base = "", all: { body: { items: { id: string }[]; nextCursor: string | null } } | null = null;
+    for (const s of sites) {
+      base = `/v1/subject-visits?studySiteId=${s.id}`;
+      const r = await boss.get(`${base}&limit=200`);
+      if (r.body.nextCursor === null && r.body.items.length > 7) { all = r; break; }
+    }
+    expect(all, "种子里没有访视数在 8～200 之间的中心").not.toBeNull();
+
+    const got: string[] = [];
+    let cursor: string | null = null;
+    for (let n = 0; n < 100; n++) {
+      const r = await boss.get(`${base}&limit=7${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+      expect(r.status).toBe(200);
+      got.push(...(r.body.items as { id: string }[]).map(v => v.id));
+      cursor = r.body.nextCursor;
+      if (!cursor) break;
+    }
+    expect(new Set(got).size, "翻页翻出了重复的").toBe(got.length);
+    expect(got).toEqual(all!.body.items.map(v => v.id));
+  });
+
+  it("游标不认得是 422，不是 500", async () => {
+    const r = await boss.get(`/v1/subject-visits?cursor=${randomUUID()}`);
+    expect(r.status).toBe(422);
+  });
+});
+
+/* 访视窗口的最后一天。`visit_window` 定义成 daterange(…, '[]')，
+   而 PostgreSQL 会把日期区间规范成 `[)` —— upper() 取到的是**窗口关闭后的第一天**。
+   原来 windowTo 直接用了它：显示的窗口长一天，"今天到期"晚一天，
+   而完成访视的超窗判定也用它 —— **窗口关闭第二天完成的访视不算超窗，不记偏离**。 */
+describe("访视窗口的最后一天", () => {
+  it("windowTo = 目标日 + 窗口天数，不是再多一天", async () => {
+    const r = await boss.get(`/v1/subject-visits?limit=50`);
+    expect(r.body.items.length).toBeGreaterThan(0);
+    for (const v of r.body.items as { targetDate: string; windowDays: number; windowTo: string }[])
+      expect(v.windowTo, `目标日 ${v.targetDate} ± ${v.windowDays}`)
+        .toBe(shift(v.targetDate, v.windowDays));
+  });
+
+  it("窗口关闭的第二天完成就是超窗：要写原因", async () => {
+    const s = await siteByCode(crc, "SS-01");
+    const { id } = await freshSubject(crc, s.id, lateIcf());
+    const v = await currentVisit(crc, id);
+    for (const t of v.tasks)
+      await crc.post(`/v1/subject-visits/${v.id}/tasks/${t.seq}:done`, {}, K());
+    const dayAfter = shift(v.targetDate, v.windowDays + 1);
+    expect(dayAfter <= today(), "这条测试要求窗口在过去").toBe(true);
+    const r = await crc.post(`/v1/subject-visits/${v.id}:complete`,
+      { actualDate: dayAfter, hours: 2 }, K());
+    expect(r.status).toBe(422);
+    expect(r.body.invariant).toBe("out-of-window-needs-reason");
+  });
+
+  it("清单上的「已超窗」与单条上的 outOfWindow 是同一个口径", async () => {
+    const r = await boss.get(`/v1/subject-visits?status=planned&outOfWindow=true&limit=100`);
+    for (const v of r.body.items as { windowTo: string; outOfWindow: boolean }[]) {
+      expect(v.outOfWindow).toBe(true);
+      expect(v.windowTo < today()).toBe(true);
+    }
+  });
+});

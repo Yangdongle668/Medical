@@ -6,6 +6,7 @@ import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { nextCode } from "../../infra/code.js";
+import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
 
 /* ════════════════════════════════════════════════════════════════════
    立项受理与中心文件（ISF）。
@@ -90,6 +91,9 @@ const ISF_FROM = `
   JOIN study_site s ON s.id = i.study_site_id
   LEFT JOIN account cb ON cb.id = i.checked_by`;
 
+/** 立项受理：递交日新的在前，同日 id 降序。 */
+const ACCEPTANCE_KEYSET: Keyset = { key: "a.submitted_on", type: "date", dir: "desc", idDir: "desc", id: "a.id" };
+
 @Injectable()
 export class AcceptanceService {
   constructor(private readonly audit: AuditService) {}
@@ -144,16 +148,16 @@ export class AcceptanceService {
     if (q.studyId) conds.push(`a.study_id = ${add(q.studyId)}`);
     if (q.state?.length) conds.push(`a.state = ANY(${add(q.state)})`);
     if (q.openOnly) conds.push(`a.state <> 'accepted'`);
-    if (q.cursor) conds.push(`a.id < ${add(q.cursor)}`);
+    if (q.cursor) conds.push(keysetCond(ACCEPTANCE_KEYSET, q.cursor, add));
 
-    const { rows } = await c.client.query<AcRow>(
-      `SELECT ${AC_COLS} ${AC_FROM}
+    const { rows } = await c.client.query<AcRow & { cursor_key: string }>(
+      `SELECT ${keysetCol(ACCEPTANCE_KEYSET)}, ${AC_COLS} ${AC_FROM}
         WHERE ${conds.join(" AND ")}
         ORDER BY a.submitted_on DESC, a.id DESC LIMIT ${add(q.limit + 1)}`, params);
     const pageRows = rows.slice(0, q.limit);
     return {
       items: pageRows.map(r => this.acDto(r)),
-      nextCursor: rows.length > q.limit ? pageRows.at(-1)?.id ?? null : null
+      nextCursor: keysetNext(rows, q.limit)
     };
   }
 

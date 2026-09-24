@@ -42,6 +42,16 @@ const CASES = [
     why: "没有它就是全表扫 18 万行，而 RLS 行谓词是每行一次函数调用 —— 实测 48 秒"
   },
   {
+    name: "访视列表：第二页（游标 = 收口日 | id）",
+    sql: `SELECT v.id FROM subject_visit v
+           WHERE upper(v.visit_window) >= DATE '2026-06-01'
+             AND (upper(v.visit_window) > DATE '2026-06-01'
+                  OR v.id < 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)
+           ORDER BY upper(v.visit_window), v.id DESC LIMIT 51`,
+    mustUse: "visit_feed_idx",
+    why: "翻页的每一页都该从索引上接着读，而不是回头把前面的全扫一遍"
+  },
+  {
     name: "访视列表：限定到一个中心",
     sql: (ctx) => `SELECT v.id FROM subject_visit v
                     WHERE v.study_site_id = '${ctx.site}'

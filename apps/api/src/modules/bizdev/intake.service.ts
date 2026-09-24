@@ -6,6 +6,7 @@ import { ctx, principal } from "../../infra/ctx.js";
 import { ProblemException, notFound } from "../../infra/problem.js";
 import { AuditService } from "../../infra/audit.service.js";
 import { nextCode } from "../../infra/code.js";
+import { keysetCond, keysetCol, keysetNext, type Keyset } from "../../infra/keyset.js";
 
 /* ════════════════════════════════════════════════════════════════════
    立项与建档。
@@ -54,6 +55,9 @@ const I_FROM = `
   JOIN account sb ON sb.id = i.submitted_by
   LEFT JOIN account db ON db.id = i.decided_by
   LEFT JOIN study st ON st.id = i.study_id`;
+
+/** 立项申请：递交日新的在前，同日 id 降序。 */
+const INTAKE_KEYSET: Keyset = { key: "i.submitted_on", type: "date", dir: "desc", idDir: "desc", id: "i.id" };
 
 @Injectable()
 export class IntakeService {
@@ -114,22 +118,23 @@ export class IntakeService {
       conds.push(`(i.contract_cents = 0
                    OR (i.contract_cents - i.estimated_cost_cents)::numeric
                       / i.contract_cents < ${add(INTAKE_GM_GATE)})`);
-    if (q.cursor) conds.push(`i.id < ${add(q.cursor)}`);
+    if (q.cursor) conds.push(keysetCond(INTAKE_KEYSET, q.cursor, add));
 
-    const { rows } = await c.client.query<IRow>(
-      `SELECT ${I_COLS} ${I_FROM}
+    const { rows } = await c.client.query<IRow & { cursor_key: string }>(
+      `SELECT ${keysetCol(INTAKE_KEYSET)}, ${I_COLS} ${I_FROM}
         WHERE ${conds.join(" AND ")}
         ORDER BY i.submitted_on DESC, i.id DESC LIMIT ${add(q.limit + 1)}`, params);
 
     const pageRows = rows.slice(0, q.limit);
     /* 越线的排最前 —— 按提交日排的话，最该看的那几条会沉在底下。
-       翻页游标仍按 id：排序是展示口径，游标是稳定口径，两者不必相同。 */
+       这一步只重排**这一页之内**；翻页游标跟 SQL 的排序键走（infra/keyset.ts）——
+       游标与 SQL 排序不一致时，翻页会漏行又重复（原来按 id 正是如此）。 */
     const items = pageRows.map(r => this.dto(r))
       .sort((a, b) => Number(b.belowGate) - Number(a.belowGate)
         || b.submittedOn.localeCompare(a.submittedOn));
     return {
       items,
-      nextCursor: rows.length > q.limit ? pageRows.at(-1)?.id ?? null : null
+      nextCursor: keysetNext(rows, q.limit)
     };
   }
 
