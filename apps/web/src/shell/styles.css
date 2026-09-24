@@ -137,6 +137,9 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
   display: block; align-items: initial;
 }
 
+/* 窄屏专用的身份条（见 App.tsx）。宽屏上身份在侧栏底部，这里不出现。 */
+.who-bar { display: none; }
+
 .main {
   min-width: 0; padding: 32px clamp(18px, 3vw, 40px) 88px;
   max-width: 1520px; width: 100%; background: var(--ground);
@@ -174,6 +177,12 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { box-shadow: 
   .rail a { white-space: nowrap; padding: 6px 11px; }
   .rail a[aria-current="page"] { background: var(--accent-soft); }
   .rail .who { display: none; }
+  .who-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin: -4px 0 12px; font-size: 12px; color: var(--ink-3);
+  }
+  .who-bar-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who-bar .btn { flex: none; }
   /* 过滤框是给"一列二十四项、要滚"的侧栏用的。手机上导航已经是
      一条横向滚动条，再摆一个搜索框只是在首屏上占掉六十像素。 */
   .rail-find { display: none; }

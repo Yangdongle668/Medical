@@ -97,6 +97,13 @@ export function App() {
 
   if (!ready) return <div className="main"><p className="muted">加载中…</p></div>;
 
+  /* 服务端吊销失败（断网、5xx）也要走到登录页。`logout()` 在 finally 里
+     已经把本地令牌清掉了；原来这里只接了 then —— 请求一失败，
+     令牌没了、人却还停在原页，界面看起来仍然登着。 */
+  const signOut = () => void logout()
+    .catch(() => { /* 本地已登出；服务端那份会话由过期清理收走 */ })
+    .then(() => nav("/login", { replace: true }));
+
   const groups = navFor(me?.permissions.modules ?? OFFLINE_MODULES);
   const here = activePath(loc.pathname, groups.flatMap(g => g.items.map(m => m.path)));
 
@@ -140,7 +147,7 @@ export function App() {
             <div data-testid="who">{me.account.displayName} · {me.account.role.name}</div>
             <div data-testid="scope">{me.scopeLabel}</div>
             <button className="btn" data-testid="logout" style={{ marginTop: 8 }}
-              onClick={() => void logout().then(() => nav("/login", { replace: true }))}>
+              onClick={signOut}>
               登出
             </button>
           </> : "未登录"}
@@ -150,6 +157,15 @@ export function App() {
           人还能换一页、还能看见待发条数、还能登出。
           key 用路径：换一页就是一次新的尝试，不必手动点重试。 */}
       <main className="main">
+        {/* 手机上侧栏是横着的一条，底部的身份区放不下（见 styles.css 720px 断点）。
+            原来的处置是直接藏掉 —— 于是手机上**没有登出**，也看不出现在登着的是谁，
+            而医院里一台平板几个人轮着用是常态。这一条只在窄屏出现。 */}
+        {me && (
+          <div className="who-bar" data-testid="who-bar">
+            <span className="who-bar-name">{me.account.displayName} · {me.account.role.name}</span>
+            <button className="btn" data-testid="logout-bar" onClick={signOut}>登出</button>
+          </div>
+        )}
         {/* 出厂口令那条红条在**边界之外**：某一页炸了，警报不该跟着消失。
             也在 key 之外 —— 换页不该把它重置成"没看过"。 */}
         {me?.credentials.passwordIsInitial && (

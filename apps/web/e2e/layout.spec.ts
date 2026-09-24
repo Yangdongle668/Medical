@@ -139,3 +139,21 @@ test("暗色模式下同样不溢出，且背景确实换了", async ({ page }) 
   const { scroll, client } = await overflow(page);
   expect(scroll).toBeLessThanOrEqual(client);
 });
+
+/* 手机上侧栏底部的身份区是藏掉的（放不下）。在此之前一起藏掉的还有
+   **登出** —— 手机上登出不了，也看不出现在登着的是谁。
+   窄屏另有一条身份条；宽屏上它不出现，免得同一个按钮出现两次。 */
+test("390px 上看得到是谁登着，并且能登出", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto("/today");
+  await expect(page.getByTestId("who-bar")).toBeVisible();
+  await page.getByTestId("logout-bar").click();
+  await expect(page).toHaveURL(/\/login/);
+});
+
+test("1500px 上身份在侧栏底部，窄屏那条不出现", async ({ page }) => {
+  await page.setViewportSize({ width: 1500, height: 900 });
+  await page.goto("/today");
+  await expect(page.getByTestId("logout")).toBeVisible();
+  await expect(page.getByTestId("who-bar")).toBeHidden();
+});
