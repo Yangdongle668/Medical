@@ -4,6 +4,7 @@ import { call } from "../../api/client.js";
 import { loadMe } from "../login/me.js";
 import { recallWho } from "../login/session.js";
 import { Why } from "../../shell/Why.js";
+import { ReportSaeForm } from "../quality/SaePanel.js";
 
 /* ════════════════════════════════════════════════════════════════════
    今天 —— 一线的首页：**要你动手的事，按先后排成一列。**
@@ -68,10 +69,17 @@ const KIND: Record<Kind, { label: string; go: string; href: (i: InboxItem) => st
   monitor_visit: { label: "监查访视", go: "查看",   all: "/monitoring", href: () => "/monitoring" }
 };
 
+/* SAE 单独一组、钉在最上面。服务端已经把它排在最前，但这里还要按紧急程度分段 ——
+   不单列的话，一条还剩三小时的 SAE（today）会落到整段「已过期」的访视下面，
+   服务端那条排序就白做了。 */
 const GROUPS = [
-  { urgency: "overdue", title: "已过期", sub: "期限已经过了" },
-  { urgency: "today",   title: "今天",   sub: "今天就是期限" },
-  { urgency: "soon",    title: "这几天", sub: "7 天内要办" }
+  { id: "sae",     title: "SAE",    sub: "知悉后 24 小时内上报", pick: (i: InboxItem) => i.kind === "sae" },
+  { id: "overdue", title: "已过期", sub: "期限已经过了",
+    pick: (i: InboxItem) => i.kind !== "sae" && i.urgency === "overdue" },
+  { id: "today",   title: "今天",   sub: "今天就是期限",
+    pick: (i: InboxItem) => i.kind !== "sae" && i.urgency === "today" },
+  { id: "soon",    title: "这几天", sub: "7 天内要办",
+    pick: (i: InboxItem) => i.kind !== "sae" && i.urgency === "soon" }
 ] as const;
 
 /* 离线时给上一次拿到的那份 —— 按账号分开存，共用一台平板时不串。
@@ -87,22 +95,35 @@ function readCache(accountId: string): Inbox | null {
   } catch { return null; }
 }
 
+type Site = { id: string; code: string; hospital: string };
+
 export function TodayPage() {
   const [box, setBox] = useState<Inbox | null>(null);
   const [stale, setStale] = useState(false);
   const [failed, setFailed] = useState(false);
+  /** 报 SAE 用：有 subjWrite 才给按钮，中心列表给表单挑。 */
+  const [saeSites, setSaeSites] = useState<Site[] | null>(null);
+
+  const load = async () => {
+    try {
+      const [me, b] = await Promise.all([loadMe(), call<Inbox>("getMyInbox")]);
+      setBox(b); setStale(false); saveCache(me.account.id, b);
+    } catch {
+      const who = recallWho();
+      const cached = who ? readCache(who.accountId) : null;
+      if (cached) { setBox(cached); setStale(true); } else setFailed(true);
+    }
+  };
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const [me, b] = await Promise.all([loadMe(), call<Inbox>("getMyInbox")]);
-        setBox(b); saveCache(me.account.id, b);
-      } catch {
-        const who = recallWho();
-        const cached = who ? readCache(who.accountId) : null;
-        if (cached) { setBox(cached); setStale(true); } else setFailed(true);
-      }
-    })();
+    void load();
+    /* 「报告 SAE」放在首页最上面：原来它在 质量与 SAE → 选中心 → 面板 里，
+       而它是一线手上最急、最不能等的一件事。 */
+    void loadMe().then(m => {
+      if (!m.permissions.actions.includes("subjWrite")) return;
+      return call<{ items: Site[] }>("listStudySites", { query: { limit: 200 } })
+        .then(r => setSaeSites(r.items));
+    }).catch(() => { /* 离线：没有按钮，不报错 —— 登记 SAE 要联网 */ });
   }, []);
 
   if (failed) return (
@@ -130,6 +151,13 @@ export function TodayPage() {
         </p>
       </div>
 
+      {saeSites && saeSites.length > 0 && (
+        <div style={{ marginBottom: 14 }} data-testid="today-sae">
+          {/* 登记完回到待办：它会带着 24 小时倒计时出现在最上面 */}
+          <ReportSaeForm sites={saeSites} cta="报告 SAE" onCreated={() => void load()} />
+        </div>
+      )}
+
       {stale && (
         <div className="problem" data-testid="today-stale" style={{ marginBottom: 14 }}>
           <b>离线</b> —— 下面是 {at.toLocaleString("zh-CN", { hour12: false })} 的待办，可能已经有变化。
@@ -137,10 +165,10 @@ export function TodayPage() {
       )}
 
       {GROUPS.map(g => {
-        const list = box.items.filter(i => i.urgency === g.urgency);
+        const list = box.items.filter(g.pick);
         if (!list.length) return null;
         return (
-          <section key={g.urgency} className="stack" data-testid={`today-${g.urgency}`}
+          <section key={g.id} className="stack" data-testid={`today-${g.id}`}
             style={{ marginBottom: 18 }}>
             <h3>{g.title} <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>
               {g.sub} · {list.length}</span></h3>

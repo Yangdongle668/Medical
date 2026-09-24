@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@sitedesk/ui/react";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
-import { CreateForm, Field, Area } from "../../shell/CreateForm.js";
+import { CreateForm, Field, Area, Pick } from "../../shell/CreateForm.js";
 import { loadMe } from "../login/me.js";
 import { Why } from "../../shell/Why.js";
 
@@ -234,23 +234,30 @@ export function SaePanel({ studySiteId }: { studySiteId: string }) {
    先记事件、上报之后再补是常态（那正是台账上"还在计时"那几条）。
    留空不是漏填，所以旁边说清楚它意味着什么。
    ════════════════════════════════════════════════════════════════════ */
-function ReportSaeForm({ studySiteId, onCreated }:
-  { studySiteId: string; onCreated: () => void }) {
+export function ReportSaeForm({ studySiteId, sites, onCreated, cta = "登记一条 SAE" }: {
+  /** 固定在一个中心上（SAE 面板）…… */
+  studySiteId?: string;
+  /** ……或者让人选（首页的「报告 SAE」）。只有一个中心时不出选择框。 */
+  sites?: { id: string; code: string; hospital: string }[];
+  onCreated: () => void;
+  cta?: string;
+}) {
+  const [site, setSite] = useState(studySiteId ?? sites?.[0]?.id ?? "");
   const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
   const [occurredAt, setOccurredAt] = useState("");
   const [reportedAt, setReportedAt] = useState("");
 
-  const ready = !!(title.trim() && detail.trim().length >= 4 && occurredAt);
+  const ready = !!(site && title.trim() && detail.trim().length >= 4 && occurredAt);
 
   return (
     <CreateForm
-      testid="new-sae" cta="登记一条 SAE" title="严重不良事件登记"
+      testid="new-sae" cta={cta} title="严重不良事件登记"
       sub="发生时刻决定及时率 —— 它不是录入时刻" ready={ready}
       note={<>上报时刻可以留空，之后在台账上补 —— 那几条会显示为「还在计时」。</>}
       onSubmit={async () => {
         await call("reportSae", {
-          params: { id: studySiteId },
+          params: { id: site },
           body: {
             title: title.trim(), detail: detail.trim(),
             occurredAt: new Date(occurredAt).toISOString(),
@@ -262,6 +269,11 @@ function ReportSaeForm({ studySiteId, onCreated }:
         onCreated();
         return said;
       }}>
+      {!studySiteId && sites && sites.length > 1 && (
+        <Pick label="中心" v={site} on={setSite} testid="sae-site" placeholder={null}
+          empty="你名下还没有中心。"
+          options={sites.map(x => ({ value: x.id, label: `${x.code} ${x.hospital}` }))} />
+      )}
       <Field label="事件名称" v={title} on={setTitle} testid="sae-title"
         placeholder="例：III 度中性粒细胞减少伴发热" />
       <Area label="经过" hint="至少 4 字" v={detail} on={setDetail} testid="sae-detail" rows={3}

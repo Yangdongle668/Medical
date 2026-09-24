@@ -286,3 +286,39 @@ test.describe("今天", () => {
     await expect(page.locator('[data-kind="approval"]')).toHaveCount(1);
   });
 });
+
+/* 「报告 SAE」在首页最上面。原来它在 质量与 SAE → 选中心 → 面板 里 ——
+   一线手上最急、最不能等的一件事，路径最深。 */
+test.describe("首页报告 SAE", () => {
+  test("在首页登记，登记完它带着倒计时出现在待办最前面", async ({ page }) => {
+    await page.goto("/today");
+    await page.getByTestId("new-sae").click();
+    /* 发生时刻仍然不预填 —— 与质量页同一个表单 */
+    await expect(page.getByTestId("sae-occurred")).toHaveValue("");
+    /* 不止一个中心时要选；默认是第一个 */
+    await expect(page.getByTestId("sae-site")).toBeVisible();
+
+    const recent = new Date(Date.now() - 2 * 3_600_000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const local = `${recent.getFullYear()}-${pad(recent.getMonth() + 1)}-${pad(recent.getDate())}` +
+      `T${pad(recent.getHours())}:${pad(recent.getMinutes())}`;
+    await page.getByTestId("sae-title").fill("首页登记的 SAE");
+    await page.getByTestId("sae-detail").fill("受试者夜间高热入院，研究者次晨知悉。");
+    await page.getByTestId("sae-occurred").fill(local);
+    await page.getByTestId("new-sae-submit").click();
+
+    const mine = page.getByTestId("inbox-item").filter({ hasText: "首页登记的 SAE" });
+    await expect(mine).toContainText("24 小时内要上报");
+    /* SAE 那一组排在所有别的待办前面（已超时的 SAE 在它之前，那是对的） */
+    const kinds = await page.getByTestId("inbox-item").evaluateAll(
+      els => els.map(e => [e.getAttribute("data-kind"), e.textContent ?? ""] as const));
+    const at = kinds.findIndex(([, t]) => t.includes("首页登记的 SAE"));
+    expect(kinds.slice(0, at + 1).every(([k]) => k === "sae")).toBe(true);
+  });
+
+  test("没有 subjWrite 的角色没有这个按钮", async ({ page }) => {
+    await page.goto("/today?as=cra");
+    await expect(page.getByTestId("today-summary")).toBeVisible();
+    await expect(page.getByTestId("new-sae")).toHaveCount(0);
+  });
+});
