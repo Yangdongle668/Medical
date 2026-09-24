@@ -63,3 +63,34 @@ test("没有的页签说清楚，并且给得回去", async ({ page }) => {
   await page.getByRole("link", { name: "回到概览" }).click();
   await expect(page).toHaveURL(/\/sites\/s1$/);
 });
+
+/* 受试者详情（W10）：「S-0203 现在什么情况」一页答完 ——
+   访视、质疑、SAE、补偿排在一条时间线上，该动手的也在这里。 */
+test.describe("受试者详情", () => {
+  test("从受试者列表点筛选号进来；时间线有访视与质疑，都点得进去", async ({ page }) => {
+    await page.goto("/subjects");
+    const row = page.getByTestId("subject-row").filter({ hasText: "S-0203" }).first();
+    await row.getByRole("link", { name: "S-0203" }).click();
+    await expect(page).toHaveURL(/\/subjects\/[^/]+$/);
+    await expect(page.getByTestId("subject-title")).toContainText("S-0203");
+
+    const tl = page.getByTestId("subject-timeline");
+    await expect(tl.locator('[data-kind="访视"]').first()).toBeVisible();
+    await expect(tl.locator('[data-kind="质疑"]').first()).toBeVisible();
+    await tl.locator('[data-kind="访视"]').first().getByRole("link", { name: "打开" }).click();
+    await expect(page).toHaveURL(/\/visits\//);
+  });
+
+  test("在详情页登记脱落 —— 与列表同一个表单，后果在按下去之前说清", async ({ page }) => {
+    await page.goto("/subjects");
+    await page.getByTestId("subject-row").filter({ hasText: "S-0203" }).first()
+      .getByRole("link", { name: "S-0203" }).click();
+    await page.getByTestId("subject-withdraw").click();
+    await expect(page.getByTestId("wd-consequence")).toContainText("一并作废");
+  });
+
+  test("范围外或不存在：说看不到，给得回去", async ({ page }) => {
+    await page.goto("/subjects/nope");
+    await expect(page.getByTestId("subject-gone")).toBeVisible();
+  });
+});

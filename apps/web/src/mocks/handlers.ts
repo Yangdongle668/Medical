@@ -2120,6 +2120,7 @@ export const scenarioHandlers = [
     const states = q.getAll("state");
     if (states.length) items = items.filter(x => states.includes(x.state));
     if (q.get("studySiteId")) items = items.filter(x => x.studySiteId === q.get("studySiteId"));
+    if (q.get("subjectId")) items = items.filter(x => x.subjectId === q.get("subjectId"));
     if (q.get("mine") === "true")
       items = items.filter(x => x.ownerAccountId === identity().id);
     /* 真接口按 raised_by_account 比对；mock 的行上没存账号 id，
@@ -3379,6 +3380,16 @@ export const scenarioHandlers = [
   }),
 
   /* ── 受试者补偿 ────────────────────────────────────────────────── */
+  /* 受试者详情。范围外与不存在同样 404；没有 subjRead 是 403（与服务端同一口径）。 */
+  http.get(pathToRegExp("/v1/subjects/{id}"), ({ request }) => {
+    if (!identity().actions.includes("subjRead")) return HttpResponse.json(
+      problem("forbidden", 403, "你的角色不能查看受试者明细"), { status: 403 });
+    const id = seg(request.url, /\/subjects\/([^/?:]+)/);
+    const s = inScope(scenario.subjects).find(x => x.id === id);
+    return s ? HttpResponse.json(maskSubject(s))
+      : HttpResponse.json(problem("not-found", 404, "受试者不存在"), { status: 404 });
+  }),
+
   http.get(pathToRegExp("/v1/subject-payments"), ({ request }) => {
     const q = new URL(request.url).searchParams;
     let items = scenario.payments.map(maskPayment);

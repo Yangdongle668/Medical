@@ -56,6 +56,7 @@ import { MODULES } from "./shell/modules.js";
 import { MOCK_ROLES, type MockRole } from "./mocks/roles.js";
 import { ToastHost } from "@sitedesk/ui/react";
 import "./shell/styles.css";
+import { SubjectPage } from "./features/subject/SubjectPage.js";
 
 /* 已经建好的页 —— 按路径登记。
    模块登记表（shell/modules.ts）里凡是没出现在这张表里的路径，
@@ -126,6 +127,7 @@ const router = createBrowserRouter([
       /* 详情页与不进导航的那几页。它们不属于任何模块 ——
          详情页从列表点进去，发件箱由侧栏那个角标进去。 */
       { path: "visits/:id", element: <VisitPage /> },
+      { path: "subjects/:id", element: <SubjectPage /> },
       { path: "sites/:id", element: <SiteDetailPage /> },
       { path: "sites/:id/startup", element: <StartupChecklistPage /> },
       { path: "sites/:id/pnl", element: <SitePnlPage /> },

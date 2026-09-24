@@ -235,11 +235,13 @@ export function SaePanel({ studySiteId }: { studySiteId: string }) {
    先记事件、上报之后再补是常态（那正是台账上"还在计时"那几条）。
    留空不是漏填，所以旁边说清楚它意味着什么。
    ════════════════════════════════════════════════════════════════════ */
-export function ReportSaeForm({ studySiteId, sites, onCreated, cta = "登记一条 SAE" }: {
+export function ReportSaeForm({ studySiteId, sites, subjectId, onCreated, cta = "登记一条 SAE" }: {
   /** 固定在一个中心上（SAE 面板）…… */
   studySiteId?: string;
   /** ……或者让人选（首页的「报告 SAE」）。只有一个中心时不出选择框。 */
   sites?: { id: string; code: string; hospital: string }[];
+  /** 从受试者详情页报的：挂到这个人身上。 */
+  subjectId?: string;
   onCreated: () => void;
   cta?: string;
 }) {
@@ -260,6 +262,7 @@ export function ReportSaeForm({ studySiteId, sites, onCreated, cta = "登记一�
         await call("reportSae", {
           params: { id: site },
           body: {
+            ...(subjectId ? { subjectId } : {}),
             title: title.trim(), detail: detail.trim(),
             occurredAt: new Date(occurredAt).toISOString(),
             ...(reportedAt ? { reportedAt: new Date(reportedAt).toISOString() } : {})
