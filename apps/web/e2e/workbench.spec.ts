@@ -100,3 +100,52 @@ test.describe("团队工作台", () => {
     await expect(page.getByTestId("pm-summary")).toContainText("个中心在你的范围里");
   });
 });
+
+/* 日历（W15）：「列表」按天往下排，「月」一格一天；监查员本人的监查访视也铺上去。 */
+test.describe("我的日程 · 月", () => {
+  test("切到月：一格一天；点一天，下面是那一天的明细", async ({ page }) => {
+    await page.goto("/sched");
+    await page.getByTestId("view-month").click();
+    const grid = page.getByTestId("month-grid");
+    await expect(grid).toBeVisible();
+    const cells = grid.getByTestId("month-day");
+    expect(await cells.count()).toBeGreaterThanOrEqual(28);
+    await cells.last().click();
+    await expect(page.getByTestId("month-picked").getByTestId("sched-day")).toBeVisible();
+    /* 翻到下个月再翻回来，月份标签跟着变 */
+    const label = await page.getByTestId("month-label").textContent();
+    await page.getByTestId("month-next").click();
+    await expect(page.getByTestId("month-label")).not.toHaveText(label!);
+  });
+
+  test("CRA：自己的监查访视在日程上；点一个将来的日子可以直接排一趟，计划日就是那一天", async ({ page }) => {
+    await page.goto("/sched?as=cra");
+    await expect(page.getByTestId("sched-summary")).toContainText("监查访视");
+    await page.getByTestId("view-month").click();
+    await page.getByTestId("month-next").click();
+    const day = page.getByTestId("month-day").nth(10);
+    const date = await day.getAttribute("data-date");
+    await day.click();
+    await page.getByTestId("plan-visit").click();
+    await expect(page.getByTestId("pv-date")).toHaveValue(date!);
+  });
+
+  test("CRC 没有监查动作：月历上点一天，没有「排一次监查」", async ({ page }) => {
+    await page.goto("/sched");
+    await page.getByTestId("view-month").click();
+    await page.getByTestId("month-next").click();
+    await page.getByTestId("month-day").nth(10).click();
+    await expect(page.getByTestId("month-picked")).toBeVisible();
+    await expect(page.getByTestId("plan-visit")).toHaveCount(0);
+  });
+
+  test("390px：月历不把页面顶出去", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto("/sched");
+    await page.getByTestId("view-month").click();
+    await expect(page.getByTestId("month-grid")).toBeVisible();
+    const { scroll, client } = await page.evaluate(() =>
+      ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+    expect(scroll).toBeLessThanOrEqual(client);
+  });
+});

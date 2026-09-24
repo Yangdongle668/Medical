@@ -389,6 +389,31 @@ td .row.acts { flex-wrap: nowrap; white-space: nowrap; }
   .cards-sm td.card-actions { padding-top: 8px; }
 }
 
+/* ── 我的日程 · 月（features/workbench/SchedulePage）─────────────────
+   七列，周一开头。一格一天：几次访视可做、哪天有监查。
+   手机上格子只剩几十像素宽 —— 字缩小、标签折行，不横向溢出。 */
+.month {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px;
+}
+.month-h { font-size: 11px; color: var(--ink-3); text-align: center; padding: 2px 0; }
+.month-cell {
+  min-height: 74px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface);
+  text-align: left; cursor: pointer; font-family: inherit; color: inherit; min-width: 0;
+}
+.month-cell.blank { background: none; border-color: transparent; cursor: default; }
+.month-cell.is-past { opacity: .5; }
+.month-cell.is-today { border-color: var(--warn); }
+.month-cell.is-picked { border-color: var(--accent); box-shadow: var(--ring); }
+.month-cell .chip { font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.month-n { font-size: 12px; font-weight: 600; }
+.month-trip { white-space: nowrap; }
+@media (max-width: 720px) {
+  .month { gap: 2px; }
+  .month-cell { min-height: 58px; padding: 3px; }
+  .month-cell .chip { font-size: 10px; padding: 0 4px; }
+}
+
 /* ── 首页待办（features/today）：一行一件事，左边一条颜色说有多急 ────────
    不用表格：手机上表格要横着滚，而待办是**要一眼扫完**的东西。
    颜色之外还有文字标签（chip）—— 色觉差异下颜色那条线索会消失。 */

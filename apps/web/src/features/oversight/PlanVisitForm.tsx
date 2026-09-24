@@ -58,11 +58,14 @@ const DEFAULT_ITEMS: Record<string, string[]> = {
   ]
 };
 
-export function PlanVisitForm({ sites, onCreated }:
-  { sites: SiteOption[]; onCreated: () => void }) {
+export function PlanVisitForm({ sites, onCreated, defaultDate }: {
+  sites: SiteOption[]; onCreated: () => void;
+  /** 从日历上点了某一天再排 —— 那一天就是默认的计划日 */
+  defaultDate?: string;
+}) {
   const [siteId, setSiteId] = useState("");
   const [kind, setKind] = useState("");
-  const [plannedOn, setPlannedOn] = useState("");
+  const [plannedOn, setPlannedOn] = useState(defaultDate ?? "");
   const [days, setDays] = useState("1");
   const [pct, setPct] = useState("");
   const [note, setNote] = useState("");
@@ -100,7 +103,7 @@ export function PlanVisitForm({ sites, onCreated }:
           }
         });
         const said = `${site?.siteCode ?? "中心"} 的监查已排在 ${plannedOn}`;
-        setSiteId(""); setKind(""); setPlannedOn(""); setDays("1");
+        setSiteId(""); setKind(""); setPlannedOn(defaultDate ?? ""); setDays("1");
         setPct(""); setNote(""); setItems([]);
         onCreated();
         return said;
