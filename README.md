@@ -317,6 +317,9 @@ docker compose --project-directory deploy -f deploy/docker-compose.yml down -v
 | `SITEDESK_SMTP_URL` | 未设 | `smtp://用户:口令@主机:587`。开机那条路；系统里配了以系统里为准 |
 | `SITEDESK_MAIL_FROM` | 未设 | 发件人。配了 SMTP 却没配它 → **拒绝启动** |
 | `SITEDESK_SMS_WEBHOOK_URL` | 未设 | 短信网关，POST `{to, text}` + Bearer |
+| `SITEDESK_REMIND_INTERVAL_MS` | `600000`（10 分钟） | 邮件提醒多久扫一轮；`0` = 关。紧急提醒（SAE 时限、今天关窗的访视）到点就发，每件事每个档一次 |
+| `SITEDESK_DIGEST_HOUR` | `8` | 每日摘要：工作日本地时间过了几点发 |
+| `SITEDESK_TZ` | `Asia/Shanghai` | 「本地」是哪个时区 —— 摘要的日期与钟点、访视关窗的"今天"按它算 |
 | `SITEDESK_HSTS_MAX_AGE` | `63072000`（两年） | 秒。只在 `X-Forwarded-Proto: https` 时发；`0` = 关 |
 | `SITEDESK_HSTS_INCLUDE_SUBDOMAINS` | 未设（关） | `1` 打开。锁的是本部署不拥有的子域名，确认它们都有证书再开 |
 | `SITEDESK_FORCE_HTTPS` | 未设（关） | 明文请求 308 到 https（探针除外） |

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { owner } from "./helpers.js";
 import { execSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,6 +20,11 @@ const run = args => execSync(`${M} ${args}`, {
   cwd: ROOT, stdio: "pipe",
   env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL }
 });
+
+/* 退到 0054 之前要退几步 —— 0054 之后每加一条迁移，这个数就多一。
+   写死成 1 的话，下一条迁移一来，"退一步"退掉的就是那一条，而这里测的不再是 0054。 */
+const STEPS_TO_BEFORE_0054 = fs.readdirSync(path.join(ROOT, "db/migrations"))
+  .filter(f => f.endsWith(".sql") && f >= "0054").length;
 
 let o;
 beforeAll(async () => { o = owner(); await o.connect(); });
@@ -52,12 +58,12 @@ describe("0054 一线侧栏", () => {
   it("不替管理员做决定：勾掉的不加回来，自己加的留着且排在后面", async () => {
     const crc = await roleId("crc");
     const cra = await roleId("cra");
-    run("down 1");
+    run(`down ${STEPS_TO_BEFORE_0054}`);
     try {
       /* 在 0054 之前，管理员给 CRC 加了「经营驾驶舱」，给 CRA 勾掉了「可行性调查」 */
       await o.query(`INSERT INTO role_module (role_id, module_key, sort_order) VALUES ($1, 'dash', 3)`, [crc]);
       await o.query(`DELETE FROM role_module WHERE role_id = $1 AND module_key = 'feas'`, [cra]);
-      run("up 1");
+      run("up");
 
       const c = await modules("crc");
       const dash = c.find(r => r.module_key === "dash");

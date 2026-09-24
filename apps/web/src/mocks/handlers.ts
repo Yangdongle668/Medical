@@ -172,6 +172,7 @@ const mailTransport = {
 export const setEmptyOps = (ops: string[]) => { emptied = new Set(ops); };
 const isEmptied = (op: string) => emptied.has(op);
 const identity = () => IDENTITIES[mockRole];
+const PREFS: Record<string, { digest: boolean; urgent: boolean }> = {};
 
 /** mock 的行范围。
  *
@@ -1962,6 +1963,15 @@ export const scenarioHandlers = [
      行策略上直接关掉（迁移 0032），因为机构办是外部的质量反馈闭环、
      DM 是内部的数据质量闭环，混在一起的后果不是多几行，而是
      机构质控页上「本院未关闭质量事件」这个数会把 EDC 质疑也算进去。 */
+  /* 提醒偏好。按 mock 身份各存一份；没存过 = 全开。 */
+  http.get(pathToRegExp("/v1/me/notify-prefs"), () =>
+    HttpResponse.json({ digest: true, urgent: true, ...PREFS[mockRole], hasEmail: true })),
+  http.patch(pathToRegExp("/v1/me/notify-prefs"), async ({ request }) => {
+    const b = await request.json() as { digest: boolean; urgent: boolean };
+    PREFS[mockRole] = { digest: b.digest, urgent: b.urgent };
+    return HttpResponse.json({ ...PREFS[mockRole], hasEmail: true });
+  }),
+
   /* 全局搜索。与服务端同一口径：中心按代号 / 医院，受试者按筛选号；
      受试者要 subjRead **且**有受试者列权限；两个字起搜。 */
   http.get(pathToRegExp("/v1/search"), ({ request }) => {

@@ -116,6 +116,11 @@ services:
       SITEDESK_MAIL_FROM: ${SITEDESK_MAIL_FROM:-}
       SITEDESK_SMS_WEBHOOK_URL: ${SITEDESK_SMS_WEBHOOK_URL:-}
       SITEDESK_SMS_WEBHOOK_TOKEN: ${SITEDESK_SMS_WEBHOOK_TOKEN:-}
+      # ── 邮件提醒（迁移 0055）─────────────────────────────────────
+      # 走上面同一条邮件通道。没配通道 = 不发（启动自检已经会告警）。
+      SITEDESK_REMIND_INTERVAL_MS: ${SITEDESK_REMIND_INTERVAL_MS:-}
+      SITEDESK_DIGEST_HOUR: ${SITEDESK_DIGEST_HOUR:-}
+      SITEDESK_TZ: ${SITEDESK_TZ:-}
     depends_on:
       db: { condition: service_healthy }
     # 不映射端口：外面进不来，只有 web 能通过内网找到它

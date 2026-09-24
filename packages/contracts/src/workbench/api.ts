@@ -125,3 +125,29 @@ define({
   query: SearchQuery,
   response: z.object({ items: z.array(SearchHit) })
 });
+
+/* ── 邮件提醒偏好 ──────────────────────────────────────────────────
+   两个开关：紧急提醒（SAE 时限、今天关窗的访视）与每日摘要。
+   `hasEmail` 告诉人「你根本收不到」—— 没登记邮箱时开关开着也没用，
+   而那种"我明明开了为什么没收到"最难自己查。 */
+export const NotifyPrefs = z.object({
+  digest: z.boolean(),
+  urgent: z.boolean(),
+  hasEmail: z.boolean().describe("有没有登记收件邮箱；没有的话两个开关都不起作用")
+}).meta({ id: "NotifyPrefs" });
+
+export const SetNotifyPrefsBody = z.object({ digest: z.boolean(), urgent: z.boolean() });
+
+define({
+  id: "getNotifyPrefs", method: "get", path: "/v1/me/notify-prefs", layer: "L1", context: CTX,
+  summary: "我的邮件提醒偏好",
+  response: NotifyPrefs
+});
+
+define({
+  id: "setNotifyPrefs", method: "patch", path: "/v1/me/notify-prefs", layer: "L1", context: CTX,
+  summary: "改我的邮件提醒偏好",
+  description: "只改自己的。没有这一行时等于两个都开。",
+  body: SetNotifyPrefsBody,
+  response: NotifyPrefs
+});

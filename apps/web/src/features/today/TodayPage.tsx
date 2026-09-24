@@ -147,7 +147,12 @@ export function TodayPage() {
   return (
     <>
       <div className="page-head">
-        <h2>今天</h2>
+        <div className="spread">
+          <h2>今天</h2>
+          {/* 每封提醒邮件底下都指到这里 —— 退订要比忍着方便 */}
+          <Link to="/settings/notify" className="muted" data-testid="open-notify-prefs"
+            style={{ fontSize: 13 }}>提醒设置</Link>
+        </div>
         <p data-testid="today-summary">
           {box.items.length === 0 ? "没有要你办的事。"
             : [counts.overdue && `${counts.overdue} 件已过期`,

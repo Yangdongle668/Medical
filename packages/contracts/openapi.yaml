@@ -6800,6 +6800,181 @@ paths:
                 title: 服务内部错误
                 status: 500
                 code: internal
+  /v1/me/notify-prefs:
+    get:
+      operationId: getNotifyPrefs
+      tags:
+        - workbench
+      summary: 我的邮件提醒偏好
+      x-layer: L1
+      parameters: []
+      responses:
+        '200':
+          description: 我的邮件提醒偏好
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotifyPrefs'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
+    patch:
+      operationId: setNotifyPrefs
+      tags:
+        - workbench
+      summary: 改我的邮件提醒偏好
+      description: 只改自己的。没有这一行时等于两个都开。
+      x-layer: L1
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 幂等键（uuid）。可选；带上之后 24 小时内重放同一键返回首次结果，离线重放因此不会写两笔。
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetNotifyPrefsRequest'
+      responses:
+        '200':
+          description: 改我的邮件提醒偏好
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotifyPrefs'
+        '401':
+          description: 未认证
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/unauthenticated
+                title: 未认证
+                status: 401
+                code: unauthenticated
+        '403':
+          description: 无此动作权限
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/forbidden-action
+                title: 无此动作权限
+                status: 403
+                code: forbidden-action
+        '404':
+          description: 资源不存在
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/not-found
+                title: 资源不存在
+                status: 404
+                code: not-found
+        '422':
+          description: 请求校验未通过
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/validation-failed
+                title: 请求校验未通过
+                status: 422
+                code: validation-failed
+        '429':
+          description: 请求过于频繁
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/rate-limited
+                title: 请求过于频繁
+                status: 429
+                code: rate-limited
+        '500':
+          description: 服务内部错误
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://sitedesk.dev/problems/internal
+                title: 服务内部错误
+                status: 500
+                code: internal
   /v1/milestones:
     get:
       operationId: listMilestones
@@ -22725,6 +22900,21 @@ components:
         - sub
         - studySiteId
       additionalProperties: false
+    NotifyPrefs:
+      type: object
+      properties:
+        digest:
+          type: boolean
+        urgent:
+          type: boolean
+        hasEmail:
+          type: boolean
+          description: 有没有登记收件邮箱；没有的话两个开关都不起作用
+      required:
+        - digest
+        - urgent
+        - hasEmail
+      additionalProperties: false
     ListAccountsResponse:
       type: object
       properties:
@@ -23748,6 +23938,17 @@ components:
       required:
         - data
         - sideEffects
+      additionalProperties: false
+    SetNotifyPrefsRequest:
+      type: object
+      properties:
+        digest:
+          type: boolean
+        urgent:
+          type: boolean
+      required:
+        - digest
+        - urgent
       additionalProperties: false
     ListMilestonesResponse:
       type: object

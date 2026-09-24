@@ -329,3 +329,20 @@ test.describe("首页报告 SAE", () => {
     await expect(page.getByTestId("new-sae")).toHaveCount(0);
   });
 });
+
+/* 提醒设置（W14）：每封提醒邮件底下都指到这一页，退订要比忍着方便。 */
+test("首页右上角进提醒设置，关掉每日摘要，回来还是关着", async ({ page }) => {
+  await page.goto("/today");
+  await page.getByTestId("open-notify-prefs").click();
+  await expect(page).toHaveURL(/\/settings\/notify/);
+  const digest = page.getByTestId("prefs-digest");
+  await expect(digest).toBeChecked();
+  await digest.uncheck();
+  await expect(page.getByTestId("toast")).toContainText("已保存");
+  /* 不整页刷新：mock 的状态在页面内存里，刷新会连同 mock 场景一起重来。
+     走客户端路由离开再回来，读到的是服务端（mock）存下的那一份。 */
+  await page.getByRole("link", { name: "← 今天" }).click();
+  await page.getByTestId("open-notify-prefs").click();
+  await expect(page.getByTestId("prefs-digest")).not.toBeChecked();
+  await expect(page.getByTestId("prefs-urgent")).toBeChecked();
+});
