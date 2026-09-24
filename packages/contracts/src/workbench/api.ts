@@ -57,6 +57,10 @@ export const InboxItem = z.object({
   studySiteId: Uuid.nullable(),
   siteCode: Code.nullable(),
   screeningNo: gated(z.string(), "subject"),
+  /** 只看、不办：这件事归别人办，你要跟进。目前只有 SAE ——
+   *  监查员（有 monitor、没有 subjWrite）不是上报人，但 24 小时时钟在他的中心上走，
+   *  他得知道、得去催。缺省即 false。 */
+  watch: z.boolean().optional(),
   /** 去哪办。`id` 为空的是合成条目（例如「6 条工时待审」）。 */
   ref: z.object({
     type: z.enum(["subject_visit", "quality_event", "data_query", "handover",

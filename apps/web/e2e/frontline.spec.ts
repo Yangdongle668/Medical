@@ -316,6 +316,13 @@ test.describe("首页报告 SAE", () => {
     expect(kinds.slice(0, at + 1).every(([k]) => k === "sae")).toBe(true);
   });
 
+  test("CRA 不上报，但首页有 SAE 的跟进提醒", async ({ page }) => {
+    await page.goto("/today?as=cra");
+    const sae = page.getByTestId("today-sae").locator('[data-kind="sae"]').first();
+    await expect(sae).toContainText("由中心上报");
+    await expect(sae.getByTestId("inbox-go")).toHaveText("去跟进");
+  });
+
   test("没有 subjWrite 的角色没有这个按钮", async ({ page }) => {
     await page.goto("/today?as=cra");
     await expect(page.getByTestId("today-summary")).toBeVisible();

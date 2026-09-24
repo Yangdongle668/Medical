@@ -1966,6 +1966,7 @@ export const scenarioHandlers = [
       kind: string; urgency: "overdue" | "today" | "soon";
       dueOn: string | null; dueAt: string | null; title: string; detail: string;
       studySiteId: string | null; siteCode: string | null; screeningNo?: string | undefined;
+      watch?: boolean;
       ref: { type: string; id: string | null };
     };
     const items: Item[] = [];
@@ -1973,14 +1974,18 @@ export const scenarioHandlers = [
       new Date(Date.parse(d + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
     const siteId = (code: string) => SITES_LIST.find(s => s.code === code)?.id ?? null;
 
-    if (can("subjWrite")) {
+    /* 监查员（没有 subjWrite、有 monitor）拿到的是「跟进」—— 与服务端同一条规则 */
+    const saeWatch = !can("subjWrite") && can("monitor");
+    if (can("subjWrite") || saeWatch) {
       for (const e of inScope(scenario.qualityEvents))
         if (e.kind === "sae" && e.state !== "closed" && e.occurredAt && !e.reportedAt) {
           const due = new Date(Date.parse(e.occurredAt) + 24 * 3_600_000);
           const late = Date.now() > due.getTime();
           items.push({ kind: "sae", urgency: late ? "overdue" : "today",
             dueOn: null, dueAt: due.toISOString(), title: `SAE 未上报 · ${e.title}`,
-            detail: late ? "已超过知悉后 24 小时" : "知悉后 24 小时内要上报",
+            detail: (saeWatch ? "由中心上报，请跟进 · " : "")
+              + (late ? "已超过知悉后 24 小时" : "知悉后 24 小时内要上报"),
+            ...(saeWatch ? { watch: true } : {}),
             studySiteId: e.studySiteId ?? siteId(e.siteCode), siteCode: e.siteCode,
             ref: { type: "quality_event", id: e.id } });
         }

@@ -20,6 +20,7 @@ const K = () => ({ "Idempotency-Key": randomUUID() });
 const RANK = { overdue: 0, today: 1, soon: 2 } as const;
 
 interface Item {
+  watch?: boolean;
   kind: string; urgency: keyof typeof RANK; title: string; detail: string;
   dueOn: string | null; dueAt: string | null; siteCode: string | null;
   screeningNo?: string; ref: { type: string; id: string | null };
@@ -71,9 +72,30 @@ describe("我的待办 · 没有比源头给得更多", () => {
 
   it("只给办得了的：CRA 没有 subjWrite —— 不出现 CRC 该完成的访视与 EDC，但有 PI 签字登记", async () => {
     const b = await inbox(cra);
-    expect(b.items.filter(i => ["visit", "edc", "sae"].includes(i.kind))).toEqual([]);
+    expect(b.items.filter(i => ["visit", "edc"].includes(i.kind))).toEqual([]);
     const pending = (await cra.get("/v1/subject-visits?pendingPi=true&limit=5")).body.items;
     if (pending.length) expect(b.items.some(i => i.kind === "pi_confirm")).toBe(true);
+  });
+});
+
+describe("SAE：上报的人办，监查员跟进", () => {
+  it("CRA 不是上报人，但看得到 SAE 时钟 —— 标成只看不办（watch）", async () => {
+    const saes = (await inbox(cra)).items.filter(i => i.kind === "sae");
+    expect(saes.length, "种子里 CRA 的中心上应当有未上报的 SAE").toBeGreaterThan(0);
+    for (const i of saes) {
+      expect(i.watch).toBe(true);
+      expect(i.detail).toContain("由中心上报");
+    }
+  });
+
+  it("CRC 的 SAE 是要他办的，不带 watch", async () => {
+    const saes = (await inbox(crc)).items.filter(i => i.kind === "sae");
+    expect(saes.length).toBeGreaterThan(0);
+    for (const i of saes) expect(i).not.toHaveProperty("watch");
+  });
+
+  it("既不能上报、也不监查的角色（QA）没有 SAE 待办", async () => {
+    expect((await inbox(qa)).items.filter(i => i.kind === "sae")).toEqual([]);
   });
 });
 

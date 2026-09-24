@@ -3442,29 +3442,30 @@
           "screeningNo": "示例",
           "ref": {
             "type": "subject_visit",
-            "id": null
+            "id": "4d5aeb1c-aaa5-1092-b644-e460db5f6922"
           }
         },
         {
           "kind": "sae",
           "urgency": "overdue",
-          "dueOn": "2026-08-15",
+          "dueOn": "2026-08-12",
           "dueAt": "2026-08-22T09:15:00+08:00",
           "title": "示例文本（由契约生成，非真实数据）",
           "detail": "示例文本（由契约生成，非真实数据）",
-          "studySiteId": "aeb1caaa-5109-2b64-4e46-0db5f692242b",
+          "studySiteId": "47e3648c-fde5-7708-53a6-76994dee2379",
           "siteCode": "示例",
           "screeningNo": "示例",
+          "watch": true,
           "ref": {
             "type": "subject_visit",
-            "id": "7e3648cf-de57-7085-3a67-6994dee2379b"
+            "id": "21137807-a6d4-e3a1-a6b1-717e8468b61c"
           }
         }
       ],
       "counts": {
-        "overdue": 7,
-        "today": 40,
-        "soon": 40
+        "overdue": 38,
+        "today": 3,
+        "soon": 3
       },
       "truncatedKinds": [
         "sae",
@@ -3485,28 +3486,29 @@
           "siteCode": null,
           "ref": {
             "type": "subject_visit",
-            "id": null
+            "id": "4d5aeb1c-aaa5-1092-b644-e460db5f6922"
           }
         },
         {
           "kind": "sae",
           "urgency": "overdue",
-          "dueOn": "2026-08-15",
+          "dueOn": "2026-08-12",
           "dueAt": "2026-08-22T09:15:00+08:00",
           "title": "示例文本（由契约生成，非真实数据）",
           "detail": "示例文本（由契约生成，非真实数据）",
-          "studySiteId": "aeb1caaa-5109-2b64-4e46-0db5f692242b",
+          "studySiteId": "47e3648c-fde5-7708-53a6-76994dee2379",
           "siteCode": "示例",
+          "watch": true,
           "ref": {
             "type": "subject_visit",
-            "id": "7e3648cf-de57-7085-3a67-6994dee2379b"
+            "id": "21137807-a6d4-e3a1-a6b1-717e8468b61c"
           }
         }
       ],
       "counts": {
-        "overdue": 7,
-        "today": 40,
-        "soon": 40
+        "overdue": 38,
+        "today": 3,
+        "soon": 3
       },
       "truncatedKinds": [
         "sae",

@@ -43,6 +43,8 @@ export interface InboxItem {
   dueOn: string | null; dueAt: string | null;
   title: string; detail: string;
   studySiteId: string | null; siteCode: string | null; screeningNo?: string;
+  /** 只看不办：归别人办、你要跟进（目前只有监查员看到的 SAE）。 */
+  watch?: boolean;
   ref: { type: string; id: string | null };
 }
 type Kind = "sae" | "visit" | "pi_confirm" | "edc" | "query" | "handover"
@@ -155,7 +157,7 @@ export function TodayPage() {
       </div>
 
       {saeSites && saeSites.length > 0 && (
-        <div style={{ marginBottom: 14 }} data-testid="today-sae">
+        <div style={{ marginBottom: 14 }} data-testid="today-report-sae">
           {/* 登记完回到待办：它会带着 24 小时倒计时出现在最上面 */}
           <ReportSaeForm sites={saeSites} cta="报告 SAE" onCreated={() => void load()} />
         </div>
@@ -218,7 +220,9 @@ function Row({ i }: { i: InboxItem }) {
           {(i.screeningNo || i.siteCode) && " · "}{i.detail}
         </div>
       </div>
-      <Link to={k.href(i)} className="btn primary inbox-go" data-testid="inbox-go">{k.go}</Link>
+      {/* 跟进的那种不是主按钮 —— 主按钮留给「这件事等你办」 */}
+      <Link to={k.href(i)} className={`btn inbox-go${i.watch ? "" : " primary"}`}
+        data-testid="inbox-go">{i.watch ? "去跟进" : k.go}</Link>
     </li>
   );
 }

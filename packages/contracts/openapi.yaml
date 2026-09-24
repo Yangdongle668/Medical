@@ -22511,6 +22511,8 @@ components:
           x-gated-by: subject
           description: 【受试者筛选号】无权限时该字段不出现在响应中（不是 null）
           type: string
+        watch:
+          type: boolean
         ref:
           type: object
           properties:

@@ -24,6 +24,8 @@ import { MonitorService } from "../oversight/monitor.service.js";
      登记 PI 签字           piConfirm
      中心文件               isfWrite
      工时审批               approve
+   唯一的例外是 SAE：没有 subjWrite 而有 monitor 的（监查员）拿到一条 `watch` ——
+   不是他上报，但 24 小时时钟在他的中心上走，他得知道、得去催。
    只看得到、办不了的不进待办 —— CRA 的待办里摆满 CRC 该完成的访视，
    他每天都得先跳过二十条不归他的，才看得到自己的。
    没有就整类不出现 —— 首页不该因为你没有某个权限而报错。
@@ -79,8 +81,9 @@ export class InboxService {
       if (fetched >= FETCH || items.length > PER_KIND) full.add(kind);
     };
 
-    /* ── SAE：知悉后 24 小时内要上报 ─────────────────────────────── */
-    if (can("subjWrite")) {
+    /* ── SAE：知悉后 24 小时内要上报（监查员：跟进） ──────────────── */
+    const saeWatch = !can("subjWrite") && can("monitor");
+    if (can("subjWrite") || saeWatch) {
       const r = await this.clinical.listQualityEvents(
         { limit: FETCH, kind: ["sae"], state: ["open", "pending_review"] });
       const now = Date.now();
@@ -92,7 +95,9 @@ export class InboxService {
           return this.item({
             kind: "sae", urgency: late ? "overdue" : "today",
             dueAt: due.toISOString(), title: `SAE 未上报 · ${e.title}`,
-            detail: late ? "已超过知悉后 24 小时" : "知悉后 24 小时内要上报",
+            detail: (saeWatch ? "由中心上报，请跟进 · " : "")
+              + (late ? "已超过知悉后 24 小时" : "知悉后 24 小时内要上报"),
+            ...(saeWatch ? { watch: true } : {}),
             studySiteId: e.studySiteId, siteCode: e.siteCode,
             screeningNo: e.screeningNo, ref: { type: "quality_event", id: e.id }
           });
