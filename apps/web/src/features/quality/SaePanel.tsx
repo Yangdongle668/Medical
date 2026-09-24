@@ -4,6 +4,7 @@ import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { CreateForm, Field, Area, Pick } from "../../shell/CreateForm.js";
 import { loadMe } from "../login/me.js";
 import { Why } from "../../shell/Why.js";
+import { rememberedSite } from "../../shell/currentSite.js";
 
 /* ════════════════════════════════════════════════════════════════════
    SAE 台账与 24 小时及时率（I6）。
@@ -242,7 +243,7 @@ export function ReportSaeForm({ studySiteId, sites, onCreated, cta = "登记一�
   onCreated: () => void;
   cta?: string;
 }) {
-  const [site, setSite] = useState(studySiteId ?? sites?.[0]?.id ?? "");
+  const [site, setSite] = useState(studySiteId ?? rememberedSite((sites ?? []).map(s => s.id)));
   const [title, setTitle] = useState("");
   const [detail, setDetail] = useState("");
   const [occurredAt, setOccurredAt] = useState("");

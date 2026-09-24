@@ -6,6 +6,7 @@ import { usePending } from "../../api/pending.js";
 import { today } from "../../shell/dates.js";
 import { Pick } from "../../shell/CreateForm.js";
 import { EffectItem } from "../../shell/Effects.js";
+import { rememberedSite } from "../../shell/currentSite.js";
 
 /* ════════════════════════════════════════════════════════════════════
    工时台账。
@@ -316,7 +317,11 @@ export function TimesheetPage() {
    `billable` 不在表单里：它由工作类型推导，提交时落库固化（I1）。
    让人手选可计费，等于把一条会被核查追问的口径交给了当事人的心情。 */
 function FileTimesheet({ sites, onDone }: { sites: Site[]; onDone: () => void }) {
-  const [studySiteId, setSite] = useState("");
+  /* 默认成上次选的中心（不认得就留空让人选 —— 工时记错中心，成本就归错了） */
+  const [studySiteId, setSite] = useState(() => rememberedSite(sites.map(s => s.id), false));
+  useEffect(() => {
+    setSite(s => s || rememberedSite(sites.map(x => x.id), false));
+  }, [sites]);
   const [workDate, setDate] = useState(today());
   const [workType, setType] = useState<string>("visit_support");
   const [hours, setHours] = useState("3.5");

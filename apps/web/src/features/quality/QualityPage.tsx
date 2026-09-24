@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { loadMe, type Me } from "../login/me.js";
 import { SaePanel } from "./SaePanel.js";
 import { IpPanel } from "./IpPanel.js";
 import { Pick } from "../../shell/CreateForm.js";
 import { Why } from "../../shell/Why.js";
+import { useCurrentSite } from "../../shell/currentSite.js";
 
 interface QualityEvent {
   id: string; code: string; siteCode: string; kind: string; severity: string;
@@ -34,9 +34,8 @@ export function QualityPage() {
   const [sites, setSites] = useState<Site[]>([]);
   /* 两本台账是**按中心**的（SAE 及时率、药品在手数量都没有跨中心的口径），
      所以这里要选一个中心。默认选第一个，而不是让人先点一下才有内容。 */
-  /* `?site=` 由首页待办带过来（「SAE 未上报」那一条要直接落在它那个中心上）。 */
-  const [params] = useSearchParams();
-  const [siteId, setSiteId] = useState(params.get("site") ?? "");
+  /* 当前中心（shell/currentSite.ts）：首页待办用 `?site=` 带过来，别的页选过的也认。 */
+  const [siteId, setSiteId] = useCurrentSite(sites.length ? sites : null);
   const [me, setMe] = useState<Me | null>(null);
   const [capaOn, setCapaOn] = useState<QualityEvent | null>(null);
   const [plan, setPlan] = useState("");
@@ -53,7 +52,7 @@ export function QualityPage() {
     void loadMe().then(setMe);
     void reloadEvents();
     void call<{ items: Site[] }>("listStudySites", { query: { limit: 200 } })
-      .then(r => { setSites(r.items); setSiteId(s => s || r.items[0]?.id || ""); })
+      .then(r => setSites(r.items))
       .catch(() => setSites([]));
   }, []);
 

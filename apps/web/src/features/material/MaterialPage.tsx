@@ -3,6 +3,7 @@ import { call, ApiError, type ProblemDetails } from "../../api/client.js";
 import { today, daysSince } from "../../shell/dates.js";
 import { Pick } from "../../shell/CreateForm.js";
 import { Why } from "../../shell/Why.js";
+import { useCurrentSite } from "../../shell/currentSite.js";
 
 /* ════════════════════════════════════════════════════════════════════
    药品与样本。
@@ -44,7 +45,7 @@ const INBOUND = new Set(["receipt", "return"]);
 
 export function MaterialPage() {
   const [sites, setSites] = useState<Site[] | null>(null);
-  const [siteId, setSiteId] = useState("");
+  const [siteId, setSiteId] = useCurrentSite(sites);
   const [ledger, setLedger] = useState<Ledger | null>(null);
   const [specimens, setSpecimens] = useState<Specimen[]>([]);
   const [tab, setTab] = useState<"ip" | "spec">("ip");
@@ -54,7 +55,7 @@ export function MaterialPage() {
 
   useEffect(() => {
     void call<{ items: Site[] }>("listStudySites", { query: { limit: 200 } })
-      .then(r => { setSites(r.items); if (r.items[0]) setSiteId(r.items[0].id); });
+      .then(r => setSites(r.items));
   }, []);
 
   const load = async (id: string) => {

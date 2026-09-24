@@ -9,6 +9,7 @@ import { SCREEN_FAIL_LABEL } from "../enrollment/api.js";
 import { Pick } from "../../shell/CreateForm.js";
 import { UnmetList, type UnmetItem } from "../../shell/Unmet.js";
 import { Why } from "../../shell/Why.js";
+import { useCurrentSite } from "../../shell/currentSite.js";
 
 /* ════════════════════════════════════════════════════════════════════
    预筛登记。
@@ -35,7 +36,8 @@ interface Site { id: string; code: string; hospital: string }
 export function PrescreenPage() {
   const [sites, setSites] = useState<Site[]>([]);
   const [subs, setSubs] = useState<Subject[] | null>(null);
-  const [siteId, setSiteId] = useState("");
+  /* 登记到哪个中心：认当前中心，但**不默认成第一个** —— 登错中心的代价大，不认得就让人选 */
+  const [siteId, setSiteId] = useCurrentSite(sites.length ? sites : null, false);
   const [no, setNo] = useState("");
   const [problem, setProblem] = useState<ProblemDetails | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -48,7 +50,6 @@ export function PrescreenPage() {
     void (async () => {
       const s = await call<{ items: Site[] }>("listStudySites", { query: { limit: 200 } });
       setSites(s.items);
-      if (s.items.length === 1) setSiteId(s.items[0]!.id);
       await reload();
     })();
   }, []);
