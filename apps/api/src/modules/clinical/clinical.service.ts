@@ -332,6 +332,8 @@ export class ClinicalService {
   async listVisits(q: {
     limit: number; cursor?: string; studySiteId?: string; subjectId?: string;
     status?: string[]; outOfWindow?: boolean; pendingPi?: boolean; windowOpensBy?: string;
+    /** 内部用（我的待办）：已完成而 EDC 还没录的。契约里没有它。 */
+    edcPending?: boolean;
   }) {
     const c = ctx();
     const params: unknown[] = [];
@@ -341,6 +343,7 @@ export class ClinicalService {
     if (q.subjectId) conds.push(`v.subject_id = ${add(q.subjectId)}`);
     if (q.status?.length) conds.push(`v.status = ANY(${add(q.status)})`);
     if (q.pendingPi) conds.push(`v.status = 'done_pending_pi'`);
+    if (q.edcPending) conds.push(`v.actual_date IS NOT NULL AND v.edc_status = 'pending'`);
     /* 走 GiST 索引：未完成而窗口已关，或已完成但落在窗口外 */
     if (q.outOfWindow)
       conds.push(`(v.out_of_window OR (v.status = 'planned' AND upper(v.visit_window) <= CURRENT_DATE))`);
